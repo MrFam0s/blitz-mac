@@ -82,22 +82,24 @@ enum TerminalLauncher {
         guard claimLaunch(of: shellCommand) else {
             return true // Same agent session was just launched; don't open it twice.
         }
-        // Measure the window from when the (blocking) launch finishes, so a click
-        // queued behind a slow osascript call is still recognised as a duplicate.
-        defer { refreshLaunch(of: shellCommand) }
-
+        let launched: Bool
         switch terminal.resolvedFallback {
         case .builtIn:
-            return false
+            launched = false
         case .terminal:
-            return launchTerminalApp(command: shellCommand)
+            launched = launchTerminalApp(command: shellCommand)
         case .ghostty:
-            return launchGhostty(command: shellCommand)
+            launched = launchGhostty(command: shellCommand)
         case .iterm:
-            return launchITerm(command: shellCommand)
+            launched = launchITerm(command: shellCommand)
         case .custom(let path):
-            return launchCustom(appPath: path, command: shellCommand)
+            launched = launchCustom(appPath: path, command: shellCommand)
         }
+        // Measure the window from when the (blocking) launch finishes, so a click
+        // queued behind a slow osascript call is still recognised as a duplicate.
+        // A failed launch is forgotten so an immediate retry isn't swallowed.
+        finishLaunch(of: shellCommand, succeeded: launched)
+        return launched
     }
 
     /// Launch using the settings from SettingsService
@@ -222,10 +224,10 @@ enum TerminalLauncher {
         return true
     }
 
-    private static func refreshLaunch(of command: String) {
+    private static func finishLaunch(of command: String, succeeded: Bool) {
         lastLaunchLock.lock()
         defer { lastLaunchLock.unlock() }
-        lastLaunch = (command, Date())
+        lastLaunch = succeeded ? (command, Date()) : nil
     }
 
     private static func escapeForAppleScript(_ command: String) -> String {
