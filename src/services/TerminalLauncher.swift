@@ -212,7 +212,7 @@ enum TerminalLauncher {
     // MARK: - Helpers
 
     /// Returns false if the identical command was launched within `duplicateLaunchWindow`.
-    private static func claimLaunch(of command: String, now: Date = Date()) -> Bool {
+    static func claimLaunch(of command: String, now: Date = Date()) -> Bool {
         lastLaunchLock.lock()
         defer { lastLaunchLock.unlock() }
         if let last = lastLaunch,
@@ -224,7 +224,7 @@ enum TerminalLauncher {
         return true
     }
 
-    private static func finishLaunch(of command: String, succeeded: Bool) {
+    static func finishLaunch(of command: String, succeeded: Bool) {
         lastLaunchLock.lock()
         defer { lastLaunchLock.unlock() }
         lastLaunch = succeeded ? (command, Date()) : nil
