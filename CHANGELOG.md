@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.36 (maintenance fork)
+- Remember Apple sign-in browser state and provide an explicit account-switch reset.
+- Stop logging login cookie value fragments and account email addresses.
+- Handle gzip-encoded Apple web API responses in embedded ASC skills.
+- Avoid duplicate external agent launches while preserving retry after failure.
+- Repair stale test fixtures and support an explicit Swift build engine override.
+- Use this fork as the update source. See MAINTENANCE.md for build and signing limitations.
+
 ## 1.0.35
 - Blitz now detects all of your apps in App Store Connect and imports them into the dashboard, no more manual bundleID setup for existing projects. 
 - Screenshot tab has been greatly simplified 

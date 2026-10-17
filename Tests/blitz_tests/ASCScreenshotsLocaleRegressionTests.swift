@@ -423,7 +423,8 @@ private func makeApp(primaryLocale: String?) -> ASCApp {
             primaryLocale: primaryLocale,
             vendorNumber: nil,
             contentRightsDeclaration: nil
-        )
+        ),
+        relationships: nil
     )
 }
 

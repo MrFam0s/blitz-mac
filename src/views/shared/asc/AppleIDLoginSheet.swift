@@ -6,6 +6,8 @@ struct AppleIDLoginSheet: View {
     var onSessionCaptured: (IrisSession) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
+    @State private var browserID = UUID()
+    @State private var isResettingBrowser = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,6 +20,16 @@ struct AppleIDLoginSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button("Use Another Apple ID") {
+                    isResettingBrowser = true
+                    Task { @MainActor in
+                        await ASCWebView.resetBrowser()
+                        isLoading = true
+                        browserID = UUID()
+                        isResettingBrowser = false
+                    }
+                }
+                .disabled(isResettingBrowser)
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
             }
@@ -29,11 +41,13 @@ struct AppleIDLoginSheet: View {
                 ASCWebView(
                     isLoading: $isLoading,
                     onSessionCaptured: { session in
+                        guard !isResettingBrowser else { return }
                         irisLog("AppleIDLoginSheet: onSessionCaptured called, \(session.cookies.count) cookies")
                         onSessionCaptured(session)
                         dismiss()
                     }
                 )
+                .id(browserID)
 
                 if isLoading {
                     ProgressView("Loading App Store Connect…")
@@ -65,6 +79,13 @@ struct ASCWebView: NSViewRepresentable {
     // would, while keeping it fully isolated from the user's actual Safari
     // data. The cookie-capture flow below is unchanged.
     private static let persistentStoreID = UUID(uuidString: "6F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D")!
+
+    @MainActor static func resetBrowser() async {
+        await WKWebsiteDataStore(forIdentifier: persistentStoreID).removeData(
+            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+            modifiedSince: .distantPast
+        )
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -192,7 +213,7 @@ struct ASCWebView: NSViewRepresentable {
             DispatchQueue.main.async {
                 webView.evaluateJavaScript(js) { [weak self] result, error in
                     let email = result as? String
-                    irisLog("extractCookies: fetched email=\(email ?? "nil") error=\(error?.localizedDescription ?? "none")")
+                    irisLog("extractCookies: fetched account email (present=\(email != nil)) error=\(error?.localizedDescription ?? "none")")
 
                     // Now capture cookies AFTER the olympus session call,
                     // so we include any cookies set by that response.
@@ -201,7 +222,7 @@ struct ASCWebView: NSViewRepresentable {
                         irisLog("extractCookies: total cookies=\(cookies.count), apple.com cookies=\(appleCookies.count)")
 
                         for c in appleCookies {
-                            irisLog("  cookie: \(c.name) domain=\(c.domain) path=\(c.path) value=\(String(c.value.prefix(20)))…")
+                            irisLog("  cookie: \(c.name) domain=\(c.domain) path=\(c.path)")
                         }
 
                         let irisCookies = appleCookies.map { cookie in
@@ -219,7 +240,7 @@ struct ASCWebView: NSViewRepresentable {
                             capturedAt: Date()
                         )
 
-                        irisLog("extractCookies: created IrisSession with \(irisCookies.count) cookies, email=\(email ?? "nil"), calling onSessionCaptured")
+                        irisLog("extractCookies: created IrisSession with \(irisCookies.count) cookies, calling onSessionCaptured")
 
                         self?.parent.onSessionCaptured(session)
                     }

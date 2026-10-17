@@ -1,3 +1,5 @@
+> Personal maintenance fork: see [MAINTENANCE.md](MAINTENANCE.md) for scope, build instructions, and limitations. This is not an official successor to Blitz.
+
 <div align="center">
   <img src=".github/assets/logo.png" width="100" />
   <h1>Blitz</h1>

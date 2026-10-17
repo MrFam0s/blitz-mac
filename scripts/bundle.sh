@@ -145,8 +145,14 @@ VERSION=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/pack
 echo "Building $APP_NAME.app v$VERSION ($CONFIG)..."
 
 # Build
-swift build -c "$CONFIG" --product Blitz
-swift build -c "$CONFIG" --product blitz-macos-mcp
+# Use the same engine for both products. Xcode 27 defaults to swiftbuild,
+# which additionally requires the optional Metal toolchain for SwiftTerm.
+BUILD_SYSTEM_ARGS=()
+if [ -n "${BLITZ_SWIFT_BUILD_SYSTEM:-}" ]; then
+    BUILD_SYSTEM_ARGS=(--build-system "$BLITZ_SWIFT_BUILD_SYSTEM")
+fi
+swift build "${BUILD_SYSTEM_ARGS[@]}" -c "$CONFIG" --product Blitz
+swift build "${BUILD_SYSTEM_ARGS[@]}" -c "$CONFIG" --product blitz-macos-mcp
 
 # Create .app structure
 rm -rf "$BUNDLE_DIR"

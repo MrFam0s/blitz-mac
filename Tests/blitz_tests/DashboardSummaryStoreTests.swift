@@ -15,7 +15,8 @@ import Testing
         source: .asc,
         ascAppId: "123",
         linkedProjectId: "project-1",
-        status: status
+        status: status,
+        iconURL: nil
     )
 
     let writer = DashboardSummaryStore(cacheURL: cacheURL, accountKeyOverride: "issuer:key")
@@ -31,7 +32,8 @@ import Testing
                     primaryLocale: nil,
                     vendorNumber: nil,
                     contentRightsDeclaration: nil
-                )
+                ),
+                relationships: nil
             )
         ],
         appRows: [row],
@@ -57,7 +59,8 @@ import Testing
         source: .asc,
         ascAppId: "123",
         linkedProjectId: nil,
-        status: .empty
+        status: .empty,
+        iconURL: nil
     )
 
     let store = DashboardSummaryStore(cacheURL: cacheURL, accountKeyOverride: "issuer:key")
@@ -73,7 +76,8 @@ import Testing
                     primaryLocale: nil,
                     vendorNumber: nil,
                     contentRightsDeclaration: nil
-                )
+                ),
+                relationships: nil
             )
         ],
         appRows: [row],
@@ -100,7 +104,8 @@ import Testing
         source: .asc,
         ascAppId: "123",
         linkedProjectId: nil,
-        status: .empty
+        status: .empty,
+        iconURL: nil
     )
 
     let store = DashboardSummaryStore(cacheURL: cacheURL, accountKeyOverride: "issuer:key")
@@ -116,7 +121,8 @@ import Testing
                     primaryLocale: nil,
                     vendorNumber: nil,
                     contentRightsDeclaration: nil
-                )
+                ),
+                relationships: nil
             )
         ],
         appRows: [row],
@@ -150,7 +156,8 @@ import Testing
                     primaryLocale: nil,
                     vendorNumber: nil,
                     contentRightsDeclaration: nil
-                )
+                ),
+                relationships: nil
             )
         ],
         appRows: [
@@ -161,7 +168,8 @@ import Testing
                 source: .asc,
                 ascAppId: "123",
                 linkedProjectId: nil,
-                status: .empty
+                status: .empty,
+                iconURL: nil
             )
         ],
         for: "seed",

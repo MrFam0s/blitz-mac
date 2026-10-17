@@ -36,8 +36,8 @@ final class AutoUpdateManager {
     private var downloadURL: String?
     private var downloadFilename: String?
 
-    private static let releasesURL = "https://api.github.com/repos/blitzdotdev/blitz-mac/releases/latest"
-    //private static let releasesURL = "https://api.github.com/repos/pythonlearner1025/blitz-mac-preflight/releases/latest"
+    // Maintenance builds must not silently replace the fork with an upstream build.
+    private static let releasesURL = "https://api.github.com/repos/MrFam0s/blitz-mac/releases/latest"
 
     /// Current app version from Info.plist (falls back to "0.0.0" in dev builds).
     var currentVersion: String {
@@ -225,7 +225,7 @@ final class AutoUpdateManager {
 
     /// Fetches CHANGELOG.md from the repo and extracts the notes for the given version.
     private static func fetchChangelogNotes(for version: String) async -> String {
-        let rawURL = "https://raw.githubusercontent.com/blitzdotdev/blitz-mac/master/CHANGELOG.md"
+        let rawURL = "https://raw.githubusercontent.com/MrFam0s/blitz-mac/maintenance/auth-and-tooling/CHANGELOG.md"
         do {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: URL(string: rawURL)!))
             guard let content = String(data: data, encoding: .utf8) else { return "" }

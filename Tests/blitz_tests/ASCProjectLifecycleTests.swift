@@ -53,7 +53,8 @@ private func makeProjectSwitchApp(bundleId: String) -> ASCApp {
             primaryLocale: "en-US",
             vendorNumber: nil,
             contentRightsDeclaration: nil
-        )
+        ),
+        relationships: nil
     )
 }
 

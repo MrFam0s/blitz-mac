@@ -318,7 +318,8 @@ private func makeBuild(id: String, version: String) -> ASCBuild {
             processingState: "VALID",
             expirationDate: nil,
             expired: false,
-            minOsVersion: nil
+            minOsVersion: nil,
+            iconAssetToken: nil
         )
     )
 }
@@ -376,7 +377,8 @@ private func makeApp(primaryLocale: String?) -> ASCApp {
             primaryLocale: primaryLocale,
             vendorNumber: nil,
             contentRightsDeclaration: nil
-        )
+        ),
+        relationships: nil
     )
 }
 
