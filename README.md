@@ -115,7 +115,7 @@ For signed builds, copy `.env.example` to `.env` and fill in your Apple Develope
 bash scripts/bundle.sh release
 ```
 
-The ASC helper binary bundled into the app is built from the pinned submodule at `deps/App-Store-Connect-CLI-helper`. If you need to override that source during development or CI, set `BLITZ_ASCD_SOURCE_DIR` or point `BLITZ_ASCD_PATH` at a prebuilt compatible helper binary.
+The ASC helper is built from the pinned official submodule at `deps/App-Store-Connect-CLI-helper` with Blitz’s protocol adapter in `helpers/asc-overlay`. `GO` can select the Go executable. `BLITZ_ASCD_PATH` can select a prebuilt helper with the same pinned version and protocol. See [the maintenance notes](MAINTENANCE.md) for validation and updating.
 
 ## Verify a release binary
 

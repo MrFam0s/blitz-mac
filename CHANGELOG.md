@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.37 (maintenance fork)
+- Build the embedded ASC helper against official ASC 5.15.0, sharing that version with Blitz's CLI wrapper.
+- Retain Blitz's JSON-lines protocol and full HTTP responses while applying current upstream target validation and redirect protection.
+- Respect globally configured Blitz MCP servers without rewriting project-level Codex settings.
+- Pin and verify the ASC source/version in the build, with retained license and provenance.
+
 ## 1.0.36 (maintenance fork)
 - Remember Apple sign-in browser state and provide an explicit account-switch reset.
 - Stop logging login cookie value fragments and account email addresses.

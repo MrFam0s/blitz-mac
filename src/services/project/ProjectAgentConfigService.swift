@@ -3,6 +3,25 @@ import Foundation
 /// Writes Blitz-owned agent config and installs Blitz-managed helper content.
 struct ProjectAgentConfigService {
     let baseDirectory: URL
+    private let globalCodexConfig: URL
+
+    init(baseDirectory: URL, globalCodexConfig: URL? = nil) {
+        self.baseDirectory = baseDirectory
+        let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"]
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+        self.globalCodexConfig = globalCodexConfig ?? codexHome.appendingPathComponent("config.toml")
+    }
+
+    private var usesGlobalCodexMCP: Bool {
+        guard let config = try? String(contentsOf: globalCodexConfig, encoding: .utf8) else { return false }
+        // A global entry, including an explicitly disabled one, takes precedence.
+        return ["blitz_macos", "blitz-iphone"].allSatisfy { name in
+            let escaped = NSRegularExpression.escapedPattern(for: name)
+            let pattern = "(?m)^\\s*\\[\\s*mcp_servers\\s*\\.\\s*(?:\(escaped)|\"\(escaped)\"|'\(escaped)')\\s*\\]\\s*(?:#.*)?$"
+            return config.range(of: pattern, options: .regularExpression) != nil
+        }
+    }
 
     private enum ProjectSkillRoot: String, CaseIterable {
         case claude = ".claude"
@@ -301,7 +320,12 @@ struct ProjectAgentConfigService {
         """
         do {
             try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
-            try toml.write(to: codexConfig, atomically: true, encoding: .utf8)
+            if !usesGlobalCodexMCP {
+                try toml.write(to: codexConfig, atomically: true, encoding: .utf8)
+            } else if !FileManager.default.fileExists(atPath: codexConfig.path) {
+                let docs = "\(codexProjectDocFallbackLine)\n\(codexProjectDocMaxBytesLine)\n"
+                try docs.write(to: codexConfig, atomically: true, encoding: .utf8)
+            }
         } catch {
             print("[ProjectAgentConfigService] Failed to write .codex/config.toml: \(error)")
         }

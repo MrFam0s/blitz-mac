@@ -13,26 +13,42 @@ This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/bl
 
 The larger screenshot redesign and the subscription-group feature PR are not included. The embedded ASC daemon and iPhone MCP are unchanged.
 
+## 1.0.37
+
+The embedded helper now builds from official ASC 5.15.0 with a small protocol
+adapter maintained in this repository. The CLI wrapper and the app share this
+ASC version. The iPhone MCP remains unchanged. When both Blitz MCP servers are
+configured globally in Codex, Blitz preserves existing project settings and
+does not generate duplicate local server definitions. Existing duplicates can
+be removed from project TOML after checking the global settings.
+
 ## Build and validation
 
-With the existing compatible Blitz helper installed:
+Initialize the pinned submodule and install Go as specified by its `go.mod`:
 
 ```sh
+git submodule update --init --recursive
 swift test --build-system native
-BLITZ_ASCD_PATH="$HOME/.blitz/bin/ascd" \
 BLITZ_SWIFT_BUILD_SYSTEM=native \
 CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
 ```
 
 The `native` build engine avoids requiring the optional Metal toolchain with Xcode 27. It is deprecated by Swift and is a local compatibility fallback; with the Metal toolchain installed, use the default engine. `BLITZ_SWIFT_BUILD_SYSTEM` is optional and does not change the default build engine.
 
-Without `APPLE_SIGNING_IDENTITY`, the bundle is ad-hoc signed, not notarized. Existing Keychain or macOS permissions may require approval for the rebuilt app. A local build can reuse the protocol-compatible helper from the installed app. To build the helper from source instead, initialize the pinned submodule and install its required Go version. Never substitute a regular `asc` binary for `ascd`.
+Without `APPLE_SIGNING_IDENTITY`, the bundle is ad-hoc signed, not notarized. Existing Keychain or macOS permissions may require approval for the rebuilt app. The default build compiles the pinned ASC source with the Blitz adapter. `BLITZ_ASCD_PATH` accepts a prebuilt helper only if its protocol and pinned version match. See `helpers/asc-overlay/README.md` for provenance and Go tests.
 
-## Independent ASC CLI
+## One ASC implementation
 
-The official [App-Store-Connect-CLI](https://github.com/rorkai/App-Store-Connect-CLI) can coexist with Blitz. Its public CLI and Blitz's long-lived `ascd` JSON-lines service are separate interfaces. Upgrading the standalone CLI does not upgrade Blitz's internal service or fix WebKit sign-in persistence.
+Blitz installs its current helper at `~/.blitz/bin/ascd` and a CLI wrapper at
+`~/.blitz/bin/asc`. To use this CLI from a general terminal, a wrapper in a
+PATH directory can execute `"$HOME/.blitz/bin/asc" "$@"`. A separate official
+ASC executable and additional `asc-upstream`/`asc-blitz` aliases are unnecessary.
 
-For an existing Blitz API-key profile, the standalone CLI can be invoked with `ASC_CONFIG_PATH="$HOME/.blitz/asc-agent/config.json"` and `ASC_BYPASS_KEYCHAIN=1`. Validate via `asc auth status --validate`; do not copy credentials or run a new login as a routine migration step. Blitz-launched terminals may put `~/.blitz/bin` first in PATH, so inspect `command -v asc` and `asc version`, or use the explicit `asc-upstream` wrapper where installed.
+The Blitz wrapper reuses its existing API-key profile via `ASC_CONFIG_PATH` and
+`ASC_BYPASS_KEYCHAIN`. Validate with `asc auth status --validate`; do not copy
+credentials or start a new login as a routine migration. Check `command -v asc`
+and `asc version` when investigating PATH conflicts. Updating ASC does not itself
+extend Apple web-session lifetime; the persistent WebKit fix is separate.
 
 ## Devices and MCP
 
