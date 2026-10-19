@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.39 (maintenance fork)
+- Remove the three-dot menus from dashboard app cards; Remove and Restore remain available by right-clicking each card.
+- Hide automatic keyboard focus effects in the SwiftUI interface while keeping keyboard navigation available.
+
 ## 1.0.38 (maintenance fork)
 - Remove apps from My Apps through their menu without deleting local projects or App Store Connect records.
 - Keep hidden apps hidden across refreshes and restarts; restore them through Undo, Hidden Apps, or an explicit re-import.

@@ -71,6 +71,7 @@ struct BlitzApp: App {
     var body: some Scene {
         Window("Blitz", id: "main") {
             ContentView(appState: appState)
+                .focusEffectDisabled()
                 .onAppear {
                     appDelegate.appState = appState
                 }

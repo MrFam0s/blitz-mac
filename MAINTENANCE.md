@@ -41,6 +41,15 @@ app, a local-only project was removed, restored with Undo, removed again,
 refreshed, and kept hidden through a full restart before being restored through
 Hidden Apps. Bundle-ID search and both global MCP server handshakes also passed.
 
+## 1.0.39
+
+Dashboard cards now expose Remove/Restore through their right-click context
+menu only, without a separate three-dot button. SwiftUI keyboard focus effects
+are hidden in the main window while keyboard navigation remains available.
+Validated with all 109 Swift tests, a signed release build, and the installed
+app: Tab navigation no longer draws focus rings, and a local-only app can be
+removed and restored using the right-click context menu.
+
 ## Build and validation
 
 Initialize the pinned submodule and install Go as specified by its `go.mod`:

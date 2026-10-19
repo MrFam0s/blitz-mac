@@ -349,32 +349,14 @@ struct DashboardView: View {
         let isSelected = row.linkedProjectId != nil && row.linkedProjectId == appState.activeProjectId
         let project = row.linkedProjectId.flatMap { id in projects.first(where: { $0.id == id }) }
 
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Menu {
-                    visibilityAction(for: row)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(width: 24, height: 18)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("Options for \(row.name)")
-                .help("Options for \(row.name)")
-            }
-
-            Button { selectRow(row) } label: {
-                appCardContent(row: row, project: project, isSelected: isSelected)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open \(row.name)")
+        Button { selectRow(row) } label: {
+            appCardContent(row: row, project: project, isSelected: isSelected)
+                .frame(maxWidth: .infinity)
+                .padding(10)
+                .contentShape(Rectangle())
         }
-        .padding(10)
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open \(row.name)")
         .contextMenu { visibilityAction(for: row) }
         .help([row.name, row.bundleId].compactMap { $0 }.joined(separator: "\n"))
     }
