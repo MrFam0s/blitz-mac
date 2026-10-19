@@ -320,6 +320,17 @@ else
 fi
 
 # ============================================================================
+# Refresh the companion independently of Python/CLI presence, including updates.
+# The old bootstrap skipped this whenever the CLI already existed.
+# ============================================================================
+
+if ! run_as_user env -i HOME="$CONSOLE_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+    /bin/bash "$RESOURCES_DIR/pkg-scripts/install-idb-companion.sh" \
+    "$CONSOLE_HOME/.blitz/idb-companion" >> "$LOG" 2>&1; then
+    echo "WARNING: IDB companion update failed; prior installation was retained" >> "$LOG"
+fi
+
+# ============================================================================
 # Launch Blitz.app
 # ============================================================================
 

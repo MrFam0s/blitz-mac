@@ -158,10 +158,45 @@ import Testing
     }
     #expect(find(root) == [bounds])
     #expect(find(Node(children: [screen])) == [])
-    // Preserve ambiguity so the caller rejects it rather than choosing a screen.
-    #expect(find(Node(children: [screen, screen] + controls)).count == 2)
+    // Device Hub exposes host and remote AX containers for the same screen.
+    #expect(find(Node(children: [screen, screen] + controls)) == [bounds])
+    let rounded = Node(frame: bounds.offsetBy(dx: 0.1, dy: 0), children: [Node(id: "remote-content")])
+    #expect(find(Node(children: [screen, rounded] + controls)) == [bounds])
+    // Genuinely different screen bounds must still be rejected as ambiguous.
+    let other = Node(frame: bounds.offsetBy(dx: 200, dy: 0), children: [Node(id: "other")])
+    #expect(find(Node(children: [screen, other] + controls)).count == 2)
     #expect(DeviceHubScreenGeometry.matchesWindow(bounds, bounds.offsetBy(dx: 0.5, dy: 0)))
     #expect(!DeviceHubScreenGeometry.matchesWindow(bounds, bounds.offsetBy(dx: 100, dy: 0)))
+}
+
+@Test func deviceHubWaitsForRemoteLayoutButNotPermissionFailures() async throws {
+    let bounds = CGRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
+    var attempts = 0
+    let result = try await DeviceHubScreenGeometry.waitForScreen(maxAttempts: 3, retryDelay: .zero) {
+        attempts += 1
+        if attempts < 3 { throw SimulatorCaptureService.CaptureError.deviceScreenNotFound }
+        return bounds
+    }
+    #expect(result == bounds)
+    #expect(attempts == 3)
+    attempts = 0
+    do {
+        _ = try await DeviceHubScreenGeometry.waitForScreen(maxAttempts: 3, retryDelay: .zero) {
+            attempts += 1
+            throw SimulatorCaptureService.CaptureError.accessibilityDenied
+        }
+        Issue.record("Permission denial must propagate")
+    } catch SimulatorCaptureService.CaptureError.accessibilityDenied {}
+    #expect(attempts == 1)
+    attempts = 0
+    do {
+        _ = try await DeviceHubScreenGeometry.waitForScreen(maxAttempts: 3, retryDelay: .zero) {
+            attempts += 1
+            throw SimulatorCaptureService.CaptureError.deviceScreenNotFound
+        }
+        Issue.record("Persistent ambiguity must propagate")
+    } catch SimulatorCaptureService.CaptureError.deviceScreenNotFound {}
+    #expect(attempts == 3)
 }
 
 private func simProject(_ id: String, selected: String? = nil) -> Project {

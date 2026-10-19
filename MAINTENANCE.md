@@ -110,10 +110,53 @@ the Simulator.app path and `-CurrentDeviceUDID` launch argument.
 
 Device Hub's capture is restricted to the uniquely named selected device window.
 Accessibility provides the actual device screen rectangle, excluding both its
-header and bottom controls. If permission or an unambiguous screen rectangle is
+header and bottom controls. Device Hub exposes host and remote accessibility
+containers with equivalent screen bounds (within half a point); those count as one
+screen, while different candidate rectangles remain an error. A newly opened
+window gets a bounded layout retry; permission failures are not retried.
+If permission or an unambiguous screen rectangle is
 unavailable, Blitz reports the issue instead of sending incorrectly mapped
 touches. Changes to Device Hub's accessibility hierarchy may require adapting
 this integration. Only the affected permission offers a System Settings action.
+
+On Apple Silicon with macOS 15+ and Xcode 26+, the installer now refreshes the
+official IDB companion to **1.7.6**, including when Python's CLI already exists
+and during app updates. `scripts/pkg-scripts/install-idb-companion.sh` pins the
+release SHA-256, preserves the complete Resources tree and a backup of the prior
+installation. Other hosts retain the legacy companion. This fixes the obsolete
+1.1.8 companion's SimulatorKit path on Xcode 27. The existing Python client is
+unchanged. A manual local app-copy installation can run the same helper script:
+
+```sh
+bash scripts/pkg-scripts/install-idb-companion.sh "$HOME/.blitz/idb-companion"
+```
+
+Blitz's IDB subprocesses receive only a small environment allowlist, because old
+companions log their inherited environment. Agent and App Store credentials are
+excluded. The Metal screen's input overlay uses a native AppKit event surface;
+SwiftUI's drag recognizer did not deliver taps reliably above the Metal view.
+The Simulator view starts a companion for the chosen simulator on its own private
+UNIX socket. It does not reuse IDB's global connection cache or enumerate physical
+devices; both caused startup failures during Xcode 27 verification. Concurrent
+first inputs share one serialized startup. Leaving the view stops only its own
+helpers; the pinned companion also exits after 60 seconds without requests.
+Late input tasks retain their originating session and UDID and cannot restart a
+closed session. A temporary invalid Device Hub AX tree during capture receives a
+bounded retry with touches suspended; it does not immediately stop the image.
+
+Validated locally on Xcode 27 with 131 Swift tests, three offline installer
+checks, a release build, strict code-signature verification and the bundled ASC
+protocol/CLI contract. The installed Developer-ID-signed release starts without
+renewed permission prompts and accepts Settings taps and Home input. The full
+UI pass also verified scrolling, resize with correct touch mapping, reopening
+the selected compact window, and preserving selection across normal quit/reopen;
+other simulators retained their names and running states.
+
+The separately installed iPhone MCP package is unchanged. Its handshake was
+checked, but device actions through that package and physical iPhones were not
+part of this UI verification. Its automatic IDB discovery still uses the global
+connection cache/all-target enumeration; the private simulator connection above
+applies to the Blitz app only.
 
 Initialize the pinned submodule and install Go as specified by its `go.mod`:
 

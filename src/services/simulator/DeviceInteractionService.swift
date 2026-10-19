@@ -4,6 +4,8 @@ import Foundation
 actor DeviceInteractionService {
     private let idb = IDBClient()
 
+    func shutdown() async { await idb.shutdown() }
+
     /// Execute a device action on a simulator via idb
     func execute(_ action: DeviceAction, udid: String) async throws -> String? {
         switch action {

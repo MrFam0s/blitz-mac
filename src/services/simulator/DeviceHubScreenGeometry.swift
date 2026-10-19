@@ -34,9 +34,25 @@ enum DeviceHubScreenGeometry {
         return rect
     }
 
-    static func matchesWindow(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
-        abs(lhs.minX - rhs.minX) < 2 && abs(lhs.minY - rhs.minY) < 2
-            && abs(lhs.width - rhs.width) < 2 && abs(lhs.height - rhs.height) < 2
+    static func matchesWindow(_ lhs: CGRect, _ rhs: CGRect, tolerance: CGFloat = 2) -> Bool {
+        abs(lhs.minX - rhs.minX) < tolerance && abs(lhs.minY - rhs.minY) < tolerance
+            && abs(lhs.width - rhs.width) < tolerance && abs(lhs.height - rhs.height) < tolerance
+    }
+
+    /// A newly opened compact window can precede its remote screen's layout.
+    /// Retry only that transient condition; permission and cancellation errors
+    /// must reach the caller immediately.
+    static func waitForScreen(maxAttempts: Int = 8, retryDelay: Duration = .milliseconds(250),
+        operation: () async throws -> CGRect) async throws -> CGRect {
+        for attempt in 1...max(1, maxAttempts) {
+            try Task.checkCancellation()
+            do {
+                return try await operation()
+            } catch SimulatorCaptureService.CaptureError.deviceScreenNotFound where attempt < maxAttempts {
+                try await Task.sleep(for: retryDelay)
+            }
+        }
+        throw SimulatorCaptureService.CaptureError.deviceScreenNotFound
     }
 
     /// SwiftUI's screen container can use different AX roles. Identify it by
@@ -52,7 +68,10 @@ enum DeviceHubScreenGeometry {
             // These controls are siblings of the screen, outside its coordinate space.
             if ids.contains("camera.viewfinder"), ids.contains("record.circle") {
                 for child in descendants where !children(child).isEmpty {
-                    if let rect = frame(child), rect.width > 100, rect.height > 100 {
+                    // Device Hub exposes both the host screen and its remote
+                    // accessibility contents as siblings with identical bounds.
+                    if let rect = frame(child), rect.width > 100, rect.height > 100,
+                       !candidates.contains(where: { matchesWindow($0, rect, tolerance: 0.5) }) {
                         candidates.append(rect)
                     }
                 }

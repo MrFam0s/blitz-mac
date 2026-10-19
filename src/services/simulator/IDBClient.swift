@@ -6,8 +6,21 @@ actor IDBClient {
     private var shellProcess: Process?
     private var stdinPipe: Pipe?
     private var udid: String?
+    private var companionProcess: Process?
+    private var socketDirectory: URL?
+    private var connectionInUse = false
+    private var closed = false
+    private var connectionWaiters: [CheckedContinuation<Void, Never>] = []
 
     init() {}
+
+    /// IDB companions can log their launch environment. Never pass app credentials,
+    /// agent API keys, Python injection settings or arbitrary IDB_* variables.
+    nonisolated static func helperEnvironment(_ source: [String: String]) -> [String: String] {
+        let allowed: Set<String> = ["HOME", "PATH", "TMPDIR", "USER", "LOGNAME",
+                                    "LANG", "LC_ALL", "LC_CTYPE", "DEVELOPER_DIR"]
+        return source.filter { allowed.contains($0.key) }
+    }
 
     /// Resolve the idb binary path — prefer ~/.blitz/python/bin/idb
     private static func resolveIdbPath() -> String {
@@ -35,44 +48,100 @@ actor IDBClient {
     private static let idbPath = resolveIdbPath()
     private static let companionPath = resolveCompanionPath()
 
+    nonisolated static func companionArguments(udid: String, socket: String) -> [String] {
+        ["--udid", udid, "--only", "simulator", "--grpc-domain-sock", socket]
+    }
+
+    // Actor methods may interleave across startup awaits. Serialize connection
+    // setup and writes so rapid first taps cannot launch competing helpers.
+    private func acquireConnection() async {
+        if connectionInUse {
+            await withCheckedContinuation { connectionWaiters.append($0) }
+        } else {
+            connectionInUse = true
+        }
+    }
+
+    private func releaseConnection() {
+        if connectionWaiters.isEmpty { connectionInUse = false }
+        else { connectionWaiters.removeFirst().resume() }
+    }
+
     /// Ensure we have a running shell process for the given UDID
     private func ensureShell(udid: String) async throws {
-        if self.udid == udid, shellProcess != nil, shellProcess?.isRunning == true {
+        guard !closed else { throw CancellationError() }
+        if self.udid == udid, shellProcess?.isRunning == true, companionProcess?.isRunning == true {
             return
         }
 
-        // Kill existing shell
-        shellProcess?.terminate()
-        shellProcess = nil
-        stdinPipe = nil
-
-        var args: [String] = []
-        if let companionPath = Self.companionPath {
-            args.append(contentsOf: ["--companion-path", companionPath])
+        stopProcesses()
+        guard UUID(uuidString: udid) != nil, let companionPath = Self.companionPath else {
+            throw IDBError.shellNotAvailable
         }
-        args.append(contentsOf: ["shell", "--no-prompt", "--udid", udid])
+        // A private socket avoids stale global IDB registrations and discovery
+        // of physical devices when this view only needs one known simulator.
+        // /tmp keeps the UNIX socket path below macOS's length limit.
+        let directory = URL(fileURLWithPath: "/tmp/blitz-idb-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
+                                                attributes: [.posixPermissions: 0o700])
+        socketDirectory = directory
+        let socket = directory.appendingPathComponent("companion.sock").path
+        let companion = Process()
+        companion.executableURL = URL(fileURLWithPath: companionPath)
+        companion.arguments = Self.companionArguments(udid: udid, socket: socket)
+        if companionPath == BlitzPaths.idbCompanionPath.path,
+           (try? String(contentsOf: BlitzPaths.root.appendingPathComponent("idb-companion/.blitz-version")))?.hasPrefix("1.7.6 ") == true {
+            companion.arguments! += ["--idle-shutdown-time", "60"]
+        }
+        companion.environment = Self.helperEnvironment(ProcessInfo.processInfo.environment)
+        companion.standardOutput = FileHandle.nullDevice
+        companion.standardError = FileHandle.nullDevice
+        companionProcess = companion
+        do {
+            try companion.run()
+            for _ in 0..<50 {
+                try Task.checkCancellation()
+                guard !closed else { throw CancellationError() }
+                guard companion.isRunning else { throw IDBError.shellNotAvailable }
+                if FileManager.default.fileExists(atPath: socket) { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard FileManager.default.fileExists(atPath: socket) else { throw IDBError.shellNotAvailable }
+        } catch {
+            stopProcesses()
+            throw error
+        }
+        let args = ["--companion", socket, "shell", "--no-prompt", "--udid", udid]
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: Self.idbPath)
         process.arguments = args
+        process.environment = Self.helperEnvironment(ProcessInfo.processInfo.environment)
 
         let stdin = Pipe()
         process.standardInput = stdin
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try process.run()
-
-        // Give the shell a moment to initialize
-        try await Task.sleep(for: .milliseconds(500))
-
         self.shellProcess = process
         self.stdinPipe = stdin
         self.udid = udid
+        do {
+            try process.run()
+            try await Task.sleep(for: .milliseconds(500))
+            guard !closed else { throw CancellationError() }
+            guard process.isRunning else { throw IDBError.shellNotAvailable }
+        } catch {
+            stopProcesses()
+            throw error
+        }
     }
 
     /// Send a command through the shell's stdin
     private func runInShell(udid: String, command: String) async throws {
+        await acquireConnection()
+        defer { releaseConnection() }
+        try Task.checkCancellation()
         try await ensureShell(udid: udid)
 
         guard let stdin = stdinPipe else {
@@ -84,13 +153,25 @@ actor IDBClient {
     }
 
     /// Run a direct idb command (not through shell) and return output
-    private func runDirect(_ arguments: [String]) async throws -> String {
-        var args: [String] = []
-        if let companionPath = Self.companionPath {
-            args.append(contentsOf: ["--companion-path", companionPath])
+    private func runDirect(udid: String, _ arguments: [String]) async throws -> String {
+        await acquireConnection()
+        let socket: String
+        do {
+            try Task.checkCancellation()
+            try await ensureShell(udid: udid)
+            guard let socketDirectory else { throw IDBError.shellNotAvailable }
+            socket = socketDirectory.appendingPathComponent("companion.sock").path
+        } catch {
+            releaseConnection()
+            throw error
         }
+        releaseConnection()
+        // Do not hold the startup gate across a potentially long CLI query.
+        var args = ["--companion", socket]
         args.append(contentsOf: arguments)
-        return try await ProcessRunner.run(Self.idbPath, arguments: args)
+        return try await ProcessRunner.run(Self.idbPath, arguments: args,
+            environment: Self.helperEnvironment(ProcessInfo.processInfo.environment),
+            inheritEnvironment: false)
     }
 
     // MARK: - Device Actions (via persistent shell for speed)
@@ -156,25 +237,35 @@ actor IDBClient {
 
     /// Describe the full UI hierarchy
     func describeAll(udid: String) async throws -> String {
-        try await runDirect(["ui", "describe-all", "--udid", udid])
+        try await runDirect(udid: udid, ["ui", "describe-all", "--udid", udid])
     }
 
     /// Describe the element at a specific point
     func describePoint(udid: String, x: Int, y: Int) async throws -> String {
-        try await runDirect(["ui", "describe-point", "\(x)", "\(y)", "--udid", udid])
+        try await runDirect(udid: udid, ["ui", "describe-point", "\(x)", "\(y)", "--udid", udid])
     }
 
     /// Take a screenshot
     func screenshot(udid: String, path: String) async throws {
-        _ = try await runDirect(["screenshot", "--udid", udid, path])
+        _ = try await runDirect(udid: udid, ["screenshot", "--udid", udid, path])
     }
 
     /// Shutdown the shell when done
-    func shutdown() {
-        shellProcess?.terminate()
+    func shutdown() async {
+        // Reject both queued and later-scheduled events from the vanished view.
+        closed = true
+        stopProcesses()
+    }
+
+    private func stopProcesses() {
+        if shellProcess?.isRunning == true { shellProcess?.terminate() }
+        if companionProcess?.isRunning == true { companionProcess?.terminate() }
         shellProcess = nil
+        companionProcess = nil
         stdinPipe = nil
         udid = nil
+        if let socketDirectory { try? FileManager.default.removeItem(at: socketDirectory) }
+        socketDirectory = nil
     }
 
     enum IDBError: Error, LocalizedError {

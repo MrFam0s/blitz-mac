@@ -12,6 +12,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private var streamOutput: StreamOutputHandler?
     private var currentWindow: SCWindow?
     private var resizeTimer: Timer?
+    @MainActor private var resizeCheckRunning = false
 
     /// Protects _latestFrame against concurrent read (main thread) / write (capture queue)
     private let frameLock = NSLock()
@@ -28,6 +29,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private(set) var frameCount: Int = 0
     private(set) var deviceScreenRect: CGRect?
     var onGeometryChange: (@MainActor @Sendable (CGRect?) -> Void)?
+    var onTouchAvailabilityChange: (@MainActor @Sendable (Bool) -> Void)?
 
     /// Callback when a new frame arrives
     var onFrame: ((CVPixelBuffer) -> Void)?
@@ -104,19 +106,27 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
             }
         }
 
-        guard let window else {
+        guard var window = window else {
             throw CaptureError.simulatorWindowNotFound
         }
 
         try Task.checkCancellation()
-        currentWindow = window
         if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
            let app = window.owningApplication {
-            deviceScreenRect = try DeviceHubScreenGeometry.screenRect(
-                processID: app.processID, windowTitle: window.title ?? "", windowFrame: window.frame)
+            let selectedWindowID = window.windowID
+            deviceScreenRect = try await DeviceHubScreenGeometry.waitForScreen {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                guard let refreshed = content.windows.first(where: { $0.windowID == selectedWindowID }) else {
+                    throw CaptureError.deviceScreenNotFound
+                }
+                window = refreshed
+                return try DeviceHubScreenGeometry.screenRect(
+                    processID: app.processID, windowTitle: refreshed.title ?? "", windowFrame: refreshed.frame)
+            }
         } else {
             deviceScreenRect = nil
         }
+        currentWindow = window
         await onGeometryChange?(deviceScreenRect)
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
@@ -148,6 +158,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
         self.stream = stream
         self.isCapturing = true
+        await onTouchAvailabilityChange?(true)
         self.skipFrameCount = 0
         self.frameCount = 0
         self.frameSize = CGSize(width: config.width, height: config.height)
@@ -165,6 +176,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     /// Stop capturing
     func stopCapture() async {
         logger.info("Stopping capture (total frames: \(self.frameCount))")
+        await onTouchAvailabilityChange?(false)
 
         await MainActor.run {
             resizeTimer?.invalidate()
@@ -191,25 +203,51 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     }
 
     /// Refresh only the selected window after capture permission has been granted.
-    private func checkForResize() async {
-        guard isCapturing, let previous = currentWindow else { return }
+    @MainActor private func checkForResize() async {
+        guard !resizeCheckRunning, isCapturing, let previous = currentWindow,
+              let expectedStream = stream else { return }
+        resizeCheckRunning = true
+        defer { resizeCheckRunning = false }
         // Permission has already been granted. Refresh this exact window's geometry.
         guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
-              let window = content.windows.first(where: { $0.windowID == previous.windowID }) else { return }
-        currentWindow = window
+              var window = content.windows.first(where: { $0.windowID == previous.windowID }),
+              stream === expectedStream else { return }
         if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
            let app = window.owningApplication {
-            if let rect = try? DeviceHubScreenGeometry.screenRect(processID: app.processID,
-                windowTitle: window.title ?? "", windowFrame: window.frame) {
+            do {
+                let rect: CGRect
+                do {
+                    rect = try DeviceHubScreenGeometry.screenRect(processID: app.processID,
+                        windowTitle: window.title ?? "", windowFrame: window.frame)
+                } catch SimulatorCaptureService.CaptureError.deviceScreenNotFound {
+                    // Device Hub can temporarily replace its remote AX tree even
+                    // without resizing. Suspend touches while refreshing the bounds.
+                    onTouchAvailabilityChange?(false)
+                    rect = try await DeviceHubScreenGeometry.waitForScreen {
+                        guard self.stream === expectedStream else { throw CancellationError() }
+                        let refreshed = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                        guard let candidate = refreshed.windows.first(where: { $0.windowID == previous.windowID }) else {
+                            throw CaptureError.deviceScreenNotFound
+                        }
+                        window = candidate
+                        return try DeviceHubScreenGeometry.screenRect(processID: app.processID,
+                            windowTitle: candidate.title ?? "", windowFrame: candidate.frame)
+                    }
+                }
+                guard stream === expectedStream else { return }
                 deviceScreenRect = rect
-                await onGeometryChange?(rect)
-            } else {
+                onGeometryChange?(rect)
+                onTouchAvailabilityChange?(true)
+            } catch {
+                guard stream === expectedStream else { return }
                 // Stop rather than keep accepting touches with stale screen bounds.
                 await stopCapture()
                 await onGeometryChange?(.zero)
                 return
             }
         }
+        guard stream === expectedStream else { return }
+        currentWindow = window
 
         let scale: CGFloat = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2.0 }
         let newWidth = Int(window.frame.width * scale)

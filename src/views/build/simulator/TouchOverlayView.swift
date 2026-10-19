@@ -114,79 +114,78 @@ struct TouchOverlayView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            if dragStart == nil {
-                                dragStart = value.startLocation
-                                dragStartTime = Date()
-                            }
-                            swipePath.append(value.location)
-                        }
-                        .onEnded { value in
-                            let start = dragStart ?? value.startLocation
-                            let end = value.location
-                            let distance = hypot(end.x - start.x, end.y - start.y)
+            // Use AppKit events above the native Metal view. SwiftUI's drag
+            // recognizer did not receive clicks reliably in this composition.
+            SimulatorTouchSurface(onChanged: { value in
+                if dragStart == nil {
+                    dragStart = value.startLocation
+                    dragStartTime = Date()
+                }
+                swipePath.append(value.location)
+            }, onEnded: { value in
+                let start = dragStart ?? value.startLocation
+                let end = value.location
+                let distance = hypot(end.x - start.x, end.y - start.y)
 
-                            if distance < 10 {
-                                let (simX, simY) = SimulatorConfigDatabase.viewToSimulatorCoords(
-                                    viewX: Double(end.x),
-                                    viewY: Double(end.y),
-                                    viewWidth: Double(geometry.size.width),
-                                    viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig,
-                                    frameWidth: frameWidth,
-                                    frameHeight: frameHeight
-                                )
-                                onTap(simX, simY)
-                                renderTap(at: end)
-                            } else {
-                                let (startX, startY) = SimulatorConfigDatabase.viewToSimulatorCoords(
-                                    viewX: Double(start.x),
-                                    viewY: Double(start.y),
-                                    viewWidth: Double(geometry.size.width),
-                                    viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig,
-                                    frameWidth: frameWidth,
-                                    frameHeight: frameHeight
-                                )
-                                let (endX, endY) = SimulatorConfigDatabase.viewToSimulatorCoords(
-                                    viewX: Double(end.x),
-                                    viewY: Double(end.y),
-                                    viewWidth: Double(geometry.size.width),
-                                    viewHeight: Double(geometry.size.height),
-                                    config: deviceConfig,
-                                    frameWidth: frameWidth,
-                                    frameHeight: frameHeight
-                                )
+                if distance < 10 {
+                    let (simX, simY) = SimulatorConfigDatabase.viewToSimulatorCoords(
+                        viewX: Double(end.x),
+                        viewY: Double(end.y),
+                        viewWidth: Double(geometry.size.width),
+                        viewHeight: Double(geometry.size.height),
+                        config: deviceConfig,
+                        frameWidth: frameWidth,
+                        frameHeight: frameHeight
+                    )
+                    onTap(simX, simY)
+                    renderTap(at: end)
+                } else {
+                    let (startX, startY) = SimulatorConfigDatabase.viewToSimulatorCoords(
+                        viewX: Double(start.x),
+                        viewY: Double(start.y),
+                        viewWidth: Double(geometry.size.width),
+                        viewHeight: Double(geometry.size.height),
+                        config: deviceConfig,
+                        frameWidth: frameWidth,
+                        frameHeight: frameHeight
+                    )
+                    let (endX, endY) = SimulatorConfigDatabase.viewToSimulatorCoords(
+                        viewX: Double(end.x),
+                        viewY: Double(end.y),
+                        viewWidth: Double(geometry.size.width),
+                        viewHeight: Double(geometry.size.height),
+                        config: deviceConfig,
+                        frameWidth: frameWidth,
+                        frameHeight: frameHeight
+                    )
 
-                                let duration = dragStartTime.map { Date().timeIntervalSince($0) } ?? 0.3
-                                let simDistance = hypot(endX - startX, endY - startY)
-                                let delta = max(1, Int(round(simDistance / 10)))
+                    let duration = dragStartTime.map { Date().timeIntervalSince($0) } ?? 0.3
+                    let simDistance = hypot(endX - startX, endY - startY)
+                    let delta = max(1, Int(round(simDistance / 10)))
 
-                                onSwipe(startX, startY, endX, endY, duration, delta)
-                            }
+                    onSwipe(startX, startY, endX, endY, duration, delta)
+                }
 
-                            dragStart = nil
-                            dragStartTime = nil
-                            swipePath = []
-                        }
-                )
+                dragStart = nil
+                dragStartTime = nil
+                swipePath = []
+            })
                 .overlay {
-                    ForEach(clickMarkers) { marker in
-                        skin.tapIndicator(opacity: marker.opacity)
-                            .position(marker.position)
-                    }
+                    ZStack {
+                        ForEach(clickMarkers) { marker in
+                            skin.tapIndicator(opacity: marker.opacity)
+                                .position(marker.position)
+                        }
 
-                    if swipePath.count > 1 {
-                        skin.activeSwipeTrail(points: swipePath)
-                    }
+                        if swipePath.count > 1 {
+                            skin.activeSwipeTrail(points: swipePath)
+                        }
 
-                    ForEach(remoteSwipeTrails) { trail in
-                        skin.remoteSwipeTrail(from: trail.from, to: trail.to, opacity: trail.opacity)
+                        ForEach(remoteSwipeTrails) { trail in
+                            skin.remoteSwipeTrail(from: trail.from, to: trail.to, opacity: trail.opacity)
+                        }
                     }
+                    .allowsHitTesting(false)
                 }
                 .onAppear {
                     renderNewGestureEvents(viewSize: geometry.size)

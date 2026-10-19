@@ -30,6 +30,7 @@ struct ProcessRunner: Sendable {
         _ executable: String,
         arguments: [String] = [],
         environment: [String: String]? = nil,
+        inheritEnvironment: Bool = true,
         currentDirectory: String? = nil,
         // TODO: timeout is accepted for API compatibility but is not enforced
         timeout: TimeInterval = 30
@@ -44,8 +45,9 @@ struct ProcessRunner: Sendable {
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
 
-            if let env = environment {
-                var processEnv = ProcessInfo.processInfo.environment
+            if environment != nil || !inheritEnvironment {
+                let env = environment ?? [:]
+                var processEnv = inheritEnvironment ? ProcessInfo.processInfo.environment : [:]
                 for (key, value) in env {
                     processEnv[key] = value
                 }

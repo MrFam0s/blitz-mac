@@ -10,6 +10,7 @@ final class SimulatorStreamManager {
     private(set) var needsScreenRecordingPermission = false
     private(set) var needsAccessibilityPermission = false
     private(set) var deviceScreenRect: CGRect?
+    private(set) var isTouchReady = false
     var statusMessage: String?
     /// True when the stream was paused by a tab switch (not manually stopped)
     var isPaused = false
@@ -18,6 +19,9 @@ final class SimulatorStreamManager {
     private var selectedDeviceID: String?
 
     init() {
+        captureService.onTouchAvailabilityChange = { [weak self] ready in
+            self?.isTouchReady = ready
+        }
         captureService.onGeometryChange = { [weak self] rect in
             guard let self else { return }
             if rect == .zero {

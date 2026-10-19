@@ -79,16 +79,18 @@ struct SimulatorView: View {
                             frameWidth: Int(frameSize.width),
                             frameHeight: Int(frameSize.height),
                             onTap: { x, y in
-                                Task { try? await handleTap(x: x, y: y) }
+                                sendInput(.tap(x: x, y: y))
                             },
                             onSwipe: { fx, fy, tx, ty, duration, delta in
-                                Task { try? await handleSwipe(fromX: fx, fromY: fy, toX: tx, toY: ty, duration: duration, delta: delta) }
+                                sendInput(.swipe(fromX: fx, fromY: fy, toX: tx, toY: ty,
+                                                 duration: duration, delta: Double(delta)))
                             },
                             gestureVisualization: appState.gestureVisualization,
                             activeDeviceID: appState.simulatorManager.bootedDeviceId,
                             skin: appState.selectedOverlaySkin
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 32))
+                        .allowsHitTesting(stream.isTouchReady)
                     )
                     .padding(16)
                 }
@@ -175,11 +177,14 @@ struct SimulatorView: View {
             await appState.startProjectSimulator()
         }
         .onAppear {
+            deviceInteraction = DeviceInteractionService()
             stream.ensureRenderer()
             installKeyMonitor()
         }
         .onDisappear {
             removeKeyMonitor()
+            let interaction = deviceInteraction
+            Task { await interaction.shutdown() }
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -188,10 +193,7 @@ struct SimulatorView: View {
 
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
-                    Task {
-                        guard let udid = appState.simulatorManager.bootedDeviceId else { return }
-                        _ = try? await deviceInteraction.execute(.button(.home), udid: udid)
-                    }
+                    sendInput(.button(.home))
                 }) {
                     Image(systemName: "house")
                         .padding(.horizontal, 4)
@@ -220,17 +222,12 @@ struct SimulatorView: View {
         }
     }
 
-    private func handleTap(x: Double, y: Double) async throws {
+    private func sendInput(_ action: DeviceAction) {
         guard let udid = appState.simulatorManager.bootedDeviceId else { return }
-        _ = try await deviceInteraction.execute(.tap(x: x, y: y), udid: udid)
-    }
-
-    private func handleSwipe(fromX: Double, fromY: Double, toX: Double, toY: Double, duration: Double, delta: Int) async throws {
-        guard let udid = appState.simulatorManager.bootedDeviceId else { return }
-        _ = try await deviceInteraction.execute(
-            .swipe(fromX: fromX, fromY: fromY, toX: toX, toY: toY, duration: duration, delta: Double(delta)),
-            udid: udid
-        )
+        // Capture the originating session and device before scheduling. A late
+        // task must never pick up a newly selected project's service or UDID.
+        let interaction = deviceInteraction
+        Task { _ = try? await interaction.execute(action, udid: udid) }
     }
 
     // MARK: - Keyboard Passthrough
