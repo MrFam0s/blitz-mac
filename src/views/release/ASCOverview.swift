@@ -89,7 +89,7 @@ struct ASCOverview: View {
             Divider()
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
                 headerRow
                 dataStatus
 
@@ -113,39 +113,54 @@ struct ASCOverview: View {
 
     @ViewBuilder
     private var dataStatus: some View {
-        HStack(spacing: 8) {
-            if asc.isTabLoading(.app) {
-                ProgressView().controlSize(.small)
-                Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
-            } else if !asc.overviewFailedFields.isEmpty {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-                Text("Some data could not be refreshed. Saved values remain visible.")
-                Button("Retry") { Task { await asc.refreshTabData(.app) } }
-                    .buttonStyle(.bordered).controlSize(.small)
+        if asc.isTabLoading(.app) || !asc.overviewFailedFields.isEmpty {
+            HStack(spacing: 8) {
+                if asc.isTabLoading(.app) {
+                    ProgressView().controlSize(.mini)
+                    Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
+                } else {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                    Text("Some data could not be refreshed. Saved values remain visible.")
+                    Button("Retry") { Task { await asc.refreshTabData(.app) } }
+                        .buttonStyle(.bordered).controlSize(.small)
+                }
             }
-            Spacer()
-            if let date = asc.overviewCacheDate {
-                Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
-            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 
-    // MARK: - Header row
+    // MARK: - Compact app header
+
+    private var headerRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                appIdentity.fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 8)
+                cacheTimestamp.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                appIdentity
+                cacheTimestamp
+            }
+        }
+    }
 
     @ViewBuilder
-    private var headerRow: some View {
-        HStack {
-            Text("Overview")
-                .font(.title2.weight(.semibold))
-            Spacer()
+    private var cacheTimestamp: some View {
+        if let date = asc.overviewCacheDate {
+            Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
+    }
 
+    @ViewBuilder
+    private var appIdentity: some View {
         if let app = asc.app {
             HStack(spacing: 10) {
                 if let project = appState.activeProject {
-                    ProjectAppIconView(project: project, size: 40, cornerRadius: 9) {
+                    ProjectAppIconView(project: project, size: 32, cornerRadius: 7) {
                         fallbackAppIcon(name: app.name)
                     }
                 } else {
@@ -154,20 +169,26 @@ struct ASCOverview: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.name)
                         .font(.headline)
+                        .lineLimit(1)
+                        .help(app.name)
                     HStack(spacing: 4) {
                         Text(app.bundleId)
-                            .font(.callout)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                             .fontDesign(.monospaced)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(app.bundleId)
                         if appState.activeProject != nil {
                             Button {
                                 showBundleIDSelector = true
                             } label: {
                                 Image(systemName: "gearshape")
-                                    .font(.callout)
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
+                            .help("Change project bundle ID")
                             .popover(isPresented: $showBundleIDSelector, arrowEdge: .bottom) {
                                 ProjectBundleIDSelectorView(
                                     appState: appState,
@@ -189,11 +210,11 @@ struct ASCOverview: View {
     private func fallbackAppIcon(name: String) -> some View {
         let first = String(name.prefix(1)).uppercased()
         return ZStack {
-            RoundedRectangle(cornerRadius: 9)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(Color.accentColor.opacity(0.18))
-                .frame(width: 40, height: 40)
+                .frame(width: 32, height: 32)
             Text(first.isEmpty ? "?" : first)
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary.opacity(0.8))
         }
     }
@@ -456,42 +477,20 @@ struct ASCOverview: View {
         .padding(.vertical, 5)
     }
 
-    // MARK: - Version Stats (original position — flat, not carded)
+    // MARK: - Compact version summary
 
     @ViewBuilder
     private var versionStatsSection: some View {
-        let live = asc.liveVersion
-        let pending = asc.currentUpdateVersion
         let rejectionCardVersion = asc.rejectionCardVersionForSelectedVersion(
             from: asc.appStoreVersions
         )
 
-        LazyVGrid(
-            columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-            spacing: 8
-        ) {
-            metricCard(
-                title: "Live Version",
-                value: live?.attributes.versionString ?? "—",
-                subtitle: live != nil ? "Ready for Sale" : "None",
-                color: live != nil ? .green : .secondary,
-                icon: "checkmark.seal.fill"
-            )
-            metricCard(
-                title: "Pending",
-                value: pending?.attributes.versionString ?? "—",
-                subtitle: pending.map { stateLabel($0.attributes.appStoreState ?? "") } ?? "None",
-                color: pending != nil ? .orange : .secondary,
-                icon: "clock.fill"
-            )
-            metricCard(
-                title: "Total Versions",
-                value: "\(asc.appStoreVersions.count)",
-                subtitle: "All time",
-                color: .blue,
-                icon: "list.number"
-            )
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 24) { versionMetrics }
+                .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 6) { versionMetrics }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
         if let rejectionCardVersion {
             RejectionCardView(asc: asc, version: rejectionCardVersion) {
@@ -505,6 +504,28 @@ struct ASCOverview: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var versionMetrics: some View {
+        let live = asc.liveVersion
+        let pending = asc.currentUpdateVersion
+        versionMetric(
+            title: "Live", value: live?.attributes.versionString ?? "—",
+            subtitle: nil, color: live != nil ? .green : .secondary,
+            icon: "checkmark.seal.fill"
+        )
+        .help(live != nil ? "Live Version · Ready for Sale" : "No live version")
+        versionMetric(
+            title: "Pending", value: pending?.attributes.versionString ?? "—",
+            subtitle: pending.map { stateLabel($0.attributes.appStoreState ?? "") },
+            color: pending != nil ? .orange : .secondary, icon: "clock.fill"
+        )
+        versionMetric(
+            title: "Versions", value: "\(asc.appStoreVersions.count)",
+            subtitle: nil, color: .secondary, icon: "list.number"
+        )
+        .help("Total versions · All time")
     }
 
     // MARK: - Submission Readiness (original standalone list)
@@ -801,19 +822,17 @@ struct ASCOverview: View {
         }
     }
 
-    private func metricCard(title: String, value: String, subtitle: String, color: Color, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 5) {
-                Image(systemName: icon).font(.callout).foregroundStyle(color)
-                Text(title).font(.caption).foregroundStyle(.secondary)
+    private func versionMetric(title: String, value: String, subtitle: String?, color: Color, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).foregroundStyle(color)
+            Text(title).foregroundStyle(.secondary)
+            Text(value).fontWeight(.semibold)
+            if let subtitle, !subtitle.isEmpty {
+                Text("· \(subtitle)").foregroundStyle(.secondary)
             }
-            Text(value).font(.body.weight(.semibold))
-            Text(subtitle).font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .font(.callout)
+        .accessibilityElement(children: .combine)
     }
 
     private func submissionHistoryRow(_ event: ASCSubmissionHistoryEvent) -> some View {

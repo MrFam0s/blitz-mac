@@ -237,6 +237,22 @@ The current build’s feedback query now confirms an empty result instead of HTT
 404. No Store mutations, uploads or device actions were performed. GitHub remains
 restricted to the free public-repository workflow described above.
 
+## 1.0.45 — compact overview header
+
+The overview places the app identity and data timestamp on one line and shows
+live version, pending update and total versions as one compact summary. It no
+longer repeats the Overview heading or spends a separate row on the timestamp.
+Narrow windows fall back to stacked content. Loading, refresh failures, Retry
+and rejection details remain visible when relevant; release actions are unchanged.
+
+Validation: all 157 existing Swift tests passed. No new tests were added for
+this layout-only change. The signed release build and strict signature check
+passed, and 1.0.45 was installed. The rendered Mühlenstein overview was checked
+in the installed app after relaunch: the healthy header uses roughly 60% less
+height before Submission Readiness at the existing window size. Automated native
+window resizing was unavailable, so the narrow-width fallback was not visually
+verified. No Store data or release actions were changed.
+
 ## Build and validation
 
 ### Xcode 27 / Blitz 1.0.41
