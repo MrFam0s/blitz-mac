@@ -14,7 +14,7 @@ struct SimulatorView: View {
     private var deviceConfig: SimulatorDeviceConfig {
         let name = appState.simulatorManager.simulators
             .first(where: { $0.udid == appState.simulatorManager.bootedDeviceId })?
-            .name
+            .displayName
         return SimulatorConfigDatabase.config(for: name)
     }
 
@@ -84,7 +84,7 @@ struct SimulatorView: View {
                     .padding(16)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = stream.errorMessage {
+            } else if let errorMessage = appState.simulatorManager.errorMessage ?? stream.errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
@@ -95,15 +95,15 @@ struct SimulatorView: View {
                         .padding(.horizontal, 40)
 
                     HStack(spacing: 12) {
-                        Button("Open System Settings") {
-                            AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                        if stream.errorMessage != nil {
+                            Button("Open System Settings") {
+                                AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                            }
                         }
                         Button("Retry") {
                             Task {
-                                await stream.startStreaming(
-                                    bootedDeviceId: appState.simulatorManager.bootedDeviceId,
-                                    )
+                                await appState.startProjectSimulator()
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -138,23 +138,29 @@ struct SimulatorView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("No simulator streaming")
+                        Text(appState.simulatorManager.selectedDeviceID == nil
+                             ? "Choose a simulator for this project" : "Simulator ready to start")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
 
-                        Button("Start Streaming") {
+                        Text("Your device choice is saved per project. Other running simulators stay open.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Start Simulator") {
                             Task {
-                                await stream.startStreaming(
-                                    bootedDeviceId: appState.simulatorManager.bootedDeviceId,
-                                    )
+                                await appState.startProjectSimulator()
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                        .disabled(appState.simulatorManager.selectedDeviceID == nil)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
+        }
+        .task(id: appState.activeProjectId) {
+            await appState.startProjectSimulator()
         }
         .onAppear {
             stream.ensureRenderer()

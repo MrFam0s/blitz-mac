@@ -12,6 +12,7 @@ final class SimulatorStreamManager {
     var isPaused = false
 
     private var rendererInitialized = false
+    private var selectedDeviceID: String?
 
     func ensureRenderer() {
         guard !rendererInitialized else { return }
@@ -26,10 +27,11 @@ final class SimulatorStreamManager {
     /// Full start: ensure renderer, open Simulator.app, connect SCStream.
     func startStreaming(bootedDeviceId: String?) async {
         guard !isCapturing else { return }
-        guard bootedDeviceId != nil else {
-            statusMessage = "No simulator booted"
+        guard let bootedDeviceId else {
+            statusMessage = nil
             return
         }
+        selectedDeviceID = bootedDeviceId
 
         errorMessage = nil
         isPaused = false
@@ -37,13 +39,22 @@ final class SimulatorStreamManager {
 
         statusMessage = "Opening Simulator.app..."
         let service = SimulatorService()
-        try? await service.openSimulatorApp()
-
-        statusMessage = "Connecting to simulator..."
         do {
-            try await captureService.startCapture(retryForWindow: true)
+            let devices = try await service.listDevices()
+            guard let device = devices.first(where: { $0.udid == bootedDeviceId && $0.isBooted }) else {
+                throw SimulatorCaptureService.CaptureError.simulatorWindowNotFound
+            }
+            guard devices.filter({ $0.isBooted && $0.name == device.name }).count == 1 else {
+                throw SimulatorCaptureService.CaptureError.ambiguousSimulatorName
+            }
+            try await service.openSimulatorApp(udid: bootedDeviceId)
+            try Task.checkCancellation()
+            statusMessage = "Connecting to \(device.name)..."
+            try await captureService.startCapture(deviceName: device.name, retryForWindow: true)
+            try Task.checkCancellation()
         } catch {
-            errorMessage = error.localizedDescription
+            if Task.isCancelled { await captureService.stopCapture() }
+            else { errorMessage = error.localizedDescription }
             statusMessage = nil
             return
         }
@@ -59,6 +70,8 @@ final class SimulatorStreamManager {
         await captureService.stopCapture()
         isCapturing = false
         isPaused = false
+        statusMessage = nil
+        errorMessage = nil
     }
 
     /// Pause: stop SCStream but keep simulator booted. Lightweight for tab switches.
@@ -72,16 +85,6 @@ final class SimulatorStreamManager {
     /// Resume: restart SCStream after a pause. No window retry needed since sim is already running.
     func resumeStream() async {
         guard isPaused else { return }
-        isPaused = false
-        ensureRenderer()
-
-        do {
-            try await captureService.startCapture(retryForWindow: false)
-            if captureService.isCapturing {
-                isCapturing = true
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        await startStreaming(bootedDeviceId: selectedDeviceID)
     }
 }

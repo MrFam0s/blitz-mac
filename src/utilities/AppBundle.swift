@@ -33,8 +33,10 @@ extension Bundle {
         if let execPath, let bundle = Bundle(path: execPath) {
             return bundle
         }
-        #endif
-
+        // swift test runs inside SwiftPM's test helper, away from our executable.
+        return Bundle.module
+        #else
         fatalError("Could not find resource bundle \(bundleName)")
+        #endif
     }()
 }

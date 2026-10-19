@@ -17,7 +17,11 @@ command -v "$GO_BINARY" >/dev/null || { echo "ERROR: Install Go as required by t
 
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR" "$OUTPUT_DIR"
-git -C "$SOURCE_DIR" archive "$ASC_COMMIT" | tar -x -C "$STAGE_DIR"
+# A file avoids SIGPIPE when BSD tar finishes before git's trailing padding.
+SOURCE_ARCHIVE="$(mktemp)"
+trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
+git -C "$SOURCE_DIR" archive --format=tar --output="$SOURCE_ARCHIVE" "$ASC_COMMIT"
+tar -xf "$SOURCE_ARCHIVE" -C "$STAGE_DIR"
 cp -R "$ROOT_DIR/helpers/asc-overlay/." "$STAGE_DIR/"
 BUILD_DATE="$(git -C "$SOURCE_DIR" show -s --format=%cI "$ASC_COMMIT")"
 echo "Building ASC $ASC_VERSION with the Blitz protocol adapter..." >&2

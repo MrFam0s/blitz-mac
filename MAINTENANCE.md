@@ -50,6 +50,38 @@ Validated with all 109 Swift tests, a signed release build, and the installed
 app: Tab navigation no longer draws focus rings, and a local-only app can be
 removed and restored using the right-click context menu.
 
+## 1.0.40
+
+`Maintenance checks` runs on pushes and pull requests targeting `maintenance/**`,
+plus manual dispatch. It needs no Apple secrets and cannot publish or install a
+release. It runs Swift tests, the pinned ASC transport/protocol/CLI tests, builds
+an ad-hoc signed app, checks its signature and helper contract, and retains a ZIP
+with its checksum. The weekly ASC update preparation is unchanged.
+
+Simulator choice is saved in each project's existing `simulatorUDID` metadata.
+The dashboard and Store views do not boot devices. The Simulator tab starts only
+that project's saved device; a project without a choice asks for one. Missing
+choices are reported instead of silently selecting another device. Switching
+projects, choosing another device and quitting Blitz leave simulators running.
+Screen capture matches the selected device name and refuses ambiguous windows;
+use unique names for project simulators with the same device model.
+
+The dashboard shows the app-list timestamp, saved-data state, actionable errors,
+and Retry/Settings. Partial status failures retain prior statuses with a warning
+and mark affected cards; totals may then be stale or incomplete. Cached data from
+a different account is never reused. Late and cancelled requests cannot overwrite
+a more recent account or project selection.
+
+Local checks:
+
+```sh
+swift test --build-system native
+bash scripts/test-asc-helper.sh
+BLITZ_ASCD_PATH="$PWD/.build/ascd-helper/ascd" BLITZ_SWIFT_BUILD_SYSTEM=native \
+CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
+python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
+```
+
 ## Build and validation
 
 Initialize the pinned submodule and install Go as specified by its `go.mod`:

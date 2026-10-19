@@ -1,0 +1,65 @@
+name: Maintenance checks
+
+on:
+  push:
+    branches: ['maintenance/**']
+  pull_request:
+    branches: ['maintenance/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maintenance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests-and-bundle:
+    name: Swift, ASC and release bundle
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      BLITZ_SWIFT_BUILD_SYSTEM: native
+      CODESIGN_TIMESTAMP: none
+      ASC_BYPASS_KEYCHAIN: '1'
+      ASC_TELEMETRY_DISABLED: '1'
+      ASC_SKILLS_AUTO_CHECK: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache-dependency-path: deps/App-Store-Connect-CLI-helper/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Swift regression tests
+        run: swift test --build-system native
+      - name: ASC transport, protocol and CLI compatibility tests
+        run: bash scripts/test-asc-helper.sh
+      - name: Build release bundle
+        env:
+          APPLE_SIGNING_IDENTITY: '-'
+          BLITZ_ASCD_PATH: ${{ github.workspace }}/.build/ascd-helper/ascd
+        run: bash scripts/bundle.sh release
+      - name: Verify installed helper contract and app signature
+        run: |
+          codesign --verify --deep --strict .build/Blitz.app
+          python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
+      - name: Archive tested build
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent .build/Blitz.app .build/Blitz.app.zip
+          shasum -a 256 .build/Blitz.app.zip > .build/Blitz.app.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Blitz-tested-${{ github.sha }}
+          path: |
+            .build/Blitz.app.zip
+            .build/Blitz.app.zip.sha256
+          retention-days: 14
+          if-no-files-found: error

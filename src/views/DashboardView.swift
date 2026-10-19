@@ -191,6 +191,7 @@ struct DashboardView: View {
     private var myAppsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                dashboardRefreshStatus
                 // Stat cards describe the visible apps in My Apps.
                 if !showsHiddenApps {
                     LazyVGrid(
@@ -298,6 +299,21 @@ struct DashboardView: View {
         .task(id: summaryHydrationKey) {
             await hydrateSummary()
         }
+    }
+
+    private var dashboardRefreshStatus: some View {
+        DashboardRefreshStatusView(
+            issueTitle: dashboardSummary.loadIssue?.title,
+            issueMessage: dashboardSummary.loadIssue?.message,
+            needsSettings: dashboardSummary.loadIssue?.needsSettings == true,
+            isShowingSavedData: dashboardSummary.isShowingSavedData,
+            hasLoadedSummary: dashboardSummary.hasLoadedSummary,
+            isLoading: dashboardSummary.isLoadingSummary,
+            loadingText: summaryLoadingStatusText,
+            refreshedAt: dashboardSummary.refreshedAt,
+            retry: { forceRefreshCurrentSubTab() },
+            openSettings: { appState.activeTab = .settings }
+        )
     }
 
     private var emptyStateView: some View {
@@ -492,7 +508,7 @@ struct DashboardView: View {
         appState.ascManager.loadStoredCredentialsIfNeeded()
         let accountKey = DashboardSummaryStore.accountKey(for: appState.ascManager.credentials)
         guard let service = appState.ascManager.service else {
-            dashboardSummary.markUnavailable(for: hydrationKey, accountKey: accountKey)
+            dashboardSummary.markUnavailable(for: hydrationKey, accountKey: accountKey, issue: .missingCredentials)
             return
         }
 
@@ -519,12 +535,16 @@ struct DashboardView: View {
     // MARK: - Helpers
 
     private func statValue(_ count: Int) -> String {
-        dashboardSummary.hasLoadedSummary ? "\(count)" : (appRows.isEmpty ? "0" : "-")
+        dashboardSummary.hasLoadedSummary ? "\(count)" : "—"
     }
 
     @ViewBuilder
     private func statusIcon(for row: DashboardAppRow) -> some View {
-        if let status = row.status {
+        if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) {
+            Image(systemName: "questionmark.circle.fill")
+                .foregroundStyle(.orange)
+                .help("Status could not be refreshed")
+        } else if let status = row.status {
             if status.isRejected {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.red)

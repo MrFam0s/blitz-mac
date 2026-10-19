@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.40 (maintenance fork)
+- Run Swift regressions, ASC transport/protocol/CLI checks, and a verified release bundle on maintenance pushes and pull requests.
+- Remember each project’s simulator, start it only when needed, and preserve running devices when switching or quitting Blitz.
+- Bind simulator capture to the selected device; reject ambiguous windows instead of displaying another device.
+- Show dashboard refresh failures, partial status failures, saved-data age, and retry/settings actions.
+- Preserve cached statuses on failed requests and ignore results from obsolete account or project requests.
+- Fix resource discovery under Swift Testing and portable ASC source extraction.
+
 ## 1.0.39 (maintenance fork)
 - Remove the three-dot menus from dashboard app cards; Remove and Restore remain available by right-clicking each card.
 - Hide automatic keyboard focus effects in the SwiftUI interface while keeping keyboard navigation available.

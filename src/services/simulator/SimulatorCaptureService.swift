@@ -39,22 +39,33 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     ]
 
     /// Search an already-fetched SCShareableContent for the simulator window.
-    private func findSimulatorWindow(in content: SCShareableContent) -> SCWindow? {
-        for window in content.windows {
-            guard let app = window.owningApplication else { continue }
-            if simulatorBundleIDs.contains(app.bundleIdentifier),
-               window.frame.width >= 200, window.frame.height >= 300 {
-                logger.info("Found simulator window: \(Int(window.frame.width))x\(Int(window.frame.height))")
-                return window
+    private func findSimulatorWindow(in content: SCShareableContent, deviceName: String) -> SCWindow? {
+        let candidates = content.windows.filter { window in
+            guard let app = window.owningApplication else { return false }
+            return simulatorBundleIDs.contains(app.bundleIdentifier)
+                && window.frame.width >= 200 && window.frame.height >= 300
+        }
+        guard let index = Self.matchingWindowIndex(titles: candidates.map { $0.title ?? "" }, deviceName: deviceName) else {
+            return nil
+        }
+        return candidates[index]
+    }
+
+    /// Never fall back to the first window: input events target a specific UDID.
+    static func matchingWindowIndex(titles: [String], deviceName: String) -> Int? {
+        let matches = titles.indices.filter { index in
+            let title = titles[index]
+            return title == deviceName || [" – ", " — ", " - ", " ("].contains {
+                title.hasPrefix(deviceName + $0)
             }
         }
-        return nil
+        return matches.count == 1 ? matches.first : nil
     }
 
     /// Start capturing the simulator window.
     /// Calls SCShareableContent exactly ONCE. If the window isn't visible yet,
     /// retries the query up to 10 times (1s apart).
-    func startCapture(retryForWindow: Bool = true) async throws {
+    func startCapture(deviceName: String, retryForWindow: Bool = true) async throws {
         guard !isCapturing else {
             logger.warning("Already capturing")
             return
@@ -75,7 +86,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         // Step 2: Look for the simulator window. If not found, retry (re-querying
         // SCShareableContent is safe AFTER the first successful call — TCC won't re-prompt
         // for the same process once granted).
-        var window = findSimulatorWindow(in: initialContent)
+        var window = findSimulatorWindow(in: initialContent, deviceName: deviceName)
 
         if window == nil && retryForWindow {
             let maxAttempts = 10
@@ -84,7 +95,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
                 try await Task.sleep(for: .seconds(1))
 
                 if let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) {
-                    window = findSimulatorWindow(in: content)
+                    window = findSimulatorWindow(in: content, deviceName: deviceName)
                     if window != nil { break }
                 }
             }
@@ -94,6 +105,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
             throw CaptureError.simulatorWindowNotFound
         }
 
+        try Task.checkCancellation()
         currentWindow = window
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
@@ -226,13 +238,16 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
     enum CaptureError: Error, LocalizedError {
         case simulatorWindowNotFound
+        case ambiguousSimulatorName
         case screenRecordingDenied(String)
         case captureStartFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .simulatorWindowNotFound:
-                return "Could not find iOS Simulator window. Make sure Simulator.app is running."
+                return "Could not uniquely find the selected simulator window. Open that device in Simulator and try again."
+            case .ambiguousSimulatorName:
+                return "Multiple running simulators have the same name. Give your project simulator a unique name in Xcode, then retry."
             case .screenRecordingDenied(let msg):
                 return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz, reboot your Mac. (\(msg))"
             case .captureStartFailed(let msg):

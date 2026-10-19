@@ -22,7 +22,7 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
 
     static func asc(
         app: ASCApp,
-        status: ASCDashboardProjectStatus,
+        status: ASCDashboardProjectStatus?,
         linkedProjectId: String?,
         iconURL: URL?
     ) -> DashboardAppRow {
@@ -65,6 +65,8 @@ final class DashboardSummaryStore {
         let projectStatuses: [String: ASCDashboardProjectStatus]
         let ascApps: [ASCApp]?
         let appRows: [DashboardAppRow]
+        let refreshedAt: Date?
+        let unavailableStatusBundleIDs: Set<String>?
     }
 
     var summary = ASCDashboardSummary.empty
@@ -76,7 +78,11 @@ final class DashboardSummaryStore {
     var loadingSummaryStatusText: String?
 
     private(set) var cacheKey: String?
-    private var refreshedAt: Date?
+    private(set) var refreshedAt: Date?
+    private(set) var loadIssue: DashboardLoadIssue?
+    private(set) var isShowingSavedData = false
+    private(set) var unavailableStatusBundleIDs: Set<String> = []
+    private var revision = 0
     private var loadedAccountKey: String?
     private let cacheURL: URL
     private let accountKeyOverride: String?
@@ -100,7 +106,7 @@ final class DashboardSummaryStore {
     }
 
     func shouldRefresh(for key: String) -> Bool {
-        guard cacheKey == key, let refreshedAt else { return true }
+        guard loadIssue == nil, !isShowingSavedData, cacheKey == key, let refreshedAt else { return true }
         return Date().timeIntervalSince(refreshedAt) > Self.freshness
     }
 
@@ -109,6 +115,7 @@ final class DashboardSummaryStore {
     }
 
     func beginLoading(for key: String, accountKey: String?) {
+        revision += 1
         if shouldResetLoadedState(for: accountKey) {
             reset()
         }
@@ -124,8 +131,13 @@ final class DashboardSummaryStore {
         ascApps: [ASCApp],
         appRows: [DashboardAppRow],
         for key: String,
-        accountKey: String?
+        accountKey: String?,
+        unavailableStatusBundleIDs: Set<String> = []
     ) {
+        revision += 1
+        self.unavailableStatusBundleIDs = unavailableStatusBundleIDs
+        loadIssue = unavailableStatusBundleIDs.isEmpty ? nil : .partialStatuses(unavailableStatusBundleIDs.count)
+        isShowingSavedData = false
         self.summary = summary
         self.projectStatuses = projectStatuses
         self.ascApps = ascApps
@@ -140,6 +152,10 @@ final class DashboardSummaryStore {
     }
 
     func markEmpty(for key: String, accountKey: String?) {
+        revision += 1
+        loadIssue = nil
+        isShowingSavedData = false
+        unavailableStatusBundleIDs = []
         summary = .empty
         projectStatuses = [:]
         ascApps = []
@@ -153,12 +169,15 @@ final class DashboardSummaryStore {
         persistCacheIfPossible(accountKey: accountKey)
     }
 
-    func markUnavailable(for key: String, accountKey: String?) {
+    func markUnavailable(for key: String, accountKey: String?, issue: DashboardLoadIssue = .unavailable) {
+        revision += 1
         if shouldResetLoadedState(for: accountKey) {
             reset()
             loadedAccountKey = accountKey
         }
         cacheKey = key
+        loadIssue = issue
+        isShowingSavedData = hasLoadedSummary
         isLoadingSummary = false
         loadingSummaryStatusText = nil
     }
@@ -172,7 +191,7 @@ final class DashboardSummaryStore {
     func refresh(
         for key: String,
         accountKey: String?,
-        service: AppStoreConnectService,
+        service: any DashboardFetching,
         projects: [Project],
         force: Bool = false
     ) async {
@@ -181,15 +200,22 @@ final class DashboardSummaryStore {
         }
 
         beginLoading(for: key, accountKey: accountKey)
+        let token = revision
 
         let allAscApps: [ASCApp]
         do {
-            allAscApps = try await service.fetchAllApps()
+            allAscApps = try await service.fetchAllApps(appStoreStateFilter: nil)
         } catch {
-            markUnavailable(for: key, accountKey: accountKey)
+            guard revision == token else { return }
+            if Task.isCancelled || error is CancellationError {
+                cancelLoading(for: key)
+            } else {
+                markUnavailable(for: key, accountKey: accountKey, issue: .from(error))
+            }
             return
         }
 
+        guard revision == token else { return }
         if Task.isCancelled {
             cancelLoading(for: key)
             return
@@ -202,7 +228,7 @@ final class DashboardSummaryStore {
 
         var nextSummary = ASCDashboardSummary.empty
         var nextStatuses: [String: ASCDashboardProjectStatus] = [:]
-        var nextIconURLs: [String: URL] = [:]
+        var nextIconURLs = currentIconURLsByBundleId()
         var completedCount = 0
         loadingSummaryStatusText = "Loading apps 0/\(allAscApps.count)…"
 
@@ -226,7 +252,7 @@ final class DashboardSummaryStore {
                     }
 
                     do {
-                        iconURL = try await service.fetchAppStoreIconURL(app: next)
+                        iconURL = try await service.fetchAppStoreIconURL(app: next, dimension: 1024)
                     } catch {
                         iconURL = nil
                     }
@@ -240,6 +266,7 @@ final class DashboardSummaryStore {
             }
 
             while let result = await group.next() {
+                guard revision == token, !Task.isCancelled else { group.cancelAll(); break }
                 if let status = result.1 {
                     perAppStatuses[result.0] = status
                 }
@@ -253,15 +280,18 @@ final class DashboardSummaryStore {
             }
         }
 
+        guard revision == token else { return }
         if Task.isCancelled {
             cancelLoading(for: key)
             return
         }
 
+        let unavailable = Set(allAscApps.map(\.bundleId)).subtracting(perAppStatuses.keys)
         for app in allAscApps {
-            let status = perAppStatuses[app.bundleId] ?? .empty
-            nextSummary.include(status)
-            nextStatuses[app.bundleId] = status
+            if let status = perAppStatuses[app.bundleId] ?? projectStatuses[app.bundleId] {
+                nextSummary.include(status)
+                nextStatuses[app.bundleId] = status
+            }
         }
 
         store(
@@ -275,12 +305,13 @@ final class DashboardSummaryStore {
                 iconURLs: nextIconURLs
             ),
             for: key,
-            accountKey: accountKey
+            accountKey: accountKey,
+            unavailableStatusBundleIDs: unavailable
         )
     }
 
     private func shouldResetLoadedState(for accountKey: String?) -> Bool {
-        hasLoadedSummary && loadedAccountKey != accountKey
+        loadedAccountKey != accountKey
     }
 
     private func reset() {
@@ -290,6 +321,9 @@ final class DashboardSummaryStore {
         appRows = []
         hasLoadedSummary = false
         refreshedAt = nil
+        loadIssue = nil
+        isShowingSavedData = false
+        unavailableStatusBundleIDs = []
         loadingSummaryStatusText = nil
     }
 
@@ -301,6 +335,10 @@ final class DashboardSummaryStore {
             return
         }
 
+        refreshedAt = snapshot.refreshedAt
+        unavailableStatusBundleIDs = snapshot.unavailableStatusBundleIDs ?? []
+        if !unavailableStatusBundleIDs.isEmpty { loadIssue = .partialStatuses(unavailableStatusBundleIDs.count) }
+        isShowingSavedData = true
         summary = snapshot.summary
         projectStatuses = snapshot.projectStatuses
         ascApps = snapshot.ascApps ?? restoredASCApps(from: snapshot.appRows)
@@ -317,7 +355,9 @@ final class DashboardSummaryStore {
             summary: summary,
             projectStatuses: projectStatuses,
             ascApps: ascApps,
-            appRows: appRows
+            appRows: appRows,
+            refreshedAt: refreshedAt,
+            unavailableStatusBundleIDs: unavailableStatusBundleIDs
         )
 
         do {
@@ -368,7 +408,7 @@ final class DashboardSummaryStore {
             }
             return DashboardAppRow.asc(
                 app: app,
-                status: projectStatuses[app.bundleId] ?? .empty,
+                status: projectStatuses[app.bundleId],
                 linkedProjectId: linkedProjectId,
                 iconURL: iconURLs[app.bundleId]
             )

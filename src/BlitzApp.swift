@@ -34,16 +34,8 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
         _ = AppRelaunchService.shared.schedulePendingScreenRecordingRelaunchIfNeeded()
         MCPBootstrap.shared.shutdown()
         appState?.gestureVisualization.tearDown()
-        // Don't block termination with synchronous simctl shutdown —
-        // this prevents macOS TCC "Quit & Reopen" from relaunching the app.
-        // Fire-and-forget: let simctl handle cleanup in the background.
-        if let udid = appState?.simulatorManager.bootedDeviceId {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-            process.arguments = ["simctl", "shutdown", udid]
-            try? process.run()
-            // Do NOT call waitUntilExit() — let the app terminate immediately
-        }
+        // Simulator processes are shared with Xcode and other tools. Leaving Blitz
+        // must not shut down a device, even if Blitz originally started it.
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

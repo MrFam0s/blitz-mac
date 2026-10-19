@@ -97,20 +97,17 @@ struct AppCommands: Commands {
             Button("Run") {
                 guard appState.activeProject != nil else { return }
                 Task {
-                    await appState.simulatorManager.bootIfNeeded()
-                    await appState.simulatorStream.startStreaming(
-                        bootedDeviceId: appState.simulatorManager.bootedDeviceId
-                    )
+                    await appState.startProjectSimulator()
                 }
             }
             .keyboardShortcut("r", modifiers: .command)
             .disabled(appState.activeProjectId == nil)
 
             Button("Stop") {
-                Task { await appState.simulatorStream.stopStreaming() }
+                Task { await appState.stopProjectSimulator() }
             }
             .keyboardShortcut(".", modifiers: .command)
-            .disabled(!appState.simulatorStream.isCapturing)
+            .disabled(!appState.simulatorStream.isCapturing && !appState.simulatorManager.isBooting)
         }
     }
 

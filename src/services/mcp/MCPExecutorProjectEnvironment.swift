@@ -161,12 +161,12 @@ extension MCPExecutor {
             throw MCPServerService.MCPError.invalidToolArgs
         }
 
-        let service = SimulatorService()
-        try await service.boot(udid: udid)
-        await MainActor.run { appState.simulatorManager.bootedDeviceId = udid }
-        await appState.simulatorManager.loadSimulators()
-
-        return mcpText("Booted simulator: \(udid)")
+        let started = await appState.startProjectSimulator(selecting: udid)
+        guard started else {
+            let message = await appState.simulatorManager.errorMessage ?? "Could not select the simulator. Try again."
+            throw NSError(domain: "BlitzSimulator", code: 2, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+        return mcpText("Selected project simulator: \(udid)")
     }
 
     // MARK: - Settings Tools

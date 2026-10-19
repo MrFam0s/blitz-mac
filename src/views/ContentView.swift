@@ -172,14 +172,7 @@ struct ContentView: View {
                 await appState.projectManager.loadProjects()
             }
 
-            // Auto-boot simulator when project opens
-            await appState.simulatorManager.bootIfNeeded()
-            // Auto-start stream if landing on simulator sub-tab
-            if appState.activeTab == .app && appState.activeAppSubTab == .simulator {
-                await appState.simulatorStream.startStreaming(
-                    bootedDeviceId: appState.simulatorManager.bootedDeviceId
-                )
-            }
+            appState.simulatorManager.activate(project: appState.activeProject)
             // Per-project credential hydration still runs when we have an active project.
             if let projectId = appState.activeProjectId,
                let project = appState.activeProject {
@@ -195,12 +188,13 @@ struct ContentView: View {
             }
         }
         .onChange(of: appState.activeProjectId) { _, newValue in
+            appState.simulatorManager.activate(project: appState.activeProject)
             if newValue == nil {
                 // Project closed → stop stream. We never reopen a separate welcome/picker
                 // window. The caller is responsible for setting `activeTab` to whatever
                 // makes sense (Dashboard for an explicit "Close Project", App for picking
                 // an ASC-only app, etc.).
-                Task { await appState.simulatorStream.stopStreaming() }
+                Task { await appState.stopProjectSimulator() }
             } else {
                 // Project switched → ensure config files, run pending setup, reload ASC credentials
                 if let newId = newValue {
@@ -236,21 +230,10 @@ struct ContentView: View {
             tabSwitchTask?.cancel()
             tabSwitchTask = Task {
                 let isLeavingSimulator = oldTab == .app && appState.activeAppSubTab == .simulator
-                let isEnteringSimulator = newTab == .app && appState.activeAppSubTab == .simulator
 
                 // Pause stream when leaving simulator
                 if isLeavingSimulator && newTab != .app {
                     await appState.simulatorStream.pauseStream()
-                }
-                // Resume/start stream when entering simulator
-                if isEnteringSimulator {
-                    if appState.simulatorStream.isPaused {
-                        await appState.simulatorStream.resumeStream()
-                    } else if !appState.simulatorStream.isCapturing {
-                        await appState.simulatorStream.startStreaming(
-                            bootedDeviceId: appState.simulatorManager.bootedDeviceId
-                        )
-                    }
                 }
                 // Fetch ASC data when entering any ASC tab
                 if newTab.isASCTab {
@@ -265,16 +248,6 @@ struct ContentView: View {
                 // Pause stream when leaving simulator sub-tab
                 if oldSub == .simulator && newSub != .simulator {
                     await appState.simulatorStream.pauseStream()
-                }
-                // Resume/start stream when entering simulator sub-tab
-                if newSub == .simulator {
-                    if appState.simulatorStream.isPaused {
-                        await appState.simulatorStream.resumeStream()
-                    } else if !appState.simulatorStream.isCapturing {
-                        await appState.simulatorStream.startStreaming(
-                            bootedDeviceId: appState.simulatorManager.bootedDeviceId
-                        )
-                    }
                 }
                 // Fetch ASC overview data when entering overview sub-tab
                 if newSub == .overview {

@@ -5,7 +5,7 @@ import os
 private let logger = Logger(subsystem: "com.blitz.macos", category: "SimulatorService")
 
 /// High-level simulator management service
-actor SimulatorService {
+actor SimulatorService: SimulatorDeviceService {
     private let simctl = SimctlClient()
 
     /// List all available simulators
@@ -13,67 +13,31 @@ actor SimulatorService {
         try await simctl.listDevices()
     }
 
-    /// Boot a simulator, then opens Simulator.app to show its window
+    /// Start only the requested device, preserving all other simulator sessions.
     func boot(udid: String) async throws {
-        logger.info("Booting simulator \(udid)...")
-
-        // Boot the specific device FIRST — before opening Simulator.app,
-        // otherwise Simulator.app auto-boots its last-used device.
-        do {
-            try await simctl.boot(udid: udid)
-        } catch {
-            // "Unable to boot device in current state: Booted" is not a real error
-            if let processError = error as? ProcessRunner.ProcessError,
-               processError.stderr.contains("current state: Booted") {
-                logger.info("Simulator already booted")
-            } else {
-                throw error
-            }
-        }
-
-        // Wait for boot to complete — poll until state is Booted
-        logger.info("Waiting for simulator to finish booting...")
-        for i in 1...15 {
-            let devices = try await simctl.listDevices()
-            if let device = devices.first(where: { $0.udid == udid }), device.isBooted {
-                logger.info("Simulator booted after \(i)s")
-                break
-            }
-            try await Task.sleep(for: .seconds(1))
-        }
-
-        // Open Simulator.app AFTER boot so it shows the correct device window
-        // (opening before boot causes it to auto-boot its last-used device)
-        try await openSimulatorApp()
+        try await bootInBackground(udid: udid)
     }
 
-    /// Boot a simulator without bringing Simulator.app to the foreground.
     func bootInBackground(udid: String) async throws {
-        logger.info("Booting simulator \(udid) in background...")
-
         do {
             try await simctl.boot(udid: udid)
         } catch {
             if let processError = error as? ProcessRunner.ProcessError,
                processError.stderr.contains("current state: Booted") {
-                logger.info("Simulator already booted")
+                // It may have been booted by Xcode since our last inventory.
             } else {
                 throw error
             }
         }
-
-        // Wait for boot
-        for i in 1...15 {
-            let devices = try await simctl.listDevices()
-            if let device = devices.first(where: { $0.udid == udid }), device.isBooted {
-                logger.info("Simulator booted after \(i)s")
-                break
+        for _ in 0..<30 {
+            try Task.checkCancellation()
+            if try await simctl.listDevices().contains(where: { $0.udid == udid && $0.isBooted }) {
+                return
             }
             try await Task.sleep(for: .seconds(1))
         }
-
-        // Open Simulator.app
-        try await openSimulatorApp()
+        throw NSError(domain: "BlitzSimulator", code: 1,
+                      userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for the selected simulator to start."])
     }
 
     /// Shutdown a simulator
@@ -97,8 +61,8 @@ actor SimulatorService {
     }
 
     /// Open the Simulator.app (-g flag opens in background)
-    func openSimulatorApp() async throws {
-        _ = try await ProcessRunner.run("open", arguments: ["-g", "-a", "Simulator"])
+    func openSimulatorApp(udid: String) async throws {
+        _ = try await ProcessRunner.run("open", arguments: ["-g", "-a", "Simulator", "--args", "-CurrentDeviceUDID", udid])
         try await Task.sleep(for: .milliseconds(500))
     }
 

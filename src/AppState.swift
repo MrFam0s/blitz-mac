@@ -190,6 +190,53 @@ final class AppState {
         return projectManager.projects.first { $0.id == id }
     }
 
+    private var simulatorActionTask: Task<Bool, Never>?
+    private var simulatorActionRevision = 0
+
+    /// Serialize stream changes so a late capture cannot take over a new project.
+    @discardableResult
+    func startProjectSimulator(selecting udid: String? = nil) async -> Bool {
+        simulatorActionRevision += 1
+        let token = simulatorActionRevision
+        let previous = simulatorActionTask
+        previous?.cancel()
+        _ = await previous?.value
+        guard token == simulatorActionRevision, !Task.isCancelled else { return false }
+        let project = activeProject
+        let task = Task { @MainActor in
+            simulatorManager.activate(project: project)
+            await simulatorStream.stopStreaming()
+            guard activeProjectId == project?.id, !Task.isCancelled else { return false }
+            let started: Bool
+            if let udid {
+                started = await simulatorManager.selectDevice(udid, for: project)
+            } else {
+                started = await simulatorManager.startSelectedDevice(for: project)
+            }
+            guard started, activeProjectId == project?.id, !Task.isCancelled else { return false }
+            if activeTab == .app && activeAppSubTab == .simulator {
+                await simulatorStream.startStreaming(bootedDeviceId: simulatorManager.bootedDeviceId)
+            }
+            return !Task.isCancelled
+        }
+        simulatorActionTask = task
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    func stopProjectSimulator() async {
+        simulatorActionRevision += 1
+        let token = simulatorActionRevision
+        let task = simulatorActionTask
+        task?.cancel()
+        _ = await task?.value
+        guard token == simulatorActionRevision else { return }
+        await simulatorStream.stopStreaming()
+    }
+
     func performLaunchAppWallSyncIfNeeded() async {
         guard !hasAttemptedLaunchAppWallSync else { return }
         hasAttemptedLaunchAppWallSync = true
