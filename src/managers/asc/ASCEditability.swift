@@ -56,7 +56,7 @@ extension ASCManager {
     }
 
     var screenshotEditingMessage: String {
-        "Screenshots dieser Version sind bei Apple gesperrt. Wähle eine bearbeitbare Version oder lege über die Übersicht eine neue Version an."
+        "Screenshots dieser Version sind bei Apple gesperrt. Wähle eine bearbeitbare Version oder wähle in der Übersicht „Versionsentwurf anlegen“."
     }
 
     func editingBlockedMessage(_ field: String) -> String {

@@ -1,5 +1,10 @@
 import Foundation
 
+struct PreparedReleaseVersion: Codable, Equatable, Sendable {
+    let id: String
+    let version: String
+}
+
 /// A captured target, independent of later dashboard/selection changes.
 struct ReleaseAutomationContext: Codable, Equatable, Sendable {
     let projectID: String
@@ -9,8 +14,9 @@ struct ReleaseAutomationContext: Codable, Equatable, Sendable {
     let bundleID: String
     let platform: ProjectPlatform
     let displayedLiveVersion: String?
+    var preparedVersion: PreparedReleaseVersion? = nil
 
-    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath)" }
+    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath):\(preparedVersion?.id ?? "new")" }
 
     func matches(project: Project?, app: ASCApp?) -> Bool {
         guard let project, let app else { return false }
@@ -33,6 +39,20 @@ struct ReleasePreflight: Codable, Sendable {
 }
 
 enum ReleaseAutomationService {
+    /// An explicit editable draft may be released later; a submitted version is never adopted.
+    static func preparedVersion(in versions: [ASCAppStoreVersion]) throws -> PreparedReleaseVersion? {
+        guard let current = ASCReleaseStatus.currentUpdateVersion(for: versions) else { return nil }
+        guard ASCReleaseStatus.isEditable(current.attributes.appStoreState) else {
+            throw ASCError.notFound("Version \(current.attributes.versionString) ist bereits eingereicht oder gesperrt. Bitte ihren Status prüfen.")
+        }
+        return PreparedReleaseVersion(id: current.id, version: current.attributes.versionString)
+    }
+
+    static func matchesPreparedVersion(_ context: ReleaseAutomationContext, versions: [ASCAppStoreVersion]) -> Bool {
+        do { return try preparedVersion(in: versions) == context.preparedVersion }
+        catch { return false }
+    }
+
     /// Numeric Store versions only; neither timestamps nor lexicographic ordering prove a new release.
     static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult? {
         func parts(_ value: String) -> [Int]? {

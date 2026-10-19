@@ -1,6 +1,6 @@
-# Blitz: Neue Version anlegen
+# Blitz: Update automatisch veröffentlichen
 
-The user explicitly started “Prüfen und veröffentlichen” for the single target
+The user explicitly started “Update automatisch veröffentlichen” for the single target
 in the Target JSON below. Complete this release workflow in German, using the
 existing project tools and credentials. This authorizes necessary local version
 changes, builds, upload, metadata updates, review submission and automatic App
@@ -17,6 +17,40 @@ use UI-selection-dependent Blitz tools for mutations: another project can be
 selected while this terminal is running. Prefer ASC with explicit identifiers.
 Use the installed Blitz ASC wrapper, existing authentication and CLI help; do not
 replace the helper, install tools globally, export keys or print credentials.
+
+## Prepared drafts and existing Store content
+
+The separate “Versionsentwurf anlegen” action only creates a Store draft and never
+starts this workflow. The release action is an explicit later decision. Target
+JSON may contain `preparedVersion` with the exact draft `id` and `version`. This
+identifies the user's prepared release, including manually or Codex-edited text,
+screenshots and App Preview videos. Do not replace it with another version.
+
+When `preparedVersion` is present, fetch that exact resource and verify app,
+platform, version string and an editable state. If it is missing, belongs to
+another target or is no longer editable, stop; do not create a replacement. If it
+has already been submitted, report the verified status without submitting again.
+Record a baseline of its localized texts, existing What's New, screenshot order
+and checksums/asset IDs, preview-video order/asset IDs and review information in
+the private release state (exclude credentials and demo-account secrets). These
+are protected prepared contents. Preserve them, including deliberate deletions;
+do not fill an empty field/media set from the old live version. A missing required
+field is a blocker, not permission to undo the user's edits. Never replace the
+draft's metadata or media by copying the previous version or local files.
+
+Keep existing nonempty What's New text in each locale. Generate truthful missing
+release notes only after comparing the actual app and/or prepared Store changes.
+Do not silently rewrite authored notes, screenshots, descriptions, keywords or
+videos. Verify protected content again before submission. If it changed externally
+while building/testing, stop and report the change so editing can finish. Keep
+track of your own explicit allowed changes (new build, missing release notes and
+releaseType) separately from protected content; do not interpret these as user edits.
+
+Without `preparedVersion`, use the fresh existing live listing as the source for
+the newly created update, preserving texts and media while generating the new
+changelog. An unexpected unrelated draft is a conflict, never permission to submit
+someone's unfinished edits. Resume an automation-created draft only if the private
+release state proves it belongs to this same update.
 
 ## 1. Recover state and prevent duplicate releases
 
@@ -50,8 +84,14 @@ not prove an update. The preview does not verify IPA/PKG identity: inspect it.
 
 If no newer artifact exists, check for releasable app changes against the source
 commit/tag/fingerprint verifiably associated with the live version. Documentation
-or generated build/cache differences alone are not a release. No newer artifact
-AND no proven unreleased app change means a successful no-op: report “Kein neuer
+or generated build/cache differences alone are not a release. With an explicitly
+selected preparedVersion, compare its localized texts, screenshots and videos
+against the live listing as well: a verified Store-content change can justify a
+release even if the app source is unchanged. Compare normalized field values and
+ordered media content checksums (or downloaded content hashes where necessary),
+not resource IDs, timestamps or the higher draft version alone. The mere existence
+of an empty or unchanged draft is not proof of changes. No newer artifact AND no proven unreleased
+app change AND no prepared Store-content change means a successful no-op: report “Kein neuer
 Stand”, leave version numbers and Store records untouched, and stop. If the live
 baseline or artifact provenance cannot be established, ask for that specific
 missing information; never invent a baseline or publish an arbitrary old build.
@@ -63,8 +103,11 @@ clean, stash, tag, commit or push user work. A dirty tree needs a reproducible
 isolated release snapshot; do not silently include unexplained edits. Record
 the precise released source. Respect project-specific build/version scripts.
 
-Reuse a newer valid intended marketing version when appropriate; otherwise
-increment the project's patch version beyond the live version. Choose a unique
+If preparedVersion is present, its version is the intended marketing version;
+keep it and make the source/archive/build match it. Stop if a different newer
+release artifact conflicts with this prepared version. Otherwise reuse a newer
+valid intended marketing version when appropriate, or increment the project's
+patch version beyond the live version. Choose a unique
 build number above relevant uploaded builds. Keep source targets/extensions,
 archive metadata and ASC version consistent. Changing a version requires a new
 build from source: never patch the Info.plist of an already signed artifact.
@@ -76,10 +119,12 @@ or interrupt unrelated simulators. A failed or unavailable required test/signing
 check blocks upload/submission; diagnose it and report the concrete blocker.
 
 Create concise truthful customer-facing “What's New” text from the verified
-source diff and project changelog. Localize it for every existing Store locale;
-preserve supported locales, descriptions and screenshots unless changes are
-required by this release. Never invent changes, features or translations of
-product names. Save the changelog with the release report for inspection.
+source diff, project changelog and any proven prepared Store-content changes.
+For a prepared version, fill only missing notes; preserve every existing nonempty
+locale's notes. For a new automatic update, write a fresh changelog in each existing
+Store locale. Preserve supported locales, descriptions, screenshots and preview
+videos. Never invent app features for a media-only update or translate product
+names. Save the generated changelog with the release report for inspection.
 
 ## 4. Upload and complete the App Store version
 
@@ -91,10 +136,12 @@ for the exact build to finish processing successfully; timeout/failure is a
 resumable blocked stage, not success. Record the returned IDs. Never pick a build
 merely because it is the first/latest item in a list.
 
-Create or reuse only the intended editable version for the fixed app/platform,
-attach the verified VALID build, and update What's New for all existing locales.
-Copy applicable listing/review details from the previous version and verify them
-fresh. Check required descriptions, URLs, screenshots for supported device sizes,
+Create or reuse only the intended editable version for the fixed app/platform.
+With preparedVersion, reuse that exact ID and version without copying old listing
+or review details over it. For a newly created automatic update, copy applicable
+listing/review details from the live version and verify preservation of its assets.
+Attach the verified VALID build and handle What's New according to the preservation
+rules above. Check required descriptions, URLs, screenshots for supported device sizes,
 review contact/demo access, age rating, content rights, privacy declarations and
 encryption/export compliance. Reuse documented facts only: do not fabricate legal,
 privacy, encryption or login answers. Missing facts require a targeted question.
@@ -108,8 +155,9 @@ review. Do not claim “veröffentlicht” while the version is waiting for revi
 
 Re-query the intended version, exact attached build and all required metadata.
 Confirm tests/checks passed, build processing is VALID, version/build identity
-matches, every required locale is complete, releaseType is AFTER_APPROVAL and
-no conflicting submission exists. Submit only when all checks pass. Record the
+matches, every required locale is complete, screenshot and preview-video processing
+is complete, protected prepared content still matches the recorded baseline,
+releaseType is AFTER_APPROVAL and no conflicting submission exists. Submit only when all checks pass. Record the
 submission ID and verify Apple's resulting status. If submission fails, keep
 the prepared version, save the error and stop; do not delete/recreate records.
 

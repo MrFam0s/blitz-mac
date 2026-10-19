@@ -37,7 +37,7 @@ struct SubmitPreviewSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(asc.canCreateUpdate ? "Create Update First" : (isSubmittable ? "Submit for Review" : "Submission Status"))
+            Text(asc.canCreateUpdate ? "Versionsentwurf anlegen" : (isSubmittable ? "Submit for Review" : "Submission Status"))
                 .font(.title2.weight(.semibold))
 
             // App header: icon + info
@@ -105,8 +105,8 @@ struct SubmitPreviewSheet: View {
                 .keyboardShortcut(.cancelAction)
                 Spacer()
                 if asc.canCreateUpdate {
-                    Button("Create Update") {
-                        asc.showCreateUpdateSheet = true
+                    Button("Versionsentwurf anlegen") {
+                        asc.showVersionDraftSheet = true
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)

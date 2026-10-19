@@ -70,7 +70,8 @@ struct ASCOverview: View {
                 ASCVersionPickerBar(
                     asc: asc,
                     selection: selectedVersionBinding,
-                    onCreateUpdate: { asc.showCreateUpdateSheet = true }
+                    onCreateDraft: { asc.showVersionDraftSheet = true },
+                    onPublishUpdate: { asc.showReleaseAutomationSheet = true }
                 ) {
                     if let appId = asc.app?.id {
                         Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/appstore")!) {

@@ -257,6 +257,59 @@ height before Submission Readiness at the existing window size. Automated native
 window resizing was unavailable, so the narrow-width fallback was not visually
 verified. No Store data or release actions were changed.
 
+## 1.0.48 — separate draft preparation from automatic publication
+
+The overview now has two independent actions and dialogs:
+
+- **Versionsentwurf anlegen** creates only an editable Store version, optionally
+  copying listing text and review details. It never starts an agent, uploads or
+  attaches a build, or submits for review. New versions use MANUAL release until
+  an explicit later release action changes that. The new draft is selected so
+  screenshots and text can be edited in their existing tabs or through Codex.
+- **Update automatisch veröffentlichen** opens a read-only build/Store preview.
+  Only its explicit start button launches the configured agent's full workflow.
+  For a regular app update it prepares the version/changelog/build and submits
+  with AFTER_APPROVAL. For an existing editable draft the preview identifies its
+  exact ID/version and tells the user to finish editing before starting.
+
+The automatic workflow carries that exact prepared version in its captured target
+JSON, rechecks its ownership/state, and preserves its texts, screenshots, preview
+videos and authored What's New. It only fills missing release notes, stops on
+required missing information, and never copies old live content over deliberate
+draft edits/deletions. It compares protected content again before submission to
+detect edits made while building. Verified metadata/media-only changes can justify
+an update even without changed app source; merely creating a draft cannot. A new
+correctly versioned and tested build is still required. An unrelated draft that
+appears after launch is a conflict, not permission to submit it. Session reuse
+includes the intended draft ID so an old automatic-new-update prompt is not reused
+for a prepared draft. The same app/platform lock still prevents parallel releases.
+
+Native Blitz handles screenshots and text. App Preview videos remain available
+through the existing `asc video-previews` commands in the Codex terminal or App
+Store Connect; this version does not add a native video editor. The draft dialog
+explains this distinction. The action bar wraps onto two rows when needed.
+
+Version creation reads fresh Store state before mutating, rejects duplicate or
+in-flight versions, and checks project identity across asynchronous preparation.
+An operation ID owns its busy state, so selecting the newly created version does
+not leave creation stuck in progress or clear a newer operation's state.
+
+Validation: 182 local Swift tests passed. New tests cover draft-only operations,
+MANUAL release, no build attachment, no old changelog copying, stale conflicts,
+read failures, target changes, operation cleanup, prepared-version pinning and
+release availability. Tests use a recording service with no real Store writes.
+The agent-assisted full publication workflow is specified and its target handoff
+is tested; it is not a deterministic release engine and is not tested by submitting
+an actual app. The native release build, strict Developer ID signature verification
+and bundled ASC 5.15.0 protocol/CLI contract passed. Version 1.0.48 was installed
+with the same signing requirement, retaining 1.0.47 as a local backup. The installed
+UI was checked on live Mühlenstein (both independent dialogs, canonical project,
+read-only artifact preview and cancellation) and the existing CleanVersion 1.0
+draft (duplicate creation disabled, exact prepared version identified). Layout
+and explanations were checked visually. No version, upload, agent release session
+or submission was created during verification. GitHub Maintenance checks remains
+disabled; no paid GitHub job was started.
+
 ## 1.0.47 — respect Apple editability and screenshot identity
 
 Version screenshots now show a lock explanation, with upload, removal, reordering
@@ -320,14 +373,15 @@ GitHub Maintenance checks remains disabled_manually; no cloud job was started.
 
 ## 1.0.46 — release workflow from the overview
 
-The overview has one **Neue Version anlegen** button. It opens a read-only local
-build preview; opening or cancelling the sheet does not create a Store version.
+In 1.0.46 the overview had one **Neue Version anlegen** button (replaced by the
+two explicit paths in 1.0.48). It opened a read-only local build preview; opening or cancelling the sheet does not create a Store version.
 **Prüfen und veröffentlichen** starts the configured coding agent in the built-in
 Blitz terminal with the bundled [release workflow](src/resources/release-automation.md).
 This is an agent-assisted workflow, not a background scheduler or a deterministic
 ASC job engine. The existing agent permission settings are retained. Missing
-facts or credentials can require interaction in that terminal. The old manual
-version form remains available through **Manuell …**.
+facts or credentials can require interaction in that terminal. In 1.0.46 the old
+manual version form remained available through **Manuell …**; 1.0.48 replaces
+that nested entry with its own draft action.
 
 The preview scans the linked project off the UI executor, with entry/depth/count
 limits. It excludes simulator and other-bundle apps, reads archived products,

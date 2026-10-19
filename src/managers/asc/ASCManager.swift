@@ -65,9 +65,11 @@ final class ASCManager {
     var pendingFormVersion: Int = 0  // Incremented when pendingFormValues changes; views watch this
     var pendingCreateValues: [String: String]?  // Pre-fill values for IAP/subscription create forms (from MCP)
     var showSubmitPreview = false
-    var showCreateUpdateSheet = false
+    var showVersionDraftSheet = false
+    var showReleaseAutomationSheet = false
     var isSubmitting = false
     var isCreatingVersion = false
+    var versionCreationOperation: UUID?
     var submissionError: String?
     var versionCreationError: String?
     var writeError: String?  // Inline error for write operations (does not replace tab content)

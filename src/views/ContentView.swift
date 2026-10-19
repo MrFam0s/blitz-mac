@@ -57,11 +57,16 @@ struct ContentView: View {
         )
     }
 
-    private var createUpdateBinding: Binding<Bool> {
+    private var versionDraftBinding: Binding<Bool> {
         Binding(
-            get: { appState.ascManager.showCreateUpdateSheet },
-            set: { appState.ascManager.showCreateUpdateSheet = $0 }
+            get: { appState.ascManager.showVersionDraftSheet },
+            set: { appState.ascManager.showVersionDraftSheet = $0 }
         )
+    }
+
+    private var releaseAutomationBinding: Binding<Bool> {
+        Binding(get: { appState.ascManager.showReleaseAutomationSheet },
+                set: { appState.ascManager.showReleaseAutomationSheet = $0 })
     }
 
     /// Consume pendingSetupProjectId and run project scaffolding if needed.
@@ -267,8 +272,11 @@ struct ContentView: View {
         .sheet(isPresented: $appState.showImportProjectSheet) {
             ImportProjectSheet(appState: appState, isPresented: $appState.showImportProjectSheet)
         }
-        .sheet(isPresented: createUpdateBinding) {
-            CreateUpdateSheet(appState: appState)
+        .sheet(isPresented: versionDraftBinding) {
+            VersionDraftSheet(appState: appState)
+        }
+        .sheet(isPresented: releaseAutomationBinding) {
+            ReleaseAutomationSheet(appState: appState)
         }
         .sheet(isPresented: appleIDLoginBinding, onDismiss: {
             appState.ascManager.cancelPendingWebAuth()

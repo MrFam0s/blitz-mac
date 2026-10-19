@@ -3,36 +3,54 @@ import SwiftUI
 struct ASCVersionPickerBar<Content: View>: View {
     var asc: ASCManager
     var selection: Binding<String>
-    var onCreateUpdate: (() -> Void)?
+    var onCreateDraft: (() -> Void)? = nil
+    var onPublishUpdate: (() -> Void)? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
-        HStack(spacing: 10) {
-            if !asc.appStoreVersions.isEmpty {
-                Picker("Version", selection: selection) {
-                    ForEach(asc.appStoreVersions) { version in
-                        Text("Version \(version.attributes.versionString)")
-                            .tag(version.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 190)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                versionSelection
+                Spacer()
+                releaseActions
+                content
             }
-
-            if let selectedVersion = asc.selectedVersion {
-                stateBadge(selectedVersion.attributes.appStoreState ?? "")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) { versionSelection; Spacer(); content }
+                HStack(spacing: 10) { Spacer(); releaseActions }
             }
+        }
+    }
 
-            Spacer()
-
-            if asc.canCreateUpdate, let onCreateUpdate {
-                Button("Neue Version anlegen") {
-                    onCreateUpdate()
+    @ViewBuilder private var versionSelection: some View {
+        if !asc.appStoreVersions.isEmpty {
+            Picker("Version", selection: selection) {
+                ForEach(asc.appStoreVersions) { version in
+                    Text("Version \(version.attributes.versionString)").tag(version.id)
                 }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 190)
+        }
+        if let version = asc.selectedVersion { stateBadge(version.attributes.appStoreState ?? "") }
+    }
+
+    @ViewBuilder private var releaseActions: some View {
+        if let onCreateDraft {
+            Button("Versionsentwurf anlegen", action: onCreateDraft)
+                .buttonStyle(.bordered)
+                .fixedSize()
+                .disabled(!asc.canCreateVersion || asc.newVersionCreationBlocker != nil)
+                .help(asc.newVersionCreationBlocker == nil
+                      ? "Entwurf zum Bearbeiten von Texten und Medien anlegen. Es wird nichts eingereicht."
+                      : "Es gibt bereits eine unveröffentlichte Version. Wähle sie zum Bearbeiten aus.")
+        }
+        if let onPublishUpdate {
+            Button("Update automatisch veröffentlichen", action: onPublishUpdate)
                 .buttonStyle(.borderedProminent)
-            }
-
-            content
+                .fixedSize()
+                .disabled(!asc.canStartReleaseAutomation)
+                .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
         }
     }
 
@@ -64,10 +82,9 @@ struct ASCVersionPickerBar<Content: View>: View {
 }
 
 extension ASCVersionPickerBar where Content == EmptyView {
-    init(asc: ASCManager, selection: Binding<String>, onCreateUpdate: (() -> Void)? = nil) {
+    init(asc: ASCManager, selection: Binding<String>) {
         self.asc = asc
         self.selection = selection
-        self.onCreateUpdate = onCreateUpdate
         self.content = EmptyView()
     }
 }

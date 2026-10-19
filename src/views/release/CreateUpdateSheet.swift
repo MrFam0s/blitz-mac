@@ -1,19 +1,18 @@
 import SwiftUI
 
-struct CreateUpdateSheet: View {
+struct ReleaseAutomationSheet: View {
     var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var context: ReleaseAutomationContext?
     @State private var preflight: ReleasePreflight?
     @State private var error: String?
-    @State private var showManual = false
 
     private var agent: AIAgent { AIAgent(rawValue: appState.settingsStore.defaultAgentCLI) ?? .claudeCode }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Neue Version anlegen").font(.title2.weight(.semibold))
-            Text("Prüft den lokalen Build und den aktuellen Store-Stand. Bei einem neueren Stand werden Version, Changelog und Einreichung vorbereitet und ausgeführt.")
+            Text("Update automatisch veröffentlichen").font(.title2.weight(.semibold))
+            Text("Prüft Build und Store-Stand, führt Tests aus und reicht das Update bei Apple ein. Nach Apples Freigabe wird es automatisch veröffentlicht.")
                 .foregroundStyle(.secondary)
 
             if let context {
@@ -22,6 +21,15 @@ struct CreateUpdateSheet: View {
                     Text(context.projectPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     Text("Store-Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
                         .font(.caption).foregroundStyle(.secondary)
+                }
+                if let draft = context.preparedVersion {
+                    Label("Vorbereiteter Entwurf: Version \(draft.version)", systemImage: "doc.text")
+                        .font(.headline)
+                    Text("Gespeicherte Texte, Screenshots und App-Preview-Videos dieses Entwurfs bleiben erhalten. Starte erst, wenn eure Bearbeitung abgeschlossen ist. Fehlende Release Notes werden ergänzt.")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    Text("Für ein normales App-Update werden eine neue Version und der passende Changelog vorbereitet. Vorhandene Store-Texte und Medien bleiben erhalten.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
                 if let preflight {
                     if preflight.artifacts.isEmpty {
@@ -50,38 +58,48 @@ struct CreateUpdateSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                Label("Neuen Stand nachweisen und nötige Tests ausführen", systemImage: "checkmark.circle")
-                Label("Version und Changelog für die vorhandenen Store-Sprachen erstellen", systemImage: "text.badge.plus")
+                Label("App- und Store-Änderungen prüfen und Tests ausführen", systemImage: "checkmark.circle")
+                Label(context?.preparedVersion == nil ? "Version und Changelog für die Store-Sprachen erstellen" : "Entwurf prüfen und fehlende Release Notes ergänzen", systemImage: "text.badge.plus")
                 Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
                 Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
             }.font(.callout)
-            Text("Startet \(agent.displayName) im Blitz-Terminal. Ohne neueren Stand wird nichts eingereicht. Fehlende Angaben oder fehlgeschlagene Tests stoppen die Veröffentlichung; Rückfragen und Fortschritt erscheinen im Terminal.")
+            Text("Startet \(agent.displayName) im Blitz-Terminal. Ohne neuen App-Stand oder vorbereitete Store-Änderungen wird nichts eingereicht. Fehlende Angaben oder fehlgeschlagene Tests stoppen den Ablauf.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).font(.callout).foregroundStyle(.orange) }
             Divider()
             HStack {
                 Button("Abbrechen") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Manuell …") { showManual = true }
                 Spacer()
-                Button("Prüfen und veröffentlichen") { start() }
+                Button("Update automatisch veröffentlichen") { start() }
                     .buttonStyle(.borderedProminent)
                     .disabled(context == nil || preflight == nil)
             }
         }
         .padding(24)
         .frame(width: 620)
-        .sheet(isPresented: $showManual) { ManualCreateUpdateSheet(appState: appState) }
         .task {
             guard let project = appState.activeProject, let app = appState.ascManager.app,
                   project.metadata.bundleIdentifier == app.bundleId else {
-                error = "Für den automatischen Ablauf muss die App mit ihrem lokalen Projekt verknüpft sein. Eine Store-Version kannst du auch manuell anlegen."
+                error = "Für den automatischen Ablauf muss die App mit ihrem lokalen Projekt verknüpft sein. Ein Entwurf kann über „Versionsentwurf anlegen“ erstellt werden."
                 return
             }
+            let revision = appState.ascManager.projectRevision
+            let versions: [ASCAppStoreVersion]
+            let prepared: PreparedReleaseVersion?
+            do {
+                guard let service = appState.ascManager.service else { throw ASCError.notFound("ASC ist nicht verbunden.") }
+                versions = try await service.fetchAppStoreVersions(appId: app.id)
+                guard !Task.isCancelled, appState.ascManager.projectRevision == revision,
+                      appState.ascManager.app?.id == app.id else { return }
+                prepared = try ReleaseAutomationService.preparedVersion(in: versions)
+                appState.ascManager.appStoreVersions = versions
+            } catch { self.error = error.localizedDescription; return }
             let target = ReleaseAutomationContext(
                 projectID: project.id,
                 projectPath: URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path,
                 appID: app.id, appName: app.name, bundleID: app.bundleId, platform: project.platform,
-                displayedLiveVersion: appState.ascManager.liveVersion?.attributes.versionString
+                displayedLiveVersion: ASCReleaseStatus.currentLiveVersion(for: versions)?.attributes.versionString,
+                preparedVersion: prepared
             )
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -104,8 +122,9 @@ struct CreateUpdateSheet: View {
 
     private func start() {
         guard let context, let preflight else { return }
-        guard context.matches(project: appState.activeProject, app: appState.ascManager.app) else {
-            error = "Die ausgewählte App hat sich geändert. Bitte schließe den Dialog und starte erneut."
+        guard context.matches(project: appState.activeProject, app: appState.ascManager.app),
+              ReleaseAutomationService.matchesPreparedVersion(context, versions: appState.ascManager.appStoreVersions) else {
+            error = "Die ausgewählte App oder ihr Entwurf hat sich geändert. Bitte schließe den Dialog und starte erneut."
             return
         }
         do {
@@ -120,7 +139,7 @@ struct CreateUpdateSheet: View {
     }
 }
 
-struct ManualCreateUpdateSheet: View {
+struct VersionDraftSheet: View {
     var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
@@ -130,12 +149,9 @@ struct ManualCreateUpdateSheet: View {
     @State private var copyFromVersionId = ""
     @State private var copyMetadata = true
     @State private var copyReviewDetail = true
-    @State private var attachBuild = true
-    @State private var selectedBuildId = ""
-
-    private var validBuilds: [ASCBuild] {
-        asc.builds.filter { $0.attributes.processingState == "VALID" && $0.attributes.expired != true }
-    }
+    @State private var isChecking = true
+    @State private var targetRevision: UUID?
+    @State private var targetAppID: String?
 
     private var sourceVersions: [ASCAppStoreVersion] {
         asc.appStoreVersions
@@ -147,26 +163,26 @@ struct ManualCreateUpdateSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Version manuell anlegen")
+            Text("Versionsentwurf anlegen")
                 .font(.title2.weight(.semibold))
 
-            Text("Create the next App Store version for this live app, optionally copying metadata and review contact details from an existing version.")
+            Text("Legt nur einen Entwurf in App Store Connect an. Danach könnt ihr Texte und Screenshots in Blitz oder per Codex bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Version")
                     .font(.callout.weight(.medium))
-                TextField("e.g. 1.2.4", text: $versionString)
+                TextField("z. B. 1.4.2", text: $versionString)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Toggle("Copy store listing metadata from an existing version", isOn: $copyMetadata)
-                Toggle("Copy review contact details", isOn: $copyReviewDetail)
+                Toggle("Store-Texte der bisherigen Version übernehmen", isOn: $copyMetadata)
+                Toggle("Review-Kontaktdaten übernehmen", isOn: $copyReviewDetail)
 
-                Picker("Copy From", selection: $copyFromVersionId) {
-                    Text("None").tag("")
+                Picker("Übernehmen aus", selection: $copyFromVersionId) {
+                    Text("Keine").tag("")
                     ForEach(sourceVersions) { version in
                         Text("Version \(version.attributes.versionString)")
                             .tag(version.id)
@@ -176,25 +192,9 @@ struct ManualCreateUpdateSheet: View {
                 .disabled(!copyMetadata && !copyReviewDetail)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Attach a build now", isOn: $attachBuild)
-
-                Picker("Build", selection: $selectedBuildId) {
-                    Text("None").tag("")
-                    ForEach(validBuilds) { build in
-                        Text("Build \(build.attributes.version)")
-                            .tag(build.id)
-                    }
-                }
-                .pickerStyle(.menu)
-                .disabled(!attachBuild)
-
-                if attachBuild && validBuilds.isEmpty {
-                    Text("No valid builds are available yet. You can still create the update and attach a build later.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Label("Build und Einreichung folgen erst, wenn ihr später die Veröffentlichung startet.", systemImage: "pause.circle")
+                .font(.callout).foregroundStyle(.secondary)
+            if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
 
             if let blockerMessage {
                 Text(blockerMessage)
@@ -217,35 +217,32 @@ struct ManualCreateUpdateSheet: View {
             }
 
             HStack {
-                Button("Cancel") {
+                Button("Abbrechen") {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                Button("Create Update") {
+                Button("Versionsentwurf anlegen") {
                     Task {
+                        guard targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
                         let resolvedSourceVersionId = (copyMetadata || copyReviewDetail) && !copyFromVersionId.isEmpty
                             ? copyFromVersionId
                             : nil
-                        let resolvedBuildId = attachBuild && !selectedBuildId.isEmpty ? selectedBuildId : nil
                         await asc.createUpdateVersion(
                             versionString: versionString,
                             platform: appState.activeProject?.platform ?? .iOS,
                             copyFromVersionId: resolvedSourceVersionId,
                             copyMetadata: copyMetadata,
                             copyReviewDetail: copyReviewDetail,
-                            attachBuildId: resolvedBuildId
+                            attachBuildId: nil
                         )
-                        if asc.versionCreationError == nil {
-                            dismiss()
-                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(
-                    asc.isCreatingVersion
+                    isChecking || targetAppID == nil || asc.isCreatingVersion
                         || blockerMessage != nil
                         || versionString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 )
@@ -253,19 +250,25 @@ struct ManualCreateUpdateSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 540)
+        .disabled(asc.isCreatingVersion)
+        .interactiveDismissDisabled(asc.isCreatingVersion)
         .task {
-            if asc.builds.isEmpty {
-                await asc.refreshTabData(.builds)
-            }
+            targetRevision = asc.projectRevision
+            targetAppID = asc.app?.id
+            asc.versionCreationError = nil
+            defer { isChecking = false }
+            do {
+                guard let appID = targetAppID, let service = asc.service else { throw ASCError.notFound("Keine App oder ASC-Verbindung ausgewählt.") }
+                let versions = try await service.fetchAppStoreVersions(appId: appID)
+                guard !Task.isCancelled, targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
+                asc.appStoreVersions = versions
+            } catch { asc.versionCreationError = error.localizedDescription; targetAppID = nil; return }
             if versionString.isEmpty {
                 versionString = suggestedNextVersion(from: asc.liveVersion?.attributes.versionString)
             }
             if copyFromVersionId.isEmpty {
                 copyFromVersionId = asc.liveVersion?.id ?? asc.appStoreVersions.first?.id ?? ""
-            }
-            if selectedBuildId.isEmpty {
-                selectedBuildId = validBuilds.first?.id ?? ""
             }
         }
     }
@@ -273,7 +276,7 @@ struct ManualCreateUpdateSheet: View {
     private func suggestedNextVersion(from source: String?) -> String {
         guard let source = source?.trimmingCharacters(in: .whitespacesAndNewlines),
               !source.isEmpty else {
-            return ""
+            return "1.0"
         }
 
         var components = source.split(separator: ".").map(String.init)

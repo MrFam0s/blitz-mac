@@ -405,9 +405,11 @@ extension ASCManager {
         selectedVersionBuild = nil
         pendingFormValues = [:]
         showSubmitPreview = false
-        showCreateUpdateSheet = false
+        showVersionDraftSheet = false
+        showReleaseAutomationSheet = false
         isSubmitting = false
         isCreatingVersion = false
+        versionCreationOperation = nil
         submissionError = nil
         versionCreationError = nil
         writeError = nil

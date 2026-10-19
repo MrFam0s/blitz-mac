@@ -1,5 +1,16 @@
 import Foundation
 
+protocol ASCVersionCreationService {
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
+    func fetchLocalizations(versionId: String) async throws -> [ASCVersionLocalization]
+    func fetchReviewDetail(versionId: String) async throws -> ASCReviewDetail
+    func createAppStoreVersion(appId: String, versionString: String, platform: String, copyright: String?, releaseType: String?) async throws -> ASCAppStoreVersion
+    func createVersionLocalization(versionId: String, locale: String, fields: [String: String]) async throws -> ASCVersionLocalization
+    func createOrPatchReviewDetail(versionId: String, attributes: [String: Any]) async throws -> ASCReviewDetail
+    func attachBuild(versionId: String, buildId: String) async throws
+}
+extension AppStoreConnectService: ASCVersionCreationService {}
+
 // MARK: - Release Manager
 // Extension containing release-related functionality for ASCManager
 
@@ -39,6 +50,12 @@ extension ASCManager {
 
     var canCreateVersion: Bool {
         app?.id != nil
+    }
+
+    var canStartReleaseAutomation: Bool {
+        guard app != nil else { return false }
+        if let current = currentUpdateVersion { return ASCReleaseStatus.isEditable(current.attributes.appStoreState) }
+        return liveVersion != nil
     }
 
     var canCreateUpdate: Bool {
@@ -245,15 +262,33 @@ extension ASCManager {
         copyFromVersionId: String? = nil,
         copyMetadata: Bool = true,
         copyReviewDetail: Bool = true,
-        attachBuildId: String? = nil
+        attachBuildId: String? = nil,
+        using serviceOverride: (any ASCVersionCreationService)? = nil
     ) async {
-        guard let service, let appId = app?.id else {
+        guard !isCreatingVersion else { return }
+        guard let service = serviceOverride ?? service, let appId = app?.id else {
+            versionCreationError = "Keine App oder ASC-Verbindung ausgewählt."
             await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
                 "reason": "missing_service_or_app",
                 "versionString": versionString,
             ])
             return
         }
+
+        let revision = projectRevision
+        func checkTarget() throws {
+            guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { throw CancellationError() }
+        }
+        let operation = UUID()
+        versionCreationOperation = operation
+        isCreatingVersion = true
+        defer {
+            if versionCreationOperation == operation {
+                isCreatingVersion = false
+                versionCreationOperation = nil
+            }
+        }
+        versionCreationError = nil
 
         let trimmedVersion = versionString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedVersion.isEmpty else {
@@ -287,8 +322,6 @@ extension ASCManager {
             return
         }
 
-        isCreatingVersion = true
-        versionCreationError = nil
         let startedAt = Date()
         await ASCUpdateLogger.shared.event("create_update_started", metadata: [
             "appId": appId,
@@ -300,6 +333,13 @@ extension ASCManager {
         ])
 
         do {
+            let freshVersions = try await service.fetchAppStoreVersions(appId: appId)
+            try checkTarget()
+            appStoreVersions = freshVersions
+            guard !freshVersions.contains(where: { $0.attributes.versionString == trimmedVersion }) else {
+                throw ASCError.notFound("Version \(trimmedVersion) existiert bereits. Bitte den vorhandenen Entwurf öffnen.")
+            }
+            if let blocker = newVersionCreationBlockerMessage(desiredVersionString: trimmedVersion) { throw ASCError.notFound(blocker) }
             // Snapshot any source data up front so the copy phase is deterministic
             // even if the selected version changes while the task is running.
             let sourceVersion = version(matching: copyFromVersionId)
@@ -321,6 +361,7 @@ extension ASCManager {
                 sourceReviewDetail = nil
             }
 
+            try checkTarget()
             // Create the new version first, then hydrate it with copied metadata
             // and the optional attached build.
             let createdVersion = try await service.createAppStoreVersion(
@@ -328,7 +369,7 @@ extension ASCManager {
                 versionString: trimmedVersion,
                 platform: platform.ascPlatformValue,
                 copyright: sourceVersion?.attributes.copyright,
-                releaseType: sourceVersion?.attributes.releaseType
+                releaseType: "MANUAL"
             )
             await ASCUpdateLogger.shared.event("create_update_created_version", metadata: [
                 "sourceVersionId": sourceVersion?.id ?? "nil",
@@ -339,6 +380,7 @@ extension ASCManager {
             if copyMetadata {
                 for localization in sourceLocalizations {
                     do {
+                        try checkTarget()
                         _ = try await service.createVersionLocalization(
                             versionId: createdVersion.id,
                             locale: localization.attributes.locale,
@@ -359,6 +401,7 @@ extension ASCManager {
                 }
             }
 
+            try checkTarget()
             if copyReviewDetail, let sourceReviewDetail {
                 _ = try await service.createOrPatchReviewDetail(
                     versionId: createdVersion.id,
@@ -369,6 +412,7 @@ extension ASCManager {
                 ])
             }
 
+            try checkTarget()
             if let attachBuildId,
                !attachBuildId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 try await service.attachBuild(versionId: createdVersion.id, buildId: attachBuildId)
@@ -378,10 +422,12 @@ extension ASCManager {
                 ])
             }
 
-            appStoreVersions = try await service.fetchAppStoreVersions(appId: appId)
+            let refreshedVersions = try await service.fetchAppStoreVersions(appId: appId)
+            try checkTarget()
+            appStoreVersions = refreshedVersions
             prepareForVersionSelection(createdVersion.id)
             syncSelectedVersion(preferredVersionId: createdVersion.id)
-            showCreateUpdateSheet = false
+            showVersionDraftSheet = false
             await refreshTabData(.app)
             await ASCUpdateLogger.shared.event("create_update_succeeded", metadata: [
                 "versionId": createdVersion.id,
@@ -393,6 +439,7 @@ extension ASCManager {
                 startedAt: startedAt
             )
         } catch {
+            guard revision == projectRevision else { return }
             versionCreationError = error.localizedDescription
             await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
                 "error": error.localizedDescription,
@@ -405,7 +452,6 @@ extension ASCManager {
             )
         }
 
-        isCreatingVersion = false
     }
 
     // MARK: - Submission
