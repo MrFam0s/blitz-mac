@@ -121,3 +121,13 @@ private func writeTestAppIcon(to projectRoot: URL) throws {
 
     try data.write(to: appIconSet.appendingPathComponent("AppIcon.png"))
 }
+
+@Test func projectIconStatusIgnoresGeneratedBuildTrees() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try writeTestAppIcon(to: root.appendingPathComponent(".build"))
+    let projectId = UUID().uuidString
+    #expect(await ProjectAppIconLoader.loadStatus(for: projectId, projectPath: root.path) == nil)
+    try writeTestAppIcon(to: root)
+    #expect(await ProjectAppIconLoader.loadStatus(for: projectId, projectPath: root.path) == "Configured")
+}

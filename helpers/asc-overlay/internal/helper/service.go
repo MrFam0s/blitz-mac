@@ -31,8 +31,9 @@ type sessionState struct {
 type Service struct {
 	mu sync.Mutex
 
-	version string
-	session *sessionState
+	version        string
+	outputIsolated bool
+	session        *sessionState
 
 	resolveCredentials func(string) (shared.ResolvedAuthCredentials, error)
 	newClient          func(shared.ResolvedAuthCredentials) (rawRequester, error)
@@ -50,6 +51,15 @@ func NewService(version string) *Service {
 		newClient:          defaultNewClient,
 		cliRunner:          runCLI,
 	}
+}
+
+// NewServiceWithIsolatedOutput is for the daemon entry point, after stdout has
+// been redirected away from its dedicated protocol writer. It avoids process-
+// wide stdout swapping (and its global lock) around concurrent network reads.
+func NewServiceWithIsolatedOutput(version string) *Service {
+	s := NewService(version)
+	s.outputIsolated = true
+	return s
 }
 
 func (s *Service) Handle(ctx context.Context, request Request) Response {
@@ -171,11 +181,15 @@ func (s *Service) requestWithSession(ctx context.Context, params SessionRequestP
 		capturedStderr string
 	)
 
-	captureIOMu.Lock()
-	capturedStdout, capturedStderr, captureErr = captureOutput(func() {
+	if s.outputIsolated {
 		response, requestErr = session.client.DoRaw(requestCtx, request)
-	})
-	captureIOMu.Unlock()
+	} else {
+		captureIOMu.Lock()
+		capturedStdout, capturedStderr, captureErr = captureOutput(func() {
+			response, requestErr = session.client.DoRaw(requestCtx, request)
+		})
+		captureIOMu.Unlock()
+	}
 	if captureErr != nil {
 		return SessionRequestResult{}, fmt.Errorf("capture request output: %w", captureErr)
 	}

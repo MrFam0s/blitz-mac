@@ -557,6 +557,7 @@ extension ASCManager {
     // MARK: - Refresh
 
     func refreshMonetization() async {
+        let revision = projectRevision
         guard let service else { return }
         guard let appId = app?.id else { return }
         await ASCUpdateLogger.shared.event("monetization_refresh_started", metadata: [
@@ -572,20 +573,21 @@ extension ASCManager {
             async let iapTask = service.fetchInAppPurchases(appId: appId)
             async let groupsTask = service.fetchSubscriptionGroups(appId: appId)
 
-            appPricePoints = try await pricePointsTask
-            applyAppPricingState(
-                await pricingStateTask
-                    ?? ASCAppPricingState(
-                        currentPricePointId: nil,
-                        scheduledPricePointId: nil,
-                        scheduledEffectiveDate: nil
-                    )
-            )
-            inAppPurchases = try await iapTask
-            subscriptionGroups = try await groupsTask
-            for group in subscriptionGroups {
-                subscriptionsPerGroup[group.id] = try await service.fetchSubscriptionsInGroup(groupId: group.id)
+            let points = try await pricePointsTask
+            let state = await pricingStateTask
+            let iaps = try await iapTask
+            let groups = try await groupsTask
+            var subscriptions: [String: [ASCSubscription]] = [:]
+            for group in groups {
+                subscriptions[group.id] = try await service.fetchSubscriptionsInGroup(groupId: group.id)
             }
+            guard projectRevision == revision, !Task.isCancelled else { return }
+            appPricePoints = points
+            if let state { applyAppPricingState(state) }
+            else { overviewFailedFields.insert("Pricing") }
+            inAppPurchases = iaps
+            subscriptionGroups = groups
+            subscriptionsPerGroup = subscriptions
             await ASCUpdateLogger.shared.event("monetization_refresh_succeeded", metadata: [
                 "appId": appId,
                 "inAppPurchaseCount": String(inAppPurchases.count),
@@ -594,6 +596,8 @@ extension ASCManager {
                 "scheduledPricePointId": scheduledAppPricePointId ?? "nil",
             ])
         } catch {
+            guard projectRevision == revision, !Task.isCancelled else { return }
+            overviewFailedFields.formUnion(Self.overviewPricingFieldLabels)
             writeError = error.localizedDescription
             await logDataFetchFailure("monetization_refresh_failed", error: error, metadata: [
                 "appId": appId,
@@ -602,6 +606,7 @@ extension ASCManager {
     }
 
     func refreshAttachedSubmissionItemIDs() async {
+        let revision = projectRevision
         guard let appId = app?.id else {
             attachedSubmissionItemIDs = []
             return
@@ -616,6 +621,7 @@ extension ASCManager {
 
         let attachedSubscriptions = await fetchAttachedSubmissionItemIDs(urlString: subscriptionURL, cookieHeader: cookieHeader)
         let attachedIAPs = await fetchAttachedSubmissionItemIDs(urlString: iapURL, cookieHeader: cookieHeader)
+        guard projectRevision == revision, !Task.isCancelled else { return }
         attachedSubmissionItemIDs = attachedSubscriptions.union(attachedIAPs)
     }
 

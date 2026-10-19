@@ -18,8 +18,13 @@ The old fork's additional analytics launcher is not included.
 
 `session.request` deliberately preserves HTTP status, headers and raw body,
 including non-2xx responses: Blitz owns their interpretation. This path retains
-the original single-request semantics and mutation concurrency limit, while
-using current upstream authentication, target validation and redirect rejection.
+the original HTTP response semantics while using current upstream authentication,
+target validation and redirect rejection. The protocol server allows at most four
+GET/HEAD reads concurrently. Session changes, CLI execution and mutations wait for
+preceding reads and execute in order; responses are correlated by request ID.
+The production entry point reserves the original stdout for JSON-lines responses
+and redirects incidental library output to stderr once at startup, so reads do
+not contend on a process-wide stdout-capture lock. CLI mode keeps normal output.
 The upstream CLI retains its own current retry/error behavior.
 
 To update, advance the submodule, update the version/commit in the build script

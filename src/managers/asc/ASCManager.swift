@@ -124,17 +124,33 @@ final class ASCManager {
     // Shared internal state used by feature extensions.
     var loadedTabs: Set<AppTab> = []
     var tabLoadedAt: [AppTab: Date] = [:]
-    var projectSnapshots: [String: ProjectSnapshot] = [:]
-    var tabHydrationTasks: [AppTab: Task<Void, Never>] = [:]
+    @ObservationIgnored var projectSnapshots: [String: ProjectSnapshot] = [:]
+    @ObservationIgnored var tabLoadTasks: [AppTab: Task<Void, Never>] = [:]
+    @ObservationIgnored var tabHydrationTasks: [AppTab: Task<Void, Never>] = [:]
     var overviewReadinessLoadingFields: Set<String> = []
+    var overviewResolvedFields: Set<String> = []
+    var overviewFailedFields: Set<String> = []
+    var overviewCacheDate: Date?
+    @ObservationIgnored var projectRevision = UUID()
+    @ObservationIgnored var overviewCache = ASCOverviewCache.shared
+    @ObservationIgnored var iconCheckTask: Task<Void, Never>?
+    @ObservationIgnored var iconCheckedAt: Date?
+    @ObservationIgnored var restoringCache = false
     var loadingFeedbackBuildIds: Set<String> = []
     var loadedProjectId: String?
     var pendingBundleIDSetup: PendingBundleIDSetupContext?
 
     // Submission readiness labels used by both the view model and background hydration.
+    static var overviewAllFields: Set<String> {
+        overviewLocalizationFieldLabels.union(overviewVersionFieldLabels)
+            .union(overviewAppInfoFieldLabels).union(overviewMetadataFieldLabels)
+            .union(overviewReviewFieldLabels).union(overviewBuildFieldLabels)
+            .union(overviewPricingFieldLabels).union(overviewScreenshotFieldLabels)
+            .union(["Content Rights", "App Icon"])
+    }
+
     static let overviewWhatsNewFieldLabel = "What's New"
     static let overviewLocalizationFieldLabels: Set<String> = [
-        "App Name",
         "Description",
         "Keywords",
         "Support URL",
@@ -143,6 +159,7 @@ final class ASCManager {
     static let overviewVersionFieldLabels: Set<String> = ["Copyright"]
     static let overviewAppInfoFieldLabels: Set<String> = ["Primary Category"]
     static let overviewMetadataFieldLabels: Set<String> = [
+        "App Name",
         "Privacy Policy URL",
         "Age Rating"
     ]

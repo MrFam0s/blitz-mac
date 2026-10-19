@@ -2,7 +2,7 @@ import Foundation
 
 extension ASCManager {
     func ensureTabData(_ tab: AppTab) async {
-        guard credentials != nil else { return }
+        guard credentials != nil, !restoringCache else { return }
 
         if loadedTabs.contains(tab) {
             if shouldRefreshTabCache(tab) {
@@ -33,13 +33,17 @@ extension ASCManager {
     func fetchApp(bundleId: String, exactName: String? = nil) async -> Bool {
         guard let service else { return false }
         isLoadingApp = true
+        let revision = projectRevision
+        defer { if projectRevision == revision { isLoadingApp = false } }
         do {
             let fetched = try await service.fetchApp(bundleId: bundleId, exactName: exactName)
+            guard projectRevision == revision, !Task.isCancelled else { return false }
             app = fetched
             credentialsError = nil
             isLoadingApp = false
             return true
         } catch {
+            guard projectRevision == revision, !Task.isCancelled else { return false }
             app = nil
             credentialsError = error.localizedDescription
             isLoadingApp = false
@@ -48,96 +52,88 @@ extension ASCManager {
     }
 
     func fetchTabData(_ tab: AppTab) async {
-        guard let service else { return }
-        guard credentials != nil else { return }
+        if let task = tabLoadTasks[tab] { await task.value; return }
         guard !loadedTabs.contains(tab) else { return }
-        guard isLoadingTab[tab] != true else { return }
-        // Project switches can briefly leave tabs asking for data while the next
-        // app lookup is still in flight. Treat that as "not ready yet" instead
-        // of surfacing a false bundle-ID/app-not-found error.
-        guard !(app == nil && isLoadingApp) else { return }
-
-        cancelBackgroundHydration(for: tab)
-        isLoadingTab[tab] = true
-        tabError.removeValue(forKey: tab)
-
-        do {
-            try await loadData(for: tab, service: service)
-            isLoadingTab[tab] = false
-            loadedTabs.insert(tab)
-            tabLoadedAt[tab] = Date()
-        } catch {
-            isLoadingTab[tab] = false
-            tabError[tab] = error.localizedDescription
-            await logDataFetchFailure("asc_tab_fetch_failed", error: error, metadata: [
-                "tab": tab.rawValue,
-            ])
-        }
+        await refreshTabData(tab)
     }
 
     /// Called after bundle ID setup completes and the app is confirmed in ASC.
-    /// Clears all tab errors and forces data to be re-fetched.
     func resetTabState() {
+        projectRevision = UUID()
         cancelBackgroundHydrationTasks()
+        for task in tabLoadTasks.values { task.cancel() }
+        tabLoadTasks.removeAll()
         tabError.removeAll()
         loadedTabs.removeAll()
         tabLoadedAt.removeAll()
+        isLoadingTab.removeAll()
         loadingFeedbackBuildIds = []
     }
 
     func refreshTabData(_ tab: AppTab) async {
-        guard let service else { return }
-        guard credentials != nil else { return }
-        // Same guard as fetchTabData(_:): an in-flight app lookup should not be
-        // rendered as a tab error. The active tab will be re-requested once the
-        // project load finishes.
-        guard !(app == nil && isLoadingApp) else { return }
-
+        if let task = tabLoadTasks[tab] { await task.value; return }
+        guard let service, credentials != nil, app != nil, !restoringCache else { return }
+        let revision = projectRevision
         let hadLoadedData = loadedTabs.contains(tab)
         cancelBackgroundHydration(for: tab)
         isLoadingTab[tab] = true
         tabError.removeValue(forKey: tab)
-
-        do {
-            try await loadData(for: tab, service: service)
-            isLoadingTab[tab] = false
-            loadedTabs.insert(tab)
-            tabLoadedAt[tab] = Date()
-        } catch {
-            isLoadingTab[tab] = false
-            if !hadLoadedData {
-                loadedTabs.remove(tab)
-                tabLoadedAt.removeValue(forKey: tab)
+        let task = Task { [self] in
+            defer {
+                if projectRevision == revision {
+                    isLoadingTab[tab] = false
+                    tabLoadTasks.removeValue(forKey: tab)
+                }
             }
-            tabError[tab] = error.localizedDescription
-            await logDataFetchFailure("asc_tab_refresh_failed", error: error, metadata: [
-                "tab": tab.rawValue,
-            ])
+            do {
+                try await loadData(for: tab, service: service)
+                guard projectRevision == revision, !Task.isCancelled else { return }
+                loadedTabs.insert(tab)
+                tabLoadedAt[tab] = Date()
+            } catch {
+                guard projectRevision == revision, !Task.isCancelled else { return }
+                if !hadLoadedData {
+                    loadedTabs.remove(tab)
+                    tabLoadedAt.removeValue(forKey: tab)
+                }
+                tabError[tab] = error.localizedDescription
+                await logDataFetchFailure("asc_tab_refresh_failed", error: error, metadata: ["tab": tab.rawValue])
+            }
         }
+        tabLoadTasks[tab] = task
+        await task.value
     }
 
     func refreshSubmissionReadinessData() async {
+        let revision = projectRevision
         await refreshCurrentApp()
+        guard projectRevision == revision, !Task.isCancelled else { return }
         await refreshMonetization()
+        guard projectRevision == revision, !Task.isCancelled else { return }
         await refreshAttachedSubmissionItemIDs()
     }
 
     func syncOverviewSubmissionReadiness(forceRefresh: Bool = false) async {
+        let revision = projectRevision
         if forceRefresh {
             await refreshTabData(.app)
         } else {
             await ensureTabData(.app)
         }
+        guard projectRevision == revision, !Task.isCancelled else { return }
         await waitForBackgroundHydration(for: .app)
+        guard projectRevision == revision, !Task.isCancelled else { return }
         await refreshSubmissionReadinessData()
     }
 
     func startOverviewReadinessLoading(_ fields: Set<String>) {
-        overviewReadinessLoadingFields = fields
+        overviewReadinessLoadingFields.formUnion(fields)
     }
 
     func finishOverviewReadinessLoading(_ fields: Set<String>) {
         overviewReadinessLoadingFields.subtract(fields)
+        overviewFailedFields.subtract(fields)
+        overviewResolvedFields.formUnion(fields)
     }
 
     func isCurrentProject(_ projectId: String?) -> Bool {
@@ -147,108 +143,10 @@ extension ASCManager {
 
     private func refreshCurrentApp() async {
         guard let service, let appId = app?.id else { return }
-        if let refreshedApp = try? await service.fetchApp(id: appId) {
+        let revision = projectRevision
+        if let refreshedApp = try? await service.fetchApp(id: appId), projectRevision == revision, !Task.isCancelled {
             app = refreshedApp
         }
-    }
-
-    private struct OverviewPrimaryLocalization {
-        /// ASC localization record ID used in follow-up API calls like `fetchScreenshotSets(localizationId:)`.
-        let localizationId: String
-        /// Locale code used when storing overview data in Blitz's locale-keyed caches.
-        let locale: String
-
-        init?(_ localization: ASCVersionLocalization?) {
-            guard let localization else { return nil }
-            localizationId = localization.id
-            locale = localization.attributes.locale
-        }
-    }
-
-    private func hydrateOverviewSecondaryData(
-        projectId: String?,
-        appId: String,
-        primaryLocalization: OverviewPrimaryLocalization?,
-        appInfoId: String?,
-        service: AppStoreConnectService
-    ) async {
-        if let primaryLocalization {
-            do {
-                let fetchedSets = try await service.fetchScreenshotSets(localizationId: primaryLocalization.localizationId)
-                let fetchedScreenshots = try await withThrowingTaskGroup(of: (String, [ASCScreenshot]).self) { group in
-                    for set in fetchedSets {
-                        group.addTask {
-                            let screenshots = try await service.fetchScreenshots(setId: set.id)
-                            return (set.id, screenshots)
-                        }
-                    }
-
-                    var pairs: [(String, [ASCScreenshot])] = []
-                    for try await pair in group {
-                        pairs.append(pair)
-                    }
-                    return pairs
-                }
-
-                guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-                updateScreenshotCache(
-                    locale: primaryLocalization.locale,
-                    sets: fetchedSets,
-                    screenshots: Dictionary(uniqueKeysWithValues: fetchedScreenshots)
-                )
-                finishOverviewReadinessLoading(Self.overviewScreenshotFieldLabels)
-            } catch {
-                print("Failed to hydrate overview screenshots: \(error)")
-                finishOverviewReadinessLoading(Self.overviewScreenshotFieldLabels)
-            }
-        } else {
-            finishOverviewReadinessLoading(Self.overviewScreenshotFieldLabels)
-        }
-
-        if let appInfoId {
-            async let ageRatingTask = fetchAgeRatingLogged(
-                service: service,
-                appInfoId: appInfoId,
-                context: "overview_secondary"
-            )
-            async let appInfoLocalizationsTask: [ASCAppInfoLocalization]? = try? service.fetchAppInfoLocalizations(appInfoId: appInfoId)
-
-            let fetchedAgeRating = await ageRatingTask
-            let fetchedAppInfoLocalizations = await appInfoLocalizationsTask ?? []
-
-            guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-            ageRatingDeclaration = fetchedAgeRating
-            appInfoLocalizationsByLocale = Dictionary(uniqueKeysWithValues: fetchedAppInfoLocalizations.map {
-                ($0.attributes.locale, $0)
-            })
-            appInfoLocalization = primaryAppInfoLocalization(in: fetchedAppInfoLocalizations)
-            finishOverviewReadinessLoading(Self.overviewMetadataFieldLabels)
-        } else {
-            ageRatingDeclaration = nil
-            appInfoLocalizationsByLocale = [:]
-            appInfoLocalization = nil
-            finishOverviewReadinessLoading(Self.overviewMetadataFieldLabels)
-        }
-
-        guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-        await refreshReviewSubmissionData(appId: appId, service: service)
-        guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-        rebuildSubmissionHistory(appId: appId)
-        refreshSubmissionFeedbackIfNeeded()
-
-        if monetizationStatus == nil {
-            let hasPricing = await fetchPricingConfiguredLogged(
-                service: service,
-                appId: appId,
-                context: "overview_secondary"
-            )
-            guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-            monetizationStatus = hasPricing ? "Configured" : nil
-        }
-
-        guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-        await refreshSubmissionReadinessData()
-        finishOverviewReadinessLoading(Self.overviewPricingFieldLabels)
     }
 
     private func hydrateReviewSecondaryData(
@@ -342,77 +240,21 @@ extension ASCManager {
 
         switch tab {
         case .app:
-            refreshAppIconStatusIfNeeded(for: loadedProjectId)
-            startOverviewReadinessLoading(
-                Self.overviewLocalizationFieldLabels
-                    .union(Self.overviewVersionFieldLabels)
-                    .union(Self.overviewAppInfoFieldLabels)
-                    .union(Self.overviewMetadataFieldLabels)
-                    .union(Self.overviewReviewFieldLabels)
-                    .union(Self.overviewBuildFieldLabels)
-                    .union(Self.overviewPricingFieldLabels)
-                    .union(Self.overviewScreenshotFieldLabels)
-            )
-            async let versionsTask = service.fetchAppStoreVersions(appId: appId)
-            async let appTask: ASCApp? = try? service.fetchApp(id: appId)
-            async let appInfoTask: ASCAppInfo? = try? service.fetchAppInfo(appId: appId)
-            async let buildsTask = service.fetchBuilds(appId: appId)
-
-            let versions = try await versionsTask
-            appStoreVersions = versions
-            syncSelectedVersion()
-            finishOverviewReadinessLoading(Self.overviewVersionFieldLabels)
-            if let refreshedApp = await appTask {
-                app = refreshedApp
-            }
-            appInfo = await appInfoTask
-            finishOverviewReadinessLoading(Self.overviewAppInfoFieldLabels)
-            builds = try await buildsTask
-
-            var primaryLocalization: OverviewPrimaryLocalization?
-            if let selectedVersionId = selectedVersion?.id {
-                async let localizationsTask = service.fetchLocalizations(versionId: selectedVersionId)
-                async let reviewDetailTask = fetchReviewDetailLogged(
-                    service: service,
-                    versionId: selectedVersionId,
-                    context: "overview_primary"
-                )
-                async let selectedBuildTask: ASCBuild? = try? service.fetchBuildAttachedToVersion(versionId: selectedVersionId)
-
-                let fetchedLocalizations = try await localizationsTask
-                localizations = fetchedLocalizations
-                primaryLocalization = OverviewPrimaryLocalization(
-                    primaryVersionLocalization(in: fetchedLocalizations)
-                )
-                finishOverviewReadinessLoading(Self.overviewLocalizationFieldLabels)
-                reviewDetail = await reviewDetailTask
-                finishOverviewReadinessLoading(Self.overviewReviewFieldLabels)
-                selectedVersionBuild = await selectedBuildTask
-                finishOverviewReadinessLoading(Self.overviewBuildFieldLabels)
-            } else {
-                selectedVersionBuild = nil
-                finishOverviewReadinessLoading(
-                    Self.overviewLocalizationFieldLabels
-                        .union(Self.overviewReviewFieldLabels)
-                        .union(Self.overviewBuildFieldLabels)
-                )
-            }
-
-            refreshSubmissionFeedbackIfNeeded()
-
-            let projectId = loadedProjectId
-            let currentAppInfoId = appInfo?.id
+            let revision = projectRevision
+            await loadOverview(using: service)
+            guard projectRevision == revision, !Task.isCancelled else { return }
             startBackgroundHydration(for: .app) {
-                await self.hydrateOverviewSecondaryData(
-                    projectId: projectId,
-                    appId: appId,
-                    primaryLocalization: primaryLocalization,
-                    appInfoId: currentAppInfoId,
-                    service: service
-                )
+                guard self.projectRevision == revision else { return }
+                async let products: Void = self.loadOverviewProducts(service: service, appId: appId, revision: revision)
+                await self.refreshReviewSubmissionData(appId: appId, service: service)
+                _ = await products
+                guard self.projectRevision == revision, !Task.isCancelled else { return }
+                self.rebuildSubmissionHistory(appId: appId)
+                self.refreshSubmissionFeedbackIfNeeded()
             }
 
         case .appInformation:
+            let revision = projectRevision
             async let appInfoTask: ASCAppInfo? = try? await service.fetchAppInfo(appId: appId)
             async let appRefreshTask: ASCApp? = try? service.fetchApp(id: appId)
             try await refreshAppInformationMetadata(
@@ -421,10 +263,11 @@ extension ASCManager {
                 preferredVersionId: selectedVersionId,
                 preferredLocale: selectedAppInformationLocale
             )
-            appInfo = await appInfoTask
-            if let refreshedApp = await appRefreshTask {
-                app = refreshedApp
-            }
+            let refreshedInfo = await appInfoTask
+            let refreshedApp = await appRefreshTask
+            guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
+            if let refreshedInfo { appInfo = refreshedInfo }
+            if let refreshedApp { app = refreshedApp }
 
         case .screenshots:
             let versions = try await service.fetchAppStoreVersions(appId: appId)

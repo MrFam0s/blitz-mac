@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
+	"sync"
 )
 
 type Server struct {
@@ -31,7 +33,30 @@ func NewServerWithService(in io.Reader, out io.Writer, service *Service) *Server
 	}
 }
 
-func (s *Server) Run(ctx context.Context) error {
+// Only safe reads may overlap. Session changes, CLI calls and mutations form
+// barriers so callers retain the original ordered write semantics.
+func (s *Server) Run(ctx context.Context) (result error) {
+	var pending sync.WaitGroup
+	var outputMu sync.Mutex
+	var outputError error
+	slots := make(chan struct{}, 4)
+	encode := func(response Response) error {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		if outputError != nil {
+			return outputError
+		}
+		outputError = s.encoder.Encode(response)
+		return outputError
+	}
+	defer func() {
+		pending.Wait()
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		if result == nil {
+			result = outputError
+		}
+	}()
 	for {
 		var request Request
 		if err := s.decoder.Decode(&request); err != nil {
@@ -45,14 +70,14 @@ func (s *Server) Run(ctx context.Context) error {
 					Data:    err.Error(),
 				},
 			}
-			if encodeErr := s.encoder.Encode(response); encodeErr != nil {
+			if encodeErr := encode(response); encodeErr != nil {
 				return fmt.Errorf("decode request: %w (encode parse error response: %v)", err, encodeErr)
 			}
 			return fmt.Errorf("decode request: %w", err)
 		}
 
 		if request.Method == "" {
-			if err := s.encoder.Encode(Response{
+			if err := encode(Response{
 				ID: request.ID,
 				Error: &ResponseError{
 					Code:    CodeInvalidRequest,
@@ -64,9 +89,26 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
-		response := s.service.Handle(ctx, request)
-		if err := s.encoder.Encode(response); err != nil {
-			return fmt.Errorf("encode response: %w", err)
+		var params SessionRequestParams
+		isRead := request.Method == "session.request" && json.Unmarshal(request.Params, &params) == nil &&
+			(strings.EqualFold(strings.TrimSpace(params.Method), "GET") || strings.EqualFold(strings.TrimSpace(params.Method), "HEAD"))
+		if isRead {
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			pending.Add(1)
+			go func(request Request) {
+				defer pending.Done()
+				defer func() { <-slots }()
+				_ = encode(s.service.Handle(ctx, request))
+			}(request)
+		} else {
+			pending.Wait()
+			if err := encode(s.service.Handle(ctx, request)); err != nil {
+				return fmt.Errorf("encode response: %w", err)
+			}
 		}
 	}
 }

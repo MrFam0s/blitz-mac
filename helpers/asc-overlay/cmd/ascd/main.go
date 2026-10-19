@@ -38,7 +38,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	server := helper.NewServer(os.Stdin, os.Stdout, versionInfoString())
+	// Keep a dedicated JSON-lines writer. SDK diagnostics can never corrupt it,
+	// and safe HTTP reads no longer need a global stdout-capture lock.
+	protocolOutput := os.Stdout
+	os.Stdout = os.Stderr
+	server := helper.NewServerWithService(os.Stdin, protocolOutput,
+		helper.NewServiceWithIsolatedOutput(versionInfoString()))
 	if err := server.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "ascd: %v\n", err)
 		os.Exit(1)

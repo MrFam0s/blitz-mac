@@ -155,6 +155,47 @@ physical-device behavior. GitHub must remain on free public standard runners.
   `npm-shrinkwrap.json`, then builds only the required native addon. Global npm
   installation was verified to resolve newer libraries and is no longer used.
 
+## 1.0.43 — overview loading and saved metadata
+
+Opening an app now restores its last overview and refreshes independent sections
+as they arrive. Text does not wait for screenshot requests. Icon discovery runs
+off the UI actor and skips dependency/build trees. Routine overview loads avoid
+the full price-point catalog; submission still performs fresh readiness checks.
+
+Store listing metadata is cached per ASC account and bundle ID in
+`~/Library/Caches/com.blitz.macos/asc-overviews`. Entries expire after seven days,
+are limited to 24 files of at most 2 MiB each, and use hashed filenames and private
+file permissions. Review contacts, demo credentials, authentication material,
+drafts, image bytes and tester data are excluded. Disk restores always revalidate;
+in-memory project snapshots are bounded and normally refresh after two minutes.
+
+Pending fields use loading indicators. Failed requests retain prior values and
+show a retryable refresh warning instead of a red missing-field error. Confirmed
+missing values remain visible as such. Cancelled requests from earlier project
+or version selections cannot overwrite the current overview, and simultaneous
+tab refreshes share one task. Submission preview checks current data before its
+submit button can become available.
+
+The ASC adapter overlaps at most four GET/HEAD requests. Mutations, session
+changes and CLI calls retain ordered execution. The app and CLI still share
+ASC 5.15.0; this update changes the adapter, not the pinned upstream version.
+`BLITZ_BUILD_JOBS` optionally bounds Swift bundle-build parallelism.
+
+Local automated validation: all 141 Swift tests, ASC transport/helper tests with
+the complete CLI compatibility comparison, and helper concurrency tests under
+Go's race detector passed. Fixtures cover slow screenshots, partial failures,
+retry, project/version changes, account isolation, cache expiry/corruption and
+entry-count limits. No Store mutations are used in these tests.
+
+The Developer-ID-signed release bundle and bundled ASC protocol/CLI contract
+passed verification. Installed UI checks covered Muehlenstein and Besser Lesen,
+switching back, manual refresh and a full quit/restart. Both caches persisted
+(about 50 KiB combined, mode 0600), and installed app/CLI helper hashes match.
+During refresh/navigation, 129 read-only MCP probes that execute on the UI actor
+had a median response of 3.24 ms and maximum of 97.62 ms. This is a local
+responsiveness sample, not a network latency guarantee. Slow/failed-network
+behavior is covered by controlled fixtures, without disconnecting the user's Mac.
+
 ## Build and validation
 
 ### Xcode 27 / Blitz 1.0.41

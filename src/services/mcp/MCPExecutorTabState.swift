@@ -179,7 +179,7 @@ extension MCPExecutor {
 
             let persistedFilled = field.value != nil && !(field.value?.isEmpty ?? true)
             let effectiveFilled = effectiveValue != nil && !(effectiveValue?.isEmpty ?? true)
-            if field.required && !field.isLoading && !effectiveFilled {
+            if field.required && !field.isLoading && !field.loadFailed && !effectiveFilled {
                 missingRequiredConsideringDrafts.append(field.label)
             }
 
@@ -189,6 +189,7 @@ extension MCPExecutor {
                 "required": field.required,
                 "filled": persistedFilled,
                 "isLoading": field.isLoading,
+                "loadFailed": field.loadFailed,
                 "savedToASC": !hasPendingChange,
             ]
             if hasPendingChange {
@@ -207,7 +208,8 @@ extension MCPExecutor {
 
         return [
             "isComplete": readiness.isComplete,
-            "isCompleteConsideringDrafts": missingRequiredConsideringDrafts.isEmpty,
+            "isCompleteConsideringDrafts": missingRequiredConsideringDrafts.isEmpty
+                && !readiness.fields.contains { $0.required && ($0.isLoading || $0.loadFailed) },
             "fields": fieldEntries,
             "missingRequired": missingRequiredPersisted,
             "missingRequiredPersisted": missingRequiredPersisted,
@@ -283,7 +285,7 @@ extension MCPExecutor {
         switch tab {
         case .app:
             if let projectId {
-                asc.checkAppIcon(projectId: projectId)
+                asc.refreshAppIconStatusIfNeeded(for: projectId)
             }
             return tabStateASCOverview(asc)
         case .appInformation:

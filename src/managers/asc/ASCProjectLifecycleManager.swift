@@ -4,6 +4,10 @@ import AppKit
 extension ASCManager {
     struct ProjectSnapshot {
         let projectId: String
+        let accountKey: String?
+        let resolvedFields: Set<String>
+        let failedFields: Set<String>
+        let cacheDate: Date?
         let bundleId: String?
         let app: ASCApp?
         let appStoreVersions: [ASCAppStoreVersion]
@@ -48,6 +52,10 @@ extension ASCManager {
         @MainActor
         init(manager: ASCManager, projectId: String) {
             self.projectId = projectId
+            accountKey = DashboardSummaryStore.accountKey(for: manager.credentials)
+            resolvedFields = manager.overviewResolvedFields
+            failedFields = manager.overviewFailedFields
+            cacheDate = manager.overviewCacheDate
             bundleId = Self.normalizedBundleId(manager.app?.bundleId)
             app = manager.app
             appStoreVersions = manager.appStoreVersions
@@ -86,7 +94,11 @@ extension ASCManager {
             screenshotImageCache = manager.screenshotImageCache
             appIconStatus = manager.appIconStatus
             monetizationStatus = manager.monetizationStatus
-            let cachedLoadedTabs = manager.loadedTabs.intersection(Self.cachedProjectTabs)
+            var cachedLoadedTabs = manager.loadedTabs.intersection(Self.cachedProjectTabs)
+            if manager.isLoadingTab[.app] == true || !manager.overviewReadinessLoadingFields.isEmpty
+                || !manager.overviewFailedFields.isEmpty {
+                cachedLoadedTabs.remove(.app)
+            }
             loadedTabs = cachedLoadedTabs
             tabLoadedAt = manager.tabLoadedAt.filter { cachedLoadedTabs.contains($0.key) }
         }
@@ -141,7 +153,11 @@ extension ASCManager {
             manager.irisFeedbackError = nil
             manager.writeError = nil
             manager.submissionError = nil
-            manager.overviewReadinessLoadingFields = []
+            manager.overviewResolvedFields = resolvedFields
+            manager.overviewFailedFields = failedFields
+            manager.overviewCacheDate = cacheDate
+            manager.overviewReadinessLoadingFields = loadedTabs.contains(.app)
+                ? [] : ASCManager.overviewAllFields.subtracting(resolvedFields)
         }
 
         func matches(bundleId: String?) -> Bool {
@@ -175,57 +191,23 @@ extension ASCManager {
     private static let projectCacheFreshness: TimeInterval = 120
 
     func checkAppIcon(projectId: String) {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
-        let iconDir = "\(home)/.blitz/projects/\(projectId)/assets/AppIcon"
-        let icon1024 = "\(iconDir)/icon_1024.png"
-        let previousStatus = appIconStatus
-
-        if fm.fileExists(atPath: icon1024) {
-            appIconStatus = "1024px"
-            if previousStatus != appIconStatus {
-                ProjectAppIconLoader.invalidate(for: projectId)
-            }
-            return
-        }
-
-        let projectDir = "\(home)/.blitz/projects/\(projectId)"
-        let xcassetsPattern = ["ios", "macos", "."]
-        for subdir in xcassetsPattern {
-            let searchDir = subdir == "." ? projectDir : "\(projectDir)/\(subdir)"
-            guard let enumerator = fm.enumerator(atPath: searchDir) else { continue }
-            while let file = enumerator.nextObject() as? String {
-                guard file.hasSuffix("AppIcon.appiconset/Contents.json") else { continue }
-                let contentsPath = "\(searchDir)/\(file)"
-                guard let data = fm.contents(atPath: contentsPath),
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let images = json["images"] as? [[String: Any]] else {
-                    continue
-                }
-                if images.contains(where: { $0["filename"] != nil }) {
-                    appIconStatus = "Configured"
-                    if previousStatus != appIconStatus {
-                        ProjectAppIconLoader.invalidate(for: projectId)
-                    }
-                    return
-                }
-            }
-        }
-
-        appIconStatus = nil
-        if previousStatus != appIconStatus {
-            ProjectAppIconLoader.invalidate(for: projectId)
-        }
+        iconCheckedAt = nil
+        ProjectAppIconLoader.invalidate(for: projectId)
+        refreshAppIconStatusIfNeeded(for: projectId)
     }
 
     func prepareForProjectSwitch(to projectId: String, bundleId: String?) {
+        if loadedProjectId == projectId,
+           app?.bundleId == bundleId, app != nil { return }
         cacheCurrentProjectSnapshot()
         resetProjectData(preserveCredentials: true)
 
-        if let snapshot = projectSnapshots[projectId], snapshot.matches(bundleId: bundleId) {
+        if let snapshot = projectSnapshots[projectId], snapshot.matches(bundleId: bundleId),
+           snapshot.accountKey == DashboardSummaryStore.accountKey(for: credentials) {
             snapshot.apply(to: self)
         } else {
             loadedProjectId = projectId
+            overviewReadinessLoadingFields = Self.overviewAllFields
             Task {
                 await ASCUpdateLogger.shared.event("project_switch_reset", metadata: [
                     "bundleId": bundleId ?? "nil",
@@ -246,39 +228,33 @@ extension ASCManager {
     }
 
     func loadCredentials(for projectId: String, bundleId: String?) async {
-        let normalizedBundleId = bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let loadedAppMatchesBundle = normalizedBundleId == nil || app?.bundleId == normalizedBundleId
-        let needsCredentialReload = credentials == nil || service == nil
-        let shouldSkip = loadedProjectId == projectId
-            && !needsCredentialReload
-            && loadedAppMatchesBundle
-            && (normalizedBundleId == nil || app != nil)
-        guard !shouldSkip else { return }
-
-        credentialsError = nil
-
-        if needsCredentialReload {
-            isLoadingCredentials = true
-            let creds = ASCCredentials.load()
-            try? ASCAuthBridge().syncCredentials(creds)
-            Self.syncWebSessionFileFromKeychain()
-            credentials = creds
-            isLoadingCredentials = false
-            service = creds.map { AppStoreConnectService(credentials: $0) }
+        let bundle = bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if loadedProjectId != projectId {
+            prepareForProjectSwitch(to: projectId, bundleId: bundle)
         }
-
-        // Never reuse app/version data for a different bundle ID, even if
-        // credentials are still valid and a previous project left data behind.
-        if loadedProjectId != projectId || !loadedAppMatchesBundle {
+        loadStoredCredentialsIfNeeded()
+        guard !restoringCache else { return }
+        if let bundle, app != nil, app?.bundleId != bundle {
             resetProjectData(preserveCredentials: true)
+            loadedProjectId = projectId
         }
-
-        loadedProjectId = projectId
+        let revision = projectRevision
+        credentialsError = nil
+        if app == nil, let bundle, !bundle.isEmpty,
+           let account = DashboardSummaryStore.accountKey(for: credentials) {
+            restoringCache = true
+            isLoadingApp = true
+            let saved = await overviewCache.load(account: account, bundle: bundle)
+            guard projectRevision == revision else { return }
+            restoringCache = false
+            isLoadingApp = false
+            guard !Task.isCancelled else { return }
+            if let saved { saved.apply(to: self) }
+            isLoadingApp = false
+        }
         refreshAppIconStatusIfNeeded(for: projectId)
-
-        if let normalizedBundleId, !normalizedBundleId.isEmpty, credentials != nil,
-           app?.bundleId != normalizedBundleId {
-            await fetchApp(bundleId: normalizedBundleId)
+        if let bundle, !bundle.isEmpty, credentials != nil, app?.bundleId != bundle {
+            await fetchApp(bundleId: bundle)
         }
     }
 
@@ -288,6 +264,8 @@ extension ASCManager {
 
     func saveCredentials(_ creds: ASCCredentials, projectId: String, bundleId: String?) async throws {
         try creds.save()
+        resetProjectData(preserveCredentials: false)
+        loadedProjectId = projectId
         credentials = creds
         service = AppStoreConnectService(credentials: creds)
         credentialsError = nil
@@ -314,7 +292,23 @@ extension ASCManager {
 
     func refreshAppIconStatusIfNeeded(for projectId: String?) {
         guard let projectId, !projectId.isEmpty else { return }
-        checkAppIcon(projectId: projectId)
+        if projectId.hasPrefix("asc:") {
+            overviewReadinessLoadingFields.remove("App Icon")
+            return
+        }
+        guard iconCheckTask == nil else { return }
+        if let iconCheckedAt, Date().timeIntervalSince(iconCheckedAt) < 120 { return }
+        let revision = projectRevision
+        overviewReadinessLoadingFields.insert("App Icon")
+        let path = BlitzPaths.projects.appendingPathComponent(projectId).path
+        iconCheckTask = Task { [weak self] in
+            let status = await ProjectAppIconLoader.loadStatus(for: projectId, projectPath: path)
+            guard let self, self.projectRevision == revision, !Task.isCancelled else { return }
+            self.appIconStatus = status
+            self.iconCheckedAt = Date()
+            self.iconCheckTask = nil
+            self.finishOverviewReadinessLoading(["App Icon"])
+        }
     }
 
     func cancelBackgroundHydration(for tab: AppTab) {
@@ -343,11 +337,22 @@ extension ASCManager {
     }
 
     func resetProjectData(preserveCredentials: Bool) {
+        projectRevision = UUID()
+        for task in tabLoadTasks.values { task.cancel() }
+        tabLoadTasks.removeAll()
+        restoringCache = false
+        iconCheckTask?.cancel()
+        iconCheckTask = nil
+        iconCheckedAt = nil
         cancelBackgroundHydrationTasks()
         overviewReadinessLoadingFields = []
+        overviewResolvedFields = []
+        overviewFailedFields = []
+        overviewCacheDate = nil
         loadingFeedbackBuildIds = []
 
         if !preserveCredentials {
+            projectSnapshots.removeAll()
             credentials = nil
             service = nil
         }
@@ -419,12 +424,18 @@ extension ASCManager {
     func cacheCurrentProjectSnapshot() {
         guard let projectId = loadedProjectId else { return }
         guard app != nil || !loadedTabs.isEmpty else { return }
+        // Bound retained screenshot thumbnails and metadata to recently opened projects.
+        if projectSnapshots.count >= 12, projectSnapshots[projectId] == nil,
+           let oldest = projectSnapshots.min(by: {
+               ($0.value.tabLoadedAt.values.max() ?? .distantPast) < ($1.value.tabLoadedAt.values.max() ?? .distantPast)
+           })?.key { projectSnapshots.removeValue(forKey: oldest) }
         projectSnapshots[projectId] = ProjectSnapshot(manager: self, projectId: projectId)
     }
 
     func shouldRefreshTabCache(_ tab: AppTab) -> Bool {
         guard loadedTabs.contains(tab) else { return true }
         guard let loadedAt = tabLoadedAt[tab] else { return true }
-        return Date().timeIntervalSince(loadedAt) > Self.projectCacheFreshness
+        return !overviewFailedFields.isEmpty && tab == .app
+            || Date().timeIntervalSince(loadedAt) > Self.projectCacheFreshness
     }
 }

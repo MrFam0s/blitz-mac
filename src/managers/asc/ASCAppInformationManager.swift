@@ -89,12 +89,14 @@ extension ASCManager {
         preferredVersionId: String? = nil,
         preferredLocale: String? = nil
     ) async throws {
+        let revision = projectRevision
         async let versionsTask = service.fetchAppStoreVersions(appId: appId)
         async let appInfoTask: ASCAppInfo? = try? await service.fetchAppInfo(appId: appId)
 
         let versions = try await versionsTask
         let fetchedAppInfo = await appInfoTask ?? appInfo
 
+        guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
         appStoreVersions = versions
         appInfo = fetchedAppInfo
         let resolvedVersionId = syncSelectedVersion(preferredVersionId: preferredVersionId)
@@ -113,6 +115,7 @@ extension ASCManager {
             fetchedAppInfoLocalizations = []
         }
 
+        guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
         if let preferredLocale {
             selectedAppInformationLocale = preferredLocale
         }

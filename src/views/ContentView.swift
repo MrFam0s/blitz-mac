@@ -21,6 +21,7 @@ private struct HostingWindowFinder: NSViewRepresentable {
 struct ContentView: View {
     @Bindable var appState: AppState
     @State private var mainWindow: NSWindow?
+    @State private var projectLoadTask: Task<Void, Never>?
     @State private var tabSwitchTask: Task<Void, Never>?
     @State private var showOnboarding: Bool
     @State private var credentialOnlyOnboarding: Bool
@@ -188,6 +189,8 @@ struct ContentView: View {
             }
         }
         .onChange(of: appState.activeProjectId) { _, newValue in
+            projectLoadTask?.cancel()
+            tabSwitchTask?.cancel()
             appState.simulatorManager.activate(project: appState.activeProject)
             if newValue == nil {
                 // Project closed → stop stream. We never reopen a separate welcome/picker
@@ -208,15 +211,18 @@ struct ContentView: View {
                     refreshProjectFiles(projectId: newId, projectType: projectType)
                 }
 
-                Task {
+                let selectedProject = appState.activeProject
+                projectLoadTask = Task {
                     if await startPendingSetupIfNeeded() {
                         await appState.projectManager.loadProjects()
                     }
-                    if let newId = newValue, let project = appState.activeProject {
+                    guard !Task.isCancelled, appState.activeProjectId == newValue else { return }
+                    if let newId = newValue, let project = selectedProject {
                         await appState.ascManager.loadCredentials(
                             for: newId,
                             bundleId: project.metadata.bundleIdentifier
                         )
+                        guard !Task.isCancelled, appState.activeProjectId == newId else { return }
                         if appState.activeTab.isASCTab {
                             await appState.ascManager.ensureTabData(appState.activeTab)
                         } else if appState.activeTab == .app && appState.activeAppSubTab == .overview {

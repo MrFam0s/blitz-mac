@@ -25,6 +25,7 @@ extension ASCManager {
                     label: Self.overviewWhatsNewFieldLabel,
                     value: nil,
                     isLoading: overviewReadinessLoadingFields.contains(Self.overviewWhatsNewFieldLabel),
+                    loadFailed: overviewFailedFields.contains(Self.overviewWhatsNewFieldLabel),
                     hint: "Fill What's New in Store Listing before submitting this update."
                 )
             ]
@@ -36,6 +37,7 @@ extension ASCManager {
                 SubmissionReadiness.FieldStatus(
                     label: Self.overviewWhatsNewFieldLabel,
                     value: "Configured for \(localizations.count) localization(s)",
+                    loadFailed: overviewFailedFields.contains(Self.overviewWhatsNewFieldLabel),
                     hint: "App Store updates require What's New text for each localization on the selected version."
                 )
             ]
@@ -45,6 +47,8 @@ extension ASCManager {
             SubmissionReadiness.FieldStatus(
                 label: "\(Self.overviewWhatsNewFieldLabel) (\(localization.attributes.locale))",
                 value: nil,
+                isLoading: overviewReadinessLoadingFields.contains(Self.overviewWhatsNewFieldLabel),
+                loadFailed: overviewFailedFields.contains(Self.overviewWhatsNewFieldLabel),
                 hint: "Fill What's New for locale \(localization.attributes.locale) in Store Listing before submitting this update."
             )
         }
@@ -80,6 +84,7 @@ extension ASCManager {
                 label: label,
                 value: value,
                 isLoading: overviewReadinessLoadingFields.contains(label) && (value == nil || value?.isEmpty == true),
+                loadFailed: overviewFailedFields.contains(label),
                 required: required,
                 actionUrl: actionUrl,
                 hint: hint
@@ -150,6 +155,10 @@ extension ASCManager {
         }
         let isFirstVersion = !hasApprovedVersion
         if isFirstVersion {
+            let productField = "In-App Purchases & Subscriptions"
+            if overviewReadinessLoadingFields.contains(productField) || overviewFailedFields.contains(productField) {
+                fields.append(readinessField(label: productField, value: nil))
+            }
             let readyIAPs = inAppPurchases.filter {
                 $0.attributes.state == "READY_TO_SUBMIT" && !attachedSubmissionItemIDs.contains($0.id)
             }
@@ -158,7 +167,7 @@ extension ASCManager {
                     $0.attributes.state == "READY_TO_SUBMIT" && !attachedSubmissionItemIDs.contains($0.id)
                 }
             let readyCount = readyIAPs.count + readySubscriptions.count
-            if readyCount > 0 {
+            if readyCount > 0 && !overviewReadinessLoadingFields.contains(productField) && !overviewFailedFields.contains(productField) {
                 let names = (readyIAPs.map { $0.attributes.name ?? $0.attributes.productId ?? $0.id }
                     + readySubscriptions.map { $0.attributes.name ?? $0.attributes.productId ?? $0.id })
                     .joined(separator: ", ")

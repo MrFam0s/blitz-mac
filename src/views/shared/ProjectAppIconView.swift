@@ -19,7 +19,7 @@ enum ProjectAppIconLoader {
         ".git",
         ".build",
         "DerivedData",
-        "build"
+        "build", "target", "vendor", "deps", "ThirdParty"
     ]
 
     static func cachedImage(for projectId: String) -> NSImage? {
@@ -38,6 +38,11 @@ enum ProjectAppIconLoader {
 
         imageCache.setObject(image, forKey: projectId as NSString)
         return image
+    }
+
+    static func loadStatus(for projectId: String, projectPath: String) async -> String? {
+        guard let path = await loadPath(for: projectId, projectPath: projectPath) else { return nil }
+        return path.hasSuffix("assets/AppIcon/icon_1024.png") ? "1024px" : "Configured"
     }
 
     static func refreshImage(for projectId: String, projectPath: String) async -> NSImage? {

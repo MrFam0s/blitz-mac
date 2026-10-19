@@ -184,11 +184,11 @@ struct ASCApp: Codable, Identifiable {
 
 // MARK: - AppStoreVersion
 
-struct ASCAppStoreVersion: Decodable, Identifiable {
+struct ASCAppStoreVersion: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         let versionString: String
         let appStoreState: String?
         let releaseType: String?
@@ -234,11 +234,11 @@ struct ASCSubmissionHistoryEvent: Codable, Identifiable {
 
 // MARK: - VersionLocalization
 
-struct ASCVersionLocalization: Decodable, Identifiable {
+struct ASCVersionLocalization: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         let locale: String
         let title: String?
         let subtitle: String?
@@ -253,11 +253,11 @@ struct ASCVersionLocalization: Decodable, Identifiable {
 
 // MARK: - ScreenshotSet
 
-struct ASCScreenshotSet: Decodable, Identifiable {
+struct ASCScreenshotSet: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         let screenshotDisplayType: String
         let screenshotCount: Int?
     }
@@ -265,27 +265,27 @@ struct ASCScreenshotSet: Decodable, Identifiable {
 
 // MARK: - Screenshot
 
-struct ASCScreenshot: Decodable, Identifiable {
+struct ASCScreenshot: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         let fileName: String?
         let fileSize: Int?
         let imageAsset: ImageAsset?
         let assetDeliveryState: AssetDeliveryState?
 
-        struct ImageAsset: Decodable {
+        struct ImageAsset: Codable {
             let templateUrl: String?
             let width: Int?
             let height: Int?
         }
 
-        struct AssetDeliveryState: Decodable {
+        struct AssetDeliveryState: Codable {
             let state: String?
             let errors: [DeliveryError]?
 
-            struct DeliveryError: Decodable {
+            struct DeliveryError: Codable {
                 let code: String?
                 let description: String?
             }
@@ -375,11 +375,11 @@ struct ASCCustomerReview: Decodable, Identifiable {
 
 // MARK: - Build
 
-struct ASCBuild: Decodable, Identifiable {
+struct ASCBuild: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         let version: String
         let uploadedDate: String?
         let processingState: String?
@@ -493,17 +493,17 @@ struct ASCBetaFeedback: Decodable, Identifiable {
 
 // MARK: - AppInfo
 
-struct ASCAppInfo: Decodable, Identifiable {
+struct ASCAppInfo: Codable, Identifiable {
     let id: String
-    struct Attributes: Decodable {}
+    struct Attributes: Codable {}
     let attributes: Attributes?
 
     // Relationships — primaryCategory is a relationship, not an attribute
-    struct Relationships: Decodable {
+    struct Relationships: Codable {
         var primaryCategory: CategoryRelationship?
-        struct CategoryRelationship: Decodable {
+        struct CategoryRelationship: Codable {
             var data: CategoryData?
-            struct CategoryData: Decodable {
+            struct CategoryData: Codable {
                 var id: String
             }
         }
@@ -518,9 +518,9 @@ struct ASCAppInfo: Decodable, Identifiable {
 
 // MARK: - AppInfoLocalization
 
-struct ASCAppInfoLocalization: Decodable, Identifiable {
+struct ASCAppInfoLocalization: Codable, Identifiable {
     let id: String
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         var locale: String
         var name: String?
         var subtitle: String?
@@ -533,9 +533,9 @@ struct ASCAppInfoLocalization: Decodable, Identifiable {
 
 // MARK: - AgeRatingDeclaration
 
-struct ASCAgeRatingDeclaration: Decodable, Identifiable {
+struct ASCAgeRatingDeclaration: Codable, Identifiable {
     let id: String
-    struct Attributes: Decodable {
+    struct Attributes: Codable {
         var alcoholTobaccoOrDrugUseOrReferences: String?
         var contests: String?
         var gambling: Bool?
@@ -591,6 +591,7 @@ struct SubmissionReadiness {
         let label: String
         let value: String?
         let isLoading: Bool
+        let loadFailed: Bool
         let required: Bool
         let actionUrl: String?  // If set, shows an "Open in ASC" button
         let hint: String?       // Agent-visible guidance for resolving this field
@@ -599,6 +600,7 @@ struct SubmissionReadiness {
             label: String,
             value: String?,
             isLoading: Bool = false,
+            loadFailed: Bool = false,
             required: Bool = true,
             actionUrl: String? = nil,
             hint: String? = nil
@@ -607,6 +609,7 @@ struct SubmissionReadiness {
             self.label = label
             self.value = value
             self.isLoading = isLoading
+            self.loadFailed = loadFailed
             self.required = required
             self.actionUrl = actionUrl
             self.hint = hint
@@ -616,11 +619,11 @@ struct SubmissionReadiness {
     var fields: [FieldStatus]
 
     var isComplete: Bool {
-        fields.filter(\.required).allSatisfy { !$0.isLoading && $0.value != nil && !($0.value!.isEmpty) }
+        fields.filter(\.required).allSatisfy { !$0.isLoading && !$0.loadFailed && $0.value != nil && !($0.value!.isEmpty) }
     }
 
     var missingRequired: [FieldStatus] {
-        fields.filter { $0.required && !$0.isLoading && ($0.value == nil || $0.value!.isEmpty) }
+        fields.filter { $0.required && !$0.isLoading && !$0.loadFailed && ($0.value == nil || $0.value!.isEmpty) }
     }
 }
 

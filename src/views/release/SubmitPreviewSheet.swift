@@ -6,6 +6,7 @@ struct SubmitPreviewSheet: View {
 
     private var asc: ASCManager { appState.ascManager }
 
+    @State private var isCheckingReadiness = true
     @State private var selectedBuildId: String = ""
     @State private var appIcon: NSImage?
 
@@ -80,6 +81,14 @@ struct SubmitPreviewSheet: View {
 
             Divider()
 
+            if isCheckingReadiness {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking current App Store data…")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
+
             if asc.canCreateUpdate {
                 createUpdateRequiredContent
             } else if isSubmittable {
@@ -112,7 +121,7 @@ struct SubmitPreviewSheet: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(asc.isSubmitting || !asc.submissionReadiness.isComplete || selectedBuildId.isEmpty)
+                    .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete || selectedBuildId.isEmpty)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -120,6 +129,10 @@ struct SubmitPreviewSheet: View {
         .padding(24)
         .frame(width: 480)
         .task {
+            // Cached metadata is for display, never an authorization to submit.
+            await asc.syncOverviewSubmissionReadiness(forceRefresh: true)
+            guard !Task.isCancelled else { return }
+            isCheckingReadiness = false
             if asc.builds.isEmpty {
                 await asc.refreshTabData(.builds)
             }
@@ -155,7 +168,10 @@ struct SubmitPreviewSheet: View {
 
     @ViewBuilder
     private var buildSelector: some View {
-        if validBuilds.isEmpty {
+        if validBuilds.isEmpty && isCheckingReadiness {
+            Text("Loading builds…")
+                .font(.callout).foregroundStyle(.secondary)
+        } else if validBuilds.isEmpty {
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
@@ -201,6 +217,11 @@ struct SubmitPreviewSheet: View {
     @ViewBuilder
     private var submittableContent: some View {
         let readiness = asc.submissionReadiness
+        if readiness.fields.contains(where: { $0.required && $0.loadFailed }) {
+            Label("Some required data could not be checked. Refresh the overview before submitting.",
+                  systemImage: "exclamationmark.triangle")
+                .font(.callout).foregroundStyle(.orange)
+        }
         if !readiness.missingRequired.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Missing Required Fields")

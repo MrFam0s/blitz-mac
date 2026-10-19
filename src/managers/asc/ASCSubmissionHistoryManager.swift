@@ -100,6 +100,7 @@ extension ASCManager {
     }
 
     func refreshReviewSubmissionData(appId: String, service: AppStoreConnectService) async {
+        let revision = projectRevision
         await ASCUpdateLogger.shared.event("review_submission_refresh_started", metadata: [
             "appId": appId,
         ])
@@ -110,6 +111,7 @@ extension ASCManager {
                 !trimmed($0.attributes.submittedDate).isEmpty
             }
         } catch {
+            guard projectRevision == revision, !Task.isCancelled else { return }
             reviewSubmissions = []
             reviewSubmissionItemsBySubmissionId = [:]
             latestSubmissionItems = []
@@ -118,6 +120,7 @@ extension ASCManager {
             ])
             return
         }
+        guard projectRevision == revision, !Task.isCancelled else { return }
         reviewSubmissions = submissions
 
         guard !submissions.isEmpty else {
@@ -152,6 +155,7 @@ extension ASCManager {
             }
         }
 
+        guard projectRevision == revision, !Task.isCancelled else { return }
         reviewSubmissionItemsBySubmissionId = itemsBySubmissionId
         latestSubmissionItems = itemsBySubmissionId[submissions.first?.id ?? ""] ?? []
         await ASCUpdateLogger.shared.event("review_submission_refresh_succeeded", metadata: [

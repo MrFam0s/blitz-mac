@@ -91,6 +91,7 @@ struct ASCOverview: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
+                dataStatus
 
                 // Version stats + rejection card (original position)
                 versionStatsSection
@@ -108,6 +109,27 @@ struct ASCOverview: View {
             .padding(.vertical, 14)
         }
         }
+    }
+
+    @ViewBuilder
+    private var dataStatus: some View {
+        HStack(spacing: 8) {
+            if asc.isTabLoading(.app) {
+                ProgressView().controlSize(.small)
+                Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
+            } else if !asc.overviewFailedFields.isEmpty {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                Text("Some data could not be refreshed. Saved values remain visible.")
+                Button("Retry") { Task { await asc.refreshTabData(.app) } }
+                    .buttonStyle(.bordered).controlSize(.small)
+            }
+            Spacer()
+            if let date = asc.overviewCacheDate {
+                Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 
     // MARK: - Header row
@@ -356,6 +378,9 @@ struct ASCOverview: View {
             if field.label == "Build" && asc.buildPipelinePhase != .idle {
                 ProgressView().controlSize(.small)
                 Text(field.label).font(.callout).foregroundStyle(.orange)
+            } else if field.loadFailed {
+                Image(systemName: "arrow.clockwise.circle").foregroundStyle(.orange)
+                Text(field.label).font(.callout).foregroundStyle(.secondary)
             } else if field.isLoading {
                 ProgressView().controlSize(.small)
                 Text(field.label).font(.callout).foregroundStyle(.secondary)
@@ -386,6 +411,9 @@ struct ASCOverview: View {
                             .frame(maxWidth: 200, alignment: .trailing)
                     }
                 }
+            } else if field.loadFailed {
+                Text(field.value.map { truncate($0, limit: 70) + " · Saved" } ?? "Could not load")
+                    .font(.callout).foregroundStyle(.secondary).lineLimit(1)
             } else if field.isLoading {
                 Text("Loading…").font(.callout).foregroundStyle(.secondary)
             } else if let url = field.actionUrl, let nsUrl = URL(string: url) {

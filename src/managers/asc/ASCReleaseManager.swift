@@ -139,6 +139,16 @@ extension ASCManager {
         // Version switches invalidate every cache whose contents come from a
         // version-scoped ASC resource, so the next tab refresh starts cleanly.
         let previousVersionId = selectedVersionId
+        projectRevision = UUID()
+        for task in tabLoadTasks.values { task.cancel() }
+        tabLoadTasks.removeAll()
+        isLoadingTab.removeAll()
+        iconCheckTask?.cancel()
+        iconCheckTask = nil
+        overviewResolvedFields = []
+        overviewFailedFields = []
+        overviewCacheDate = nil
+        overviewReadinessLoadingFields = Self.overviewAllFields
         selectedVersionId = trimmedVersionId
         selectedVersionBuild = nil
         localizations = []

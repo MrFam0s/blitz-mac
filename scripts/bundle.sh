@@ -108,6 +108,13 @@ BUILD_SYSTEM_ARGS=()
 if [ -n "${BLITZ_SWIFT_BUILD_SYSTEM:-}" ]; then
     BUILD_SYSTEM_ARGS=(--build-system "$BLITZ_SWIFT_BUILD_SYSTEM")
 fi
+if [ -n "${BLITZ_BUILD_JOBS:-}" ]; then
+    if ! [[ "$BLITZ_BUILD_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: BLITZ_BUILD_JOBS must be a positive integer." >&2
+        exit 1
+    fi
+    BUILD_SYSTEM_ARGS+=(--jobs "$BLITZ_BUILD_JOBS")
+fi
 swift build "${BUILD_SYSTEM_ARGS[@]}" -c "$CONFIG" --product Blitz
 swift build "${BUILD_SYSTEM_ARGS[@]}" -c "$CONFIG" --product blitz-macos-mcp
 
