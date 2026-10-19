@@ -1,10 +1,6 @@
 name: Maintenance checks
 
 on:
-  push:
-    branches: ['maintenance/**']
-  pull_request:
-    branches: ['maintenance/**']
   workflow_dispatch:
 
 permissions:

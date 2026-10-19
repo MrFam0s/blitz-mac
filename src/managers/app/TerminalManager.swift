@@ -113,6 +113,7 @@ final class TerminalManager {
     var activeSessionId: UUID?
 
     private var sessionCounter = 0
+    private var agentSessionRegistry = AgentSessionRegistry()
 
     nonisolated static func agentStartupProcess(
         agent: AIAgent,
@@ -211,8 +212,15 @@ final class TerminalManager {
         projectPath: String?,
         agent: AIAgent,
         prompt: String? = nil,
-        skipPermissions: Bool = false
+        skipPermissions: Bool = false,
+        reuseKey: String? = nil
     ) -> TerminalSession {
+        if let reuseKey,
+           let id = agentSessionRegistry.existing(for: reuseKey, activeIDs: Set(sessions.filter { !$0.isTerminated }.map(\.id))),
+           let existing = sessions.first(where: { $0.id == id }) {
+            activeSessionId = id
+            return existing
+        }
         sessionCounter += 1
 
         let session = TerminalSession(
@@ -232,6 +240,7 @@ final class TerminalManager {
         )
         sessions.append(session)
         activeSessionId = session.id
+        if let reuseKey { agentSessionRegistry.register(session.id, for: reuseKey) }
         return session
     }
 

@@ -52,8 +52,12 @@ removed and restored using the right-click context menu.
 
 ## 1.0.40
 
-`Maintenance checks` runs on pushes and pull requests targeting `maintenance/**`,
-plus manual dispatch. It needs no Apple secrets and cannot publish or install a
+`Maintenance checks` originally ran on pushes and pull requests targeting
+`maintenance/**`. Since 1.0.46 it supports manual dispatch only and is paused on
+GitHub because account billing restrictions prevent even free jobs from starting.
+Do not re-enable automatic triggers or change spending limits to unblock it.
+Local checks and weekly local ASC update preparation remain available.
+The workflow needs no Apple secrets and cannot publish or install a
 release. It runs Swift tests, the pinned ASC transport/protocol/CLI tests, builds
 an ad-hoc signed app, checks its signature and helper contract, and retains a ZIP
 with its checksum only for the lifetime of that runner. The weekly ASC update
@@ -252,6 +256,54 @@ in the installed app after relaunch: the healthy header uses roughly 60% less
 height before Submission Readiness at the existing window size. Automated native
 window resizing was unavailable, so the narrow-width fallback was not visually
 verified. No Store data or release actions were changed.
+
+## 1.0.46 — release workflow from the overview
+
+The overview has one **Neue Version anlegen** button. It opens a read-only local
+build preview; opening or cancelling the sheet does not create a Store version.
+**Prüfen und veröffentlichen** starts the configured coding agent in the built-in
+Blitz terminal with the bundled [release workflow](src/resources/release-automation.md).
+This is an agent-assisted workflow, not a background scheduler or a deterministic
+ASC job engine. The existing agent permission settings are retained. Missing
+facts or credentials can require interaction in that terminal. The old manual
+version form remains available through **Manuell …**.
+
+The preview scans the linked project off the UI executor, with entry/depth/count
+limits. It excludes simulator and other-bundle apps, reads archived products,
+does not follow escaping symlinks, and marks IPA/PKG identity as unverified.
+Truncation is shown explicitly. Numeric version comparison is only a hint:
+the workflow must establish fresh Store state, artifact identity/provenance and
+unreleased changes before making a release. No new confirmed state means no-op.
+It prepares version/build numbers, runs project checks, creates truthful release
+notes in the existing locales, uploads, verifies readiness and submits with
+`AFTER_APPROVAL`. Apple still performs its review before publication.
+
+The target is captured independently of dashboard navigation. The launch rejects
+a changed app/project/platform, and repeated starts reuse that target's live
+agent session. The workflow instructs the agent to maintain an exclusive project
+lock plus durable state/report in `.blitz/release-automation/`, reconcile uncertain
+server outcomes, and resume missing steps without duplicate uploads/submissions.
+These cross-process release checks are agent instructions, not Swift-enforced
+transaction guarantees. Do not represent a waiting-for-review version as live.
+
+GitHub's check annotation for run `39277985967` confirmed that the job never
+started because of the account payment/spending restriction. `Maintenance checks`
+is disabled on the fork and its source now has only `workflow_dispatch`.
+Consequently maintenance pushes/PRs no longer produce these automatic failure
+emails. No billing settings or account-wide notification preferences changed.
+Local tests and the weekly local ASC update preparation remain in use.
+
+Validation: 164 Swift tests passed, including seven release-workflow regressions.
+The Developer-ID-signed release bundle, strict signature verification and bundled
+ASC protocol/CLI contract passed. Version 1.0.46 was installed and the actual UI
+checked: one overview action, correct canonical project and configured Codex
+agent, newest numeric versions/builds first, explicit incomplete-scan warning,
+manual fallback and cancellation without creating a version. A transient Store
+read failure recovered with Retry. No agent-driven release, real upload or review
+submission was executed during validation; the complete Apple release lifecycle
+therefore remains unverified end to end. The seven new tests check local inventory,
+target identity, session reuse and prompt/resource integration, not agent behavior
+or Apple's acceptance of a future release.
 
 ## Build and validation
 

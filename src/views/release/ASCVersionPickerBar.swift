@@ -26,7 +26,7 @@ struct ASCVersionPickerBar<Content: View>: View {
             Spacer()
 
             if asc.canCreateUpdate, let onCreateUpdate {
-                Button("Create New Update") {
+                Button("Neue Version anlegen") {
                     onCreateUpdate()
                 }
                 .buttonStyle(.borderedProminent)

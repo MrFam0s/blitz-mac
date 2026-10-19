@@ -540,12 +540,7 @@ struct ASCOverview: View {
                 let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
                 let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
 
-                if asc.canCreateUpdate {
-                    Button("Create Update") {
-                        asc.showCreateUpdateSheet = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
+                if !asc.canCreateUpdate {
                     Button(showStatus ? "View Status" : "Submit for Review") {
                         showPreview = true
                     }
