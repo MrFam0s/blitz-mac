@@ -1,3 +1,6 @@
 [submodule "deps/App-Store-Connect-CLI-helper"]
 	path = deps/App-Store-Connect-CLI-helper
 	url = https://github.com/rorkai/App-Store-Connect-CLI.git
+[submodule "deps/iPhone-mcp"]
+	path = deps/iPhone-mcp
+	url = https://github.com/blitzdotdev/iPhone-mcp.git

@@ -204,6 +204,17 @@ if [ -d "$PKG_SCRIPTS_SRC" ]; then
     echo "Embedded pkg-scripts in .app bundle"
 fi
 
+# Embed a reproducible maintenance package, never an unpinned npm @latest.
+IPHONE_MCP_PACKAGE="${BLITZ_IPHONE_MCP_TARBALL:-}"
+if [ -z "$IPHONE_MCP_PACKAGE" ]; then
+    IPHONE_MCP_PACKAGE="$(bash "$ROOT_DIR/scripts/build-iphone-mcp.sh")"
+fi
+python3 "$ROOT_DIR/scripts/verify-iphone-mcp.py" "$IPHONE_MCP_PACKAGE"
+mkdir -p "$BUNDLE_DIR/Contents/Resources/iphone-mcp"
+cp "$IPHONE_MCP_PACKAGE" "$BUNDLE_DIR/Contents/Resources/iphone-mcp/"
+cp "$IPHONE_MCP_PACKAGE.sha256" "$BUNDLE_DIR/Contents/Resources/iphone-mcp/"
+cp "$ROOT_DIR/helpers/iphone-mcp-overlay/README.md" "$BUNDLE_DIR/Contents/Resources/iphone-mcp/PROVENANCE.md"
+
 # Write Info.plist with correct version
 cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>

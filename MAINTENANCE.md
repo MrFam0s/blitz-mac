@@ -97,6 +97,64 @@ CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
 python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
 ```
 
+## 1.0.42
+
+The separate iPhone MCP now ships as a reproducible maintenance package,
+`0.1.18-blitz.1`, from pinned upstream source plus the tested overlay in
+[helpers/iphone-mcp-overlay](helpers/iphone-mcp-overlay/README.md). The bundle
+contains this package and checksum. Installation stages dependencies, validates
+the package and retains the previous tree; updates no longer install npm latest.
+The existing global `blitz-iphone` entry and executable path remain valid.
+
+Simulator input uses private companion sockets, bounded acknowledged CLI calls,
+serialized requests and scoped cleanup. Failed or timed-out actions are never
+replayed automatically. No global IDB kill or all-target discovery is used for
+simulator input. Both subprocess environments and error messages exclude entered
+text and credentials. Multiple booted simulators require an explicit UDID.
+Xcode 27's simulated devicectl entries are excluded from physical-device discovery.
+The companion supplies screen dimensions and UI scans, without assumptions about
+simulator names or legacy ax-scan frameworks. String/numeric key sequences and
+fractional touch coordinates are translated to the CLI's actual input format.
+Text respects the selected simulator's active German QWERTZ or US QWERTY layout.
+German umlauts are supported. Unknown layouts and unsupported characters fail
+before any text is sent. No clipboard is used: Xcode 27's `simctl pbcopy` returned
+success without copying in live verification. iOS autocorrection/smart punctuation
+still apply to HID input; verify the field with `describe_after`.
+
+Build the package before bundling to reuse it:
+
+```sh
+# Node 22 / npm 10 on PATH
+bash scripts/build-iphone-mcp.sh
+python3 scripts/test-iphone-mcp-installer.py
+BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz" \
+BLITZ_SWIFT_BUILD_SYSTEM=native CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
+```
+
+Existing running MCP sessions keep their loaded code until the client reconnects.
+New sessions identify the maintenance version during initialize. Physical iPhone
+control still uses the existing WDA implementation; simulator checks do not verify
+physical-device behavior. GitHub must remain on free public standard runners.
+
+### Local verification, 19 October 2026
+
+- 131 Swift tests, 17 Node MCP tests, 7 Python keyboard tests and 5 offline
+  installation transaction tests passed.
+- Release bundle built and verified with the existing Developer ID; ASC 5.15.0
+  JSON-lines and CLI contract checks passed without account access.
+- Actual MCP stdio sessions against the installed package verified discovery,
+  exact simulator targeting, screenshots, hierarchy/region scans, taps, swipe,
+  Home, text, Backspace, mixed key sequences, ambiguous-target errors and clean EOF.
+- German y/z, umlauts, eszett and common Option symbols matched the visible field.
+  iOS smart quotes remain enabled. Unsupported emoji failed before any input.
+- The owned temporary simulator was deleted. All twelve pre-existing simulators
+  retained their names and states. No physical-device control was exercised.
+- Global MCP executable/configuration paths are unchanged. Existing clients need
+  to reconnect (restart Codex) because their already-loaded server code remains old.
+- Installation extracts the staged package and runs `npm ci --omit=dev` against
+  `npm-shrinkwrap.json`, then builds only the required native addon. Global npm
+  installation was verified to resolve newer libraries and is no longer used.
+
 ## Build and validation
 
 ### Xcode 27 / Blitz 1.0.41

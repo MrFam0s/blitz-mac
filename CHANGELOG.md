@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.42 (maintenance fork)
+- Bundle a pinned, tested iPhone MCP maintenance package instead of installing npm latest.
+- Isolate simulator IDB connections, confirm completed inputs, bound failures and release helpers on disconnect.
+- Require explicit selection among multiple booted simulators; exclude Xcode 27 simulated devices from physical-phone discovery.
+- Use actual simulator dimensions and the maintained companion for screenshots and UI scans.
+- Respect German and US simulator keyboard layouts, including German umlauts; reject unsupported text before sending any input.
+
 ## 1.0.41 (maintenance fork)
 - Open the selected simulator in Xcode 27 Device Hub, while retaining the legacy Simulator launch path for older Xcode installations.
 - Use the actual Device Hub screen bounds for capture and touch coordinates, excluding its top and bottom controls.

@@ -1,0 +1,1437 @@
+diff --git a/package-lock.json b/package-lock.json
+index d6a1828..294d4fb 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,15 +1,14 @@
+ {
+   "name": "@blitzdev/iphone-mcp",
+-  "version": "0.1.18",
++  "version": "0.1.18-blitz.1",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "@blitzdev/iphone-mcp",
+-      "version": "0.1.18",
++      "version": "0.1.18-blitz.1",
+       "license": "MIT",
+       "dependencies": {
+-        "@blitzdev/iphone-mcp": "^0.1.15",
+         "@inquirer/checkbox": "^5.1.0",
+         "@modelcontextprotocol/sdk": "^1.12.1",
+         "express": "^5.1.0",
+@@ -30,26 +29,6 @@
+         "node": ">=18"
+       }
+     },
+-    "node_modules/@blitzdev/iphone-mcp": {
+-      "version": "0.1.15",
+-      "resolved": "https://registry.npmjs.org/@blitzdev/iphone-mcp/-/iphone-mcp-0.1.15.tgz",
+-      "integrity": "sha512-giCXryKmZf1zR58qe5eoY3Bi51JQ8KEO8wS+NLFOITEqzXJ/L6vdxmb8LAaBmIDV1uhxNecuBWTtNQiAardnYA==",
+-      "license": "MIT",
+-      "dependencies": {
+-        "@blitzdev/iphone-mcp": "^0.1.14",
+-        "@inquirer/checkbox": "^5.1.0",
+-        "@modelcontextprotocol/sdk": "^1.12.1",
+-        "express": "^5.1.0",
+-        "ws": "^8.18.3",
+-        "zod": "^3.23.0"
+-      },
+-      "bin": {
+-        "iphone-mcp": "dist/cli.js"
+-      },
+-      "engines": {
+-        "node": ">=18"
+-      }
+-    },
+     "node_modules/@hono/node-server": {
+       "version": "1.19.9",
+       "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-1.19.9.tgz",
+@@ -245,7 +224,6 @@
+       "integrity": "sha512-akNQMv0wW5uyRpD2v2IEyRSZiR+BeGuoB6L310EgGObO44HSMNT8z1xzio28V8qOrgYaopIDNA18YgdXd+qTiw==",
+       "devOptional": true,
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "undici-types": "~6.21.0"
+       }
+@@ -618,7 +596,6 @@
+       "resolved": "https://registry.npmjs.org/express/-/express-5.2.1.tgz",
+       "integrity": "sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw==",
+       "license": "MIT",
+-      "peer": true,
+       "dependencies": {
+         "accepts": "^2.0.0",
+         "body-parser": "^2.2.1",
+@@ -853,7 +830,6 @@
+       "resolved": "https://registry.npmjs.org/hono/-/hono-4.12.3.tgz",
+       "integrity": "sha512-SFsVSjp8sj5UumXOOFlkZOG6XS9SJDKw0TbwFeV+AJ8xlST8kxK5Z/5EYa111UY8732lK2S/xB653ceuaoGwpg==",
+       "license": "MIT",
+-      "peer": true,
+       "engines": {
+         "node": ">=16.9.0"
+       }
+@@ -1486,7 +1462,6 @@
+       "resolved": "https://registry.npmjs.org/zod/-/zod-3.25.76.tgz",
+       "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==",
+       "license": "MIT",
+-      "peer": true,
+       "funding": {
+         "url": "https://github.com/sponsors/colinhacks"
+       }
+diff --git a/package.json b/package.json
+index 560497c..c3c05d0 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@blitzdev/iphone-mcp",
+-  "version": "0.1.18",
++  "version": "0.1.18-blitz.1",
+   "description": "MCP server for controlling iOS simulators and physical iPhones",
+   "type": "module",
+   "license": "MIT",
+@@ -20,13 +20,13 @@
+     "node": ">=18"
+   },
+   "scripts": {
+-    "build": "tsc",
++    "build": "tsc && cp src/idb/type-text.py dist/idb/type-text.py",
+     "benchmark:gesture-visualization": "node scripts/benchmark-gesture-visualization.mjs",
+     "typecheck": "tsc --noEmit",
+-    "prepublishOnly": "npm run build"
++    "prepublishOnly": "npm run build",
++    "test": "npm run build && node --test tests/*.test.mjs && python3 -m unittest discover -s tests -p \"test_*.py\""
+   },
+   "dependencies": {
+-    "@blitzdev/iphone-mcp": "^0.1.15",
+     "@inquirer/checkbox": "^5.1.0",
+     "@modelcontextprotocol/sdk": "^1.12.1",
+     "express": "^5.1.0",
+diff --git a/src/device-client.ts b/src/device-client.ts
+index 2d23678..5ba9d4e 100644
+--- a/src/device-client.ts
++++ b/src/device-client.ts
+@@ -1,4 +1,4 @@
+-import { getIDBClient } from './idb/idb-client.js'
++import { getIDBClient, resolveBootedUdid } from './idb/idb-client.js'
+ import { WDAClient } from './wda/wda-client.js'
+ import { wdaManager } from './wda/wda-manager.js'
+ import { isPhysicalDeviceUdid, type DeviceClient } from './types.js'
+@@ -11,5 +11,5 @@ export async function getDeviceClient(udid: string = 'booted'): Promise<DeviceCl
+     const tunnelIP = await wdaManager.getTunnelAddress(udid)
+     return WDAClient.getInstance(udid, 8100, tunnelIP)
+   }
+-  return getIDBClient(udid)
++  return getIDBClient(udid === 'booted' ? await resolveBootedUdid() : udid)
+ }
+diff --git a/src/idb/ax-scan-client.ts b/src/idb/ax-scan-client.ts
+index 2fc2f5c..ef4da41 100644
+--- a/src/idb/ax-scan-client.ts
++++ b/src/idb/ax-scan-client.ts
+@@ -1,65 +1,5 @@
+-import { spawn, type ChildProcess, exec } from 'child_process'
+-import { existsSync } from 'fs'
+-import path from 'path'
+-import os from 'os'
+-import { promisify } from 'util'
+-import { log } from '../logger.js'
+-import type { ScanRegion, ScanCommand } from '../types.js'
+-
+-const execAsync = promisify(exec)
+-
+-function resolveAxScanPath(): string | null {
+-  const mcpPath = path.join(os.homedir(), '.blitz-iphone-mcp', 'bin', 'ax-scan')
+-  if (existsSync(mcpPath)) return mcpPath
+-  const blitzPath = path.join(os.homedir(), '.blitz', 'bin', 'ax-scan')
+-  if (existsSync(blitzPath)) return blitzPath
+-  return null
+-}
+-
+-const DEFAULT_SCREEN_SIZE = { width: 393, height: 852 }
+-
+-async function resolveDeviceScreenSize(udid: string): Promise<{ width: number; height: number }> {
+-  try {
+-    const { stdout } = await execAsync('xcrun simctl list devices -j')
+-    const data = JSON.parse(stdout)
+-    for (const runtime of Object.values(data.devices) as { udid: string; name: string; state: string }[][]) {
+-      for (const device of runtime) {
+-        if (device.udid === udid) {
+-          const name = device.name
+-          // Common device screen sizes (points)
+-          const deviceSizes: Record<string, { width: number; height: number }> = {
+-            'iPhone 17 Pro': { width: 402, height: 874 },
+-            'iPhone 17 Pro Max': { width: 440, height: 956 },
+-            'iPhone 16 Pro': { width: 402, height: 874 },
+-            'iPhone 16 Pro Max': { width: 440, height: 956 },
+-            'iPhone 16': { width: 393, height: 852 },
+-            'iPhone 16 Plus': { width: 430, height: 932 },
+-            'iPhone 15 Pro': { width: 393, height: 852 },
+-            'iPhone 15 Pro Max': { width: 430, height: 932 },
+-            'iPhone 15': { width: 393, height: 852 },
+-            'iPhone 15 Plus': { width: 430, height: 932 },
+-            'iPhone 14 Pro': { width: 393, height: 852 },
+-            'iPhone 14 Pro Max': { width: 430, height: 932 },
+-            'iPhone 14': { width: 390, height: 844 },
+-            'iPhone SE (3rd generation)': { width: 375, height: 667 },
+-            'iPad Pro (12.9-inch)': { width: 1024, height: 1366 },
+-            'iPad Pro (11-inch)': { width: 834, height: 1194 },
+-            'iPad Air': { width: 820, height: 1180 },
+-          }
+-          if (deviceSizes[name]) return deviceSizes[name]
+-          for (const key of Object.keys(deviceSizes)) {
+-            if (name.includes(key) || key.includes(name)) return deviceSizes[key]
+-          }
+-          log('AXScan', 'warn', `Unknown device model "${name}", using default screen size`)
+-          return DEFAULT_SCREEN_SIZE
+-        }
+-      }
+-    }
+-  } catch (e) {
+-    log('AXScan', 'warn', `Failed to resolve device screen size for ${udid}: ${e}`)
+-  }
+-  return DEFAULT_SCREEN_SIZE
+-}
++import { getIDBClient } from './idb-client.js'
++import type { ScanRegion, ScanCommand, UIElement } from '../types.js'
+ 
+ export function regionToCommand(
+   region: ScanRegion,
+@@ -89,185 +29,32 @@ export function regionToCommand(
+   }
+ }
+ 
++// Use the same pinned companion and bounded requests as input. The old native
++// scanner links legacy IDB frameworks and can hang before READY on new Xcode.
+ export class AXScanClient {
+-  private static instances: Map<string, AXScanClient> = new Map()
+-
+-  private udid: string
+-  private proc: ChildProcess | null = null
+-  private ready = false
+-  private readyPromise: Promise<void> | null = null
+-  private buffer = ''
+-  private pendingResolve: ((result: string) => void) | null = null
+-  private pendingReject: ((err: Error) => void) | null = null
+-
+-  private screenWidth = 0
+-  private screenHeight = 0
+-  private axScanAvailable: boolean
+-
+-  private constructor(udid: string) {
+-    this.udid = udid
+-    this.axScanAvailable = resolveAxScanPath() !== null
+-  }
+-
++  private static instances = new Map<string, AXScanClient>()
++  private constructor(private udid: string) {}
+   static getInstance(udid: string): AXScanClient {
+-    if (!AXScanClient.instances.has(udid)) {
+-      AXScanClient.instances.set(udid, new AXScanClient(udid))
+-    }
+-    return AXScanClient.instances.get(udid)!
++    if (!this.instances.has(udid)) this.instances.set(udid, new AXScanClient(udid))
++    return this.instances.get(udid)!
+   }
+-
+-  private async ensureStarted(): Promise<void> {
+-    if (this.ready) return
+-    if (this.readyPromise) return this.readyPromise
+-
+-    // Resolve screen size
+-    if (this.screenWidth === 0) {
+-      const screenSize = await resolveDeviceScreenSize(this.udid)
+-      this.screenWidth = screenSize.width
+-      this.screenHeight = screenSize.height
+-    }
+-
+-    if (!this.axScanAvailable) {
+-      // No ax-scan binary — we'll use idb fallback in scan()
+-      this.ready = true
+-      return
+-    }
+-
+-    const axScanPath = resolveAxScanPath()!
+-
+-    this.readyPromise = new Promise<void>((resolve, reject) => {
+-      log('AXScan', 'log', `Starting ax-scan daemon for ${this.udid} (screen: ${this.screenWidth}x${this.screenHeight})`)
+-
+-      this.proc = spawn(axScanPath, ['--udid', this.udid], {
+-        stdio: ['pipe', 'pipe', 'pipe'],
+-      })
+-
+-      this.proc.stderr?.on('data', (data: Buffer) => {
+-        const text = data.toString().trim()
+-        if (text) log('AXScan', 'log', `[${this.udid}] ${text}`)
+-      })
+-
+-      this.proc.on('error', (err) => {
+-        log('AXScan', 'error', `[${this.udid}] Process error: ${err}`)
+-        this.ready = false
+-        this.proc = null
+-        this.readyPromise = null
+-        this.axScanAvailable = false
+-        if (this.pendingReject) {
+-          this.pendingReject(err)
+-          this.pendingResolve = null
+-          this.pendingReject = null
+-        }
+-      })
+-
+-      this.proc.on('exit', (code) => {
+-        log('AXScan', 'log', `[${this.udid}] Daemon exited with code ${code}`)
+-        this.ready = false
+-        this.proc = null
+-        this.readyPromise = null
+-      })
+-
+-      this.proc.stdout?.on('data', (data: Buffer) => {
+-        this.buffer += data.toString()
+-
+-        if (!this.ready) {
+-          const readyIdx = this.buffer.indexOf('READY\n')
+-          if (readyIdx !== -1) {
+-            this.buffer = this.buffer.slice(readyIdx + 6)
+-            this.ready = true
+-            log('AXScan', 'log', `[${this.udid}] Daemon ready`)
+-            resolve()
+-            return
+-          }
+-        }
+-
+-        const sentinelIdx = this.buffer.indexOf('\n---\n')
+-        if (sentinelIdx !== -1 && this.pendingResolve) {
+-          const response = this.buffer.slice(0, sentinelIdx)
+-          this.buffer = this.buffer.slice(sentinelIdx + 5)
+-          const res = this.pendingResolve
+-          this.pendingResolve = null
+-          this.pendingReject = null
+-          res(response)
+-        }
+-      })
+-
+-      setTimeout(() => {
+-        if (!this.ready) {
+-          reject(new Error('ax-scan daemon startup timed out'))
+-          this.shutdown()
+-        }
+-      }, 10000)
+-    })
+-
+-    return this.readyPromise
+-  }
+-
+-  private sendCommand(cmd: ScanCommand): Promise<string> {
+-    return new Promise((resolve, reject) => {
+-      if (!this.proc?.stdin) {
+-        reject(new Error('Daemon not running'))
+-        return
+-      }
+-      this.pendingResolve = resolve
+-      this.pendingReject = reject
+-      this.proc.stdin.write(JSON.stringify(cmd) + '\n')
+-
+-      setTimeout(() => {
+-        if (this.pendingReject) {
+-          this.pendingReject(new Error('Scan timed out'))
+-          this.pendingResolve = null
+-          this.pendingReject = null
+-        }
+-      }, 15000)
+-    })
+-  }
+-
+-  async getScreenSize(): Promise<{ width: number; height: number }> {
+-    await this.ensureStarted()
+-    return { width: this.screenWidth, height: this.screenHeight }
++  async getScreenSize(): Promise<{width: number; height: number}> {
++    return getIDBClient(this.udid).getScreenSize()
+   }
+-
+   async scan(region: ScanRegion, gridStep = 25): Promise<unknown[]> {
+-    await this.ensureStarted()
+-
+-    if (!this.axScanAvailable || !this.proc) {
+-      return this.fallbackScan()
+-    }
+-
+-    const cmd = regionToCommand(region, this.screenWidth, this.screenHeight, gridStep)
+-    const raw = await this.sendCommand(cmd)
+-    try {
+-      const parsed = JSON.parse(raw)
+-      if (parsed.error) throw new Error(parsed.error)
+-      return Array.isArray(parsed) ? parsed : [parsed]
+-    } catch (e) {
+-      throw new Error(`Failed to parse ax-scan response: ${(e as Error).message}`)
+-    }
+-  }
+-
+-  private async fallbackScan(): Promise<unknown[]> {
+-    log('AXScan', 'log', `[${this.udid}] Using idb describe-all fallback`)
+-    const { getIDBClient } = await import('./idb-client.js')
+     const client = getIDBClient(this.udid)
+-    const result = await client.describeAll(false)
+-    return Array.isArray(result) ? result : [result]
+-  }
+-
+-  async shutdown(): Promise<void> {
+-    if (this.proc) {
+-      this.proc.stdin?.end()
+-      this.proc.kill('SIGTERM')
+-      this.proc = null
+-    }
+-    this.ready = false
+-    this.readyPromise = null
+-    this.buffer = ''
+-    AXScanClient.instances.delete(this.udid)
+-  }
+-
+-  static async shutdownAll(): Promise<void> {
+-    const instances = Array.from(AXScanClient.instances.values())
+-    await Promise.all(instances.map(i => i.shutdown()))
++    const raw = await client.describeAll(false)
++    const elements = Array.isArray(raw) ? raw : [raw]
++    if (region === 'full') return elements
++    const { width, height } = await this.getScreenSize()
++    const bounds = regionToCommand(region, width, height, 0)
++    return elements.filter((element: UIElement) => {
++      const frame = element.frame
++      if (!frame) return false
++      const x = frame.x + frame.width / 2, y = frame.y + frame.height / 2
++      return x >= bounds.x_start && x <= bounds.x_end && y >= bounds.y_start && y <= bounds.y_end
++    })
+   }
++  async shutdown(): Promise<void> { AXScanClient.instances.delete(this.udid) }
++  static async shutdownAll(): Promise<void> { AXScanClient.instances.clear() }
+ }
+diff --git a/src/idb/idb-client.ts b/src/idb/idb-client.ts
+index 631594e..a5d073b 100644
+--- a/src/idb/idb-client.ts
++++ b/src/idb/idb-client.ts
+@@ -1,43 +1,34 @@
+-import { spawn, type ChildProcess, exec, execFile } from 'child_process'
+-import { promisify } from 'util'
+-import { existsSync } from 'fs'
+-import { join } from 'path'
+-import { homedir, tmpdir } from 'os'
+-import { log } from '../logger.js'
+-import { childEnv } from '../child-env.js'
+-
+-const execAsync = promisify(exec)
+-
+-function resolveIdbPath(): string {
+-  const mcpIdb = join(homedir(), '.blitz-iphone-mcp', 'python', 'bin', 'idb')
+-  if (existsSync(mcpIdb)) return mcpIdb
+-  const blitzIdb = join(homedir(), '.blitz', 'python', 'bin', 'idb')
+-  if (existsSync(blitzIdb)) return blitzIdb
+-  return 'idb'
++import { spawn, type ChildProcess, execFile } from 'node:child_process'
++import { promisify } from 'node:util'
++import { existsSync } from 'node:fs'
++import { mkdtemp, chmod, rm, readFile } from 'node:fs/promises'
++import { join } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { homedir } from 'node:os'
++import { setTimeout as delay } from 'node:timers/promises'
++import { simulatorEnv } from './simulator-env.js'
++
++const execute = promisify(execFile)
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
++function resolvePath(relative: string, fallback: string): string {
++  for (const root of ['.blitz-iphone-mcp', '.blitz']) {
++    const path = join(homedir(), root, relative)
++    if (existsSync(path)) return path
++  }
++  return fallback
+ }
+ 
+-function resolveCompanionPath(): string | null {
+-  const mcpCompanion = join(homedir(), '.blitz-iphone-mcp', 'idb-companion', 'bin', 'idb_companion')
+-  if (existsSync(mcpCompanion)) return mcpCompanion
+-  const blitzCompanion = join(homedir(), '.blitz', 'idb-companion', 'bin', 'idb_companion')
+-  if (existsSync(blitzCompanion)) return blitzCompanion
+-  return null
++export function selectBootedSimulator(data: { devices: Record<string, {udid: string; state: string}[]> }): string {
++  const devices = Object.values(data.devices).flat().filter(d => d.state === 'Booted')
++  if (!devices.length) throw new Error('No booted simulator found')
++  if (devices.length !== 1) throw new Error('Multiple simulators are booted; provide an explicit udid')
++  return devices[0].udid
+ }
+ 
+-const IDB_PATH = resolveIdbPath()
+-const IDB_COMPANION_PATH = resolveCompanionPath()
+-
+ export async function resolveBootedUdid(): Promise<string> {
+-  const { stdout } = await execAsync('xcrun simctl list devices booted -j')
+-  const data = JSON.parse(stdout)
+-  for (const runtime of Object.values(data.devices) as { udid: string; state: string }[][]) {
+-    for (const device of runtime) {
+-      if (device.state === 'Booted') {
+-        return device.udid
+-      }
+-    }
+-  }
+-  throw new Error('No booted simulator found')
++  const { stdout } = await execute('xcrun', ['simctl', 'list', 'devices', 'booted', '-j'],
++    { env: simulatorEnv(), timeout: 10000 })
++  return selectBootedSimulator(JSON.parse(stdout))
+ }
+ 
+ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type: 'System' | 'User' }[] {
+@@ -56,250 +47,216 @@ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type
+   return apps
+ }
+ 
++export interface IDBOptions {
++  idbPath?: string
++  companionPath?: string
++  pythonPath?: string
++  environment?: NodeJS.ProcessEnv
++  startupTimeoutMs?: number
++  commandTimeoutMs?: number
++}
++
+ export class IDBClient {
+-  private static instances: Map<string, IDBClient> = new Map()
+-  private udid: string
+-  private shellProcess: ChildProcess | null = null
+-  private isShuttingDown = false
+-  private companionKillAttempts = 0
+-  private static readonly MAX_COMPANION_KILL_ATTEMPTS = 5
++  private static instances = new Map<string, IDBClient>()
++  private companion: ChildProcess | null = null
++  private directory: string | null = null
++  private companionUdid: string | null = null
++  private closed = false
++  private queue: Promise<unknown> = Promise.resolve()
++  private controller = new AbortController()
++  private readonly env: NodeJS.ProcessEnv
++  private readonly idbPath: string
++  private readonly companionPath: string
++  private readonly pythonPath: string
++
++  constructor(private udid: string, private options: IDBOptions = {}) {
++    this.env = simulatorEnv(options.environment)
++    this.idbPath = options.idbPath ?? resolvePath('python/bin/idb', 'idb')
++    this.companionPath = options.companionPath ?? resolvePath('idb-companion/bin/idb_companion', 'idb_companion')
++    this.pythonPath = options.pythonPath ?? resolvePath('python/bin/python3', 'python3')
++  }
+ 
+-  private constructor(udid: string) {
+-    this.udid = udid
++  static getInstance(udid = 'booted'): IDBClient {
++    if (!this.instances.has(udid)) this.instances.set(udid, new IDBClient(udid))
++    return this.instances.get(udid)!
+   }
+ 
+-  private resolvedUdid: string | null = null
++  private async resolvedUdid(): Promise<string> {
++    if (this.closed) throw new Error('IDB client is closed')
++    const udid = this.udid === 'booted' ? await resolveBootedUdid() : this.udid
++    if (!UUID.test(udid)) throw new Error('Invalid simulator udid')
++    return udid
++  }
+ 
+-  private async getResolvedUdid(): Promise<string> {
+-    if (this.resolvedUdid) return this.resolvedUdid
+-    if (this.udid === 'booted') {
+-      this.resolvedUdid = await resolveBootedUdid()
+-      log('IDBClient', 'log', `Resolved "booted" -> ${this.resolvedUdid}`)
+-    } else {
+-      this.resolvedUdid = this.udid
+-    }
+-    return this.resolvedUdid
++  private serialize<T>(operation: () => Promise<T>): Promise<T> {
++    const result = this.queue.then(() => {
++      if (this.closed) throw new Error('IDB client is closed')
++      return operation()
++    })
++    this.queue = result.catch(() => {})
++    return result
+   }
+ 
+-  static getInstance(udid: string = 'booted'): IDBClient {
+-    if (!IDBClient.instances.has(udid)) {
+-      IDBClient.instances.set(udid, new IDBClient(udid))
++  private async stopCompanion(): Promise<void> {
++    const proc = this.companion
++    const directory = this.directory
++    this.companion = null
++    this.companionUdid = null
++    this.directory = null
++    if (proc && proc.exitCode === null && proc.signalCode === null) {
++      const stopped = new Promise<void>(resolve => proc.once('close', () => resolve()))
++      proc.kill('SIGTERM')
++      await Promise.race([stopped, delay(500)])
++      if (proc.exitCode === null && proc.signalCode === null) {
++        proc.kill('SIGKILL')
++        await Promise.race([stopped, delay(500)])
++      }
+     }
+-    return IDBClient.instances.get(udid)!
++    if (directory) await rm(directory, { recursive: true, force: true })
+   }
+ 
+-  private async startShell(): Promise<void> {
+-    if (this.shellProcess || this.isShuttingDown) return
+-
+-    log('IDBClient', 'log', `Starting idb shell for ${this.udid}...`)
+-    const resolvedUdid = await this.getResolvedUdid()
+-
+-    const args: string[] = []
+-    if (IDB_COMPANION_PATH) {
+-      args.push('--companion-path', IDB_COMPANION_PATH)
++  private async ensureCompanion(udid: string): Promise<string> {
++    if (this.companionUdid === udid && this.companion?.exitCode === null && this.companion.signalCode === null && this.directory) {
++      return join(this.directory, 'companion.sock')
+     }
+-    args.push('shell', '--no-prompt', '--udid', resolvedUdid)
+-
+-    log('IDBClient', 'log', `IDB command - ${IDB_PATH} ${args.join(' ')}`)
+-
+-    const proc = spawn(IDB_PATH, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+-    this.shellProcess = proc
+-
+-    proc.stderr?.on('data', (data: Buffer) => {
+-      const text = data.toString()
+-      log('IDBClient', 'log', `[${this.udid}] stderr: ${text.trim()}`)
++    await this.stopCompanion()
++    if (this.closed) throw new Error('IDB client is closed')
++    // Keep the UNIX socket well below macOS's short socket path limit.
++    this.directory = await mkdtemp('/tmp/blitz-mcp-idb-')
++    await chmod(this.directory, 0o700)
++    if (this.closed) { await this.stopCompanion(); throw new Error('IDB client is closed') }
++    const socket = join(this.directory, 'companion.sock')
++    const proc = spawn(this.companionPath,
++      ['--udid', udid, '--only', 'simulator', '--grpc-domain-sock', socket],
++      { env: this.env, stdio: 'ignore' })
++    this.companion = proc
++    this.companionUdid = udid
++    let spawnError = false
++    proc.on('error', () => { spawnError = true })
++    const deadline = Date.now() + (this.options.startupTimeoutMs ?? 10000)
++    try {
++      while (!existsSync(socket)) {
++        if (this.closed) throw new Error('IDB client is closed')
++        if (spawnError || proc.exitCode !== null || proc.signalCode !== null) throw new Error('IDB companion failed to start')
++        if (Date.now() >= deadline) throw new Error('IDB companion startup timed out')
++        await delay(50, undefined, { signal: this.controller.signal })
++      }
++      return socket
++    } catch (error) {
++      await this.stopCompanion()
++      throw error
++    }
++  }
+ 
+-      if (text.includes('Connection refused')) {
+-        this.companionKillAttempts++
+-        if (this.companionKillAttempts > IDBClient.MAX_COMPANION_KILL_ATTEMPTS) {
+-          log('IDBClient', 'error', `[${this.udid}] Companion connection refused after ${IDBClient.MAX_COMPANION_KILL_ATTEMPTS} attempts`)
+-          return
++  private async run(args: string[], inputText?: string): Promise<string> {
++    return this.serialize(async () => {
++      const udid = await this.resolvedUdid()
++      const socket = await this.ensureCompanion(udid)
++      if (this.closed) throw new Error('IDB client is closed')
++      try {
++        // execFile preserves text literally; success requires a completed CLI
++        // response. Never replay an uncertain input or invoke global `idb kill`.
++        const pending = execute(inputText === undefined ? this.idbPath : this.pythonPath,
++          inputText === undefined ? ['--companion', socket, ...args, '--udid', udid]
++            : [fileURLToPath(new URL('./type-text.py', import.meta.url)), socket, udid],
++          { env: this.env, timeout: this.options.commandTimeoutMs ?? 20000,
++            signal: this.controller.signal, maxBuffer: 8 * 1024 * 1024,
++            killSignal: 'SIGKILL' })
++        if (inputText !== undefined) pending.child.stdin?.end(inputText, 'utf8')
++        const { stdout } = await pending
++        return stdout.trim()
++      } catch (error) {
++        await this.stopCompanion()
++        const failure = error as { killed?: boolean; code?: unknown; name?: string }
++        if (inputText !== undefined && failure.code === 43) {
++          throw new Error('Simulator text was not sent: unsupported character or keyboard layout. Focus a text field with the German QWERTZ or US QWERTY keyboard; inspect the active layout before retrying.')
+         }
+-        log('IDBClient', 'warn', `[${this.udid}] Companion connection refused (attempt ${this.companionKillAttempts}/${IDBClient.MAX_COMPANION_KILL_ATTEMPTS}) — restarting shell`)
+-        proc.kill('SIGTERM')
+-        if (this.shellProcess === proc) this.shellProcess = null
+-        execAsync(`${IDB_PATH} kill`)
+-          .catch(e => log('IDBClient', 'log', `[${this.udid}] idb kill error: ${e}`))
+-          .then(() => new Promise(resolve => setTimeout(resolve, 2000)))
+-          .then(() => this.startShell())
++        const reason = failure.name === 'AbortError' ? 'cancelled'
++          : failure.killed ? 'timed out' : `failed (exit ${String(failure.code ?? 'unknown')})`
++        // Node's execFile error includes the entire command and text. Do not
++        // expose that, inherited environments, or raw subprocess diagnostics.
++        throw new Error(`IDB ${args.slice(0, 2).join(' ')} ${reason}; action was not retried`)
+       }
+     })
+-
+-    proc.on('error', (error) => {
+-      log('IDBClient', 'error', `[${this.udid}] Shell process error: ${error}`)
+-      if (this.shellProcess === proc) this.shellProcess = null
+-    })
+-
+-    proc.on('exit', (code, signal) => {
+-      log('IDBClient', 'log', `[${this.udid}] Shell exited code=${code} signal=${signal}`)
+-      if (this.shellProcess === proc) this.shellProcess = null
+-    })
+-
+-    await new Promise(resolve => setTimeout(resolve, 300))
+-    log('IDBClient', 'log', `idb shell started for ${this.udid}`)
+-  }
+-
+-  private async runInShell(args: string): Promise<void> {
+-    if (this.isShuttingDown) throw new Error('IDB client is shutting down')
+-    if (!this.shellProcess) await this.startShell()
+-    if (!this.shellProcess?.stdin) throw new Error('Shell process not available')
+-    log('IDBClient', 'log', `[${this.udid}] Executing: ${args}`)
+-    this.shellProcess.stdin.write(args + '\n')
+-  }
+-
+-  private async runDirect(args: string): Promise<string> {
+-    const resolvedUdid = await this.getResolvedUdid()
+-    const companionArg = IDB_COMPANION_PATH ? `--companion-path ${IDB_COMPANION_PATH}` : ''
+-    const udidArg = `--udid ${resolvedUdid}`
+-    const cmd = `${IDB_PATH} ${companionArg} ${args} ${udidArg}`.trim()
+-    log('IDBClient', 'log', `[${this.udid}] Running direct: ${cmd}`)
+-    const { stdout, stderr } = await execAsync(cmd)
+-    if (stderr) log('IDBClient', 'log', `[${this.udid}] stderr: ${stderr}`)
+-    return stdout.trim()
+   }
+ 
+   async shutdown(): Promise<void> {
+-    if (this.isShuttingDown) return
+-    log('IDBClient', 'log', `[${this.udid}] Shutting down...`)
+-    this.isShuttingDown = true
+-
+-    if (this.shellProcess) {
+-      this.shellProcess.stdin?.end()
+-      this.shellProcess.kill('SIGTERM')
+-      await new Promise(resolve => setTimeout(resolve, 1000))
+-      if (this.shellProcess && !this.shellProcess.killed) {
+-        this.shellProcess.kill('SIGKILL')
+-      }
+-      this.shellProcess = null
+-    }
+-
+-    IDBClient.instances.delete(this.udid)
+-    log('IDBClient', 'log', `[${this.udid}] Shutdown complete`)
++    if (this.closed) return
++    this.closed = true
++    this.controller.abort()
++    await this.queue
++    await this.stopCompanion()
++    if (IDBClient.instances.get(this.udid) === this) IDBClient.instances.delete(this.udid)
+   }
+ 
+   async tap(x: number, y: number, duration?: number): Promise<void> {
+-    let args = `ui tap ${x} ${y}`
+-    if (duration !== undefined) args += ` --duration ${duration}`
+-    args += ' --json'
+-    await this.runInShell(args)
++    await this.run(['ui', 'tap', String(Math.round(x)), String(Math.round(y)), ...durationArgs(duration), '--json'])
+   }
+-
+   async swipe(fromX: number, fromY: number, toX: number, toY: number, duration?: number, delta?: number): Promise<void> {
+-    let args = `ui swipe ${fromX} ${fromY} ${toX} ${toY}`
+-    if (duration !== undefined) args += ` --duration ${duration}`
+-    if (delta !== undefined) args += ` --delta ${delta}`
+-    args += ' --json'
+-    await this.runInShell(args)
++    await this.run(['ui', 'swipe', ...[fromX, fromY, toX, toY].map(value => String(Math.round(value))), ...durationArgs(duration),
++      ...(delta === undefined ? [] : ['--delta', String(Math.round(delta))]), '--json'])
+   }
+-
+   async pressButton(button: 'HOME' | 'LOCK' | 'SIDE_BUTTON' | 'APPLE_PAY' | 'SIRI', duration?: number): Promise<void> {
+-    let args = `ui button ${button}`
+-    if (duration !== undefined) args += ` --duration ${duration}`
+-    args += ' --json'
+-    await this.runInShell(args)
++    await this.run(['ui', 'button', button, ...durationArgs(duration), '--json'])
+   }
+-
+   async inputText(text: string): Promise<void> {
+-    await this.runInShell(`ui text ${JSON.stringify(text)} --json`)
++    await this.run(['ui', 'text'], text)
+   }
+-
+   async pressKey(key: number | string, duration?: number): Promise<void> {
+-    if (typeof key === 'string') {
+-      await this.inputText(key)
+-      return
+-    }
+-    let args = `ui key ${key}`
+-    if (duration !== undefined) args += ` --duration ${duration}`
+-    args += ' --json'
+-    await this.runInShell(args)
++    if (typeof key === 'string') return this.inputText(key)
++    await this.run(['ui', 'key', String(key), ...durationArgs(duration), '--json'])
+   }
+-
+-  async pressKeySequence(keySequence: (number | string)[]): Promise<void> {
+-    const keys = keySequence.join(' ')
+-    await this.runInShell(`ui key-sequence ${keys} --json`)
++  async pressKeySequence(keys: (number | string)[]): Promise<void> {
++    // The CLI accepts numeric HID codes only; string entries represent text.
++    for (const key of keys) await this.pressKey(key)
+   }
+-
+   async describeAll(nested?: boolean): Promise<unknown> {
+-    let args = 'ui describe-all --json'
+-    if (nested) args += ' --nested'
+-
+-    let output = ''
+-    try {
+-      output = await this.runDirect(args)
+-      const jsonMatch = output.match(/[{[][\s\S]*[}\]]/)
+-      if (jsonMatch) return JSON.parse(jsonMatch[0])
+-      return JSON.parse(output)
+-    } catch (error) {
+-      throw new Error(`Failed to parse UI description. Raw output: ${output.substring(0, 300)}`)
+-    }
++    return JSON.parse(await this.run(['ui', 'describe-all', '--json', ...(nested ? ['--nested'] : [])]))
+   }
+-
+   async describePoint(x: number, y: number, nested?: boolean): Promise<unknown> {
+-    let args = `ui describe-point ${Math.round(x)} ${Math.round(y)} --json`
+-    if (nested) args += ' --nested'
+-
+-    let output = ''
+-    try {
+-      output = await this.runDirect(args)
+-      const jsonMatch = output.match(/[{[][\s\S]*[}\]]/)
+-      if (jsonMatch) return JSON.parse(jsonMatch[0])
+-      return JSON.parse(output)
+-    } catch (error) {
+-      throw new Error(`Failed to parse UI description at point (${x}, ${y}). Raw output: ${output.substring(0, 300)}`)
++    return JSON.parse(await this.run(['ui', 'describe-point', String(Math.round(x)), String(Math.round(y)),
++      '--json', ...(nested ? ['--nested'] : [])]))
++  }
++  async getScreenSize(): Promise<{ width: number; height: number }> {
++    const description = JSON.parse(await this.run(['describe', '--json']))
++    const dimensions = description.screen_dimensions
++    const width = dimensions?.width_points ?? dimensions?.width / dimensions?.density
++    const height = dimensions?.height_points ?? dimensions?.height / dimensions?.density
++    if (!(width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height))) {
++      throw new Error('IDB did not return valid simulator screen dimensions')
+     }
++    return { width, height }
+   }
+-
+   async screenshot(): Promise<Buffer> {
+-    const resolvedUdid = await this.getResolvedUdid()
+-    const filePath = join(tmpdir(), `blitz-idb-screenshot-${Date.now()}.png`)
+-    const execFileAsync = promisify(execFile)
+-    await execFileAsync('xcrun', ['simctl', 'io', resolvedUdid, 'screenshot', '--type=png', filePath], {
+-      env: childEnv(),
+-      timeout: 10000,
+-    })
+-    const { readFile, unlink } = await import('fs/promises')
+-    const buffer = await readFile(filePath)
+-    await unlink(filePath).catch(() => {})
+-    return buffer
++    const udid = await this.resolvedUdid()
++    const directory = await mkdtemp('/tmp/blitz-mcp-image-')
++    const file = join(directory, 'screen.png')
++    try {
++      await execute('xcrun', ['simctl', 'io', udid, 'screenshot', '--type=png', file],
++        { env: this.env, timeout: 10000, signal: this.controller.signal })
++      return await readFile(file)
++    } finally { await rm(directory, { recursive: true, force: true }) }
+   }
+-
+   async listApps(): Promise<{ bundleId: string; name: string; type: 'System' | 'User' }[]> {
+-    const resolvedUdid = await this.getResolvedUdid()
+-    const { stdout } = await execAsync(`xcrun simctl listapps ${resolvedUdid}`)
++    const udid = await this.resolvedUdid()
++    const { stdout } = await execute('xcrun', ['simctl', 'listapps', udid],
++      { env: this.env, timeout: 10000, signal: this.controller.signal, maxBuffer: 8 * 1024 * 1024 })
+     return parseSimctlAppList(stdout)
+   }
+-
+   async launch(bundleId: string): Promise<void> {
+-    const resolvedUdid = await this.getResolvedUdid()
+-    await execAsync(`xcrun simctl launch ${resolvedUdid} ${bundleId}`)
++    const udid = await this.resolvedUdid()
++    await execute('xcrun', ['simctl', 'launch', udid, bundleId],
++      { env: this.env, timeout: 10000, signal: this.controller.signal })
+   }
+-}
+-
+-export function getIDBClient(udid: string = 'booted'): IDBClient {
+-  return IDBClient.getInstance(udid)
+-}
+-
+-let isCleaningUp = false
+-
+-async function cleanupAllInstances(): Promise<void> {
+-  if (isCleaningUp) return
+-  isCleaningUp = true
+-  const instances = Array.from((IDBClient as unknown as { instances: Map<string, IDBClient> }).instances.values())
+-  if (instances.length > 0) {
+-    log('IDBClient', 'log', `Cleaning up ${instances.length} IDB client instance(s)...`)
+-    await Promise.all(instances.map(instance => instance.shutdown()))
+-    log('IDBClient', 'log', 'All IDB client instances cleaned up')
++  static async shutdownAll(): Promise<void> {
++    await Promise.all([...this.instances.values()].map(client => client.shutdown()))
+   }
+ }
+-
+-process.on('SIGINT', () => {
+-  cleanupAllInstances().then(() => process.exit(0)).catch(() => process.exit(1))
+-})
+-
+-process.on('SIGTERM', () => {
+-  cleanupAllInstances().then(() => process.exit(0)).catch(() => process.exit(1))
+-})
+-
+-export async function shutdownAllIDBClients(): Promise<void> {
+-  await cleanupAllInstances()
++function durationArgs(duration?: number): string[] {
++  return duration === undefined ? [] : ['--duration', String(duration)]
++}
++export function getIDBClient(udid = 'booted'): IDBClient { return IDBClient.getInstance(udid) }
++export async function shutdownAllIDBClients(): Promise<void> { await IDBClient.shutdownAll() }
++for (const signal of ['SIGINT', 'SIGTERM'] as const) {
++  process.once(signal, () => { shutdownAllIDBClients().finally(() => process.exit(0)) })
+ }
+diff --git a/src/idb/simulator-env.ts b/src/idb/simulator-env.ts
+new file mode 100644
+index 0000000..9cf44ec
+--- /dev/null
++++ b/src/idb/simulator-env.ts
+@@ -0,0 +1,6 @@
++// Older IDB companions print their launch environment. Pass only OS/tool paths.
++export function simulatorEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
++  const allowed = new Set(['HOME', 'PATH', 'TMPDIR', 'USER', 'LOGNAME', 'LANG',
++    'LC_ALL', 'LC_CTYPE', 'DEVELOPER_DIR'])
++  return Object.fromEntries(Object.entries(source).filter(([key]) => allowed.has(key)))
++}
+diff --git a/src/idb/type-text.py b/src/idb/type-text.py
+new file mode 100644
+index 0000000..08db762
+--- /dev/null
++++ b/src/idb/type-text.py
+@@ -0,0 +1,96 @@
++"""Send text through the selected simulator's active keyboard, never a clipboard.
++The entire input is validated before sending any event. Unsupported layouts or
++characters fail explicitly instead of silently producing a different string.
++"""
++import asyncio
++import logging
++import plistlib
++import sys
++from pathlib import Path
++
++class UnsupportedText(ValueError):
++    pass
++
++# USB HID usages for the iOS German hardware layout. Modifiers are explicit,
++# avoiding fb-idb's US-only text conversion. Restrict to verified characters.
++GERMAN_KEYS = {
++    'ä': (52, False), 'ö': (51, False), 'ü': (47, False), 'ß': (45, False),
++    'Ä': (52, True), 'Ö': (51, True), 'Ü': (47, True),
++    ' ': (44, False), '\n': (40, False), '\t': (43, False),
++    '.': (55, False), ',': (54, False), '-': (56, False), '_': (56, True),
++    '!': (30, True), '?': (45, True), ';': (54, True), ':': (55, True),
++    '+': (48, False), '*': (48, True), '/': (36, True), '&': (35, True),
++    '(': (37, True), ')': (38, True), '=': (39, True), '%': (34, True),
++    '$': (33, True), '"': (31, True), "'": (49, True), '#': (49, False),
++    # Modifier bits: 1 = Shift, 2 = Option.
++    '@': (15, 2), '€': (8, 2), '~': (17, 2), '[': (34, 2), ']': (35, 2),
++    '{': (37, 2), '}': (38, 2), '|': (36, 2), '\\': (36, 3),
++    '<': (53, False), '>': (53, True),
++}
++
++def keyboard_layout(udid, home=None):
++    path = Path(home or Path.home()) / 'Library/Developer/CoreSimulator/Devices' / udid / 'data/Library/Preferences/com.apple.keyboard.preferences.plist'
++    with path.open('rb') as stream:
++        current = plistlib.load(stream).get('KeyboardsCurrentAndNext', [])[0]
++    if current.startswith('de_DE@sw=QWERTZ-German;hw=Automatic'):
++        return 'de-DE'
++    if current.startswith('en_US@sw=QWERTY;hw=Automatic'):
++        return 'en-US'
++    raise UnsupportedText('Unsupported active simulator keyboard')
++
++def german_keys(text):
++    result = []
++    for char in text:
++        if char.isascii() and char.isalpha():
++            letter = {'y': 'z', 'z': 'y'}.get(char.lower(), char.lower())
++            result.append((4 + ord(letter) - ord('a'), char.isupper()))
++        elif char in '1234567890':
++            result.append((30 + '1234567890'.index(char), False))
++        elif char in GERMAN_KEYS:
++            result.append(GERMAN_KEYS[char])
++        else:
++            raise UnsupportedText('Character is not supported by the active simulator keyboard')
++    return result
++
++def text_events(text, layout):
++    from idb.common.hid import KEY_MAP, text_to_events
++    from idb.common.types import HIDPress, HIDKey, HIDDirection
++    if layout == 'en-US':
++        if any(char not in KEY_MAP for char in text):
++            raise UnsupportedText('Character is not supported by the active simulator keyboard')
++        return list(text_to_events(text))
++    keys = german_keys(text)  # Validate every character before emitting anything.
++    events = []
++    def press(key, down):
++        events.append(HIDPress(action=HIDKey(keycode=key), direction=HIDDirection.DOWN if down else HIDDirection.UP))
++    for key, modifiers in keys:
++        if modifiers & 2: press(226, True)
++        if modifiers & 1: press(225, True)
++        press(key, True)
++        press(key, False)
++        if modifiers & 1: press(225, False)
++        if modifiers & 2: press(226, False)
++    return events
++
++async def main():
++    from idb.grpc.client import Client
++    from idb.common.types import DomainSocketAddress
++    socket, udid = sys.argv[1:3]
++    text = sys.stdin.buffer.read().decode('utf-8')
++    events = text_events(text, keyboard_layout(udid))
++    async with Client.build(address=DomainSocketAddress(path=socket),
++                            logger=logging.getLogger('blitz-text'), exchange_metadata=False) as client:
++        if client.companion.udid.lower() != udid.lower():
++            raise RuntimeError('Companion device does not match requested simulator')
++        await asyncio.wait_for(client.send_events(events), timeout=10)
++
++if __name__ == '__main__':
++    try:
++        asyncio.run(main())
++    except (UnsupportedText, FileNotFoundError, IndexError):
++        sys.stderr.write('Unsupported simulator keyboard layout or character\n')
++        sys.exit(43)
++    except Exception:
++        # Do not print entered text or IDB debug diagnostics.
++        sys.stderr.write('Simulator text input failed\n')
++        sys.exit(1)
+diff --git a/src/index.ts b/src/index.ts
+index a74f65f..e517c88 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,6 +1,7 @@
+ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+ import { createMcpServer } from './mcp-server.js'
+ import { createViewerServer } from './viewer/server.js'
++import { shutdownAllIDBClients } from './idb/idb-client.js'
+ import { log } from './logger.js'
+ 
+ const DEFAULT_VIEWER_PORT = 5150
+@@ -20,6 +21,12 @@ export async function startServer(): Promise<void> {
+   const server = createMcpServer(viewerPort)
+   const transport = new StdioServerTransport()
+   await server.connect(transport)
++  process.stdin.once('end', () => { void server.close() })
++  server.server.onclose = () => {
++    // EOF must release this server's simulator helpers, even if its optional
++    // viewer HTTP server would otherwise keep Node alive.
++    void shutdownAllIDBClients().finally(() => process.exit(0))
++  }
+ 
+   log('Server', 'log', `MCP server running (stdio).${viewerPort ? ` Viewer at http://localhost:${viewerPort}` : ''}`)
+ }
+diff --git a/src/mcp-server.ts b/src/mcp-server.ts
+index bbad780..a57ad8a 100644
+--- a/src/mcp-server.ts
++++ b/src/mcp-server.ts
+@@ -3,6 +3,7 @@ import { z } from 'zod'
+ import { promises as fs } from 'node:fs'
+ import path from 'node:path'
+ import os from 'node:os'
++import { randomUUID } from 'node:crypto'
+ import { execFile } from 'node:child_process'
+ import { resolveBootedUdid } from './idb/idb-client.js'
+ import { AXScanClient } from './idb/ax-scan-client.js'
+@@ -14,7 +15,8 @@ import { listPhysicalDevices } from './wda/device-discovery.js'
+ import { applyScanUiFilters, applyDescribeScreenFilters } from './ui-filters.js'
+ import { detectExecutionContext } from './execution-context.js'
+ import { wdaManager } from './wda/wda-manager.js'
+-import { childEnv } from './child-env.js'
++import { simulatorEnv } from './idb/simulator-env.js'
++import { getIDBClient } from './idb/idb-client.js'
+ import { log } from './logger.js'
+ import { emitTapGestureVisualization, emitSwipeGestureVisualization } from './gesture-visualization.js'
+ 
+@@ -63,23 +65,8 @@ const singleActionSchema = z.object({
+ })
+ 
+ const referenceFrameCache = new Map<string, Promise<{ width: number; height: number }>>()
+-const BOOTED_UDID_CACHE_TTL_MS = 5_000
+-let cachedBootedUdid: { value: string; expiresAtMs: number } | null = null
+-
+ async function resolveActionUdid(udid: string): Promise<string> {
+-  if (udid !== 'booted') return udid
+-
+-  const now = Date.now()
+-  if (cachedBootedUdid && cachedBootedUdid.expiresAtMs > now) {
+-    return cachedBootedUdid.value
+-  }
+-
+-  const resolvedUdid = await resolveBootedUdid()
+-  cachedBootedUdid = {
+-    value: resolvedUdid,
+-    expiresAtMs: now + BOOTED_UDID_CACHE_TTL_MS,
+-  }
+-  return resolvedUdid
++  return udid === 'booted' ? await resolveBootedUdid() : udid
+ }
+ 
+ async function resolveReferenceFrame(udid: string): Promise<{ width: number; height: number }> {
+@@ -150,7 +137,7 @@ async function emitVisualizationForAction(params: {
+ export function createMcpServer(viewerPort: number) {
+   const server = new McpServer({
+     name: '@blitzdev/iphone-mcp',
+-    version: '0.1.0',
++    version: '0.1.18-blitz.1',
+   })
+ 
+   server.registerTool(
+@@ -213,11 +200,11 @@ Actions available:
+ - tap: Tap at coordinates { x, y, duration? }
+ - swipe: Swipe gesture { fromX, fromY, toX, toY, duration?, delta? }
+ - button: Press button { button: 'HOME'|'LOCK'|'SIDE_BUTTON'|'APPLE_PAY'|'SIRI', duration? }
+-- input-text: Type text { text }
++- input-text: Type text { text }. Simulator text supports the active German QWERTZ (including umlauts) and US QWERTY keyboards. Unsupported layouts/characters fail before any text is sent; no clipboard is used.
+ - key: Press key { key: number (HID keycode) | string (character), duration? }
+ - key-sequence: Press key sequence { keySequence: (number|string)[] }
+ 
+-Use describe_after to see the screen state after the action.`,
++Use describe_after to verify the screen state after the action. Text is sent as keyboard input, so iOS autocorrection and smart punctuation still apply.`,
+       inputSchema: {
+         action: z.enum(['tap', 'swipe', 'button', 'input-text', 'key', 'key-sequence']).describe('Type of action'),
+         params: z.record(z.string(), z.unknown()).describe('Action parameters (depends on action type)'),
+@@ -424,38 +411,36 @@ Use describe_after to see the screen state after all actions complete.`,
+     async ({ udid = 'booted' }) => {
+       log('MCP', 'log', `get_screenshot udid=${udid}`)
+       try {
+-        const timestamp = Date.now()
++        const timestamp = randomUUID()
+         const rawFile = path.join(os.tmpdir(), `blitz-screenshot-${timestamp}.png`)
+         const resizedFile = path.join(os.tmpdir(), `blitz-screenshot-${timestamp}-sm.png`)
+ 
+-        if (isPhysicalDeviceUdid(udid)) {
+-          const client = await getDeviceClient(udid)
+-          const pngBuffer = await client.screenshot()
+-          await fs.writeFile(rawFile, pngBuffer)
+-        } else {
+-          await new Promise<void>((resolve, reject) => {
+-            execFile('xcrun', ['simctl', 'io', udid, 'screenshot', '--type=png', rawFile], { env: childEnv(), timeout: 10000 }, (error) => {
+-              if (error) reject(error)
+-              else resolve()
+-            })
+-          })
+-        }
++        const resolvedUdid = await resolveActionUdid(udid)
++        const client = await getDeviceClient(resolvedUdid)
++        const pngBuffer = await client.screenshot()
++        await fs.writeFile(rawFile, pngBuffer, { mode: 0o600 })
+ 
+         const sizeOutput = await new Promise<string>((resolve, reject) => {
+-          execFile('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', rawFile], { timeout: 5000 }, (error, stdout) => {
++          execFile('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', rawFile], { env: simulatorEnv(), timeout: 5000 }, (error, stdout) => {
+             if (error) reject(error)
+             else resolve(stdout)
+           })
+         })
+         const widthMatch = sizeOutput.match(/pixelWidth:\s*(\d+)/)
+         const heightMatch = sizeOutput.match(/pixelHeight:\s*(\d+)/)
+-        const targetWidth = Math.round(Number(widthMatch![1]) / 3)
+-        const targetHeight = Math.round(Number(heightMatch![1]) / 3)
++        let targetWidth = Math.round(Number(widthMatch![1]) / 3)
++        let targetHeight = Math.round(Number(heightMatch![1]) / 3)
++        if (!isPhysicalDeviceUdid(resolvedUdid)) {
++          const size = await getIDBClient(resolvedUdid).getScreenSize()
++          const landscape = Number(widthMatch![1]) > Number(heightMatch![1])
++          targetWidth = landscape ? Math.max(size.width, size.height) : Math.min(size.width, size.height)
++          targetHeight = landscape ? Math.min(size.width, size.height) : Math.max(size.width, size.height)
++        }
+         await new Promise<void>((resolve, reject) => {
+           execFile(
+             'sips',
+             ['--resampleWidth', String(targetWidth), '--resampleHeight', String(targetHeight), rawFile, '--out', resizedFile],
+-            { timeout: 5000 },
++            { env: simulatorEnv(), timeout: 5000 },
+             (error) => {
+               if (error) reject(error)
+               else resolve()
+@@ -490,10 +475,8 @@ Use the "query" parameter to search for a specific element by label (e.g. "Add t
+ 
+ Without a query, returns all visible interactive elements on screen.
+ 
+-Region options optimize scan time:
+-- "top-left" / "top-right" / "bottom-left" / "bottom-right": ~250ms
+-- "top-half" / "bottom-half": ~500ms
+-- "full": ~1s (entire screen)
++Region options limit results to the selected portion of the screen.
++Simulator scans use the maintained IDB accessibility hierarchy.
+ 
+ For the complete element tree (all types), use describe_screen instead.`,
+       inputSchema: {
+@@ -557,7 +540,7 @@ For the complete element tree (all types), use describe_screen instead.`,
+         let simulators: { udid: string; name: string; state: string }[] = []
+         try {
+           const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
+-            execFile('xcrun', ['simctl', 'list', 'devices', 'booted', '-j'], { timeout: 10000 }, (error, stdout) => {
++            execFile('xcrun', ['simctl', 'list', 'devices', 'booted', '-j'], { env: simulatorEnv(), timeout: 10000 }, (error, stdout) => {
+               if (error) reject(error)
+               else resolve({ stdout })
+             })
+diff --git a/src/wda/device-discovery.ts b/src/wda/device-discovery.ts
+index 5a09743..fb104ea 100644
+--- a/src/wda/device-discovery.ts
++++ b/src/wda/device-discovery.ts
+@@ -17,19 +17,26 @@ export interface PhysicalDevice {
+   wdaRunning: boolean
+ }
+ 
++// Xcode 27 includes simulators in devicectl output. They are not USB devices.
++export function isPhysicalIOSDevice(device: {hardwareProperties?: {reality?: string; platform?: string; udid?: string}; connectionProperties?: {transportType?: string}}): boolean {
++  const hardware = device.hardwareProperties
++  if (!hardware?.udid || hardware.reality === 'simulated' || device.connectionProperties?.transportType === 'sameMachine') return false
++  return hardware.platform === 'iOS' || hardware.platform === 'iPadOS'
++}
++
+ export async function listPhysicalDevices(): Promise<PhysicalDevice[]> {
+   const devices: Map<string, PhysicalDevice> = new Map()
+ 
+   try {
+-    const { stdout } = await execAsync('xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null', { env: childEnv() })
++    const { stdout } = await execAsync('xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null', { env: childEnv(), timeout: 10000, maxBuffer: 8 * 1024 * 1024 })
+     const jsonStart = stdout.indexOf('{')
+     if (jsonStart < 0) throw new Error('No JSON in devicectl output')
+     const json = JSON.parse(stdout.substring(jsonStart))
+     const deviceList = json?.result?.devices ?? []
+ 
+     for (const d of deviceList) {
+-      const udid = d.hardwareProperties?.udid ?? d.identifier
+-      if (!udid) continue
++      if (!isPhysicalIOSDevice(d)) continue
++      const udid = d.hardwareProperties.udid
+ 
+       if (d.connectionProperties?.transportType === 'localNetwork' && !d.hardwareProperties?.platform?.includes('iOS')) {
+         continue
+@@ -56,7 +63,7 @@ export async function listPhysicalDevices(): Promise<PhysicalDevice[]> {
+ 
+   if (devices.size === 0) {
+     try {
+-      const { stdout } = await execAsync('system_profiler SPUSBDataType -json 2>/dev/null', { env: childEnv() })
++      const { stdout } = await execAsync('system_profiler SPUSBDataType -json 2>/dev/null', { env: childEnv(), timeout: 10000, maxBuffer: 8 * 1024 * 1024 })
+       const json = JSON.parse(stdout)
+       const usbItems = json?.SPUSBDataType ?? []
+ 
+diff --git a/tests/idb-client.test.mjs b/tests/idb-client.test.mjs
+new file mode 100644
+index 0000000..8bdf13c
+--- /dev/null
++++ b/tests/idb-client.test.mjs
+@@ -0,0 +1,169 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {mkdtemp, writeFile, readFile, rm, stat} from 'node:fs/promises';
++import {existsSync} from 'node:fs';
++import {join} from 'node:path';
++import {tmpdir} from 'node:os';
++import {spawn} from 'node:child_process';
++import {setTimeout as delay} from 'node:timers/promises';
++import {IDBClient, selectBootedSimulator} from '../dist/idb/idb-client.js';
++import {simulatorEnv} from '../dist/idb/simulator-env.js';
++import {isPhysicalIOSDevice} from '../dist/wda/device-discovery.js';
++import {regionToCommand} from '../dist/idb/ax-scan-client.js';
++const UDID = '00000000-0000-4000-8000-000000000001';
++
++async function fixture(t, options={}) {
++  const root=await mkdtemp(join(tmpdir(),'mcp-idb-test-'));
++  const record=join(root,'events.jsonl');
++  const source=`#!${process.execPath}\nimport fs from 'node:fs';
++const args=process.argv.slice(2), record=${JSON.stringify(record)};
++const log=value=>fs.appendFileSync(record,JSON.stringify(value)+'\\n');
++if (args.includes('--grpc-domain-sock')) {
++  log({kind:'companion',pid:process.pid,args,env:process.env});
++  fs.writeFileSync(args[args.indexOf('--grpc-domain-sock')+1],'ready');
++  setInterval(()=>{},1000);
++} else {
++  let input; if(args[0]?.endsWith('type-text.py')) { input='';for await(const chunk of process.stdin) input+=chunk; }
++  log({kind:'start',pid:process.pid,args,env:process.env,input});
++  if(input==='unsupported-fixture') process.exit(43);
++  if(args.includes('777')) { console.error('private text must not leak'); process.exit(7); }
++  if(args.includes('888')) { setInterval(()=>{},1000); }
++  else {
++    if(args.includes('999')) await new Promise(r=>setTimeout(r,180));
++    log({kind:'end',args});
++    if(args.includes('describe')) console.log(JSON.stringify({screen_dimensions:{width:1206,height:2622,width_points:402,height_points:874,density:3}}));
++    else console.log('{}');
++  }
++}
++`;
++  const fake=join(root,'helper.mjs');await writeFile(fake,source,{mode:0o755});
++  const client=new IDBClient(UDID,{idbPath:fake,companionPath:fake,pythonPath:fake,
++    environment:{PATH:process.env.PATH,HOME:root,OPENAI_API_KEY:'test-only',PYTHONPATH:'test-only',IDB_SECRET:'test-only'},...options});
++  t.after(async()=>{await client.shutdown();await rm(root,{recursive:true,force:true});});
++  const events=async()=>existsSync(record)?(await readFile(record,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse):[];
++  return {client,events,root,fake};
++}
++
++test('ambiguous booted devices are rejected instead of selecting another project',()=>{
++  const device=udid=>({udid,state:'Booted'});
++  assert.equal(selectBootedSimulator({devices:{ios:[device(UDID)]}}),UDID);
++  assert.throws(()=>selectBootedSimulator({devices:{ios:[device(UDID),device('other')]}}),/explicit udid/);
++  assert.throws(()=>selectBootedSimulator({devices:{ios:[]}}),/No booted/);
++});
++test('credential and injection variables are omitted',()=>{
++  assert.deepEqual(simulatorEnv({HOME:'/tmp',PATH:'/bin',OPENAI_API_KEY:'test-only',PYTHONPATH:'bad',DYLD_INSERT_LIBRARIES:'bad'}),{HOME:'/tmp',PATH:'/bin'});
++});
++test('real subprocess boundary uses private socket, exact device and safe environment',async t=>{
++  const {client,events}=await fixture(t);await client.tap(1,2);
++  const all=await events(),companion=all.find(x=>x.kind==='companion');
++  assert.equal(all.filter(x=>x.kind==='companion').length,1);
++  assert.deepEqual(companion.args.slice(0,4),['--udid',UDID,'--only','simulator']);
++  const socket=companion.args.at(-1);assert.ok(socket.length<104);
++  assert.equal((await stat(join(socket,'..'))).mode & 0o777,0o700);
++  for(const event of all.filter(x=>x.env)) {
++    assert.equal(event.env.OPENAI_API_KEY,undefined);assert.equal(event.env.PYTHONPATH,undefined);assert.equal(event.env.IDB_SECRET,undefined);
++  }
++  const command=all.find(x=>x.kind==='start').args;
++  assert.deepEqual(command.slice(0,2),['--companion',socket]);
++  assert.deepEqual(command.slice(-2),['--udid',UDID]);
++  await client.shutdown();assert.equal(existsSync(join(socket,'..')),false);
++});
++test('action waits for acknowledgement and simultaneous calls share one companion',async t=>{
++  const {client,events}=await fixture(t);
++  let finished=false;const first=client.tap(999,2).then(()=>{finished=true});
++  await delay(60);assert.equal(finished,false);
++  await Promise.all([first,client.tap(3,4)]);
++  const all=await events();assert.equal(all.filter(x=>x.kind==='companion').length,1);
++  assert.deepEqual(all.filter(x=>x.kind!=='companion').map(x=>x.kind),['start','end','start','end']);
++});
++test('failed input is reported without sensitive diagnostics or automatic replay',async t=>{
++  const {client,events}=await fixture(t);
++  await assert.rejects(client.tap(777,2),error=>/exit 7/.test(error.message)&&!error.message.includes('private text'));
++  assert.equal((await events()).filter(x=>x.kind==='start').length,1);
++  await client.tap(1,2);assert.equal((await events()).filter(x=>x.kind==='companion').length,2);
++});
++test('timeout releases owned helpers and leaves unrelated processes alive',async t=>{
++  const foreign=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
++  t.after(()=>foreign.kill());
++  const {client,events}=await fixture(t,{commandTimeoutMs:80});
++  await assert.rejects(client.tap(888,2),/timed out/);
++  assert.equal(foreign.exitCode,null);assert.equal(foreign.signalCode,null);
++  const all=await events();assert.equal(all.filter(x=>x.kind==='start').length,1);
++  assert.equal(all.some(x=>x.args.includes('kill')),false);
++  assert.equal(existsSync(join(all.find(x=>x.kind==='companion').args.at(-1),'..')),false);
++});
++test('shutdown cancels running work and rejects queued and late input',async t=>{
++  const {client,events}=await fixture(t);
++  const pending=client.tap(888,2);const failure=assert.rejects(pending,/cancelled|closed/);
++  while(!(await events()).some(x=>x.kind==='start')) await delay(20);
++  const queued=assert.rejects(client.tap(3,4),/closed/);
++  await client.shutdown();await failure;await queued;
++  await assert.rejects(client.tap(5,6),/closed/);
++  assert.equal((await events()).filter(x=>x.kind==='start').length,1);
++});
++test('text travels literally on stdin, never in process arguments',async t=>{
++  const {client,events}=await fixture(t);const text='quotes " \' $HOME $(touch nope)\nnext';
++  await client.inputText(text);
++  const args=(await events()).find(x=>x.kind==='start').args;
++  assert.equal((await events()).find(x=>x.kind==='start').input,text);
++  assert.equal(args.includes(text),false);
++});
++test('unsupported text is an actionable failure and is never replayed',async t=>{
++  const {client,events}=await fixture(t);
++  await assert.rejects(client.inputText('unsupported-fixture'),/text was not sent: unsupported character or keyboard layout/);
++  assert.equal((await events()).filter(x=>x.kind==='start').length,1);
++});
++test('mixed key sequence supports text and numeric HID codes in order',async t=>{
++  const {client,events}=await fixture(t);await client.pressKeySequence(['ab',42,'c']);
++  const args=(await events()).filter(x=>x.kind==='start').map(x=>x.input===undefined?x.args.slice(2,5):['ui','text',x.input]);
++  assert.deepEqual(args,[['ui','text','ab'],['ui','key','42'],['ui','text','c']]);
++});
++test('screen dimensions come from companion points, independent of simulator name',async t=>{
++  const {client}=await fixture(t);assert.deepEqual(await client.getScreenSize(),{width:402,height:874});
++});
++test('invalid UUID fails before launching any helper',async t=>{
++  const {fake,events}=await fixture(t);const client=new IDBClient('invalid; touch nope',{idbPath:fake,companionPath:fake});
++  await assert.rejects(client.tap(1,2),/Invalid/);await client.shutdown();assert.deepEqual(await events(),[]);
++});
++test('missing companion gives bounded startup failure',async t=>{
++  const {client}=await fixture(t,{companionPath:'/nonexistent/blitz-companion',startupTimeoutMs:100});
++  await assert.rejects(client.tap(1,2),/failed to start/);
++});
++test('scan region bounds retain correct bottom-right device coordinates',()=>{
++  assert.deepEqual(regionToCommand('bottom-right',402,874,0),{grid_step:0,x_start:201,y_start:437,x_end:402,y_end:874});
++});
++
++test('fractional coordinates are rounded for the integer IDB CLI',async t=>{
++  const {client,events}=await fixture(t);await client.tap(10.6,20.3);await client.swipe(1.2,2.9,3.6,4.1,0.3,5.8);
++  const args=(await events()).filter(x=>x.kind==='start').map(x=>x.args);
++  assert.deepEqual(args[0].slice(2,6),['ui','tap','11','20']);
++  assert.deepEqual(args[1].slice(2,12),['ui','swipe','1','3','4','4','--duration','0.3','--delta','6']);
++});
++
++test('Xcode 27 simulated devicectl entries are never classified as physical USB phones',()=>{
++  const base={hardwareProperties:{udid:'device-hardware-id',platform:'iOS',reality:'physical'},connectionProperties:{transportType:'wired'}};
++  assert.equal(isPhysicalIOSDevice(base),true);
++  assert.equal(isPhysicalIOSDevice({...base,hardwareProperties:{...base.hardwareProperties,reality:'simulated'}}),false);
++  assert.equal(isPhysicalIOSDevice({...base,connectionProperties:{transportType:'sameMachine'}}),false);
++  assert.equal(isPhysicalIOSDevice({...base,hardwareProperties:{...base.hardwareProperties,platform:'macOS'}}),false);
++  assert.equal(isPhysicalIOSDevice({}),false);
++});
++
++test('MCP server exits promptly when its stdio client closes input',async t=>{
++  const child=spawn(process.execPath,['dist/cli.js'],{stdio:['pipe','pipe','ignore'],env:simulatorEnv()});
++  t.after(()=>{if(child.exitCode===null)child.kill('SIGKILL')});
++  const exited=new Promise(resolve=>child.once('exit',(code,signal)=>resolve({code,signal})));
++  const initialized=new Promise((resolve,reject)=>{
++    let buffer='';
++    child.stdout.on('data',data=>{
++      buffer+=data;
++      if(buffer.includes('\n')) { try {const message=JSON.parse(buffer.split('\n')[0]);assert.equal(message.result.serverInfo.version,'0.1.18-blitz.1');resolve()} catch(error){reject(error)} }
++    });
++    child.once('error',reject);
++  });
++  child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'test',version:'1'}}})+'\n');
++  await Promise.race([initialized,delay(3000).then(()=>{throw new Error('initialize timeout')})]);
++  child.stdin.end();
++  const result=await Promise.race([exited,delay(2000).then(()=>{throw new Error('EOF cleanup timed out')})]);
++  assert.equal(result.code,0);
++});
+diff --git a/tests/test_type_text.py b/tests/test_type_text.py
+new file mode 100644
+index 0000000..cecf6df
+--- /dev/null
++++ b/tests/test_type_text.py
+@@ -0,0 +1,30 @@
++import importlib.util,plistlib,tempfile,unittest
++from pathlib import Path
++spec=importlib.util.spec_from_file_location('type_text',Path(__file__).parents[1]/'src/idb/type-text.py')
++module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
++
++class TextTests(unittest.TestCase):
++    def test_german_y_and_z_are_not_swapped(self):
++        self.assertEqual(module.german_keys('yYzZ'),[(29,False),(29,True),(28,False),(28,True)])
++    def test_german_umlauts_and_eszett(self):
++        self.assertEqual(module.german_keys('äÄöÖüÜß'),[(52,False),(52,True),(51,False),(51,True),(47,False),(47,True),(45,False)])
++    def test_unsupported_suffix_rejects_entire_text_before_event_generation(self):
++        with self.assertRaises(module.UnsupportedText):module.german_keys('valid prefix 😀')
++    def test_punctuation_uses_german_keys(self):
++        self.assertEqual(module.german_keys('-_?'),[(56,False),(56,True),(45,True)])
++    def test_option_symbols_use_verified_german_apple_key_positions(self):
++        self.assertEqual(module.german_keys('@€\\<>'),[(15,2),(8,2),(36,3),(53,False),(53,True)])
++    def test_keyboard_is_read_from_selected_simulator_only(self):
++        with tempfile.TemporaryDirectory() as home:
++            root=Path(home)/'Library/Developer/CoreSimulator/Devices'
++            for udid,layout in [('selected','de_DE@sw=QWERTZ-German;hw=Automatic'),('other','en_US@sw=QWERTY;hw=Automatic')]:
++                path=root/udid/'data/Library/Preferences/com.apple.keyboard.preferences.plist'
++                path.parent.mkdir(parents=True);path.write_bytes(plistlib.dumps({'KeyboardsCurrentAndNext':[layout,layout]}))
++            self.assertEqual(module.keyboard_layout('selected',home),'de-DE')
++            self.assertEqual(module.keyboard_layout('other',home),'en-US')
++    def test_unknown_layout_never_falls_back_to_us(self):
++        with tempfile.TemporaryDirectory() as home:
++            path=Path(home)/'Library/Developer/CoreSimulator/Devices/selected/data/Library/Preferences/com.apple.keyboard.preferences.plist'
++            path.parent.mkdir(parents=True);path.write_bytes(plistlib.dumps({'KeyboardsCurrentAndNext':['fr_FR@sw=AZERTY;hw=Automatic']}))
++            with self.assertRaises(module.UnsupportedText):module.keyboard_layout('selected',home)
++if __name__=='__main__':unittest.main()

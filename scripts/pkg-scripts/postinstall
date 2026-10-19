@@ -170,30 +170,18 @@ T_IPHONE_MCP_START=$(date +%s)
 NPM_BIN="$NODE_DIR/npm"
 IPHONE_MCP_BIN="$NODE_DIR/iphone-mcp"
 
-if [ -x "$NPM_BIN" ]; then
-    echo "Installing @blitzdev/iphone-mcp..." >> "$LOG"
-    if run_as_user \
-        env \
-            "HOME=$CONSOLE_HOME" \
-            "PATH=$NODE_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
-            "npm_config_cache=$CONSOLE_TMPDIR/blitz-npm-cache" \
-            "npm_config_loglevel=error" \
-            "npm_config_update_notifier=false" \
-            "$NPM_BIN" install -g --prefix "$BLITZ_NODE_DIR" @blitzdev/iphone-mcp@latest > /dev/null 2>> "$LOG"; then
-        if [ -x "$IPHONE_MCP_BIN" ]; then
-            echo "iphone-mcp ready at: $IPHONE_MCP_BIN" >> "$LOG"
-        else
-            echo "WARNING: iphone-mcp install reported success but binary was not found at $IPHONE_MCP_BIN" >> "$LOG"
-        fi
-    else
-        if [ -x "$IPHONE_MCP_BIN" ]; then
-            echo "WARNING: iphone-mcp refresh failed; keeping existing binary at $IPHONE_MCP_BIN" >> "$LOG"
-        else
-            echo "WARNING: Failed to install @blitzdev/iphone-mcp" >> "$LOG"
-        fi
+IPHONE_MCP_PACKAGE="$RESOURCES_DIR/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz"
+if [ -x "$NPM_BIN" ] && [ -f "$IPHONE_MCP_PACKAGE" ]; then
+    if ! run_as_user env -i "HOME=$CONSOLE_HOME" \
+        "PATH=$NODE_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
+        "npm_config_cache=$CONSOLE_TMPDIR/blitz-npm-cache" \
+        "npm_config_loglevel=error" "npm_config_update_notifier=false" \
+        /bin/bash "$RESOURCES_DIR/pkg-scripts/install-iphone-mcp.sh" \
+        "$BLITZ_NODE_DIR" "$IPHONE_MCP_PACKAGE" >> "$LOG" 2>&1; then
+        echo "WARNING: Maintained iPhone MCP install failed; inspect retained package/backup" >> "$LOG"
     fi
 else
-    echo "WARNING: npm not found at $NPM_BIN; skipping iphone-mcp install" >> "$LOG"
+    echo "WARNING: Bundled maintained iPhone MCP or npm missing; keeping current installation" >> "$LOG"
 fi
 
 echo "TIMING: iphone-mcp install took $(( $(date +%s) - T_IPHONE_MCP_START ))s" >> "$LOG"

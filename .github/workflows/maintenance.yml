@@ -46,9 +46,14 @@ jobs:
         run: python3 scripts/test-idb-installer.py
       - name: ASC transport, protocol and CLI compatibility tests
         run: bash scripts/test-asc-helper.sh
+      - name: iPhone MCP installation transaction checks (offline)
+        run: python3 scripts/test-iphone-mcp-installer.py
+      - name: Build and test maintained iPhone MCP
+        run: bash scripts/build-iphone-mcp.sh
       - name: Build release bundle
         env:
           APPLE_SIGNING_IDENTITY: '-'
+          BLITZ_IPHONE_MCP_TARBALL: ${{ github.workspace }}/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz
           BLITZ_ASCD_PATH: ${{ github.workspace }}/.build/ascd-helper/ascd
         run: bash scripts/bundle.sh release
       - name: Verify installed helper contract and app signature
