@@ -128,6 +128,13 @@ The `native` build engine avoids requiring the optional Metal toolchain with Xco
 
 Without `APPLE_SIGNING_IDENTITY`, the bundle is ad-hoc signed, not notarized. Existing Keychain or macOS permissions may require approval for the rebuilt app. The default build compiles the pinned ASC source with the Blitz adapter. `BLITZ_ASCD_PATH` accepts a prebuilt helper only if its protocol and pinned version match. See `helpers/asc-overlay/README.md` for provenance and Go tests.
 
+For local installations, prefer the maintainer's existing personal Developer ID
+Application identity via `APPLE_SIGNING_IDENTITY`. Keeping that signing identity
+and bundle identifier stable lets macOS recognize subsequent builds. CI can
+continue to use ad-hoc signatures without access to private keys. Signing alone
+does not notarize the app; do not create, purchase, or export certificates as a
+routine build step. A first switch from ad-hoc signing can need renewed consent.
+
 When replacing the official signed app with a local build, macOS can retain the
 original app's signing requirement even when Screen Recording appears enabled.
 If the `tccd` log reports `Failed to match existing code requirement` for

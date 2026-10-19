@@ -142,6 +142,28 @@ import Testing
     #expect(abs(reverse.y - 1090.5) < 0.001)
 }
 
+@Test func deviceHubFindsScreenContainerWithoutAssumingItsAccessibilityRole() {
+    struct Node {
+        var id: String? = nil
+        var frame: CGRect? = nil
+        var children: [Node] = []
+    }
+    let bounds = CGRect(x: 60, y: 134, width: 670, height: 1454)
+    let screen = Node(frame: bounds, children: [Node(id: "app-content")])
+    let controls = [Node(id: "camera.viewfinder"), Node(id: "record.circle")]
+    let root = Node(children: [Node(children: [Node(id: "header"), screen] + controls)])
+    let find = { (node: Node) in
+        DeviceHubScreenGeometry.screenBounds(in: node, children: { $0.children },
+            identifier: { $0.id }, frame: { $0.frame })
+    }
+    #expect(find(root) == [bounds])
+    #expect(find(Node(children: [screen])) == [])
+    // Preserve ambiguity so the caller rejects it rather than choosing a screen.
+    #expect(find(Node(children: [screen, screen] + controls)).count == 2)
+    #expect(DeviceHubScreenGeometry.matchesWindow(bounds, bounds.offsetBy(dx: 0.5, dy: 0)))
+    #expect(!DeviceHubScreenGeometry.matchesWindow(bounds, bounds.offsetBy(dx: 100, dy: 0)))
+}
+
 private func simProject(_ id: String, selected: String? = nil) -> Project {
     Project(id: id, metadata: BlitzProjectMetadata(name: id, type: .swift, simulatorUDID: selected), path: "/tmp/\(id)")
 }
