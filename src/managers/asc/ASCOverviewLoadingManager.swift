@@ -54,13 +54,15 @@ extension ASCManager {
             apply: { monetizationStatus = $0 ? "Configured" : nil })
         async let buildInventory: Bool = overviewRequest(fields: [], revision: revision,
             operation: { try await service.fetchBuilds(appId: appId) }, apply: { builds = $0 })
-        _ = await (identity, version, info, pricing, buildInventory)
+        let (_, _, _, _, buildsLoaded) = await (identity, version, info, pricing, buildInventory)
         guard projectRevision == revision, !Task.isCancelled else { return }
         if overviewFailedFields.isEmpty {
             overviewCacheDate = Date()
             if let account = DashboardSummaryStore.accountKey(for: credentials), app != nil {
                 let entry = ASCOverviewCacheEntry(manager: self, savedAt: overviewCacheDate!)
                 await overviewCache.save(entry, account: account)
+                guard projectRevision == revision, !Task.isCancelled else { return }
+                await shareOverviewDataWithTabs(includeBuilds: buildsLoaded)
             }
         }
     }

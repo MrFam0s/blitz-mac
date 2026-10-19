@@ -50,41 +50,55 @@ extension ASCManager {
             ?? Array(repeating: nil, count: 10)
     }
 
-    func loadScreenshots(locale: String, force: Bool = false) async {
-        guard let service else { return }
+    @discardableResult
+    func loadScreenshots(locale: String, force: Bool = false) async -> Bool {
+        guard let service else { return false }
+        let revision = projectRevision
         let cacheKey = screenshotCacheKey(locale: locale)
-
-        if !force,
-           screenshotSetsByLocale[cacheKey] != nil,
-           let cachedScreenshots = screenshotsByLocale[cacheKey] {
-            await hydrateScreenshotImageCache(
-                screenshots: cachedScreenshots,
-                force: false
-            )
-            return
+        if let task = screenshotLoadTasks[cacheKey] {
+            let alreadyForced = screenshotForcedLoads.contains(cacheKey)
+            let result = await task.value
+            guard projectRevision == revision, !Task.isCancelled else { return false }
+            if force && !alreadyForced { return await loadScreenshots(locale: locale, force: true) }
+            return result
         }
-
-        await ensureScreenshotLocalizationsLoaded(service: service)
-        guard let loc = localizations.first(where: { $0.attributes.locale == locale })
-                ?? localizations.first else {
-            return
+        if force { screenshotForcedLoads.insert(cacheKey) }
+        let task = Task { [self] in
+            defer { if projectRevision == revision {
+                screenshotLoadTasks.removeValue(forKey: cacheKey)
+                screenshotForcedLoads.remove(cacheKey)
+            } }
+            if !force, let date = screenshotLoadedAt[cacheKey], Date().timeIntervalSince(date) < 120,
+               let cached = screenshotsByLocale[cacheKey] {
+                await hydrateScreenshotImageCache(screenshots: cached, force: false)
+                return projectRevision == revision && !Task.isCancelled
+            }
+            await ensureScreenshotLocalizationsLoaded(service: service)
+            guard projectRevision == revision, !Task.isCancelled else { return false }
+            guard let loc = localizations.first(where: { $0.attributes.locale == locale }) else {
+                tabError[.screenshots] = "No localization found for \(locale)."
+                return false
+            }
+            do {
+                let previousIDs = screenshotIDs(in: screenshotsByLocale[cacheKey] ?? [:])
+                let (sets, shots) = try await fetchScreenshotData(localizationId: loc.id, service: service)
+                guard projectRevision == revision, !Task.isCancelled else { return false }
+                updateScreenshotCache(locale: locale, sets: sets, screenshots: shots)
+                screenshotLoadedAt[cacheKey] = Date()
+                tabError.removeValue(forKey: .screenshots)
+                await persistTabCache(.screenshots)
+                guard projectRevision == revision, !Task.isCancelled else { return false }
+                // A metadata refresh does not redownload unchanged image URLs.
+                await hydrateScreenshotImageCache(screenshots: shots, previousScreenshotIDs: previousIDs, force: false)
+                return projectRevision == revision && !Task.isCancelled
+            } catch {
+                guard projectRevision == revision, !Task.isCancelled else { return false }
+                tabError[.screenshots] = error.localizedDescription
+                return false
+            }
         }
-
-        do {
-            let previousScreenshotIDs = screenshotIDs(in: screenshotsByLocale[cacheKey] ?? [:])
-            let (fetchedSets, fetchedScreenshots) = try await fetchScreenshotData(
-                localizationId: loc.id,
-                service: service
-            )
-            updateScreenshotCache(locale: loc.attributes.locale, sets: fetchedSets, screenshots: fetchedScreenshots)
-            await hydrateScreenshotImageCache(
-                screenshots: fetchedScreenshots,
-                previousScreenshotIDs: previousScreenshotIDs,
-                force: force
-            )
-        } catch {
-            print("Failed to load screenshots for locale \(loc.attributes.locale): \(error)")
-        }
+        screenshotLoadTasks[cacheKey] = task
+        return await task.value
     }
 
     func screenshotSetsForLocale(_ locale: String) -> [ASCScreenshotSet] {
@@ -111,20 +125,43 @@ extension ASCManager {
         force: Bool,
         loader: ((URL) async -> NSImage?)? = nil
     ) async {
+        let revision = projectRevision
         let currentScreenshotIDs = screenshotIDs(in: screenshots)
         removeCachedScreenshotImages(for: previousScreenshotIDs.subtracting(currentScreenshotIDs))
-
+        let account = DashboardSummaryStore.accountKey(for: credentials)
+        let scope = account.flatMap { account in app.map { "\(account)\u{0}\($0.id)" } }
+        let cache = previewCache
         let resolvedLoader = loader ?? { url in
-            await Self.loadScreenshotImage(from: url)
+            if let scope, let bytes = await cache.data(scope: scope, url: url, force: force) {
+                return Self.decodeScreenshotImage(from: bytes)
+            }
+            // Missing credentials only occur in isolated previews/tests.
+            return scope == nil ? await Self.loadScreenshotImage(from: url) : nil
         }
-
-        for shot in screenshots.values.flatMap({ $0 }) {
-            guard let url = shot.imageURL else { continue }
-            if !force, screenshotImageCache[shot.id] != nil { continue }
-            guard let image = await resolvedLoader(url) else { continue }
-            cacheScreenshotImage(image, for: shot.id)
+        let pending = screenshots.values.flatMap { $0 }.filter { force || screenshotImageCache[$0.id] == nil }
+        let requestedURLs = Dictionary(pending.map { ($0.id, $0.imageURL) }, uniquingKeysWith: { _, new in new })
+        let trackedIDs = Set(screenshotsByLocale.values.flatMap { $0.values.flatMap { $0.map(\.id) } })
+        await withTaskGroup(of: (String, NSImage?).self) { group in
+            var next = 0
+            func enqueue() {
+                guard next < pending.count else { return }
+                let shot = pending[next]
+                next += 1
+                group.addTask {
+                    guard let url = shot.imageURL else { return (shot.id, nil) }
+                    return (shot.id, await resolvedLoader(url))
+                }
+            }
+            for _ in 0..<min(4, pending.count) { enqueue() }
+            for await (id, image) in group {
+                guard projectRevision == revision, !Task.isCancelled else { group.cancelAll(); continue }
+                let current = screenshotsByLocale.values.flatMap { $0.values.flatMap { $0 } }.first { $0.id == id }
+                let stillCurrent = !trackedIDs.contains(id) || (current != nil && current?.imageURL == (requestedURLs[id] ?? nil))
+                if stillCurrent, let image { cacheScreenshotImage(image, for: id) }
+                enqueue()
+            }
         }
-
+        guard projectRevision == revision, !Task.isCancelled else { return }
         purgeUnreferencedScreenshotImages(keeping: currentScreenshotIDs)
     }
 
@@ -134,6 +171,13 @@ extension ASCManager {
         screenshots: [String: [ASCScreenshot]]
     ) {
         let cacheKey = screenshotCacheKey(locale: locale)
+        let previous = Dictionary((screenshotsByLocale[cacheKey] ?? [:]).values.flatMap { $0 }.map { ($0.id, $0.imageURL) },
+                                  uniquingKeysWith: { _, new in new })
+        let changed = screenshots.values.flatMap { $0 }.filter { shot in
+            previous.keys.contains(shot.id) && (previous[shot.id] ?? nil) != shot.imageURL
+        }.map(\.id)
+        removeCachedScreenshotImages(for: changed)
+        screenshotLoadedAt[cacheKey] = Date()
         screenshotSetsByLocale[cacheKey] = sets
         screenshotsByLocale[cacheKey] = screenshots
         for displayType in trackDisplayTypes(for: locale) {
@@ -208,8 +252,6 @@ extension ASCManager {
                     } else if let localPath,
                               let image = NSImage(contentsOfFile: localPath) {
                         localImage = image
-                    } else if i < previousSlots.count, let prev = previousSlots[i] {
-                        localImage = prev.localImage
                     }
                 }
                 slots[i] = TrackSlot(
@@ -306,14 +348,16 @@ extension ASCManager {
     }
 
     private func ensureScreenshotLocalizationsLoaded(service: AppStoreConnectService) async {
-        if localizations.isEmpty, let versionId = selectedVersion?.id ?? syncSelectedVersion() {
-            localizations = (try? await service.fetchLocalizations(versionId: versionId)) ?? []
-        }
+        let revision = projectRevision
         if localizations.isEmpty, let appId = app?.id {
-            let versions = (try? await service.fetchAppStoreVersions(appId: appId)) ?? []
-            appStoreVersions = versions
-            if let versionId = syncSelectedVersion() {
-                localizations = (try? await service.fetchLocalizations(versionId: versionId)) ?? []
+            if selectedVersion == nil, let versions = try? await service.fetchAppStoreVersions(appId: appId) {
+                guard projectRevision == revision, !Task.isCancelled else { return }
+                appStoreVersions = versions
+                syncSelectedVersion()
+            }
+            if let versionId = selectedVersion?.id, let values = try? await service.fetchLocalizations(versionId: versionId) {
+                guard projectRevision == revision, !Task.isCancelled else { return }
+                localizations = values
             }
         }
     }
@@ -468,7 +512,9 @@ extension ASCManager {
         do {
             // Refresh the remote baseline before diffing so stale cached ASC IDs
             // don't survive server-side edits made outside Blitz.
-            await loadScreenshots(locale: loc.attributes.locale, force: true)
+            guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
+                throw ASCError.notFound(tabError[.screenshots] ?? "Could not verify current screenshots")
+            }
             invalidateStaleTrackSnapshots(displayType: displayType, locale: loc.attributes.locale)
 
             let current = trackSlots[trackKey] ?? Array(repeating: nil, count: 10)

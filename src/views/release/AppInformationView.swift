@@ -26,6 +26,15 @@ struct AppInformationView: View {
     @State private var isSaving = false
     @State private var suppressAutomaticWrites = false
     @State private var showAdvanced = false
+    @State private var populatedText: [String] = []
+
+    private var textValues: [String] {
+        [title, subtitle, descriptionText, keywords, promotionalText, marketingUrl, supportUrl, whatsNew, privacyPolicyUrl]
+    }
+
+    private var mayRefreshFields: Bool {
+        focusedField == nil && !isSaving && (populatedText.isEmpty || textValues == populatedText)
+    }
 
     private var currentLocale: String {
         asc.activeAppInformationLocale() ?? ""
@@ -98,23 +107,29 @@ struct AppInformationView: View {
             }
         }
         .task(id: "\(appState.activeProjectId ?? ""):\(asc.credentialActivationRevision)") {
+            await asc.restoreTabCacheIfNeeded(.appInformation)
+            guard !Task.isCancelled else { return }
+            populateCurrentFields()
+            populateDetailsFields()
+            applyPendingValues()
             await asc.ensureTabData(.appInformation)
+            guard !Task.isCancelled, mayRefreshFields else { return }
             populateCurrentFields()
             populateDetailsFields()
             applyPendingValues()
         }
         .onChange(of: asc.selectedAppInformationLocale) { _, _ in
-            guard focusedField == nil else { return }
+            guard mayRefreshFields else { return }
             populateCurrentFields()
         }
         .onChange(of: asc.isTabLoading(.appInformation)) { wasLoading, isLoading in
             guard wasLoading, !isLoading else { return }
-            guard focusedField == nil else { return }
+            guard mayRefreshFields else { return }
             populateCurrentFields()
             populateDetailsFields()
         }
-        .onChange(of: asc.appInfo?.primaryCategoryId) { _, _ in populateDetailsFields() }
-        .onChange(of: asc.app?.contentRightsDeclaration) { _, _ in populateDetailsFields() }
+        .onChange(of: asc.appInfo?.primaryCategoryId) { _, _ in if mayRefreshFields { populateDetailsFields() } }
+        .onChange(of: asc.app?.contentRightsDeclaration) { _, _ in if mayRefreshFields { populateDetailsFields() } }
         .onDisappear {
             Task { await flushChanges() }
         }
@@ -517,6 +532,7 @@ struct AppInformationView: View {
         marketingUrl = loc?.attributes.marketingUrl ?? ""
         supportUrl = loc?.attributes.supportUrl ?? ""
         whatsNew = loc?.attributes.whatsNew ?? ""
+        populatedText = textValues
     }
 
     private func populateDetailsFields() {
@@ -586,6 +602,12 @@ struct AppInformationView: View {
             await asc.updateAppInfoLocalizationField(field, value: value, locale: currentLocale)
         } else {
             await asc.updateVersionLocalizationField(field, value: value, locale: currentLocale)
+        }
+        if asc.writeError == nil {
+            let fields = ["title", "subtitle", "description", "keywords", "promotionalText", "marketingUrl", "supportUrl", "whatsNew", "privacyPolicyUrl"]
+            if let index = fields.firstIndex(of: field), populatedText.indices.contains(index) {
+                populatedText[index] = value
+            }
         }
         isSaving = false
     }

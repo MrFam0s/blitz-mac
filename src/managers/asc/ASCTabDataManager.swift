@@ -4,6 +4,9 @@ extension ASCManager {
     func ensureTabData(_ tab: AppTab) async {
         guard credentials != nil, !restoringCache else { return }
 
+        await restoreTabCacheIfNeeded(tab)
+        guard !Task.isCancelled else { return }
+
         if loadedTabs.contains(tab) {
             if shouldRefreshTabCache(tab) {
                 await refreshTabData(tab)
@@ -60,6 +63,7 @@ extension ASCManager {
     /// Called after bundle ID setup completes and the app is confirmed in ASC.
     func resetTabState() {
         projectRevision = UUID()
+        resetTabCacheTasks()
         cancelBackgroundHydrationTasks()
         for task in tabLoadTasks.values { task.cancel() }
         tabLoadTasks.removeAll()
@@ -90,6 +94,8 @@ extension ASCManager {
                 guard projectRevision == revision, !Task.isCancelled else { return }
                 loadedTabs.insert(tab)
                 tabLoadedAt[tab] = Date()
+                tabsNeedingRevalidation.remove(tab)
+                await persistTabCache(tab)
             } catch {
                 guard projectRevision == revision, !Task.isCancelled else { return }
                 if !hadLoadedData {
@@ -213,26 +219,6 @@ extension ASCManager {
         }
     }
 
-    private func hydrateFeedbackSecondaryData(
-        projectId: String?,
-        buildId: String,
-        service: AppStoreConnectService
-    ) async {
-        guard isCurrentProject(projectId) else { return }
-        guard !Task.isCancelled else { return }
-        loadingFeedbackBuildIds.insert(buildId)
-        defer { loadingFeedbackBuildIds.remove(buildId) }
-
-        do {
-            let items = try await service.fetchBetaFeedback(buildId: buildId)
-            guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-            betaFeedback[buildId] = items
-        } catch {
-            guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-            betaFeedback[buildId] = []
-        }
-    }
-
     private func loadData(for tab: AppTab, service: AppStoreConnectService) async throws {
         guard let appId = app?.id else {
             throw ASCError.notFound("App - check your bundle ID in project settings")
@@ -255,42 +241,37 @@ extension ASCManager {
 
         case .appInformation:
             let revision = projectRevision
-            async let appInfoTask: ASCAppInfo? = try? await service.fetchAppInfo(appId: appId)
-            async let appRefreshTask: ASCApp? = try? service.fetchApp(id: appId)
+            async let appRefreshTask = service.fetchApp(id: appId)
             try await refreshAppInformationMetadata(
                 service: service,
                 appId: appId,
                 preferredVersionId: selectedVersionId,
                 preferredLocale: selectedAppInformationLocale
             )
-            let refreshedInfo = await appInfoTask
-            let refreshedApp = await appRefreshTask
+            let refreshedApp = try await appRefreshTask
             guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
-            if let refreshedInfo { appInfo = refreshedInfo }
-            if let refreshedApp { app = refreshedApp }
+            app = refreshedApp
 
         case .screenshots:
+            let revision = projectRevision
             let versions = try await service.fetchAppStoreVersions(appId: appId)
+            guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
             appStoreVersions = versions
             syncSelectedVersion()
             if let selectedVersionId = selectedVersion?.id {
-                let localizations = try await service.fetchLocalizations(versionId: selectedVersionId)
-                self.localizations = localizations
-                let preferredLocale = selectedScreenshotsLocale
-                let targetLocalization = localizations.first(where: { $0.attributes.locale == preferredLocale })
-                    ?? localizations.first
-                if let targetLocalization {
-                    selectedScreenshotsLocale = targetLocalization.attributes.locale
-                    await loadScreenshots(locale: targetLocalization.attributes.locale, force: true)
-                } else {
-                    screenshotSetsByLocale = [:]
-                    screenshotsByLocale = [:]
-                    selectedScreenshotsLocale = nil
-                }
+                let values = try await service.fetchLocalizations(versionId: selectedVersionId)
+                guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
+                localizations = values
+                let target = values.first { $0.attributes.locale == selectedScreenshotsLocale }
+                    ?? primaryVersionLocalization()
+                if let target {
+                    selectedScreenshotsLocale = target.attributes.locale
+                    guard await loadScreenshots(locale: target.attributes.locale, force: true) else {
+                        throw ASCError.notFound(tabError[.screenshots] ?? "Could not refresh screenshots")
+                    }
+                } else { selectedScreenshotsLocale = nil }
             } else {
                 localizations = []
-                screenshotSetsByLocale = [:]
-                screenshotsByLocale = [:]
                 selectedScreenshotsLocale = nil
             }
 
@@ -365,38 +346,8 @@ extension ASCManager {
         case .reviews:
             customerReviews = try await service.fetchCustomerReviews(appId: appId)
 
-        case .builds:
-            builds = try await service.fetchBuilds(appId: appId)
-
-        case .groups:
-            betaGroups = try await service.fetchBetaGroups(appId: appId)
-
-        case .betaInfo:
-            betaLocalizations = try await service.fetchBetaLocalizations(appId: appId)
-
-        case .feedback:
-            let fetchedBuilds = try await service.fetchBuilds(appId: appId)
-            builds = fetchedBuilds
-            let resolvedBuildId: String?
-            if let currentSelectedBuildId = selectedBuildId,
-               fetchedBuilds.contains(where: { $0.id == currentSelectedBuildId }) {
-                resolvedBuildId = currentSelectedBuildId
-            } else {
-                resolvedBuildId = fetchedBuilds.first?.id
-            }
-            selectedBuildId = resolvedBuildId
-            if let resolvedBuildId {
-                let projectId = loadedProjectId
-                startBackgroundHydration(for: .feedback) {
-                    await self.hydrateFeedbackSecondaryData(
-                        projectId: projectId,
-                        buildId: resolvedBuildId,
-                        service: service
-                    )
-                }
-            } else {
-                betaFeedback = [:]
-            }
+        case .builds, .groups, .betaInfo, .feedback:
+            try await loadTestFlightTab(tab, using: service)
 
         default:
             break

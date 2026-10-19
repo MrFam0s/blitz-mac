@@ -102,8 +102,7 @@ struct FeedbackView: View {
         .onChange(of: localSelectedBuildId) { _, newValue in
             guard !newValue.isEmpty else { return }
             asc.selectedBuildId = newValue
-            guard asc.betaFeedback[newValue] == nil else { return }
-            Task { await asc.refreshBetaFeedback(buildId: newValue) }
+            Task { await asc.refreshBetaFeedback(buildId: newValue, force: false) }
         }
         .onAppear {
             syncSelectedBuild(with: builds)

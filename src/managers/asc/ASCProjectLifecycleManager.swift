@@ -48,10 +48,20 @@ extension ASCManager {
         let monetizationStatus: String?
         let loadedTabs: Set<AppTab>
         let tabLoadedAt: [AppTab: Date]
+        let tabsNeedingRevalidation: Set<AppTab>
+        let screenshotLoadedAt: [String: Date]
+        let feedbackLoadedAt: [String: Date]
+        let appInformationLocale: String?
+        let screenshotsLocale: String?
 
         @MainActor
         init(manager: ASCManager, projectId: String) {
             self.projectId = projectId
+            tabsNeedingRevalidation = manager.tabsNeedingRevalidation
+            screenshotLoadedAt = manager.screenshotLoadedAt
+            feedbackLoadedAt = manager.feedbackLoadedAt
+            appInformationLocale = manager.selectedAppInformationLocale
+            screenshotsLocale = manager.selectedScreenshotsLocale
             accountKey = DashboardSummaryStore.accountKey(for: manager.credentials)
             resolvedFields = manager.overviewResolvedFields
             failedFields = manager.overviewFailedFields
@@ -105,6 +115,11 @@ extension ASCManager {
 
         @MainActor
         func apply(to manager: ASCManager) {
+            manager.tabsNeedingRevalidation = tabsNeedingRevalidation
+            manager.screenshotLoadedAt = screenshotLoadedAt
+            manager.feedbackLoadedAt = feedbackLoadedAt
+            manager.selectedAppInformationLocale = appInformationLocale
+            manager.selectedScreenshotsLocale = screenshotsLocale
             manager.app = app
             manager.appStoreVersions = appStoreVersions
             manager.localizations = localizations
@@ -338,6 +353,7 @@ extension ASCManager {
 
     func resetProjectData(preserveCredentials: Bool) {
         projectRevision = UUID()
+        resetTabCacheTasks()
         for task in tabLoadTasks.values { task.cancel() }
         tabLoadTasks.removeAll()
         restoringCache = false
@@ -435,7 +451,8 @@ extension ASCManager {
     func shouldRefreshTabCache(_ tab: AppTab) -> Bool {
         guard loadedTabs.contains(tab) else { return true }
         guard let loadedAt = tabLoadedAt[tab] else { return true }
-        return !overviewFailedFields.isEmpty && tab == .app
+        return tabsNeedingRevalidation.contains(tab) || tabError[tab] != nil
+            || !overviewFailedFields.isEmpty && tab == .app
             || Date().timeIntervalSince(loadedAt) > Self.projectCacheFreshness
     }
 }

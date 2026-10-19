@@ -466,9 +466,10 @@ final class AppStoreConnectService {
 
     // MARK: - Beta Feedback
 
-    func fetchBetaFeedback(buildId: String) async throws -> [ASCBetaFeedback] {
-        let resp = try await get("betaFeedback", queryItems: [
+    func fetchBetaFeedback(appId: String, buildId: String) async throws -> [ASCBetaFeedback] {
+        let resp = try await get("apps/\(appId)/betaFeedbackScreenshotSubmissions", queryItems: [
             URLQueryItem(name: "filter[build]", value: buildId),
+            URLQueryItem(name: "sort", value: "-createdDate"),
             URLQueryItem(name: "limit", value: "50")
         ], as: ASCListResponse<ASCBetaFeedback>.self)
         return resp.data

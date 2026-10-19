@@ -67,7 +67,21 @@ struct ASCTabContent<Content: View>: View {
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            content()
+            VStack(spacing: 0) {
+                if ASCTabCacheEntry.tabs.contains(tab), let date = asc.tabLoadedAt[tab] {
+                    HStack(spacing: 8) {
+                        if isLoading {
+                            ProgressView().controlSize(.mini)
+                            Text("Updating saved data…")
+                        }
+                        Spacer()
+                        Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, 20).padding(.vertical, 6)
+                }
+                content()
+            }
                 .overlay(alignment: .topLeading) {
                     if let error = asc.tabError[tab], asc.hasLoadedTabData(tab) {
                         HStack(spacing: 8) {

@@ -445,11 +445,11 @@ struct ASCBuildUpload: Decodable, Identifiable {
 
 // MARK: - BetaGroup
 
-struct ASCBetaGroup: Decodable, Identifiable {
+struct ASCBetaGroup: Codable, Equatable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable, Equatable {
         let name: String
         let isInternalGroup: Bool?
         let hasAccessToAllBuilds: Bool?
@@ -460,11 +460,11 @@ struct ASCBetaGroup: Decodable, Identifiable {
 
 // MARK: - BetaLocalization
 
-struct ASCBetaLocalization: Decodable, Identifiable {
+struct ASCBetaLocalization: Codable, Equatable, Identifiable {
     let id: String
     let attributes: Attributes
 
-    struct Attributes: Decodable {
+    struct Attributes: Codable, Equatable {
         let locale: String
         let description: String?
         let feedbackEmail: String?
@@ -482,12 +482,24 @@ struct ASCBetaFeedback: Decodable, Identifiable {
     struct Attributes: Decodable {
         let comment: String?
         let timestamp: String?
-        let screenshotUrl: String?
         let emailAddress: String?
         let architecture: String?
         let osVersion: String?
         let deviceModel: String?
         let locale: String?
+        let screenshots: [Screenshot]?
+
+        struct Screenshot: Decodable {
+            let url: String?
+        }
+
+        var screenshotUrl: String? { screenshots?.first?.url }
+
+        enum CodingKeys: String, CodingKey {
+            case comment, architecture, osVersion, deviceModel, locale, screenshots
+            case timestamp = "createdDate"
+            case emailAddress = "email"
+        }
     }
 }
 

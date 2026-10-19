@@ -12,6 +12,9 @@ struct BetaInfoView: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var saveSuccess = false
+    @State private var populatedValues: [String] = []
+    private var editValues: [String] { [editDescription, editFeedbackEmail, editMarketingUrl, editPrivacyUrl] }
+    private var hasEdits: Bool { !populatedValues.isEmpty && editValues != populatedValues }
 
     var body: some View {
         ASCCredentialGate(
@@ -25,7 +28,21 @@ struct BetaInfoView: View {
             }
         }
         .task(id: "\(appState.activeProjectId ?? ""):\(asc.credentialActivationRevision)") {
+            await asc.restoreTabCacheIfNeeded(.betaInfo)
+            guard !Task.isCancelled else { return }
+            syncLocalization()
             await asc.ensureTabData(.betaInfo)
+            guard !Task.isCancelled else { return }
+            syncLocalization()
+        }
+        .onChange(of: asc.betaLocalizations) { _, _ in syncLocalization() }
+    }
+
+    private func syncLocalization() {
+        guard !hasEdits, !isSaving else { return }
+        if let current = asc.betaLocalizations.first(where: { $0.id == selectedLocId }) ?? asc.betaLocalizations.first {
+            selectedLocId = current.id
+            loadLocalization(current)
         }
     }
 
@@ -159,6 +176,7 @@ struct BetaInfoView: View {
         editFeedbackEmail = loc.attributes.feedbackEmail ?? ""
         editMarketingUrl = loc.attributes.marketingUrl ?? ""
         editPrivacyUrl = loc.attributes.privacyPolicyUrl ?? ""
+        populatedValues = editValues
         saveSuccess = false
         saveError = nil
     }
@@ -179,12 +197,14 @@ struct BetaInfoView: View {
                     privacyPolicyUrl: editPrivacyUrl.isEmpty ? nil : editPrivacyUrl
                 )
                 saveSuccess = true
+                populatedValues = editValues
                 // Refresh tab data
                 await asc.refreshTabData(.betaInfo)
             } catch {
                 saveError = error.localizedDescription
             }
             isSaving = false
+            syncLocalization()
         }
     }
 }

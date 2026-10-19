@@ -133,6 +133,16 @@ final class ASCManager {
     var overviewCacheDate: Date?
     @ObservationIgnored var projectRevision = UUID()
     @ObservationIgnored var overviewCache = ASCOverviewCache.shared
+    @ObservationIgnored var tabCache = ASCTabCache.shared
+    @ObservationIgnored var previewCache = ASCScreenshotPreviewCache.shared
+    @ObservationIgnored var tabCacheRestoreTasks: [AppTab: Task<Void, Never>] = [:]
+    @ObservationIgnored var tabCacheRestoreAttempted: Set<AppTab> = []
+    var tabsNeedingRevalidation: Set<AppTab> = []
+    @ObservationIgnored var screenshotLoadTasks: [String: Task<Bool, Never>] = [:]
+    @ObservationIgnored var screenshotForcedLoads: Set<String> = []
+    var screenshotLoadedAt: [String: Date] = [:]
+    @ObservationIgnored var feedbackLoadTasks: [String: Task<Bool, Never>] = [:]
+    var feedbackLoadedAt: [String: Date] = [:]
     @ObservationIgnored var iconCheckTask: Task<Void, Never>?
     @ObservationIgnored var iconCheckedAt: Date?
     @ObservationIgnored var restoringCache = false

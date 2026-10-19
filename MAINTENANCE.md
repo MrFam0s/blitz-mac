@@ -196,6 +196,47 @@ had a median response of 3.24 ms and maximum of 97.62 ms. This is a local
 responsiveness sample, not a network latency guarantee. Slow/failed-network
 behavior is covered by controlled fixtures, without disconnecting the user's Mac.
 
+## 1.0.44 — cached release and TestFlight tabs
+
+App Information, screenshot metadata, Builds, Groups and Beta Info now restore
+account/app-scoped disk snapshots before revalidating. Version-scoped listing
+and screenshot data also require the selected version to match. The metadata
+cache holds at most 120 entries, 2 MiB each, expiring after seven days. Successful
+overview requests are shared with the information, screenshot and build tabs
+rather than fetched again on first entry. Tabs show the saved-data timestamp.
+
+Screenshot previews use a separate account/app/URL-scoped cache, limited to
+128 MiB, 300 images and seven days. Preview requests are coalesced and each
+hydration batch fetches at most four images concurrently. Tracks appear before
+previews finish; unchanged images survive metadata refreshes. Original upload
+files, unsaved tracks and editor drafts are not written into this cache.
+Background refresh preserves edited text and screenshot ordering. Failed
+screenshot baseline checks stop synchronization before any Store write.
+
+TestFlight feedback remains in memory only, bounded to twelve builds per
+project, with a two-minute freshness window. Failed refreshes retain existing
+comments. The feedback reader now uses Apple’s app-scoped
+`betaFeedbackScreenshotSubmissions` endpoint and decodes `createdDate`, `email`
+and screenshot arrays; the previous nonexistent `betaFeedback` route returned
+HTTP 404. Disk snapshots exclude tester feedback, tester addresses, review
+credentials and authentication material. Metadata and previews use mode 0600
+inside private cache directories. Late responses are rejected after project
+or version changes; explicit refresh and normal edits remain available.
+
+Validation: 157 Swift tests passed, including new scope/version, expiry,
+corruption, size/count bounds, preview reuse/coalescing and URL invalidation, failed refresh,
+unsaved screenshot preservation and late-response regressions. The ASC helper
+and iPhone MCP implementations are unchanged from 1.0.43.
+
+The Developer-ID-signed 1.0.44 release passed the release bundle build, strict
+signature verification and bundled ASC protocol/CLI contract and was installed
+locally. Live UI checks covered all five cached tabs, feedback, normal quit and
+relaunch, and retaining an unsaved Beta Info draft across refresh (then restoring
+it without saving). Twenty preview files were reused unchanged after restart.
+The current build’s feedback query now confirms an empty result instead of HTTP
+404. No Store mutations, uploads or device actions were performed. GitHub remains
+restricted to the free public-repository workflow described above.
+
 ## Build and validation
 
 ### Xcode 27 / Blitz 1.0.41

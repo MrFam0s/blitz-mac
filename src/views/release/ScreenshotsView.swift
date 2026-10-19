@@ -812,27 +812,9 @@ struct ScreenshotsView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(displayState.borderColor, lineWidth: 2)
                 )
-        } else if let url = slot.ascScreenshot?.imageURL {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                case .failure:
-                    slotPlaceholder(icon: "photo", screenshotHeight: screenshotHeight)
-                default:
-                    slotPlaceholder(screenshotHeight: screenshotHeight) {
-                        ProgressView()
-                    }
-                }
-            }
-            .frame(height: screenshotHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(displayState.borderColor, lineWidth: 2)
-            )
+        } else if slot.ascScreenshot?.imageURL != nil {
+            slotPlaceholder(icon: "photo", screenshotHeight: screenshotHeight)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(displayState.borderColor, lineWidth: 2))
         } else {
             slotPlaceholder(icon: "photo", screenshotHeight: screenshotHeight)
                 .overlay(
@@ -891,7 +873,17 @@ struct ScreenshotsView: View {
 
     private func loadData() async {
         syncSelectedDeviceIfNeeded()
+        await asc.restoreTabCacheIfNeeded(.screenshots)
+        guard !Task.isCancelled else { return }
+        if asc.selectedScreenshotsLocale == nil {
+            asc.selectedScreenshotsLocale = asc.primaryAppInformationLocale()
+        }
+        loadTrackForDevice()
+        let cached = asc.screenshotsForLocale(currentLocale)
+        async let previews: Void = asc.hydrateScreenshotImageCache(screenshots: cached, force: false)
         await asc.ensureTabData(.screenshots)
+        _ = await previews
+        guard !Task.isCancelled else { return }
         if asc.selectedScreenshotsLocale == nil {
             asc.selectedScreenshotsLocale = asc.localizations.first?.attributes.locale
         }

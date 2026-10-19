@@ -1,5 +1,13 @@
 import Foundation
 
+protocol ASCAppInformationService {
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
+    func fetchAppInfo(appId: String) async throws -> ASCAppInfo
+    func fetchLocalizations(versionId: String) async throws -> [ASCVersionLocalization]
+    func fetchAppInfoLocalizations(appInfoId: String) async throws -> [ASCAppInfoLocalization]
+}
+extension AppStoreConnectService: ASCAppInformationService {}
+
 // MARK: - App Information Manager
 // Extension containing merged app-information functionality for ASCManager
 
@@ -84,22 +92,23 @@ extension ASCManager {
     }
 
     func refreshAppInformationMetadata(
-        service: AppStoreConnectService,
+        service: any ASCAppInformationService,
         appId: String,
         preferredVersionId: String? = nil,
         preferredLocale: String? = nil
     ) async throws {
         let revision = projectRevision
         async let versionsTask = service.fetchAppStoreVersions(appId: appId)
-        async let appInfoTask: ASCAppInfo? = try? await service.fetchAppInfo(appId: appId)
+        async let appInfoTask = service.fetchAppInfo(appId: appId)
 
         let versions = try await versionsTask
-        let fetchedAppInfo = await appInfoTask ?? appInfo
+        let fetchedAppInfo = try await appInfoTask
 
         guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
-        appStoreVersions = versions
-        appInfo = fetchedAppInfo
-        let resolvedVersionId = syncSelectedVersion(preferredVersionId: preferredVersionId)
+        let resolvedVersionId = [preferredVersionId, selectedVersionId].compactMap { $0 }
+            .first(where: { id in versions.contains { $0.id == id } })
+            ?? ASCReleaseStatus.defaultSelectedVersion(for: versions)?.id
+        async let infoLocalizationsTask = service.fetchAppInfoLocalizations(appInfoId: fetchedAppInfo.id)
 
         let versionLocalizations: [ASCVersionLocalization]
         if let resolvedVersionId {
@@ -108,18 +117,16 @@ extension ASCManager {
             versionLocalizations = []
         }
 
-        let fetchedAppInfoLocalizations: [ASCAppInfoLocalization]
-        if let infoId = fetchedAppInfo?.id {
-            fetchedAppInfoLocalizations = try await service.fetchAppInfoLocalizations(appInfoId: infoId)
-        } else {
-            fetchedAppInfoLocalizations = []
-        }
+        let fetchedAppInfoLocalizations = try await infoLocalizationsTask
 
         guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
         if let preferredLocale {
             selectedAppInformationLocale = preferredLocale
         }
 
+        appStoreVersions = versions
+        selectedVersionId = resolvedVersionId
+        appInfo = fetchedAppInfo
         localizations = versionLocalizations
         appInfoLocalizationsByLocale = Dictionary(uniqueKeysWithValues: fetchedAppInfoLocalizations.map {
             ($0.attributes.locale, $0)
@@ -127,6 +134,7 @@ extension ASCManager {
 
         appInfoLocalization = primaryAppInfoLocalization(in: fetchedAppInfoLocalizations)
         selectedAppInformationLocale = activeAppInformationLocale()
+        await persistTabCache(.appInformation)
     }
 
     // MARK: - App Information Updates
