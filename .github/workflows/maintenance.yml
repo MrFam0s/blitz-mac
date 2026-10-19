@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   tests-and-bundle:
+    # Standard runners are free only while this repository is public.
+    if: github.event.repository.private == false
     name: Swift, ASC and release bundle
     runs-on: macos-15
     timeout-minutes: 35
@@ -32,7 +34,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
-          cache-dependency-path: deps/App-Store-Connect-CLI-helper/go.sum
+          cache: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -51,15 +53,8 @@ jobs:
         run: |
           codesign --verify --deep --strict .build/Blitz.app
           python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
-      - name: Archive tested build
+      - name: Verify archive checksum without cloud storage
         run: |
           ditto -c -k --sequesterRsrc --keepParent .build/Blitz.app .build/Blitz.app.zip
           shasum -a 256 .build/Blitz.app.zip > .build/Blitz.app.zip.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Blitz-tested-${{ github.sha }}
-          path: |
-            .build/Blitz.app.zip
-            .build/Blitz.app.zip.sha256
-          retention-days: 14
-          if-no-files-found: error
+          cat .build/Blitz.app.zip.sha256

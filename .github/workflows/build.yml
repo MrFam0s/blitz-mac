@@ -8,6 +8,8 @@ on:
 
 jobs:
   build:
+    # Standard runners are free only while this repository is public.
+    if: github.event.repository.private == false
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -18,6 +20,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
@@ -36,15 +39,9 @@ jobs:
           shasum -a 256 Blitz.app.zip > Blitz.app.zip.sha256
           cat Blitz.app.zip.sha256
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Blitz-${{ github.sha }}
-          path: |
-            .build/Blitz.app.zip
-            .build/Blitz.app.zip.sha256
-
   build_x86_64:
+    # Standard runners are free only while this repository is public.
+    if: github.event.repository.private == false
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +52,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
@@ -73,16 +71,8 @@ jobs:
           shasum -a 256 Blitz-x86_64.app.zip > Blitz-x86_64.app.zip.sha256
           cat Blitz-x86_64.app.zip.sha256
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Blitz-x86_64-${{ github.sha }}
-          path: |
-            .build/Blitz-x86_64.app.zip
-            .build/Blitz-x86_64.app.zip.sha256
-
   release:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    if: github.event.repository.private == false && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     needs: [build, build_x86_64]
     runs-on: macos-15
     permissions:
@@ -96,6 +86,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -275,7 +266,7 @@ jobs:
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
   release_x86_64:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    if: github.event.repository.private == false && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
     needs: [build, build_x86_64, release]
     runs-on: macos-15-intel
     permissions:
@@ -289,6 +280,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

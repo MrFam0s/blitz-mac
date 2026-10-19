@@ -15,6 +15,8 @@ run-name: "Release Smoke Test (${{ github.ref_name }}) #${{ github.run_number }}
 
 jobs:
   smoke_arm64:
+    # Standard runners are free only while this repository is public.
+    if: github.event.repository.private == false
     runs-on: macos-15
     permissions:
       contents: read
@@ -35,6 +37,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -118,21 +121,10 @@ jobs:
           test -f "build/Blitz-${{ steps.version.outputs.version }}.pkg"
           ls -lh .build/Blitz.app.zip .build/SHA256SUMS.txt "build/Blitz-${{ steps.version.outputs.version }}.pkg"
 
-      - name: Upload arm64 smoke artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Blitz-smoke-arm64-${{ steps.version.outputs.version }}-${{ github.run_number }}
-          path: |
-            .build/Blitz.app.zip
-            .build/SHA256SUMS.txt
-            build/Blitz-${{ steps.version.outputs.version }}.pkg
-          retention-days: 14
-          if-no-files-found: error
-
       - name: Write summary
         run: |
           {
-            echo "## arm64 smoke artifacts"
+            echo "## arm64 smoke verification"
             echo ""
             echo "- Version: ${{ steps.version.outputs.version }}"
             echo "- Bundled app zip: .build/Blitz.app.zip"
@@ -145,6 +137,8 @@ jobs:
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
   smoke_x86_64:
+    # Standard runners are free only while this repository is public.
+    if: github.event.repository.private == false
     runs-on: macos-15-intel
     permissions:
       contents: read
@@ -161,6 +155,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: deps/App-Store-Connect-CLI-helper/go.mod
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -214,20 +209,10 @@ jobs:
           test -f "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
           ls -lh "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip" "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
 
-      - name: Upload x86_64 smoke artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Blitz-smoke-x86_64-${{ steps.version.outputs.version }}-${{ github.run_number }}
-          path: |
-            build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip
-            build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256
-          retention-days: 14
-          if-no-files-found: error
-
       - name: Write summary
         run: |
           {
-            echo "## x86_64 smoke artifacts"
+            echo "## x86_64 smoke verification"
             echo ""
             echo "- Version: ${{ steps.version.outputs.version }}"
             echo "- App zip: build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip"

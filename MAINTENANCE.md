@@ -56,7 +56,22 @@ removed and restored using the right-click context menu.
 plus manual dispatch. It needs no Apple secrets and cannot publish or install a
 release. It runs Swift tests, the pinned ASC transport/protocol/CLI tests, builds
 an ad-hoc signed app, checks its signature and helper contract, and retains a ZIP
-with its checksum. The weekly ASC update preparation is unchanged.
+with its checksum only for the lifetime of that runner. The weekly ASC update
+preparation is unchanged.
+
+### GitHub: free services only
+
+Use only free GitHub features for this fork. All workflow jobs require a public
+repository and use standard `macos-15` or `macos-15-intel` runners; do not switch
+to larger runners or run these jobs in a private repository. Go caches and
+Actions artifact uploads are disabled to avoid additional cloud storage usage.
+Builds remain available locally; CI records the checksum in its log.
+
+Never add a payment method, increase a spending limit, enable paid reviews, or
+purchase another service to unblock checks. A GitHub account billing restriction
+can still prevent a free runner from starting. Report that limitation and use
+the local test/build commands below. The weekly ASC updater must follow the same
+rule. See [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 Simulator choice is saved in each project's existing `simulatorUDID` metadata.
 The dashboard and Store views do not boot devices. The Simulator tab starts only
