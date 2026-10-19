@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.38 (maintenance fork)
+- Remove apps from My Apps through their menu without deleting local projects or App Store Connect records.
+- Keep hidden apps hidden across refreshes and restarts; restore them through Undo, Hidden Apps, or an explicit re-import.
+- Search the dashboard by app name or bundle ID, with clearer app labels and accessible card actions.
+- Show local projects even before ASC apps load or when the ASC account has no apps.
+- Keep dashboard actions in a footer so they do not cover app cards; overview counts exclude hidden apps.
+
 ## 1.0.37 (maintenance fork)
 - Build the embedded ASC helper against official ASC 5.15.0, sharing that version with Blitz's CLI wrapper.
 - Retain Blitz's JSON-lines protocol and full HTTP responses while applying current upstream target validation and redirect protection.

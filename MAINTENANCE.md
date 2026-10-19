@@ -22,6 +22,25 @@ configured globally in Codex, Blitz preserves existing project settings and
 does not generate duplicate local server definitions. Existing duplicates can
 be removed from project TOML after checking the global settings.
 
+## 1.0.38
+
+My Apps now supports **Remove from Dashboard** in each card's menu and context
+menu. This saves a visibility preference only; project files, import links and
+App Store Connect records remain intact. **Undo**, **Hidden Apps → Restore to
+Dashboard**, and an explicit re-import bring an app back. Visibility is stored
+in `~/.blitz/dashboard-hidden-apps.json`, independently of the ASC cache.
+Bundle/project identities preserve it when rows are refreshed or relinked.
+
+The dashboard also searches names and bundle IDs, shows local projects without
+requiring ASC results, and keeps its action buttons below the scrolling grid.
+The overview counts describe visible apps, independent of the search text.
+ASC remains at the version pinned by the previous update.
+
+Validated with all 109 Swift tests and a signed release build. On the installed
+app, a local-only project was removed, restored with Undo, removed again,
+refreshed, and kept hidden through a full restart before being restored through
+Hidden Apps. Bundle-ID search and both global MCP server handshakes also passed.
+
 ## Build and validation
 
 Initialize the pinned submodule and install Go as specified by its `go.mod`:

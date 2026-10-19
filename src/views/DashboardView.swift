@@ -5,6 +5,11 @@ struct DashboardView: View {
     @State private var dashboardSummary = DashboardSummaryStore.shared
     @State private var appWallRefreshRevision = 0
     @State private var isRefreshingAllApps = false
+    @State private var visibility = DashboardVisibilityStore.shared
+    @State private var searchText = ""
+    @State private var showsHiddenApps = false
+    @State private var lastHiddenApp: DashboardAppRow?
+    @State private var visibilityError: String?
 
     private var projects: [Project] { appState.projectManager.projects }
 
@@ -37,6 +42,14 @@ struct DashboardView: View {
             // Sub-tab content
             subTabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .alert("Couldn’t update Dashboard", isPresented: Binding(
+            get: { visibilityError != nil },
+            set: { if !$0 { visibilityError = nil } }
+        )) {
+            Button("OK", role: .cancel) { visibilityError = nil }
+        } message: {
+            Text(visibilityError ?? "")
         }
     }
 
@@ -75,6 +88,36 @@ struct DashboardView: View {
 
             Spacer()
 
+            if appState.activeDashboardSubTab == .myApps {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search apps", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .accessibilityLabel("Search apps by name or bundle ID")
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear search")
+                    }
+                }
+                .padding(6)
+                .frame(width: 190)
+                .background(.background, in: RoundedRectangle(cornerRadius: 6))
+
+                Button {
+                    showsHiddenApps.toggle()
+                } label: {
+                    Label(showsHiddenApps ? "Back to My Apps" : "Hidden Apps (\(hiddenAppCount))",
+                          systemImage: showsHiddenApps ? "square.grid.2x2" : "eye.slash")
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 8)
+                .help("View and restore apps removed from this dashboard")
+            }
+
             Button {
                 forceRefreshCurrentSubTab()
             } label: {
@@ -111,6 +154,17 @@ struct DashboardView: View {
     }
 
     private var appRows: [DashboardAppRow] { dashboardSummary.rows(linking: projects) }
+    private var visibleSummary: ASCDashboardSummary {
+        var summary = ASCDashboardSummary.empty
+        for row in appRows where !visibility.isHidden(row) {
+            if let status = row.status { summary.include(status) }
+        }
+        return summary
+    }
+    private var hiddenAppCount: Int { appRows.filter { visibility.isHidden($0) }.count }
+    private var displayedRows: [DashboardAppRow] {
+        appRows.filter { visibility.isHidden($0) == showsHiddenApps && $0.matches(searchText: searchText) }
+    }
     private var showsBlockingSummarySpinner: Bool {
         dashboardSummary.isLoadingSummary && !dashboardSummary.hasLoadedSummary
     }
@@ -137,43 +191,50 @@ struct DashboardView: View {
     private var myAppsContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Stat cards
-                LazyVGrid(
-                    columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                    spacing: 12
-                ) {
-                    statCard(
-                        title: "Live on Store",
-                        value: statValue(dashboardSummary.summary.liveCount),
-                        color: .green,
-                        icon: "checkmark.seal.fill"
-                    )
-                    statCard(
-                        title: "Pending Review",
-                        value: statValue(dashboardSummary.summary.pendingCount),
-                        color: .orange,
-                        icon: "clock.fill"
-                    )
-                    statCard(
-                        title: "Rejected Apps",
-                        value: statValue(dashboardSummary.summary.rejectedCount),
-                        color: .red,
-                        icon: "xmark.seal.fill"
-                    )
+                // Stat cards describe the visible apps in My Apps.
+                if !showsHiddenApps {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                        spacing: 12
+                    ) {
+                        statCard(
+                            title: "Live on Store",
+                            value: statValue(visibleSummary.liveCount),
+                            color: .green,
+                            icon: "checkmark.seal.fill"
+                        )
+                        statCard(
+                            title: "Pending Review",
+                            value: statValue(visibleSummary.pendingCount),
+                            color: .orange,
+                            icon: "clock.fill"
+                        )
+                        statCard(
+                            title: "Rejected Apps",
+                            value: statValue(visibleSummary.rejectedCount),
+                            color: .red,
+                            icon: "xmark.seal.fill"
+                        )
+                    }
                 }
 
-                if !appRows.isEmpty {
+                if showsHiddenApps {
+                    Text("Hidden apps stay in App Store Connect and on disk. Restore them here whenever you need them.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !displayedRows.isEmpty {
                     // App grid — ASC apps first, local-only projects beneath
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 8, alignment: .leading)],
                         spacing: 16
                     ) {
-                        ForEach(appRows) { row in
+                        ForEach(displayedRows) { row in
                             appCard(row: row)
-                                .onTapGesture { selectRow(row) }
                         }
                     }
-                } else if dashboardSummary.hasLoadedSummary {
+                } else if !showsBlockingSummarySpinner {
                     emptyStateView
                 }
 
@@ -198,8 +259,20 @@ struct DashboardView: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            VStack(spacing: 8) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 12) {
+                if let lastHiddenApp {
+                    Text("\(lastHiddenApp.name) removed from Dashboard.")
+                        .font(.callout)
+                        .lineLimit(2)
+                    Button("Undo") { setHidden(false, for: lastHiddenApp) }
+                    Button { self.lastHiddenApp = nil } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Dismiss")
+                }
+                Spacer(minLength: 8)
                 Button {
                     appState.showNewProjectSheet = true
                 } label: {
@@ -219,7 +292,8 @@ struct DashboardView: View {
                 .controlSize(.large)
                 .background(.background, in: RoundedRectangle(cornerRadius: 8))
             }
-            .padding(20)
+            .padding(12)
+            .background(.bar)
         }
         .task(id: summaryHydrationKey) {
             await hydrateSummary()
@@ -231,9 +305,14 @@ struct DashboardView: View {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
-            Text("No apps yet")
+            Text(!searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                 ? "No matching apps" : (showsHiddenApps ? "No hidden apps" : "No apps to show"))
                 .font(.headline)
-            Text("Create a new app or import an existing project to get started.")
+            Text(!searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                 ? "Try another name or bundle ID."
+                 : (showsHiddenApps ? "Apps you remove from the dashboard will appear here."
+                    : (hiddenAppCount > 0 ? "Restore an app from Hidden Apps, or import another project."
+                       : "Create a new app or import an existing project to get started.")))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -270,6 +349,37 @@ struct DashboardView: View {
         let isSelected = row.linkedProjectId != nil && row.linkedProjectId == appState.activeProjectId
         let project = row.linkedProjectId.flatMap { id in projects.first(where: { $0.id == id }) }
 
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Menu {
+                    visibilityAction(for: row)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 24, height: 18)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityLabel("Options for \(row.name)")
+                .help("Options for \(row.name)")
+            }
+
+            Button { selectRow(row) } label: {
+                appCardContent(row: row, project: project, isSelected: isSelected)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open \(row.name)")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .contextMenu { visibilityAction(for: row) }
+        .help([row.name, row.bundleId].compactMap { $0 }.joined(separator: "\n"))
+    }
+
+    private func appCardContent(row: DashboardAppRow, project: Project?, isSelected: Bool) -> some View {
         VStack(spacing: 6) {
             Group {
                 if let project {
@@ -291,7 +401,7 @@ struct DashboardView: View {
                     .font(.system(size: 9))
                 Text(row.name)
                     .font(.callout.weight(.medium))
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
 
             if row.source == .localOnly {
@@ -300,9 +410,7 @@ struct DashboardView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
+        .frame(minHeight: 110, alignment: .top)
     }
 
     @ViewBuilder
@@ -349,10 +457,30 @@ struct DashboardView: View {
 
     // MARK: - Actions
 
-    private func selectRow(_ row: DashboardAppRow) {
-        // Claim analytics event — one-shot per app key per device.
-        let claimKey = row.bundleId ?? row.id
+    @ViewBuilder
+    private func visibilityAction(for row: DashboardAppRow) -> some View {
+        if visibility.isHidden(row) {
+            Button { setHidden(false, for: row) } label: {
+                Label("Restore to Dashboard", systemImage: "eye")
+            }
+        } else {
+            Button { setHidden(true, for: row) } label: {
+                Label("Remove from Dashboard", systemImage: "eye.slash")
+            }
+        }
+    }
 
+    private func setHidden(_ hidden: Bool, for row: DashboardAppRow) {
+        do {
+            try visibility.setHidden(hidden, for: row)
+            if hidden { lastHiddenApp = row }
+            else if lastHiddenApp?.id == row.id { lastHiddenApp = nil }
+        } catch {
+            visibilityError = error.localizedDescription
+        }
+    }
+
+    private func selectRow(_ row: DashboardAppRow) {
         if let projectId = row.linkedProjectId {
             // Linked local project — open it as before.
             appState.activeTab = .app

@@ -196,3 +196,15 @@ private func makeDashboardCacheURL() -> URL {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     return directory.appendingPathComponent("dashboard-my-apps-cache.json")
 }
+
+@MainActor
+@Test func dashboardShowsCurrentLocalProjectsWithoutASCApps() {
+    let cacheURL = makeDashboardCacheURL()
+    defer { try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: cacheURL, accountKeyOverride: "test")
+    let project = Project(id: "local", metadata: BlitzProjectMetadata(name: "Local App", type: .swift), path: "/tmp/local")
+    #expect(store.rows(linking: [project]) == [.localOnly(project: project)])
+    store.markEmpty(for: "empty-account", accountKey: "test")
+    #expect(store.rows(linking: [project]) == [.localOnly(project: project)])
+    #expect(store.rows(linking: []).isEmpty)
+}

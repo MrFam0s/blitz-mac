@@ -239,6 +239,10 @@ struct ImportProjectSheet: View {
             // This ensures all Blitz files land in the actual project, not a detached directory.
             try storage.writeMetadataToDirectory(url, metadata: hydratedMetadata)
             let projectId = try storage.openProject(at: url)
+            // An explicit re-import also brings a previously hidden app back.
+            try DashboardVisibilityStore.shared.setHidden(false, for: .localOnly(project: Project(
+                id: projectId, metadata: hydratedMetadata, path: url.path
+            )))
             storage.ensureMCPConfig(
                 projectId: projectId,
                 whitelistBlitzMCP: appState.settingsStore.whitelistBlitzMCPTools,

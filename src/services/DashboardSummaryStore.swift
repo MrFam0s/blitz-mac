@@ -351,8 +351,6 @@ final class DashboardSummaryStore {
         projectStatuses: [String: ASCDashboardProjectStatus],
         iconURLs: [String: URL]
     ) -> [DashboardAppRow] {
-        guard !ascApps.isEmpty else { return appRows }
-
         var projectsByBundleId: [String: Project] = [:]
         for project in projects {
             if let bundleId = project.metadata.bundleIdentifier?
