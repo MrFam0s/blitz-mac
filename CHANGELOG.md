@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.41 (maintenance fork)
+- Open the selected simulator in Xcode 27 Device Hub, while retaining the legacy Simulator launch path for older Xcode installations.
+- Use the actual Device Hub screen bounds for capture and touch coordinates, excluding its top and bottom controls.
+- Show permission settings only for the relevant screen-recording or accessibility failure.
+- Restrict GitHub jobs to free public standard runners, without Actions artifact uploads or Go caches.
+
 ## 1.0.40 (maintenance fork)
 - Run Swift regressions, ASC transport/protocol/CLI checks, and a verified release bundle on maintenance pushes and pull requests.
 - Remember each project’s simulator, start it only when needed, and preserve running devices when switching or quitting Blitz.

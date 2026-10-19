@@ -15,7 +15,13 @@ struct SimulatorView: View {
         let name = appState.simulatorManager.simulators
             .first(where: { $0.udid == appState.simulatorManager.bootedDeviceId })?
             .displayName
-        return SimulatorConfigDatabase.config(for: name)
+        let config = SimulatorConfigDatabase.config(for: name)
+        guard let rect = stream.deviceScreenRect else { return config }
+        let landscape = rect.width * frameSize.width > rect.height * frameSize.height
+        return SimulatorDeviceConfig(toolbarHeight: 0, toolbarOffset: 0,
+                                     widthPoints: landscape ? config.heightPoints : config.widthPoints,
+                                     heightPoints: landscape ? config.widthPoints : config.heightPoints,
+                                     borderX: 0, borderY: 0)
     }
 
     /// Current frame dimensions from the capture (pixels)
@@ -24,6 +30,9 @@ struct SimulatorView: View {
     /// Compute the crop rect from device config + current frame size.
     /// Only crops the toolbar — bezels remain visible (matches blitz-cn).
     private var cropRect: (x: Double, y: Double, w: Double, h: Double) {
+        if let rect = stream.deviceScreenRect {
+            return (rect.minX, rect.minY, rect.width, rect.height)
+        }
         let size = frameSize
         guard size.width > 0, size.height > 0 else {
             return (0, 0, 1, 1)
@@ -95,10 +104,13 @@ struct SimulatorView: View {
                         .padding(.horizontal, 40)
 
                     HStack(spacing: 12) {
-                        if stream.errorMessage != nil {
+                        if stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission {
                             Button("Open System Settings") {
-                                AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
-                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                                if stream.needsScreenRecordingPermission {
+                                    AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
+                                }
+                                let pane = stream.needsAccessibilityPermission ? "Privacy_Accessibility" : "Privacy_ScreenCapture"
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
                             }
                         }
                         Button("Retry") {

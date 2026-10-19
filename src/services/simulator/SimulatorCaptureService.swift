@@ -26,6 +26,8 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private(set) var frameSize: CGSize = .zero
     private(set) var isCapturing = false
     private(set) var frameCount: Int = 0
+    private(set) var deviceScreenRect: CGRect?
+    var onGeometryChange: (@MainActor @Sendable (CGRect?) -> Void)?
 
     /// Callback when a new frame arrives
     var onFrame: ((CVPixelBuffer) -> Void)?
@@ -35,7 +37,8 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
     private let simulatorBundleIDs = [
         "com.apple.iphonesimulator",
-        "com.apple.CoreSimulator.SimulatorTrampoline"
+        "com.apple.CoreSimulator.SimulatorTrampoline",
+        "com.apple.dt.Devices"
     ]
 
     /// Search an already-fetched SCShareableContent for the simulator window.
@@ -107,6 +110,14 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
         try Task.checkCancellation()
         currentWindow = window
+        if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
+           let app = window.owningApplication {
+            deviceScreenRect = try DeviceHubScreenGeometry.screenRect(
+                processID: app.processID, windowTitle: window.title ?? "", windowFrame: window.frame)
+        } else {
+            deviceScreenRect = nil
+        }
+        await onGeometryChange?(deviceScreenRect)
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
@@ -167,6 +178,8 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         stream = nil
         streamOutput = nil
         currentWindow = nil
+        deviceScreenRect = nil
+        await onGeometryChange?(nil)
         isCapturing = false
         clearLatestFrame()
     }
@@ -177,10 +190,26 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         frameLock.unlock()
     }
 
-    /// Check if the simulator window has resized using the stored window reference.
-    /// Does NOT re-query SCShareableContent (which would re-trigger TCC prompts).
+    /// Refresh only the selected window after capture permission has been granted.
     private func checkForResize() async {
-        guard isCapturing, let window = currentWindow else { return }
+        guard isCapturing, let previous = currentWindow else { return }
+        // Permission has already been granted. Refresh this exact window's geometry.
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+              let window = content.windows.first(where: { $0.windowID == previous.windowID }) else { return }
+        currentWindow = window
+        if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
+           let app = window.owningApplication {
+            if let rect = try? DeviceHubScreenGeometry.screenRect(processID: app.processID,
+                windowTitle: window.title ?? "", windowFrame: window.frame) {
+                deviceScreenRect = rect
+                await onGeometryChange?(rect)
+            } else {
+                // Stop rather than keep accepting touches with stale screen bounds.
+                await stopCapture()
+                await onGeometryChange?(.zero)
+                return
+            }
+        }
 
         let scale: CGFloat = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2.0 }
         let newWidth = Int(window.frame.width * scale)
@@ -241,17 +270,28 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         case ambiguousSimulatorName
         case screenRecordingDenied(String)
         case captureStartFailed(String)
+        case accessibilityDenied
+        case deviceScreenNotFound
+
+        var requiresScreenRecordingPermission: Bool {
+            if case .screenRecordingDenied = self { return true }
+            return false
+        }
 
         var errorDescription: String? {
             switch self {
             case .simulatorWindowNotFound:
-                return "Could not uniquely find the selected simulator window. Open that device in Simulator and try again."
+                return "Could not uniquely find the selected simulator window. Open that device in a compact Device Hub or Simulator window and try again."
             case .ambiguousSimulatorName:
                 return "Multiple running simulators have the same name. Give your project simulator a unique name in Xcode, then retry."
             case .screenRecordingDenied(let msg):
                 return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz, reboot your Mac. (\(msg))"
             case .captureStartFailed(let msg):
                 return "Failed to start capture: \(msg)"
+            case .accessibilityDenied:
+                return "Allow Blitz in System Settings → Privacy & Security → Accessibility so it can locate the device screen inside Device Hub. Then retry."
+            case .deviceScreenNotFound:
+                return "Could not locate the device screen inside Device Hub. Open the selected device in a compact window and retry."
             }
         }
     }

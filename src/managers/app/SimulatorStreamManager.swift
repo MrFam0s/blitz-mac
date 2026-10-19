@@ -7,12 +7,27 @@ final class SimulatorStreamManager {
     var renderer: MetalRenderer?
     var isCapturing = false
     var errorMessage: String?
+    private(set) var needsScreenRecordingPermission = false
+    private(set) var needsAccessibilityPermission = false
+    private(set) var deviceScreenRect: CGRect?
     var statusMessage: String?
     /// True when the stream was paused by a tab switch (not manually stopped)
     var isPaused = false
 
     private var rendererInitialized = false
     private var selectedDeviceID: String?
+
+    init() {
+        captureService.onGeometryChange = { [weak self] rect in
+            guard let self else { return }
+            if rect == .zero {
+                self.isCapturing = false
+                self.errorMessage = SimulatorCaptureService.CaptureError.deviceScreenNotFound.localizedDescription
+            } else {
+                self.deviceScreenRect = rect
+            }
+        }
+    }
 
     func ensureRenderer() {
         guard !rendererInitialized else { return }
@@ -34,6 +49,8 @@ final class SimulatorStreamManager {
         selectedDeviceID = bootedDeviceId
 
         errorMessage = nil
+        needsScreenRecordingPermission = false
+        needsAccessibilityPermission = false
         isPaused = false
         ensureRenderer()
 
@@ -54,7 +71,13 @@ final class SimulatorStreamManager {
             try Task.checkCancellation()
         } catch {
             if Task.isCancelled { await captureService.stopCapture() }
-            else { errorMessage = error.localizedDescription }
+            else {
+                errorMessage = error.localizedDescription
+                needsScreenRecordingPermission = (error as? SimulatorCaptureService.CaptureError)?.requiresScreenRecordingPermission == true
+                if case SimulatorCaptureService.CaptureError.accessibilityDenied = error {
+                    needsAccessibilityPermission = true
+                }
+            }
             statusMessage = nil
             return
         }
@@ -72,6 +95,9 @@ final class SimulatorStreamManager {
         isPaused = false
         statusMessage = nil
         errorMessage = nil
+        needsScreenRecordingPermission = false
+        needsAccessibilityPermission = false
+        deviceScreenRect = nil
     }
 
     /// Pause: stop SCStream but keep simulator booted. Lightweight for tab switches.

@@ -89,6 +89,59 @@ import Testing
     #expect(SimulatorCaptureService.matchingWindowIndex(titles: ["iPhone 17 (27.0)"], deviceName: "iPhone 17") == 0)
 }
 
+@Test func simulatorViewerUsesSelectedXcodeForLegacyAndDeviceHub() throws {
+    let developer = "/Applications/Xcode Preview.app/Contents/Developer"
+    let legacy = developer + "/Applications/Simulator.app"
+    let hub = "/Applications/Xcode Preview.app/Contents/Applications/DeviceHub.app"
+    let id = "A2956D56-B83A-4B61-B52A-6DBC943D242D"
+    let oldViewer = try SimulatorApplication.resolve(developerDirectory: developer + "\n", exists: { $0 == legacy })
+    #expect(try oldViewer.openArguments(udid: id) == ["-g", "-a", legacy, "--args", "-CurrentDeviceUDID", id])
+    let newViewer = try SimulatorApplication.resolve(developerDirectory: "/Applications/Xcode Preview.app", exists: { $0 == hub })
+    #expect(newViewer.kind == .deviceHub)
+    let arguments = try newViewer.openArguments(udid: id)
+    #expect(Array(arguments.prefix(3)) == ["-g", "-a", hub])
+    let url = try #require(URLComponents(string: arguments[3]))
+    #expect(url.scheme == "devices")
+    #expect(url.path == "/device/open")
+    #expect(url.queryItems == [URLQueryItem(name: "id", value: id)])
+    #expect(throws: SimulatorApplication.LaunchError.self) {
+        try newViewer.openArguments(udid: "not-a-device&other=value")
+    }
+    #expect(throws: SimulatorApplication.LaunchError.self) {
+        try SimulatorApplication.resolve(developerDirectory: "/Library/Developer/CommandLineTools", exists: { _ in false })
+    }
+}
+
+@Test func simulatorLaunchAndWindowErrorsDoNotRequestPrivacyChanges() {
+    #expect(!SimulatorCaptureService.CaptureError.simulatorWindowNotFound.requiresScreenRecordingPermission)
+    #expect(!SimulatorCaptureService.CaptureError.ambiguousSimulatorName.requiresScreenRecordingPermission)
+    #expect(!SimulatorCaptureService.CaptureError.captureStartFailed("connection closed").requiresScreenRecordingPermission)
+    #expect(SimulatorCaptureService.CaptureError.screenRecordingDenied("denied").requiresScreenRecordingPermission)
+    #expect(!SimulatorCaptureService.CaptureError.accessibilityDenied.requiresScreenRecordingPermission)
+    #expect(!SimulatorCaptureService.CaptureError.deviceScreenNotFound.requiresScreenRecordingPermission)
+}
+
+@Test func deviceHubScreenBoundsExcludeAsymmetricChromeAndMapTouches() throws {
+    let window = CGRect(x: 120, y: 80, width: 790, height: 1720)
+    let screen = CGRect(x: 180, y: 214, width: 670, height: 1454)
+    let crop = try #require(DeviceHubScreenGeometry.normalizedRect(content: screen, window: window))
+    #expect(abs(crop.minX * window.width - 60) < 0.001)
+    #expect(abs(crop.minY * window.height - 134) < 0.001)
+    #expect(abs(crop.height * window.height - 1454) < 0.001)
+    #expect(DeviceHubScreenGeometry.normalizedRect(content: screen.offsetBy(dx: 1000, dy: 0), window: window) == nil)
+    #expect(DeviceHubScreenGeometry.normalizedRect(content: .zero, window: window) == nil)
+    let config = SimulatorDeviceConfig(toolbarHeight: 0, toolbarOffset: 0,
+        widthPoints: 402, heightPoints: 874, borderX: 0, borderY: 0)
+    let point = SimulatorConfigDatabase.viewToSimulatorCoords(viewX: 167.5, viewY: 1090.5,
+        viewWidth: 670, viewHeight: 1454, config: config, frameWidth: 790, frameHeight: 1720)
+    #expect(abs(point.x - 100.5) < 0.001)
+    #expect(abs(point.y - 655.5) < 0.001)
+    let reverse = SimulatorConfigDatabase.simulatorToViewCoords(simX: point.x, simY: point.y,
+        viewWidth: 670, viewHeight: 1454, config: config, frameWidth: 790, frameHeight: 1720)
+    #expect(abs(reverse.x - 167.5) < 0.001)
+    #expect(abs(reverse.y - 1090.5) < 0.001)
+}
+
 private func simProject(_ id: String, selected: String? = nil) -> Project {
     Project(id: id, metadata: BlitzProjectMetadata(name: id, type: .swift, simulatorUDID: selected), path: "/tmp/\(id)")
 }

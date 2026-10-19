@@ -99,6 +99,22 @@ python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
 
 ## Build and validation
 
+### Xcode 27 / Blitz 1.0.41
+
+The selected Xcode's Device Hub replaces Simulator.app on Xcode 27. Blitz resolves
+the viewer from `DEVELOPER_DIR` or `xcode-select -p`, and opens the selected device
+in its own compact window using Device Hub's registered `devices:///device/open?id=`
+URL handler. This route was verified against the locally installed Device Hub;
+it is not a guarantee of a stable Apple API. Older Xcode installations retain
+the Simulator.app path and `-CurrentDeviceUDID` launch argument.
+
+Device Hub's capture is restricted to the uniquely named selected device window.
+Accessibility provides the actual device screen rectangle, excluding both its
+header and bottom controls. If permission or an unambiguous screen rectangle is
+unavailable, Blitz reports the issue instead of sending incorrectly mapped
+touches. Changes to Device Hub's accessibility hierarchy may require adapting
+this integration. Only the affected permission offers a System Settings action.
+
 Initialize the pinned submodule and install Go as specified by its `go.mod`:
 
 ```sh
@@ -111,6 +127,15 @@ CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
 The `native` build engine avoids requiring the optional Metal toolchain with Xcode 27. It is deprecated by Swift and is a local compatibility fallback; with the Metal toolchain installed, use the default engine. `BLITZ_SWIFT_BUILD_SYSTEM` is optional and does not change the default build engine.
 
 Without `APPLE_SIGNING_IDENTITY`, the bundle is ad-hoc signed, not notarized. Existing Keychain or macOS permissions may require approval for the rebuilt app. The default build compiles the pinned ASC source with the Blitz adapter. `BLITZ_ASCD_PATH` accepts a prebuilt helper only if its protocol and pinned version match. See `helpers/asc-overlay/README.md` for provenance and Go tests.
+
+When replacing the official signed app with a local build, macOS can retain the
+original app's signing requirement even when Screen Recording appears enabled.
+If the `tccd` log reports `Failed to match existing code requirement` for
+`com.blitz.macos` and `kTCCServiceScreenCapture`, ask the user to remove the old
+Blitz entry in Privacy settings, add `/Applications/Blitz.app` again, and approve
+the current app before fully quitting and reopening it. Do not reset unrelated
+apps' privacy permissions or claim that toggling the old entry necessarily fixes
+the signature mismatch.
 
 ## One ASC implementation
 

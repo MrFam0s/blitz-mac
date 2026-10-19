@@ -62,7 +62,14 @@ actor SimulatorService: SimulatorDeviceService {
 
     /// Open the Simulator.app (-g flag opens in background)
     func openSimulatorApp(udid: String) async throws {
-        _ = try await ProcessRunner.run("open", arguments: ["-g", "-a", "Simulator", "--args", "-CurrentDeviceUDID", udid])
+        let developerDirectory: String
+        if let override = ProcessInfo.processInfo.environment["DEVELOPER_DIR"], !override.isEmpty {
+            developerDirectory = override
+        } else {
+            developerDirectory = try await ProcessRunner.run("/usr/bin/xcode-select", arguments: ["-p"])
+        }
+        let application = try SimulatorApplication.resolve(developerDirectory: developerDirectory)
+        _ = try await ProcessRunner.run("/usr/bin/open", arguments: application.openArguments(udid: udid))
         try await Task.sleep(for: .milliseconds(500))
     }
 
