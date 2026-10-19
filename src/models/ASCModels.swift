@@ -507,7 +507,9 @@ struct ASCBetaFeedback: Decodable, Identifiable {
 
 struct ASCAppInfo: Codable, Identifiable {
     let id: String
-    struct Attributes: Codable {}
+    struct Attributes: Codable {
+        var appStoreState: String? = nil
+    }
     let attributes: Attributes?
 
     // Relationships — primaryCategory is a relationship, not an attribute

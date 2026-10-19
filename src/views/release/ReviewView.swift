@@ -351,6 +351,10 @@ struct ReviewView: View {
     @ViewBuilder
     private var ageRatingForm: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if !asc.canEditField("ageRating") {
+                Label("Die Altersfreigabe ist für diesen Apple-Status schreibgeschützt.", systemImage: "lock.fill")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Group {
                 Text("Boolean Fields").font(.callout.weight(.medium)).padding(.top, 8)
                 Toggle("Gambling", isOn: $arGambling)
@@ -401,6 +405,7 @@ struct ReviewView: View {
             .padding(.top, 8)
         }
         .padding(.top, 8)
+        .disabled(!asc.canEditField("ageRating"))
     }
 
     private func threeLevelPicker(_ label: String, selection: Binding<String>) -> some View {

@@ -4,9 +4,11 @@ import Foundation
 struct ProjectAgentConfigService {
     let baseDirectory: URL
     private let globalCodexConfig: URL
+    private let launcherDirectory: URL
 
-    init(baseDirectory: URL, globalCodexConfig: URL? = nil) {
+    init(baseDirectory: URL, globalCodexConfig: URL? = nil, launcherDirectory: URL = BlitzPaths.bin) {
         self.baseDirectory = baseDirectory
+        self.launcherDirectory = launcherDirectory
         let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"]
             .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
@@ -47,7 +49,7 @@ struct ProjectAgentConfigService {
         }
 
         let env = ["PATH": "\(pathEnv):/opt/homebrew/bin:/usr/local/bin"]
-        if let launcher = Self.ensureDetachedMCPLauncher() {
+        if let launcher = ensureDetachedMCPLauncher() {
             return (
                 command: launcher,
                 args: [command] + args,
@@ -62,9 +64,9 @@ struct ProjectAgentConfigService {
         )
     }
 
-    private static func ensureDetachedMCPLauncher() -> String? {
+    private func ensureDetachedMCPLauncher() -> String? {
         let fm = FileManager.default
-        let launcherURL = BlitzPaths.bin.appendingPathComponent("blitz-detached-mcp")
+        let launcherURL = launcherDirectory.appendingPathComponent("blitz-detached-mcp")
         let script = """
         #!/usr/bin/env python3
         import os
@@ -108,7 +110,7 @@ struct ProjectAgentConfigService {
         """
 
         do {
-            try fm.createDirectory(at: BlitzPaths.bin, withIntermediateDirectories: true)
+            try fm.createDirectory(at: launcherDirectory, withIntermediateDirectories: true)
             try script.write(to: launcherURL, atomically: true, encoding: .utf8)
             try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcherURL.path)
             return launcherURL.path

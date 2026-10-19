@@ -257,6 +257,67 @@ height before Submission Readiness at the existing window size. Automated native
 window resizing was unavailable, so the narrow-width fallback was not visually
 verified. No Store data or release actions were changed.
 
+## 1.0.47 — respect Apple editability and screenshot identity
+
+Version screenshots now show a lock explanation, with upload, removal, reordering
+and Save unavailable outside Apple's five editable version states. Unknown states
+are read-only. The same policy protects manager/MCP entry points, refreshes the
+relevant Apple resource before writes, and rejects a mixed locked metadata batch
+before the first patch. App-info fields use the app-info resource's own status;
+fetching app-info no longer assumes the first record is the editable one.
+Promotional text, copyright and review contacts remain editable on live versions.
+Category, age rating, version text/URLs and other restricted fields are gated.
+Product review notes/screenshots and localization use IAP/subscription state,
+independently of the app version. Subscription groups must be freshly confirmed
+empty before deletion; an unloaded group is not assumed empty. App Information
+and TestFlight Beta Info protect edits against project/locale/version switches;
+unchanged focus transitions do not write app-information text.
+
+Existing remote screenshots with remembered local source paths are no longer
+uploaded again during incremental saves. Remote previews use their Apple asset
+identity, never a local file chosen only by filename. Full rebuilds download the
+original remote asset instead of reusing a potentially changed local source.
+Missing locales no longer silently fall back to another language. A failed final
+server refresh is reported as unconfirmed, not as a successful save. Screenshot
+writes still span multiple Apple API requests and are not an atomic transaction;
+partial upload failures require inspecting/refetching the remote result before
+retrying. No automatic removal of suspected duplicates is performed.
+
+Read-only investigation of Mühlenstein 1.4.1 on 2026-10-19 found five screenshots
+per device set in all eight localizations, with distinct source checksums within
+each set. Downloaded German first/fifth assets were different (gameplay/WLAN).
+This does not establish the cause of the reported public Store duplication. The
+re-upload and filename-fallback defects existed in pre-maintenance code; the
+reported 409 itself is Apple's refusal to delete an already submitted screenshot.
+
+Policy references checked on 2026-10-19:
+- [Version screenshot editing](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-your-app-store-assets)
+- [Editable properties](https://developer.apple.com/help/app-store-connect/reference/app-information/required-localizable-and-editable-properties/)
+- [Version/review information](https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/)
+- [IAP review information](https://developer.apple.com/help/app-store-connect/manage-in-app-purchases/view-and-edit-in-app-purchase-information)
+- [Product states](https://developer.apple.com/help/app-store-connect/reference/in-app-purchases-and-subscriptions/in-app-purchase-statuses)
+- [Subscription groups](https://developer.apple.com/help/app-store-connect/manage-subscriptions/offer-auto-renewable-subscriptions)
+
+These are rules for Blitz's existing version-scoped API, not a claim that Apple's
+new Asset Library or live creative-asset workflows can never change assets.
+The audit also inspected Release, pricing, TestFlight, reviews and analytics:
+read-only views stay read-only, and app pricing/beta information do not acquire
+an inappropriate live-version lock. Account permissions and further server
+constraints still apply; tests do not attempt real Store mutations.
+
+Validation: 177 local Swift tests, including editability matrices, stale-status,
+failed-read and changed-target checks, unchanged product review notes, and the
+remote screenshot upload/preview regressions. A pre-existing parallel MCP test
+race was fixed by placing each test's detached launcher in its temporary directory,
+rather than rewriting the live user installation. The signed 1.0.47 release build,
+strict/deep codesign verification and ASC helper RPC/CLI contract check passed.
+Installed UI checks confirmed Mühlenstein 1.4.1 has five distinct previews, no X
+controls, disabled Save/upload, locked name/category/URLs/age rating, and available
+copyright/review-contact fields. CleanVersion's existing Prepare for Submission
+version retains editable name and screenshot Upload controls. Unchanged TestFlight
+Beta Info has disabled Save. No Store writes, submissions or uploads were made.
+GitHub Maintenance checks remains disabled_manually; no cloud job was started.
+
 ## 1.0.46 — release workflow from the overview
 
 The overview has one **Neue Version anlegen** button. It opens a read-only local

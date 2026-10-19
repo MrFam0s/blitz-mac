@@ -80,13 +80,19 @@ extension ASCManager {
     func updateIAP(id: String, name: String?, reviewNote: String?, displayName: String?, description: String?) async {
         guard let service else { return }
         guard let appId = app?.id else { return }
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
         do {
+            let product = try await service.fetchInAppPurchaseRecord(id: id)
+            guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { return }
+            try ASCEditability.validateProductChanges(state: product.attributes.state,
+                oldReviewNote: product.attributes.reviewNote, reviewNote: reviewNote,
+                changesLocalization: displayName != nil || description != nil)
             // Patch IAP attributes (name, reviewNote)
             var attrs: [String: Any] = [:]
             if let name { attrs["name"] = name }
-            if let reviewNote { attrs["reviewNote"] = reviewNote }
+            if let reviewNote, reviewNote != (product.attributes.reviewNote ?? "") { attrs["reviewNote"] = reviewNote }
             if !attrs.isEmpty {
                 try await service.patchInAppPurchase(iapId: id, attrs: attrs)
             }
@@ -145,9 +151,15 @@ extension ASCManager {
 
     func uploadIAPScreenshot(iapId: String, path: String) async {
         guard let service else { return }
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
         do {
+            let product = try await service.fetchInAppPurchaseRecord(id: iapId)
+            guard projectRevision == revision, !Task.isCancelled else { return }
+            guard ASCEditability.canEditProductReview(product.attributes.state) else {
+                throw ASCError.notFound("Review-Screenshots dieses Produkts sind bei Apple gesperrt.")
+            }
             try await service.uploadIAPReviewScreenshot(iapId: iapId, path: path)
             AnalyticsService.trackBlitzManagedASCUsage(
                 commandType: "iap.screenshot.upload",
@@ -292,12 +304,18 @@ extension ASCManager {
     func updateSubscription(id: String, name: String?, reviewNote: String?, displayName: String?, description: String?) async {
         guard let service else { return }
         guard let appId = app?.id else { return }
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
         do {
+            let product = try await service.fetchSubscriptionRecord(id: id)
+            guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { return }
+            try ASCEditability.validateProductChanges(state: product.attributes.state,
+                oldReviewNote: product.attributes.reviewNote, reviewNote: reviewNote,
+                changesLocalization: displayName != nil || description != nil)
             var attrs: [String: Any] = [:]
             if let name { attrs["name"] = name }
-            if let reviewNote { attrs["reviewNote"] = reviewNote }
+            if let reviewNote, reviewNote != (product.attributes.reviewNote ?? "") { attrs["reviewNote"] = reviewNote }
             if !attrs.isEmpty {
                 try await service.patchSubscription(subscriptionId: id, attrs: attrs)
             }
@@ -360,9 +378,16 @@ extension ASCManager {
     func deleteSubscriptionGroup(id: String) async {
         guard let service else { return }
         guard let appId = app?.id else { return }
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
         do {
+            let subscriptions = try await service.fetchSubscriptionsInGroup(groupId: id)
+            guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { return }
+            subscriptionsPerGroup[id] = subscriptions
+            guard subscriptions.isEmpty else {
+                throw ASCError.notFound("Diese Gruppe enthält noch Abonnements und kann nicht gelöscht werden.")
+            }
             try await service.deleteSubscriptionGroup(groupId: id)
             subscriptionGroups = try await service.fetchSubscriptionGroups(appId: appId)
             subscriptionsPerGroup.removeValue(forKey: id)
@@ -385,9 +410,15 @@ extension ASCManager {
 
     func uploadSubscriptionScreenshot(subscriptionId: String, path: String) async {
         guard let service else { return }
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
         do {
+            let product = try await service.fetchSubscriptionRecord(id: subscriptionId)
+            guard projectRevision == revision, !Task.isCancelled else { return }
+            guard ASCEditability.canEditProductReview(product.attributes.state) else {
+                throw ASCError.notFound("Review-Screenshots dieses Produkts sind bei Apple gesperrt.")
+            }
             try await service.uploadSubscriptionReviewScreenshot(subscriptionId: subscriptionId, path: path)
             AnalyticsService.trackBlitzManagedASCUsage(
                 commandType: "subscription.screenshot.upload",

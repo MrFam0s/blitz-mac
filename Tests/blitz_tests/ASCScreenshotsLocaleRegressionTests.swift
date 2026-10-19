@@ -5,7 +5,7 @@ import AppKit
 
 @MainActor
 @Test func loadTrackFromASCPreservesUnsavedLocaleTrack() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let set = makeScreenshotSet(id: "set-us", displayType: displayType, count: 1)
@@ -44,7 +44,7 @@ import AppKit
 
 @MainActor
 @Test func hydrateScreenshotImageCacheOverwritesOnForceRefresh() async {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let shot = makeScreenshot(
         id: "remote-1",
         fileName: "remote-1.png",
@@ -77,7 +77,7 @@ import AppKit
 
 @MainActor
 @Test func loadTrackFromASCUsesCachedRemoteImage() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let cachedImage = makeTestImage()
@@ -103,7 +103,7 @@ import AppKit
 
 @MainActor
 @Test func removeFromTrackClearsCachedImage() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let trackKey = manager.screenshotTrackKey(displayType: displayType, locale: locale)
@@ -128,7 +128,7 @@ import AppKit
 
 @MainActor
 @Test func addAssetToTrackCachesLocalImage() throws {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let imagePath = try writeValidScreenshotPNG(
@@ -152,7 +152,7 @@ import AppKit
 
 @MainActor
 @Test func reorderTrackPermutationUsesCurrentSlotIndexes() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let trackKey = manager.screenshotTrackKey(displayType: displayType, locale: locale)
@@ -187,7 +187,7 @@ import AppKit
 
 @MainActor
 @Test func loadTrackFromASCPreservesLocalSourcePathsForMatchingUploadedFiles() throws {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let locale = "en-US"
     let displayType = "APP_IPHONE_67"
     let trackKey = manager.screenshotTrackKey(displayType: displayType, locale: locale)
@@ -236,7 +236,7 @@ import AppKit
 
 @MainActor
 @Test func trackSyncRequiresFullRebuildWhenLocalSlotSplitsRemoteOrder() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let remoteA = TrackSlot(
         id: "remote-a",
         localPath: nil,
@@ -267,7 +267,7 @@ import AppKit
 
 @MainActor
 @Test func trackSyncDoesNotRequireFullRebuildForTailAppend() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     let remoteA = TrackSlot(
         id: "remote-a",
         localPath: nil,
@@ -298,7 +298,7 @@ import AppKit
 
 @MainActor
 @Test func submissionReadinessUsesPrimaryLocaleScreenshotCache() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     manager.app = makeApp(primaryLocale: "en-US")
     manager.localizations = [
         makeLocalization(id: "loc-gb", locale: "en-GB"),
@@ -322,7 +322,7 @@ import AppKit
 
 @MainActor
 @Test func submissionReadinessUsesPrimaryLocaleMetadataWhenAPIOrderDiffers() {
-    let manager = ASCManager()
+    let manager = editableScreenshotManager()
     manager.app = makeApp(primaryLocale: "en-US")
     manager.localizations = [
         makeLocalization(
@@ -544,4 +544,40 @@ private func writeValidScreenshotPNG(width: Int, height: Int, fileName: String) 
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
     try data.write(to: url, options: .atomic)
     return url.path
+}
+
+@MainActor
+private func editableScreenshotManager() -> ASCManager {
+    let manager = ASCManager()
+    manager.appStoreVersions = [ASCAppStoreVersion(id: "draft", attributes: .init(
+        versionString: "1.1", appStoreState: "PREPARE_FOR_SUBMISSION", releaseType: nil,
+        createdDate: nil, copyright: nil))]
+    return manager
+}
+
+@MainActor
+@Test func incrementalScreenshotSaveDoesNotReuploadRemoteSlotsWithLocalSourcePaths() async throws {
+    let manager = editableScreenshotManager()
+    let path = try writeValidScreenshotPNG(width: 1290, height: 2796, fileName: UUID().uuidString + ".png")
+    let remote = TrackSlot(id: "remote", localPath: path, localImage: nil,
+        ascScreenshot: makeScreenshot(id: "remote", fileName: "same.png"), isFromASC: true)
+    let local = TrackSlot(id: "local", localPath: path, localImage: nil, ascScreenshot: nil, isFromASC: false)
+    let noChange = try await manager.prepareTrackUploads(current: [remote], fullRebuild: false)
+    #expect(noChange.isEmpty)
+    let appended = try await manager.prepareTrackUploads(current: [remote, local], fullRebuild: false)
+    #expect(appended.count == 1)
+    #expect(appended.first?.path == path)
+}
+
+@MainActor
+@Test func storePreviewNeverSubstitutesLocalFileWithMatchingName() throws {
+    let manager = editableScreenshotManager()
+    let path = try writeValidScreenshotPNG(width: 1290, height: 2796, fileName: UUID().uuidString + ".png")
+    let shot = makeScreenshot(id: "server", fileName: URL(fileURLWithPath: path).lastPathComponent)
+    let set = makeScreenshotSet(id: "set", displayType: "APP_IPHONE_67", count: 1)
+    manager.updateScreenshotCache(locale: "en-US", sets: [set], screenshots: [set.id: [shot]])
+    let slots = manager.buildTrackSlotsFromASC(displayType: "APP_IPHONE_67", locale: "en-US",
+        previousSlots: [TrackSlot(id: "local", localPath: path, localImage: makeTestImage(), ascScreenshot: nil, isFromASC: false)])
+    #expect(slots[0]?.localPath == path)
+    #expect(slots[0]?.localImage == nil)
 }

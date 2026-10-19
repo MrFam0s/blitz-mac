@@ -167,10 +167,13 @@ extension ASCManager {
             return
         }
 
+        let revision = projectRevision
         let startedAt = Date()
         writeError = nil
 
         do {
+            let fields = Set(versionFields.keys).union(rawAppInfoFields.keys)
+            let target = try await validateWrite(fields: fields, using: service)
             if !versionFields.isEmpty {
                 guard let locId = appInformationLocalization(locale: trimmedLocale)?.id else {
                     throw ASCError.notFound("Version localization for locale '\(trimmedLocale)'")
@@ -180,6 +183,7 @@ extension ASCManager {
 
             let appInfoFields = mappedAppInfoLocalizationFields(rawAppInfoFields)
             if !appInfoFields.isEmpty {
+                try checkWriteTarget(target)
                 guard let infoId = appInfo?.id else {
                     throw ASCError.notFound("AppInfo")
                 }
@@ -195,6 +199,7 @@ extension ASCManager {
                 }
             }
 
+            try checkWriteTarget(target)
             guard let appId = app?.id else { return }
             try await refreshAppInformationMetadata(
                 service: service,
@@ -208,6 +213,7 @@ extension ASCManager {
                 startedAt: startedAt
             )
         } catch {
+            guard revision == projectRevision else { return }
             writeError = error.localizedDescription
             AnalyticsService.trackBlitzManagedASCUsage(
                 commandType: "app_information.update",
@@ -220,68 +226,35 @@ extension ASCManager {
     func updateAppInfoField(_ field: String, value: String) async {
         guard let service else { return }
         let startedAt = Date()
+        let revision = projectRevision
         writeError = nil
-
-        // Fields live on different ASC resources:
-        // - copyright -> appStoreVersions
-        // - contentRightsDeclaration -> apps
-        // - primaryCategory -> appInfos
-        if field == "copyright" {
-            guard let versionId = selectedVersion?.id else { return }
-            do {
+        do {
+            let target = try await validateWrite(fields: [field], using: service)
+            if field == "copyright", let versionId = target.versionID {
                 try await service.patchVersion(id: versionId, fields: [field: value])
-                if let appId = app?.id {
-                    appStoreVersions = try await service.fetchAppStoreVersions(appId: appId)
-                    syncSelectedVersion(preferredVersionId: versionId)
-                }
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: true,
-                    startedAt: startedAt
-                )
-            } catch {
-                writeError = error.localizedDescription
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: false,
-                    startedAt: startedAt
-                )
-            }
-        } else if field == "contentRightsDeclaration" {
-            guard let appId = app?.id else { return }
-            do {
-                try await service.patchApp(id: appId, fields: [field: value])
-                app = try await service.fetchApp(id: appId)
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: true,
-                    startedAt: startedAt
-                )
-            } catch {
-                writeError = error.localizedDescription
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: false,
-                    startedAt: startedAt
-                )
-            }
-        } else if let infoId = appInfo?.id {
-            do {
+                try checkWriteTarget(target)
+                let versions = try await service.fetchAppStoreVersions(appId: target.appID)
+                try checkWriteTarget(target)
+                appStoreVersions = versions
+                syncSelectedVersion(preferredVersionId: versionId)
+            } else if field == "contentRightsDeclaration" {
+                try await service.patchApp(id: target.appID, fields: [field: value])
+                try checkWriteTarget(target)
+                let updated = try await service.fetchApp(id: target.appID)
+                try checkWriteTarget(target)
+                app = updated
+            } else if let infoId = target.appInfoID {
                 try await service.patchAppInfo(id: infoId, fields: [field: value])
-                appInfo = try? await service.fetchAppInfo(appId: app?.id ?? "")
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: true,
-                    startedAt: startedAt
-                )
-            } catch {
-                writeError = error.localizedDescription
-                AnalyticsService.trackBlitzManagedASCUsage(
-                    commandType: "app_information.update",
-                    success: false,
-                    startedAt: startedAt
-                )
+                try checkWriteTarget(target)
+                let updated = try await service.fetchAppInfoRecord(id: infoId)
+                try checkWriteTarget(target)
+                appInfo = updated
             }
+            AnalyticsService.trackBlitzManagedASCUsage(commandType: "app_information.update", success: true, startedAt: startedAt)
+        } catch {
+            guard revision == projectRevision else { return }
+            writeError = error.localizedDescription
+            AnalyticsService.trackBlitzManagedASCUsage(commandType: "app_information.update", success: false, startedAt: startedAt)
         }
     }
 

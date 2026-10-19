@@ -550,6 +550,9 @@ private struct IAPDetailRow: View {
     @State private var didLoadFields = false
     @State private var showValidation = false
 
+    private var canEditReview: Bool { ASCEditability.canEditProductReview(iap.attributes.state) }
+    private var canEditLocalization: Bool { ASCEditability.canEditProductLocalization(iap.attributes.state) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row
@@ -592,12 +595,20 @@ private struct IAPDetailRow: View {
                     Divider()
                     RequiredField("Reference Name", text: $editName, showError: showValidation && editName.isEmpty)
                     RequiredField("Display Name", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
+                        .disabled(!canEditLocalization)
                     RequiredField("Description", text: $editDescription, showError: showValidation && editDescription.isEmpty)
+                        .disabled(!canEditLocalization)
                     TextField("Review Notes", text: $editReviewNote, axis: .vertical)
                         .lineLimit(2...4).textFieldStyle(.roundedBorder)
+                        .disabled(!canEditReview)
 
+                    if !canEditReview {
+                        Label("Review-Unterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     ScreenshotPicker(label: "Review Screenshot", path: $screenshotPath)
-                    if !screenshotPath.isEmpty {
+                        .disabled(!canEditReview)
+                    if canEditReview && !screenshotPath.isEmpty {
                         HStack {
                             Button("Upload Screenshot") {
                                 isUploading = true
@@ -618,7 +629,7 @@ private struct IAPDetailRow: View {
 
                     HStack {
                         Button("Save") {
-                            if editDisplayName.isEmpty || editDescription.isEmpty {
+                            if canEditLocalization && (editDisplayName.isEmpty || editDescription.isEmpty) {
                                 showValidation = true
                                 return
                             }
@@ -627,9 +638,9 @@ private struct IAPDetailRow: View {
                                 await asc.updateIAP(
                                     id: iap.id,
                                     name: editName.isEmpty ? nil : editName,
-                                    reviewNote: editReviewNote,
-                                    displayName: editDisplayName,
-                                    description: editDescription
+                                    reviewNote: canEditReview ? editReviewNote : nil,
+                                    displayName: canEditLocalization ? editDisplayName : nil,
+                                    description: canEditLocalization ? editDescription : nil
                                 )
                                 isSaving = false
                             }
@@ -863,8 +874,7 @@ private struct SubscriptionGroupRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
-                let subs = asc.subscriptionsPerGroup[group.id] ?? []
-                if subs.isEmpty {
+                if asc.subscriptionsPerGroup[group.id]?.isEmpty == true {
                     Button(role: .destructive, action: onDeleteGroup) {
                         Image(systemName: "trash").font(.caption)
                     }.buttonStyle(.borderless)
@@ -940,6 +950,9 @@ private struct SubscriptionDetailRow: View {
     @State private var didLoadFields = false
     @State private var showValidation = false
 
+    private var canEditReview: Bool { ASCEditability.canEditProductReview(sub.attributes.state) }
+    private var canEditLocalization: Bool { ASCEditability.canEditProductLocalization(sub.attributes.state) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -980,12 +993,20 @@ private struct SubscriptionDetailRow: View {
                     Divider()
                     RequiredField("Reference Name", text: $editName, showError: showValidation && editName.isEmpty)
                     RequiredField("Display Name", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
+                        .disabled(!canEditLocalization)
                     RequiredField("Description", text: $editDescription, showError: showValidation && editDescription.isEmpty)
+                        .disabled(!canEditLocalization)
                     TextField("Review Notes", text: $editReviewNote, axis: .vertical)
                         .lineLimit(2...4).textFieldStyle(.roundedBorder)
+                        .disabled(!canEditReview)
 
+                    if !canEditReview {
+                        Label("Review-Unterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     ScreenshotPicker(label: "Review Screenshot", path: $screenshotPath)
-                    if !screenshotPath.isEmpty {
+                        .disabled(!canEditReview)
+                    if canEditReview && !screenshotPath.isEmpty {
                         HStack {
                             Button("Upload Screenshot") {
                                 isUploading = true
@@ -1006,7 +1027,7 @@ private struct SubscriptionDetailRow: View {
 
                     HStack {
                         Button("Save") {
-                            if editDisplayName.isEmpty || editDescription.isEmpty {
+                            if canEditLocalization && (editDisplayName.isEmpty || editDescription.isEmpty) {
                                 showValidation = true
                                 return
                             }
@@ -1015,9 +1036,9 @@ private struct SubscriptionDetailRow: View {
                                 await asc.updateSubscription(
                                     id: sub.id,
                                     name: editName.isEmpty ? nil : editName,
-                                    reviewNote: editReviewNote,
-                                    displayName: editDisplayName,
-                                    description: editDescription
+                                    reviewNote: canEditReview ? editReviewNote : nil,
+                                    displayName: canEditLocalization ? editDisplayName : nil,
+                                    description: canEditLocalization ? editDescription : nil
                                 )
                                 isSaving = false
                             }

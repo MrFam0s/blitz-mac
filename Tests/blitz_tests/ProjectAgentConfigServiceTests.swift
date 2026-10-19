@@ -8,10 +8,10 @@ import Testing
     try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
-    let service = ProjectAgentConfigService(baseDirectory: tempDirectory, globalCodexConfig: tempDirectory.appendingPathComponent("missing-global.toml"))
+    let service = ProjectAgentConfigService(baseDirectory: tempDirectory, globalCodexConfig: tempDirectory.appendingPathComponent("missing-global.toml"), launcherDirectory: tempDirectory.appendingPathComponent("bin"))
     service.ensureMCPConfig(in: tempDirectory)
 
-    let launcherPath = BlitzPaths.bin.appendingPathComponent("blitz-detached-mcp").path
+    let launcherPath = tempDirectory.appendingPathComponent("bin").appendingPathComponent("blitz-detached-mcp").path
     #expect(FileManager.default.isExecutableFile(atPath: launcherPath))
 
     let codexConfigURL = tempDirectory.appendingPathComponent(".codex/config.toml")
@@ -40,7 +40,7 @@ import Testing
     let local = directory.appendingPathComponent(".codex/config.toml")
     let settings = "model = \"my-model\"\n[mcp_servers.example]\ncommand = \"example\"\n"
     try settings.write(to: local, atomically: true, encoding: .utf8)
-    let service = ProjectAgentConfigService(baseDirectory: directory, globalCodexConfig: global)
+    let service = ProjectAgentConfigService(baseDirectory: directory, globalCodexConfig: global, launcherDirectory: directory.appendingPathComponent("bin"))
     service.ensureMCPConfig(in: directory)
     #expect(try String(contentsOf: local, encoding: .utf8) == settings)
     try FileManager.default.removeItem(at: local)

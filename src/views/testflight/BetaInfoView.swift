@@ -13,6 +13,7 @@ struct BetaInfoView: View {
     @State private var saveError: String?
     @State private var saveSuccess = false
     @State private var populatedValues: [String] = []
+    @State private var formRevision: UUID?
     private var editValues: [String] { [editDescription, editFeedbackEmail, editMarketingUrl, editPrivacyUrl] }
     private var hasEdits: Bool { !populatedValues.isEmpty && editValues != populatedValues }
 
@@ -35,11 +36,23 @@ struct BetaInfoView: View {
             guard !Task.isCancelled else { return }
             syncLocalization()
         }
+        .onChange(of: asc.projectRevision) { _, _ in
+            selectedLocId = ""
+            populatedValues = []
+            editDescription = ""
+            editFeedbackEmail = ""
+            editMarketingUrl = ""
+            editPrivacyUrl = ""
+            isSaving = false
+            saveError = nil
+            saveSuccess = false
+            syncLocalization()
+        }
         .onChange(of: asc.betaLocalizations) { _, _ in syncLocalization() }
     }
 
     private func syncLocalization() {
-        guard !hasEdits, !isSaving else { return }
+        guard formRevision != asc.projectRevision || (!hasEdits && !isSaving) else { return }
         if let current = asc.betaLocalizations.first(where: { $0.id == selectedLocId }) ?? asc.betaLocalizations.first {
             selectedLocId = current.id
             loadLocalization(current)
@@ -61,6 +74,7 @@ struct BetaInfoView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .disabled(isSaving)
                     .frame(width: 180)
                     .onChange(of: locs.count) { _, _ in
                         if selectedLocId.isEmpty, let first = asc.betaLocalizations.first {
@@ -102,7 +116,7 @@ struct BetaInfoView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isSaving || current == nil)
+                .disabled(isSaving || current == nil || formRevision != asc.projectRevision || !hasEdits)
                 ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Refresh beta info")
             }
             .padding(.horizontal, 20)
@@ -172,6 +186,7 @@ struct BetaInfoView: View {
     }
 
     private func loadLocalization(_ loc: ASCBetaLocalization) {
+        formRevision = asc.projectRevision
         editDescription = loc.attributes.description ?? ""
         editFeedbackEmail = loc.attributes.feedbackEmail ?? ""
         editMarketingUrl = loc.attributes.marketingUrl ?? ""
@@ -182,27 +197,34 @@ struct BetaInfoView: View {
     }
 
     private func save(locId: String) {
-        guard !locId.isEmpty, let service = asc.service else { return }
+        guard !locId.isEmpty, locId == selectedLocId, formRevision == asc.projectRevision,
+              asc.betaLocalizations.contains(where: { $0.id == locId }), let service = asc.service else { return }
+        let revision = asc.projectRevision
+        let values = editValues
         isSaving = true
         saveError = nil
         saveSuccess = false
         Task {
+            guard revision == asc.projectRevision else { return }
             do {
                 try await service.patchBetaLocalization(
                     id: locId,
                     locale: "",
-                    description: editDescription.isEmpty ? nil : editDescription,
-                    feedbackEmail: editFeedbackEmail.isEmpty ? nil : editFeedbackEmail,
-                    marketingUrl: editMarketingUrl.isEmpty ? nil : editMarketingUrl,
-                    privacyPolicyUrl: editPrivacyUrl.isEmpty ? nil : editPrivacyUrl
+                    description: values[0].isEmpty ? nil : values[0],
+                    feedbackEmail: values[1].isEmpty ? nil : values[1],
+                    marketingUrl: values[2].isEmpty ? nil : values[2],
+                    privacyPolicyUrl: values[3].isEmpty ? nil : values[3]
                 )
+                guard revision == asc.projectRevision else { return }
                 saveSuccess = true
-                populatedValues = editValues
+                populatedValues = values
                 // Refresh tab data
                 await asc.refreshTabData(.betaInfo)
             } catch {
+                guard revision == asc.projectRevision else { return }
                 saveError = error.localizedDescription
             }
+            guard revision == asc.projectRevision else { return }
             isSaving = false
             syncLocalization()
         }

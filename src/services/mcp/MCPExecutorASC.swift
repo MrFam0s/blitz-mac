@@ -406,6 +406,12 @@ extension MCPExecutor {
                 }
             }
 
+            // Validate the complete batch before any localized/detail write can succeed.
+            do {
+                guard let service = await appState.ascManager.service else { return mcpText("Error: ASC is not connected.") }
+                _ = try await appState.ascManager.validateWrite(fields: Set(fieldMap.keys), using: service)
+            } catch { return mcpText("Error: \(error.localizedDescription)") }
+
             if hasLocalizedFields, let locale = resolvedAppInformationLocale {
                 await appState.ascManager.updateAppInformationFields(
                     versionFields: versionLocFields,

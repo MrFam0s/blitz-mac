@@ -901,6 +901,14 @@ final class AppStoreConnectService {
         _ = try await post(path: "inAppPurchasePriceSchedules", body: body)
     }
 
+    func fetchInAppPurchaseRecord(id: String) async throws -> ASCInAppPurchase {
+        try await get(fullPath: "/v2/inAppPurchases/\(id)", as: ASCSingleResponse<ASCInAppPurchase>.self).data
+    }
+
+    func fetchSubscriptionRecord(id: String) async throws -> ASCSubscription {
+        try await get("subscriptions/\(id)", as: ASCSingleResponse<ASCSubscription>.self).data
+    }
+
     func fetchInAppPurchases(appId: String) async throws -> [ASCInAppPurchase] {
         var all: [ASCInAppPurchase] = []
         var path = "apps/\(appId)/inAppPurchasesV2"
@@ -1545,13 +1553,18 @@ final class AppStoreConnectService {
     func fetchAppInfo(appId: String) async throws -> ASCAppInfo {
         // include=primaryCategory so the relationship data (with category ID) is populated
         let resp = try await get("apps/\(appId)/appInfos", queryItems: [
-            URLQueryItem(name: "limit", value: "1"),
+            URLQueryItem(name: "limit", value: "200"),
             URLQueryItem(name: "include", value: "primaryCategory")
         ], as: ASCListResponse<ASCAppInfo>.self)
-        guard let info = resp.data.first else {
+        guard let info = ASCEditability.preferredAppInfo(resp.data) else {
             throw ASCError.notFound("AppInfo for app \(appId)")
         }
         return info
+    }
+
+    func fetchAppInfoRecord(id: String) async throws -> ASCAppInfo {
+        let response = try await get("appInfos/\(id)", queryItems: [URLQueryItem(name: "include", value: "primaryCategory")], as: ASCSingleResponse<ASCAppInfo>.self)
+        return response.data
     }
 
     // MARK: - Fetch: AgeRating

@@ -20,7 +20,7 @@ extension ASCManager {
         ],
     ]
 
-    private struct PreparedTrackUpload {
+    struct PreparedTrackUpload {
         let path: String
         let isTemporary: Bool
     }
@@ -244,16 +244,8 @@ extension ASCManager {
         var slots: [TrackSlot?] = Array(repeating: nil, count: 10)
         if let set, let shots = screenshotsForLocale(locale)[set.id] {
             for (i, shot) in shots.prefix(10).enumerated() {
-                var localImage = cachedScreenshotImage(for: shot.id)
+                let localImage = cachedScreenshotImage(for: shot.id)
                 let localPath = resolvedLocalSourcePath(for: shot, previousSlots: previousSlots)
-                if localImage == nil {
-                    if i < previousSlots.count, let prev = previousSlots[i], prev.id == shot.id {
-                        localImage = prev.localImage
-                    } else if let localPath,
-                              let image = NSImage(contentsOfFile: localPath) {
-                        localImage = image
-                    }
-                }
                 slots[i] = TrackSlot(
                     id: shot.id,
                     localPath: localPath,
@@ -394,15 +386,25 @@ extension ASCManager {
         return false
     }
 
-    private func prepareTrackUploads(
+    func prepareTrackUploads(
         current: [TrackSlot?],
         fullRebuild: Bool
     ) async throws -> [PreparedTrackUpload] {
         var uploads: [PreparedTrackUpload] = []
+        var completed = false
+        defer {
+            if !completed { for upload in uploads where upload.isTemporary { try? FileManager.default.removeItem(atPath: upload.path) } }
+        }
         uploads.reserveCapacity(current.compactMap { $0 }.count)
 
         for slot in current {
             guard let slot else { continue }
+            // A remembered local source does not make an existing remote asset new.
+            if slot.isFromASC && !fullRebuild { continue }
+            if slot.isFromASC, let screenshot = slot.ascScreenshot {
+                uploads.append(try await stageRemoteScreenshotForReupload(screenshot))
+                continue
+            }
             if let localPath = slot.localPath {
                 guard FileManager.default.fileExists(atPath: localPath) else {
                     throw NSError(
@@ -416,21 +418,13 @@ extension ASCManager {
                 uploads.append(PreparedTrackUpload(path: localPath, isTemporary: false))
                 continue
             }
-            guard fullRebuild else {
-                continue
-            }
-            guard slot.isFromASC, let screenshot = slot.ascScreenshot else {
-                throw NSError(
-                    domain: "ASCManager",
-                    code: 6,
-                    userInfo: [
-                        NSLocalizedDescriptionKey: "A staged screenshot could not be resolved for re-upload. Refresh the screenshots tab and try again."
-                    ]
-                )
-            }
-            uploads.append(try await stageRemoteScreenshotForReupload(screenshot))
+            throw NSError(
+                domain: "ASCManager", code: 6,
+                userInfo: [NSLocalizedDescriptionKey: "A staged screenshot could not be resolved for re-upload. Refresh the screenshots tab and try again."]
+            )
         }
 
+        completed = true
         return uploads
     }
 
@@ -490,18 +484,25 @@ extension ASCManager {
     }
 
     func syncTrackToASC(displayType: String, locale: String) async {
+        guard !isSyncing else { return }
+        guard canEditField("screenshots") else {
+            writeError = screenshotEditingMessage
+            return
+        }
         guard let service else {
             writeError = "ASC service not configured"
             return
         }
 
+        let revision = projectRevision
         isSyncing = true
-        defer { isSyncing = false }
+        defer { if projectRevision == revision { isSyncing = false } }
         writeError = nil
 
         await ensureScreenshotLocalizationsLoaded(service: service)
+        guard revision == projectRevision, !Task.isCancelled else { return }
         guard let loc = localizations.first(where: { $0.attributes.locale == locale })
-                ?? localizations.first else {
+                else {
             writeError = "No localizations found for locale '\(locale)'."
             return
         }
@@ -510,11 +511,13 @@ extension ASCManager {
         let startedAt = Date()
 
         do {
+            let target = try await validateWrite(fields: ["screenshots"], using: service)
             // Refresh the remote baseline before diffing so stale cached ASC IDs
             // don't survive server-side edits made outside Blitz.
             guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
                 throw ASCError.notFound(tabError[.screenshots] ?? "Could not verify current screenshots")
             }
+            try checkWriteTarget(target)
             invalidateStaleTrackSnapshots(displayType: displayType, locale: loc.attributes.locale)
 
             let current = trackSlots[trackKey] ?? Array(repeating: nil, count: 10)
@@ -535,19 +538,29 @@ extension ASCManager {
                 }
             }
 
+            try checkWriteTarget(target)
+            _ = try await validateWrite(fields: ["screenshots"], using: service)
+            try checkWriteTarget(target)
+
             let idsToDelete = fullRebuild
                 ? savedRemoteIds
                 : savedRemoteIds.subtracting(currentRemoteIds)
             for id in idsToDelete {
+                try checkWriteTarget(target)
                 try await service.deleteScreenshot(screenshotId: id)
             }
             removeCachedScreenshotImages(for: idsToDelete)
 
             for upload in uploads {
+                try checkWriteTarget(target)
                 try await service.uploadScreenshot(localizationId: loc.id, path: upload.path, displayType: displayType)
             }
 
-            await loadScreenshots(locale: loc.attributes.locale, force: true)
+            try checkWriteTarget(target)
+            guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
+                throw ASCError.notFound("Speichern wurde ausgeführt, der Serverstand konnte aber nicht bestätigt werden. Bitte vor einem erneuten Speichern aktualisieren.")
+            }
+            try checkWriteTarget(target)
             loadTrackFromASC(displayType: displayType, locale: loc.attributes.locale, overwriteUnsaved: true)
             purgeUnreferencedScreenshotImages()
             AnalyticsService.trackBlitzManagedASCUsage(
@@ -556,6 +569,7 @@ extension ASCManager {
                 startedAt: startedAt
             )
         } catch {
+            guard revision == projectRevision else { return }
             writeError = error.localizedDescription
             AnalyticsService.trackBlitzManagedASCUsage(
                 commandType: "screenshots.save",
@@ -569,6 +583,10 @@ extension ASCManager {
 
     func deleteScreenshot(screenshotId: String) async throws {
         guard let service else { throw ASCError.notFound("ASC service not configured") }
+        _ = try await validateWrite(fields: ["screenshots"], using: service)
+        guard localizations.contains(where: { loc in screenshotsForLocale(loc.attributes.locale).values.joined().contains { $0.id == screenshotId } }) else {
+            throw ASCError.notFound("Der Screenshot gehört nicht zur geladenen Version.")
+        }
         try await service.deleteScreenshot(screenshotId: screenshotId)
     }
 
@@ -581,6 +599,7 @@ extension ASCManager {
         localPath: String,
         locale: String = "en-US"
     ) -> String? {
+        guard canEditField("screenshots"), !isSyncing else { return screenshotEditingMessage }
         guard slotIndex >= 0 && slotIndex < 10 else { return "Invalid slot index" }
         guard let image = NSImage(contentsOfFile: localPath) else {
             return "Could not load image"
@@ -629,6 +648,7 @@ extension ASCManager {
     }
 
     func removeFromTrack(displayType: String, slotIndex: Int, locale: String = "en-US") {
+        guard canEditField("screenshots"), !isSyncing else { writeError = screenshotEditingMessage; return }
         guard slotIndex >= 0 && slotIndex < 10 else { return }
         let trackKey = screenshotTrackKey(displayType: displayType, locale: locale)
         var slots = trackSlots[trackKey] ?? Array(repeating: nil, count: 10)
@@ -647,6 +667,7 @@ extension ASCManager {
         toIndex: Int,
         locale: String = "en-US"
     ) {
+        guard canEditField("screenshots"), !isSyncing else { writeError = screenshotEditingMessage; return }
         guard fromIndex >= 0 && fromIndex < 10 && toIndex >= 0 && toIndex < 10 else { return }
         guard fromIndex != toIndex else { return }
         let trackKey = screenshotTrackKey(displayType: displayType, locale: locale)
@@ -662,6 +683,7 @@ extension ASCManager {
         order: [Int],
         locale: String = "en-US"
     ) -> String? {
+        guard canEditField("screenshots"), !isSyncing else { return screenshotEditingMessage }
         guard order.count == 10 else {
             return "Order must contain exactly 10 indexes."
         }

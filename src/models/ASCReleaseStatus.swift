@@ -71,7 +71,7 @@ struct ASCDashboardSummary: Codable, Sendable, Equatable {
 }
 
 enum ASCReleaseStatus {
-    static let liveStates: Set<String> = [ "READY_FOR_SALE" ]
+    static let liveStates: Set<String> = [ "READY_FOR_SALE", "READY_FOR_DISTRIBUTION" ]
 
     static let removedStates: Set<String> = [
         "REMOVED_FROM_SALE",
@@ -112,7 +112,7 @@ enum ASCReleaseStatus {
             return .processing
         case "ACCEPTED", "PENDING_DEVELOPER_RELEASE":
             return .accepted
-        case "READY_FOR_SALE":
+        case "READY_FOR_SALE", "READY_FOR_DISTRIBUTION":
             return .live
         case "INVALID_BINARY":
             return .submissionError
@@ -147,12 +147,7 @@ enum ASCReleaseStatus {
     }
 
     static func isEditable(_ state: String?) -> Bool {
-        let normalized = normalize(state)
-        guard !normalized.isEmpty else { return false }
-        if editableStates.contains(normalized) {
-            return true
-        }
-        return !isLocked(normalized)
+        editableStates.contains(normalize(state))
     }
 
     static func isCurrentUpdateCandidate(_ state: String?) -> Bool {

@@ -228,6 +228,7 @@ struct ScreenshotsView: View {
     }
 
     private func beginDrag(for slot: TrackSlot, with value: DragGesture.Value) {
+        guard asc.canEditField("screenshots"), !asc.isSyncing else { return }
         draggingSlot = slot
         dragPointerLocation = value.location
         previousDragPointerX = value.location.x
@@ -533,6 +534,12 @@ struct ScreenshotsView: View {
 
                     trackToolbar
 
+                    if !asc.canEditField("screenshots") {
+                        Label(asc.screenshotEditingMessage, systemImage: "lock.fill")
+                            .font(.callout).foregroundStyle(.secondary)
+                            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     writeErrorBanner
 
                     GeometryReader { geometry in
@@ -611,7 +618,7 @@ struct ScreenshotsView: View {
                     Label("Save", systemImage: "arrow.up.circle")
                 }
             }
-            .disabled(!hasChanges || asc.isSyncing)
+            .disabled(!asc.canEditField("screenshots") || !hasChanges || asc.isSyncing)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -754,24 +761,28 @@ struct ScreenshotsView: View {
         ZStack(alignment: .topTrailing) {
             slotImageContent(slot: slot, displayState: displayState, screenshotHeight: screenshotHeight)
                 .contentShape(Rectangle())
-                .highPriorityGesture(slotDragGesture(for: slot))
+                .highPriorityGesture(slotDragGesture(for: slot), including: asc.canEditField("screenshots") && !asc.isSyncing ? .all : .none)
 
-            Button {
-                withAnimation {
-                    asc.removeFromTrack(
-                        displayType: selectedDisplayType,
-                        slotIndex: index,
-                        locale: currentLocale
-                    )
+            if asc.canEditField("screenshots") {
+                Button {
+                    withAnimation {
+                        asc.removeFromTrack(
+                            displayType: selectedDisplayType,
+                            slotIndex: index,
+                            locale: currentLocale
+                        )
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.white, Color(.darkGray))
+                        .shadow(color: .black.opacity(0.3), radius: 2)
                 }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.white, Color(.darkGray))
-                    .shadow(color: .black.opacity(0.3), radius: 2)
+                .buttonStyle(.plain)
+                .padding(6)
+                .disabled(asc.isSyncing)
+                .accessibilityLabel("Screenshot entfernen")
             }
-            .buttonStyle(.plain)
-            .padding(6)
         }
     }
 
@@ -832,6 +843,7 @@ struct ScreenshotsView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!asc.canEditField("screenshots") || asc.isSyncing)
     }
 
     private func emptySlotBody(screenshotHeight: CGFloat) -> some View {
@@ -839,7 +851,7 @@ struct ScreenshotsView: View {
             VStack(spacing: 6) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title2)
-                Text("Upload")
+                Text(asc.canEditField("screenshots") ? "Upload" : "Leer")
                     .font(.caption)
             }
             .foregroundStyle(.secondary)
@@ -912,6 +924,7 @@ struct ScreenshotsView: View {
 
     @MainActor
     private func addFileToSlot(index: Int) {
+        guard asc.canEditField("screenshots"), !asc.isSyncing else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
@@ -923,6 +936,7 @@ struct ScreenshotsView: View {
     }
 
     private func importFileToSlot(url: URL, slotIndex: Int) {
+        guard asc.canEditField("screenshots"), !asc.isSyncing else { return }
         guard let projectId = appState.activeProjectId else {
             importError = "No active project"
             return
@@ -992,7 +1006,9 @@ struct ScreenshotsView: View {
     }
 
     private func handleFinderDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard asc.canEditField("screenshots"), !asc.isSyncing else { return false }
         guard appState.activeProjectId != nil else { return false }
+        let revision = asc.projectRevision
 
         let validExtensions: Set<String> = ["png", "jpg", "jpeg", "webp"]
         var hasValidProvider = false
@@ -1006,6 +1022,7 @@ struct ScreenshotsView: View {
                           validExtensions.contains(url.pathExtension.lowercased()) else { return }
 
                     Task { @MainActor in
+                        guard self.asc.projectRevision == revision else { return }
                         guard let slotIndex = self.currentTrack.firstIndex(where: { $0 == nil }) else {
                             self.importError = "All 10 slots are full"
                             return

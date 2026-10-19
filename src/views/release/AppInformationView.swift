@@ -27,6 +27,13 @@ struct AppInformationView: View {
     @State private var suppressAutomaticWrites = false
     @State private var showAdvanced = false
     @State private var populatedText: [String] = []
+    @State private var formRevision: UUID?
+    @State private var formVersionID: String?
+    @State private var formLocale = ""
+
+    private var isCurrentForm: Bool {
+        formRevision == asc.projectRevision && formVersionID == asc.selectedVersion?.id && formLocale == currentLocale
+    }
 
     private var textValues: [String] {
         [title, subtitle, descriptionText, keywords, promotionalText, marketingUrl, supportUrl, whatsNew, privacyPolicyUrl]
@@ -181,6 +188,12 @@ struct AppInformationView: View {
 
             Divider()
 
+            if !asc.canEditField("description") || !asc.canEditField("title") {
+                Label("Gesperrte Angaben sind schreibgeschützt. Werbetext und Copyright bleiben bearbeitbar. Für andere Änderungen eine bearbeitbare Version auswählen.", systemImage: "lock.fill")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             if current != nil {
                 HStack(alignment: .top, spacing: 0) {
                     // Left: main content
@@ -230,11 +243,13 @@ struct AppInformationView: View {
                                     }
                                 }
                                 .labelsHidden()
+                                .disabled(!asc.canEditField("primaryCategory"))
                                 .onChange(of: primaryCategory) { _, newValue in
-                                    guard !suppressAutomaticWrites else { return }
+                                    guard !suppressAutomaticWrites, isCurrentForm else { return }
                                     guard !newValue.isEmpty else { return }
                                     guard newValue != asc.appInfo?.primaryCategoryId else { return }
                                     Task {
+                                        guard isCurrentForm else { return }
                                         isSaving = true
                                         await asc.updateAppInfoField("primaryCategory", value: newValue)
                                         isSaving = false
@@ -254,11 +269,13 @@ struct AppInformationView: View {
                                     }
                                 }
                                 .labelsHidden()
+                                .disabled(!asc.canEditField("contentRightsDeclaration"))
                                 .onChange(of: contentRights) { _, newValue in
-                                    guard !suppressAutomaticWrites else { return }
+                                    guard !suppressAutomaticWrites, isCurrentForm else { return }
                                     guard !newValue.isEmpty else { return }
                                     guard newValue != asc.app?.contentRightsDeclaration else { return }
                                     Task {
+                                        guard isCurrentForm else { return }
                                         isSaving = true
                                         await asc.updateAppInfoField("contentRightsDeclaration", value: newValue)
                                         isSaving = false
@@ -302,8 +319,9 @@ struct AppInformationView: View {
         .onChange(of: focusedField) { oldField, _ in
             if let oldField {
                 // Non-localized fields save through separate ASC resources.
-                if oldField == "copyright", !copyright.isEmpty {
+                if oldField == "copyright", !copyright.isEmpty, copyright != asc.selectedVersion?.attributes.copyright {
                     Task {
+                        guard isCurrentForm else { return }
                         isSaving = true
                         await asc.updateAppInfoField("copyright", value: copyright)
                         isSaving = false
@@ -516,6 +534,9 @@ struct AppInformationView: View {
     // MARK: - Field Population
 
     private func populateCurrentFields() {
+        formRevision = asc.projectRevision
+        formVersionID = asc.selectedVersion?.id
+        formLocale = currentLocale
         populateFields(
             from: asc.appInformationLocalization(locale: currentLocale),
             infoLocalization: asc.appInfoLocalizationForLocale(currentLocale)
@@ -583,6 +604,7 @@ struct AppInformationView: View {
     private static let appInfoLocFields: Set<String> = ["title", "subtitle", "privacyPolicyUrl"]
 
     private func saveField(_ field: String) async {
+        guard isCurrentForm, asc.canEditField(field) else { return }
         let value: String
         switch field {
         case "title": value = title
@@ -597,25 +619,26 @@ struct AppInformationView: View {
         default: return
         }
 
+        let fields = ["title", "subtitle", "description", "keywords", "promotionalText", "marketingUrl", "supportUrl", "whatsNew", "privacyPolicyUrl"]
+        guard let index = fields.firstIndex(of: field), populatedText.indices.contains(index), populatedText[index] != value else { return }
+        let revision = formRevision, versionID = formVersionID, locale = formLocale
         isSaving = true
         if Self.appInfoLocFields.contains(field) {
             await asc.updateAppInfoLocalizationField(field, value: value, locale: currentLocale)
         } else {
             await asc.updateVersionLocalizationField(field, value: value, locale: currentLocale)
         }
-        if asc.writeError == nil {
-            let fields = ["title", "subtitle", "description", "keywords", "promotionalText", "marketingUrl", "supportUrl", "whatsNew", "privacyPolicyUrl"]
-            if let index = fields.firstIndex(of: field), populatedText.indices.contains(index) {
-                populatedText[index] = value
-            }
+        if asc.writeError == nil, isCurrentForm, formRevision == revision, formVersionID == versionID, formLocale == locale {
+            populatedText[index] = value
         }
         isSaving = false
     }
 
     private func flushChanges() async {
+        guard isCurrentForm else { return }
         if let focused = focusedField {
             if focused == "copyright" {
-                if !copyright.isEmpty {
+                if !copyright.isEmpty, copyright != asc.selectedVersion?.attributes.copyright {
                     await asc.updateAppInfoField("copyright", value: copyright)
                 }
             } else if focused == "teamId" {
@@ -627,6 +650,7 @@ struct AppInformationView: View {
     }
 
     private func saveTeamId() {
+        guard isCurrentForm else { return }
         let trimmed = teamId.trimmingCharacters(in: .whitespaces)
         guard let projectId = appState.activeProjectId else { return }
         let storage = ProjectStorage()
@@ -670,6 +694,7 @@ struct AppInformationView: View {
             TextField(label, text: text)
                 .textFieldStyle(.roundedBorder)
                 .focused($focusedField, equals: fieldKey)
+                .disabled(!asc.canEditField(fieldKey))
         }
     }
 
@@ -696,6 +721,7 @@ struct AppInformationView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
                 .focused($focusedField, equals: fieldKey)
+                .disabled(!asc.canEditField(fieldKey))
         }
     }
 }
