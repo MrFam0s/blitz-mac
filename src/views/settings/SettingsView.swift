@@ -47,7 +47,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Einstellungen")
-                .font(.title2.bold())
+                .font(BlitzLayout.pageTitle)
             Picker("Bereich", selection: $selectedSection) {
                 ForEach(SettingsSection.allCases) { section in
                     Text(section.rawValue).tag(section)
@@ -74,7 +74,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .id(selectedSection)
         }
-        .padding(24)
+        .blitzPagePadding()
         .frame(maxWidth: 700)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {

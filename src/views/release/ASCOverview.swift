@@ -82,9 +82,7 @@ struct ASCOverview: View {
                     }
                     ASCTabRefreshButton(asc: asc, tab: .app, helpText: "Refresh overview data")
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(.bar)
+                .blitzToolbar()
             }
 
             Divider()

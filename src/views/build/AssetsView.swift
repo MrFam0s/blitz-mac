@@ -146,9 +146,9 @@ struct AssetsView: View {
 
     private var iconGridPanel: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 Text("App Icon")
-                    .font(.title2.weight(.semibold))
+                    .font(BlitzLayout.pageTitle)
 
                 if isGenerating {
                     HStack {
@@ -176,7 +176,7 @@ struct AssetsView: View {
                     }
                 }
             }
-            .padding(24)
+            .blitzPagePadding()
         }
     }
 

@@ -23,7 +23,17 @@ monospace font as a fallback. No font download or shell changes are needed.
 
 The overview no longer repeats a generic warning banner after partial refreshes.
 Dashboard app titles are centered below their icons, including wrapped titles;
-status glyphs have balanced spacing so they do not shift the title off-center.
+status badges sit at the icon corner so they do not shift titles off-center.
+Dashboard counts use compact inline chips, with a quieter background and smaller
+footer actions. The continuously ticking app-list timestamp is removed; the
+refresh tooltip retains the last update date to minute precision. Page toolbars,
+titles and outer spacing share one layout across Release, TestFlight, Insights,
+Settings and the app tools. Screenshot tracks no longer append two invisible
+placeholder widths at each end or jump past that leading artificial padding.
+Locked versions show only existing screenshots; editable drafts expose one
+trailing add slot, preserving original indices and the ten-image capacity.
+Previews align to the top of the content instead of floating in a tall blank area.
+The final layout build uses counter 50.
 Loading progress remains visible, individual readiness rows still distinguish
 failed reads/saved values from missing required fields, and the existing toolbar
 refresh button retries the overview. Submission checks still require fresh data.
@@ -65,6 +75,10 @@ sizes: centered titles, removed refresh banner, all four settings sections,
 fixed sidebar footer, and correctly rendered Nerd Font shell separators/icons.
 The pinned Settings entry shares the native sidebar row styling and selection
 behavior used by the rest of the navigation.
+The final build 50 passed all 183 Swift tests again. Native visual checks cover
+Release, Insights and TestFlight pages, dashboard layouts with wide and narrow
+terminal splits, the locked five-image track at both scroll ends, and an empty
+editable draft with exactly one upload slot. Store data was not modified.
 
 ## 1.0.36
 

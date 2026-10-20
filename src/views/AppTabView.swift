@@ -10,7 +10,7 @@ struct AppTabView: View {
         let buttonInnerSpacing: CGFloat = 4
         let buttonHorizontalPadding: CGFloat = 20
         let interButtonSpacing: CGFloat = 2 * CGFloat(max(AppSubTab.visibleCases.count - 1, 0))
-        let navbarHorizontalPadding: CGFloat = 32
+        let navbarHorizontalPadding = BlitzLayout.pageInset * 2
         let safetyMargin: CGFloat = 24
 
         let totalButtonWidth = AppSubTab.visibleCases.reduce(CGFloat.zero) { partial, tab in
@@ -25,9 +25,7 @@ struct AppTabView: View {
         VStack(spacing: 0) {
             // Top navbar
             topNavbar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.bar)
+                .blitzToolbar()
 
             Divider()
 

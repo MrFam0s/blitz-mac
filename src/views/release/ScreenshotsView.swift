@@ -191,8 +191,14 @@ struct ScreenshotsView: View {
     }
 
     private var trackItems: [ScreenshotTrackItem] {
-        currentTrack.enumerated().map { index, slot in
-            ScreenshotTrackItem(
+        let track = currentTrack
+        let editable = asc.canEditField("screenshots")
+        let lastFilledIndex = track.lastIndex(where: { $0 != nil }) ?? -1
+        // Keep original slot indices for imports/reordering. A draft exposes one
+        // trailing add slot; a locked version shows only its existing images.
+        return track.enumerated().compactMap { index, slot in
+            guard editable ? index <= lastFilledIndex + 1 : slot != nil else { return nil }
+            return ScreenshotTrackItem(
                 id: slot?.id ?? "empty-\(index)",
                 index: index,
                 slot: slot
@@ -525,9 +531,7 @@ struct ScreenshotsView: View {
                             }
                             ASCTabRefreshButton(asc: asc, tab: .screenshots, helpText: "Refresh screenshots")
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(.bar)
+                        .blitzToolbar()
                     }
 
                     Divider()
@@ -620,8 +624,7 @@ struct ScreenshotsView: View {
             }
             .disabled(!asc.canEditField("screenshots") || !hasChanges || asc.isSyncing)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .blitzToolbar()
     }
 
     @ViewBuilder
@@ -646,6 +649,14 @@ struct ScreenshotsView: View {
         return ZStack {
             trackScrollView(screenshotHeight: screenshotHeight, minHeight: size.height)
 
+            if trackItems.isEmpty {
+                ContentUnavailableView(
+                    "No Screenshots",
+                    systemImage: "photo.on.rectangle",
+                    description: Text("No screenshots for this language and device.")
+                )
+            }
+
             if draggingSlot != nil {
                 dragOverlayView(screenshotHeight: screenshotHeight)
 
@@ -664,38 +675,23 @@ struct ScreenshotsView: View {
         }
     }
 
-    private let trackPaddingSlots = 2
     private let trackSpacing: CGFloat = 16
-
-    private func trackPaddingWidth(screenshotHeight: CGFloat) -> CGFloat {
-        let slotWidth = screenshotHeight * selectedDevice.placeholderAspectRatio
-        return CGFloat(trackPaddingSlots) * slotWidth + CGFloat(trackPaddingSlots) * trackSpacing
-    }
 
     private func trackScrollView(screenshotHeight: CGFloat, minHeight: CGFloat) -> some View {
         ScrollView(.horizontal, showsIndicators: true) {
             HStack(alignment: .center, spacing: trackSpacing) {
-                Color.clear.frame(width: trackPaddingWidth(screenshotHeight: screenshotHeight), height: 1)
                 ForEach(trackItems) { item in
                     slotContainer(item: item, screenshotHeight: screenshotHeight)
                 }
-                Color.clear.frame(width: trackPaddingWidth(screenshotHeight: screenshotHeight), height: 1)
             }
             .animation(.spring(response: 0.25, dampingFraction: 0.82), value: trackAnimationKey)
             .background(ScrollViewFinder(scrollView: $scrollViewRef))
             .padding(20)
-            .frame(minHeight: minHeight)
+            .frame(minHeight: minHeight, alignment: .topLeading)
         }
         .coordinateSpace(name: "trackArea")
         .onPreferenceChange(SlotViewportFramePreference.self) { slotViewportFrames = $0 }
-        .onAppear {
-            DispatchQueue.main.async {
-                guard let scrollView = scrollViewRef else { return }
-                let offsetX = trackPaddingWidth(screenshotHeight: screenshotHeight) + trackSpacing
-                scrollView.contentView.scroll(to: NSPoint(x: offsetX, y: 0))
-                scrollView.reflectScrolledClipView(scrollView.contentView)
-            }
-        }
+
     }
 
     // MARK: - Slot Container

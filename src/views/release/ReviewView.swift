@@ -115,15 +115,13 @@ struct ReviewView: View {
                     }
                     ASCTabRefreshButton(asc: asc, tab: .review, helpText: "Refresh review data")
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(.bar)
+                .blitzToolbar()
             }
 
             Divider()
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 // Current version status card
                 if let version = selectedVersion {
                     VStack(alignment: .leading, spacing: 12) {
@@ -326,7 +324,7 @@ struct ReviewView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
-            .padding(24)
+            .blitzPagePadding()
         }
         }
         .onAppear {

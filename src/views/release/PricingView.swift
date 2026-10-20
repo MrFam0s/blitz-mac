@@ -54,15 +54,13 @@ struct MonetizationView: View {
                     }
                     ASCTabRefreshButton(asc: asc, tab: .monetization, helpText: "Refresh monetization data")
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(.bar)
+                .blitzToolbar()
             }
 
             Divider()
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 if let err = asc.writeError {
                     Text(err)
                         .font(.callout)
@@ -89,7 +87,7 @@ struct MonetizationView: View {
                 InAppPurchasesSection(asc: asc)
                 SubscriptionsSection(asc: asc)
             }
-            .padding(24)
+            .blitzPagePadding()
         }
         }
     }

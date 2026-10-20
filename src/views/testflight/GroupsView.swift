@@ -26,12 +26,11 @@ struct GroupsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Groups")
-                    .font(.title2.weight(.semibold))
+                    .font(BlitzLayout.pageTitle)
                 Spacer()
                 ASCTabRefreshButton(asc: asc, tab: .groups, helpText: "Refresh groups")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .blitzToolbar()
 
             Divider()
 

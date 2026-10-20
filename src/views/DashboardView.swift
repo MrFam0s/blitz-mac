@@ -31,9 +31,7 @@ struct DashboardView: View {
         VStack(spacing: 0) {
             // Dashboard controls
             topNavbar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.bar)
+                .blitzToolbar()
 
             Divider()
 
@@ -54,10 +52,9 @@ struct DashboardView: View {
     // MARK: - Top Navbar
 
     private var topNavbar: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 10) {
             Label("My Apps", systemImage: "folder")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+                .font(BlitzLayout.pageTitle)
 
             Spacer()
 
@@ -129,18 +126,20 @@ struct DashboardView: View {
     private var isRefreshingApps: Bool {
         dashboardSummary.isLoading(for: summaryHydrationKey)
     }
-    private var refreshButtonHelpText: String { "Force refresh My Apps" }
+    private var refreshButtonHelpText: String {
+        guard let date = dashboardSummary.refreshedAt else { return "Refresh My Apps" }
+        return "Refresh My Apps · Last updated \(date.formatted(date: .abbreviated, time: .shortened))"
+    }
 
     private var myAppsContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                dashboardRefreshStatus
-                // Stat cards describe the visible apps in My Apps.
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                if dashboardSummary.loadIssue != nil || dashboardSummary.isLoadingSummary {
+                    dashboardRefreshStatus
+                }
+                // Compact counts describe visible apps, independent of the search filter.
                 if !showsHiddenApps {
-                    LazyVGrid(
-                        columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                        spacing: 12
-                    ) {
+                    HStack(spacing: 10) {
                         statCard(
                             title: "Live on Store",
                             value: statValue(visibleSummary.liveCount),
@@ -159,6 +158,7 @@ struct DashboardView: View {
                             color: .red,
                             icon: "xmark.seal.fill"
                         )
+                        Spacer(minLength: 0)
                     }
                 }
 
@@ -171,7 +171,7 @@ struct DashboardView: View {
                 if !displayedRows.isEmpty {
                     // App grid — ASC apps first, local-only projects beneath
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 8, alignment: .leading)],
+                        columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 12, alignment: .center)],
                         spacing: 16
                     ) {
                         ForEach(displayedRows) { row in
@@ -184,10 +184,10 @@ struct DashboardView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(20)
+            .blitzPagePadding()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DottedCanvasBackground())
+        .background(DottedCanvasBackground(dotColor: .primary.opacity(0.12)))
         .overlay {
             if showsBlockingSummarySpinner {
                 VStack(spacing: 12) {
@@ -224,7 +224,7 @@ struct DashboardView: View {
                         .font(.body.weight(.medium))
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .controlSize(.regular)
 
                 Button {
                     appState.showImportProjectSheet = true
@@ -233,11 +233,9 @@ struct DashboardView: View {
                         .font(.body.weight(.medium))
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.large)
-                .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                .controlSize(.regular)
             }
-            .padding(12)
-            .background(.bar)
+            .blitzToolbar()
         }
         .task(id: summaryHydrationKey) {
             await hydrateSummary()
@@ -283,22 +281,21 @@ struct DashboardView: View {
     // MARK: - Stat Card
 
     private func statCard(title: String, value: String, color: Color, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.callout)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+            Text(title)
+                .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .font(.caption)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - App Card
@@ -311,7 +308,7 @@ struct DashboardView: View {
         Button { selectRow(row) } label: {
             appCardContent(row: row, project: project, isSelected: isSelected)
                 .frame(maxWidth: .infinity)
-                .padding(10)
+                .padding(8)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -336,27 +333,28 @@ struct DashboardView: View {
                 RoundedRectangle(cornerRadius: 15)
                     .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
-
-            HStack(spacing: 3) {
-                statusIcon(for: row)
-                    .font(.system(size: 9))
-                    .frame(width: 10)
-                Text(row.name)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                // Balance the status glyph so the title itself stays below the icon's center.
-                Color.clear.frame(width: 10, height: 1)
+            .overlay(alignment: .bottomTrailing) {
+                if row.status != nil || (row.bundleId.map { dashboardSummary.unavailableStatusBundleIDs.contains($0) } ?? false) {
+                    statusIcon(for: row)
+                        .font(.system(size: 12))
+                        .padding(2)
+                        .background(.background, in: Circle())
+                        .offset(x: 2, y: 2)
+                }
             }
-            .frame(maxWidth: .infinity)
 
-            if row.source == .localOnly {
-                Text("Local only")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            Text(row.name)
+                .font(.callout.weight(.medium))
+                .lineLimit(2, reservesSpace: true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Text(row.source == .localOnly ? "Local only" : " ")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(row.source != .localOnly)
         }
-        .frame(minHeight: 110, alignment: .top)
+        .frame(minHeight: 112, alignment: .top)
     }
 
     @ViewBuilder

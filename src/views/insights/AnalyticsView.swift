@@ -34,10 +34,10 @@ struct AnalyticsView: View {
         let hasVendor = asc.app?.vendorNumber != nil
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 HStack {
                     Text("Analytics")
-                        .font(.title2.weight(.semibold))
+                        .font(BlitzLayout.pageTitle)
                     Spacer()
                     Picker("Range", selection: $dateRange) {
                         ForEach(DateRange.allCases, id: \.self) {
@@ -45,6 +45,8 @@ struct AnalyticsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .accessibilityLabel("Date range")
                     .frame(width: 240)
                     ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: "Refresh analytics tab")
                 }
@@ -94,7 +96,7 @@ struct AnalyticsView: View {
                 .background(.background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
-            .padding(24)
+            .blitzPagePadding()
         }
     }
 

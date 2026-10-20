@@ -119,9 +119,7 @@ struct BetaInfoView: View {
                 .disabled(isSaving || current == nil || formRevision != asc.projectRevision || !hasEdits)
                 ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Refresh beta info")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(.background.secondary)
+            .blitzToolbar()
 
             Divider()
 
@@ -160,7 +158,7 @@ struct BetaInfoView: View {
                                   text: $editPrivacyUrl,
                                   hint: "https://example.com/privacy")
                     }
-                    .padding(24)
+                    .blitzPagePadding()
                 }
             }
         }

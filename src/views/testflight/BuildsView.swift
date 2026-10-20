@@ -29,12 +29,11 @@ struct BuildsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Builds")
-                    .font(.title2.weight(.semibold))
+                    .font(BlitzLayout.pageTitle)
                 Spacer()
                 ASCTabRefreshButton(asc: asc, tab: .builds, helpText: "Refresh builds")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .blitzToolbar()
 
             Divider()
 

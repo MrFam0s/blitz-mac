@@ -181,9 +181,7 @@ struct AppInformationView: View {
                     }
                     ASCTabRefreshButton(asc: asc, tab: .appInformation, helpText: "Refresh app information")
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(.bar)
+                .blitzToolbar()
             }
 
             Divider()
@@ -219,7 +217,7 @@ struct AppInformationView: View {
                             // Advanced section at bottom of main scroll
                             advancedSection(isLoading: isLoading)
                         }
-                        .padding(24)
+                        .blitzPagePadding()
                     }
 
                     Divider()

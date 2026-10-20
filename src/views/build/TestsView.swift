@@ -16,7 +16,7 @@ struct TestsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 hero
                 statusBadge
                 ExampleCard(
@@ -41,7 +41,7 @@ struct TestsView: View {
                     detail: detailSubscriptions
                 )
             }
-            .padding(32)
+            .blitzPagePadding()
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
@@ -52,7 +52,7 @@ struct TestsView: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Automate Testing with AI Agents", systemImage: "sparkles")
-                .font(.title2.weight(.semibold))
+                .font(BlitzLayout.pageTitle)
 
             Text("In a Blitz project directory, you can ask agents to use iPhones to test features and find bugs. Using Blitz's **iPhone-MCP**, your agent can tap, swipe, and type in both simulated and physical iPhone devices.")
                 .font(.body)

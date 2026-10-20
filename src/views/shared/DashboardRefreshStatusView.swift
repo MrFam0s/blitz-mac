@@ -33,20 +33,14 @@ struct DashboardRefreshStatusView: View {
                 .padding(12)
                 .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
-            HStack(spacing: 5) {
-                if isLoading {
+            if isLoading {
+                HStack(spacing: 5) {
                     ProgressView().controlSize(.mini)
                     Text(loadingText)
-                } else if let refreshedAt {
-                    Text(isShowingSavedData ? "Saved app list updated" : "App list updated")
-                    Text(refreshedAt, style: .relative)
-                    Text("ago")
-                } else if hasLoadedSummary {
-                    Text("Saved app list; last update unknown")
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

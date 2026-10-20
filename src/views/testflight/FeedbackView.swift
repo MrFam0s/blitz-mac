@@ -57,9 +57,7 @@ struct FeedbackView: View {
                 }
                 ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Refresh feedback tab")
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(.background.secondary)
+            .blitzToolbar()
 
             Divider()
 
