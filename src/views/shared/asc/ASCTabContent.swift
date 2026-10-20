@@ -67,21 +67,7 @@ struct ASCTabContent<Content: View>: View {
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            VStack(spacing: 0) {
-                if ASCTabCacheEntry.tabs.contains(tab), let date = asc.tabLoadedAt[tab] {
-                    HStack(spacing: 8) {
-                        if isLoading {
-                            ProgressView().controlSize(.mini)
-                            Text("Updating saved data…")
-                        }
-                        Spacer()
-                        Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
-                    }
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.horizontal, 20).padding(.vertical, 6)
-                }
-                content()
-            }
+            content()
                 .overlay(alignment: .topLeading) {
                     if let error = asc.tabError[tab], asc.hasLoadedTabData(tab) {
                         HStack(spacing: 8) {
@@ -147,6 +133,12 @@ struct ASCTabRefreshButton: View {
         asc.isTabLoading(tab)
     }
 
+    private var refreshHelp: String {
+        let date = tab == .app ? asc.overviewCacheDate : asc.tabLoadedAt[tab]
+        guard let date else { return helpText }
+        return "\(helpText) · Data from \(date.formatted(date: .abbreviated, time: .shortened))"
+    }
+
     var body: some View {
         Button {
             Task { await asc.refreshTabData(tab) }
@@ -164,7 +156,7 @@ struct ASCTabRefreshButton: View {
         }
         .buttonStyle(.borderless)
         .disabled(isRefreshing)
-        .help(helpText)
+        .help(refreshHelp)
     }
 }
 
@@ -174,16 +166,25 @@ struct InfoRow: View {
     var value: String
 
     var body: some View {
-        HStack(alignment: .top) {
-            Text(label)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(width: 150, alignment: .leading)
-            Text(value)
-                .font(.callout)
-                .textSelection(.enabled)
-            Spacer()
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(label)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 150, alignment: .leading)
+                Text(value)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 0)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label).foregroundStyle(.secondary)
+                Text(value)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .font(.callout)
         .padding(.vertical, 6)
     }
 }

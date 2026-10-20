@@ -125,26 +125,7 @@ struct ASCOverview: View {
     // MARK: - Compact app header
 
     private var headerRow: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 16) {
-                appIdentity.fixedSize(horizontal: true, vertical: false)
-                Spacer(minLength: 8)
-                cacheTimestamp.fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                appIdentity
-                cacheTimestamp
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var cacheTimestamp: some View {
-        if let date = asc.overviewCacheDate {
-            Text("Data from \(date.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        appIdentity.frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

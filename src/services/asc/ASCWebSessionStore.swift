@@ -63,13 +63,13 @@ struct ASCWebSessionStore: Codable {
     static func mergedData(
         storing session: IrisSession,
         into existingData: Data?,
-        now: Date = Date()
+        now: Date? = nil
     ) throws -> Data {
         var store = try decode(existingData) ?? ASCWebSessionStore(version: version, lastKey: nil, sessions: [:])
         let key = sessionKey(forEmail: session.email)
         store.sessions[key] = Session(
             version: version,
-            updatedAt: now,
+            updatedAt: now ?? session.capturedAt,
             userEmail: normalizedEmail(session.email),
             cookies: persistedCookies(from: session.cookies)
         )
@@ -123,10 +123,10 @@ struct ASCWebSessionStore: Codable {
                 value: cookie.value,
                 path: cookie.path.isEmpty ? "/" : cookie.path,
                 domain: cookie.domain,
-                expires: nil,
+                expires: cookie.expires,
                 maxAge: nil,
-                secure: true,
-                httpOnly: true,
+                secure: cookie.secure ?? true,
+                httpOnly: cookie.httpOnly ?? true,
                 sameSite: nil
             )
 

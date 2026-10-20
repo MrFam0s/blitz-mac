@@ -2,6 +2,59 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.50 — narrow detail panes and verified Apple web sign-in
+
+App Information changes to a single column below 800 points without recreating
+its form bindings. Version, locale and release actions wrap into complete rows;
+refresh dates live in tooltips. Review fields, pricing rows and TestFlight pages
+also adapt to narrow detail panes; Builds uses a picker below 720 points. The
+App subtab strip scrolls horizontally at a fixed height. Terminal width on the
+right and height at the bottom are saved independently when the divider is
+released, and clamped to the current window without overwriting that preference.
+
+Screenshot previews fit both the height and width of the detail pane; clicking
+an image opens a larger preview. CDN thumbnails preserve the original aspect
+ratio, up to 1200 pixels. Processing at Apple and image-loading failures have
+distinct labels and retry behavior. A local file with a matching name is never
+substituted for a server screenshot, even while Apple is processing it.
+
+Apple sign-in previously accepted the presence of an old `myacinfo` cookie,
+even when the Olympus request failed. It now waits for the actual ASC origin,
+requires an authenticated Olympus response and validates the portable session
+through the bundled ASC CLI before reporting success. Cancelled or superseded
+navigation cannot complete a later login callback. Failed validation keeps the
+login dialog open; it does not launch Safari or require Computer Use access to
+private browser windows. Apple's own account/2FA interaction can still be needed.
+
+The CLI importer uses the official `web auth import --validate --overwrite`
+operation and its cache locking, so `asc web` receives the verified session even
+when Keychain bypass is enabled. The legacy aggregate export remains available
+to existing Blitz skills. Portable cookies are narrowed to their allowed origin,
+deduplicated by identity, and staged in a private temporary directory; credentials
+and raw helper output never enter logs. The subprocess has cancellation and a
+deadline, and temporary credentials are removed on success or failure. Native
+Iris requests also scope cookies by origin/path/expiry. Cookie expiry metadata
+and the original capture time survive cache backfills.
+
+Validation: 203 Swift tests pass, including the pinned ASC binary's offline
+parser/import test with fictitious cookies and an isolated cache. Regressions
+cover stale/unauthenticated Olympus responses, superseded/cancelled capture,
+cookie scope/expiry, private temporary-file cleanup, rejected or mismatched CLI
+receipts, screenshot processing/loading errors and terminal size persistence.
+Independent review caught and removed an unverified local screenshot fallback
+and corrected the portable cookie scope to match ASC's strict importer.
+Native UI checks at 361-point detail width cover App Information, Overview,
+Review, Monetization, Analytics and the empty Builds state. A complete Mac
+screenshot fits the pane and its larger preview opens independently of the
+terminal. Ordinary pointer clicks open the preview in editable EntryCheck and
+locked Mühlenstein versions; placeholder retry controls keep their own clicks.
+Switching the terminal between bottom and right restores the separate
+sizes. The final build counter is 52; the installed app retains its Developer ID.
+The live Apple login test did not obtain a confirmed session within the MCP's
+five-minute wait; the dialog correctly stayed unverified and was cancelled for
+installation. End-to-end authentication still needs the user's completed login.
+No Store uploads, submissions or privacy-declaration writes are part of testing.
+
 ## 1.0.49 — dashboard, terminal and settings cleanup
 
 Project icons now share one background resolver across the dashboard, sidebar,

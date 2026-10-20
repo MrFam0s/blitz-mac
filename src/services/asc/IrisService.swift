@@ -30,7 +30,6 @@ struct IrisRawPage {
 actor IrisService {
     private let session: IrisSession
     private let urlSession: URLSession
-    private let cookieHeader: String
     private static let baseURL = "https://appstoreconnect.apple.com/iris/v1"
 
     init(session: IrisSession) {
@@ -39,12 +38,7 @@ actor IrisService {
         config.httpCookieAcceptPolicy = .never
         self.urlSession = URLSession(configuration: config)
 
-        let header = session.cookies
-            .map { "\($0.name)=\($0.value)" }
-            .joined(separator: "; ")
-        self.cookieHeader = header
-
-        irisLog("IrisService: init with \(session.cookies.count) cookies, header length=\(header.count)")
+        irisLog("IrisService: init with \(session.cookies.count) cookies")
     }
 
     // MARK: - Public API
@@ -131,7 +125,7 @@ actor IrisService {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+        request.setValue(ASCWebAuthentication.cookieHeader(from: session.cookies, for: url), forHTTPHeaderField: "Cookie")
         request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
         request.setValue("https://appstoreconnect.apple.com", forHTTPHeaderField: "Origin")
         request.setValue("https://appstoreconnect.apple.com/", forHTTPHeaderField: "Referer")

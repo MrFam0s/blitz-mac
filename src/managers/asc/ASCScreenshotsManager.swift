@@ -115,6 +115,7 @@ extension ASCManager {
 
     func cacheScreenshotImage(_ image: NSImage, for slotId: String) {
         screenshotImageCache[slotId] = image
+        screenshotPreviewFailures.remove(slotId)
         syncCachedImage(image, for: slotId, in: &trackSlots)
         syncCachedImage(image, for: slotId, in: &savedTrackState)
     }
@@ -141,6 +142,7 @@ extension ASCManager {
         let pending = screenshots.values.flatMap { $0 }.filter { force || screenshotImageCache[$0.id] == nil }
         let requestedURLs = Dictionary(pending.map { ($0.id, $0.imageURL) }, uniquingKeysWith: { _, new in new })
         let trackedIDs = Set(screenshotsByLocale.values.flatMap { $0.values.flatMap { $0.map(\.id) } })
+        screenshotPreviewFailures.subtract(pending.map(\.id))
         await withTaskGroup(of: (String, NSImage?).self) { group in
             var next = 0
             func enqueue() {
@@ -157,7 +159,13 @@ extension ASCManager {
                 guard projectRevision == revision, !Task.isCancelled else { group.cancelAll(); continue }
                 let current = screenshotsByLocale.values.flatMap { $0.values.flatMap { $0 } }.first { $0.id == id }
                 let stillCurrent = !trackedIDs.contains(id) || (current != nil && current?.imageURL == (requestedURLs[id] ?? nil))
-                if stillCurrent, let image { cacheScreenshotImage(image, for: id) }
+                if stillCurrent {
+                    if let image {
+                        cacheScreenshotImage(image, for: id)
+                    } else if (requestedURLs[id] ?? nil) != nil {
+                        screenshotPreviewFailures.insert(id)
+                    }
+                }
                 enqueue()
             }
         }
@@ -774,6 +782,7 @@ extension ASCManager {
     private func removeCachedScreenshotImages<S: Sequence>(for slotIds: S) where S.Element == String {
         for slotId in slotIds {
             screenshotImageCache.removeValue(forKey: slotId)
+            screenshotPreviewFailures.remove(slotId)
             syncCachedImage(nil, for: slotId, in: &trackSlots)
             syncCachedImage(nil, for: slotId, in: &savedTrackState)
         }
@@ -788,6 +797,7 @@ extension ASCManager {
         })
         let retainedIDs = referencedTrackIDs.union(referencedSavedIDs).union(protectedIDs)
         screenshotImageCache = screenshotImageCache.filter { retainedIDs.contains($0.key) }
+        screenshotPreviewFailures.formIntersection(retainedIDs)
     }
 
     private func syncCachedImage(

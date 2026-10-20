@@ -95,7 +95,7 @@ struct GroupsView: View {
                 Text(group.attributes.name)
                     .font(.callout.weight(.medium))
 
-                HStack(spacing: 8) {
+                BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                     if group.attributes.isInternalGroup == true {
                         badge("Internal", color: .blue)
                     } else {

@@ -117,6 +117,7 @@ final class ASCManager {
     var trackSlots: [String: [TrackSlot?]] = [:]      // keyed by locale + ascDisplayType, 10-element arrays
     var savedTrackState: [String: [TrackSlot?]] = [:] // snapshot after last load/save
     var screenshotImageCache: [String: NSImage] = [:] // keyed by track slot id / ASC screenshot id
+    var screenshotPreviewFailures: Set<String> = []
     var isSyncing = false
 
     // Per-tab loading / error

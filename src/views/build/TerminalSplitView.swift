@@ -9,6 +9,7 @@ struct TerminalSplitView<Content: View, Panel: View>: View {
     @Binding var panelSize: CGFloat
     let minPanelSize: CGFloat
     let minContentSize: CGFloat
+    var onResizeEnded: () -> Void = {}
     @ViewBuilder let content: () -> Content
     @ViewBuilder let panel: () -> Panel
 
@@ -117,6 +118,7 @@ struct TerminalSplitView<Content: View, Panel: View>: View {
                         panelSize = clampedPanelSize(startSize + dragDelta(for: value), total: total)
                         dragStartPanelSize = nil
                         isDraggingDivider = false
+                        onResizeEnded()
                     }
             )
     }
@@ -130,7 +132,7 @@ struct TerminalSplitView<Content: View, Panel: View>: View {
     }
 
     private func clampedPanelSize(_ proposed: CGFloat, total: CGFloat) -> CGFloat {
-        let maxPanelSize = max(total - minContentSize, 0)
+        let maxPanelSize = max(total - minContentSize - dividerThickness, 0)
         let minAllowedPanelSize = min(minPanelSize, maxPanelSize)
         return min(max(proposed, minAllowedPanelSize), maxPanelSize)
     }

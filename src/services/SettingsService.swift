@@ -36,9 +36,11 @@ final class SettingsService {
     var allowASCCLICalls: Bool = false
     var enableASCShellIntegration: Bool = false
     var terminalPosition: String = "bottom"  // "bottom" or "right"
+    var terminalRightWidth: Double = 480
+    var terminalBottomHeight: Double = 250
 
-    init() {
-        self.settingsURL = BlitzPaths.settings
+    init(settingsURL: URL = BlitzPaths.settings) {
+        self.settingsURL = settingsURL
         load()
     }
 
@@ -60,6 +62,13 @@ final class SettingsService {
         if let allowASCCLI = json["allowASCCLICalls"] as? Bool { allowASCCLICalls = allowASCCLI }
         if let shellIntegration = json["enableASCShellIntegration"] as? Bool { enableASCShellIntegration = shellIntegration }
         if let termPos = json["terminalPosition"] as? String { terminalPosition = termPos }
+        terminalRightWidth = Self.validTerminalSize(json["terminalRightWidth"], fallback: 480)
+        terminalBottomHeight = Self.validTerminalSize(json["terminalBottomHeight"], fallback: 250)
+    }
+
+    private static func validTerminalSize(_ value: Any?, fallback: Double) -> Double {
+        guard let size = value as? Double, size.isFinite, size >= 120 else { return fallback }
+        return min(size, 10_000)
     }
 
     func save() {
@@ -76,6 +85,8 @@ final class SettingsService {
             "allowASCCLICalls": allowASCCLICalls,
             "enableASCShellIntegration": enableASCShellIntegration,
             "terminalPosition": terminalPosition,
+            "terminalRightWidth": terminalRightWidth,
+            "terminalBottomHeight": terminalBottomHeight,
         ]
         if let udid = defaultSimulatorUDID {
             json["defaultSimulatorUDID"] = udid

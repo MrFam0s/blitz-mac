@@ -43,7 +43,9 @@ struct FeedbackView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .frame(width: 160)
+                    .labelsHidden()
+                    .accessibilityLabel("Build")
+                    .frame(width: 130)
                     .onAppear {
                         if localSelectedBuildId.isEmpty {
                             localSelectedBuildId = asc.selectedBuildId ?? builds.first?.id ?? ""
@@ -126,7 +128,7 @@ struct FeedbackView: View {
             }
 
             if let device = item.attributes.deviceModel {
-                HStack(spacing: 8) {
+                BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                     Image(systemName: "iphone")
                         .font(.caption)
                         .foregroundStyle(.secondary)

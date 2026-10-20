@@ -52,30 +52,48 @@ struct BuildsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
-                HStack(spacing: 0) {
-                    // Build list
-                    List(selection: $selectedBuildId) {
-                        ForEach(asc.builds) { build in
-                            buildRow(build)
-                                .tag(build.id)
+                GeometryReader { geometry in
+                    if geometry.size.width < 720 {
+                        VStack(spacing: 0) {
+                            Picker("Build", selection: $selectedBuildId) {
+                                ForEach(asc.builds) { build in
+                                    Text("Build \(build.attributes.version) · \(build.attributes.processingState?.capitalized ?? "Unknown")")
+                                        .tag(Optional(build.id))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .blitzPagePadding()
+                            Divider()
+                            selectedBuildDetail
                         }
-                    }
-                    .listStyle(.inset)
-                    .frame(width: 300)
-
-                    Divider()
-
-                    // Detail panel
-                    if let bid = selectedBuildId,
-                       let build = asc.builds.first(where: { $0.id == bid }) {
-                        buildDetail(build)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        ContentUnavailableView("Select a Build", systemImage: "hammer")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        HStack(spacing: 0) {
+                            List(selection: $selectedBuildId) {
+                                ForEach(asc.builds) { build in
+                                    buildRow(build).tag(build.id)
+                                }
+                            }
+                            .listStyle(.inset)
+                            .frame(width: 280)
+                            Divider()
+                            selectedBuildDetail
+                        }
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var selectedBuildDetail: some View {
+        if let bid = selectedBuildId,
+           let build = asc.builds.first(where: { $0.id == bid }) {
+            buildDetail(build)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView("Select a Build", systemImage: "hammer")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

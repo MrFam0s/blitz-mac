@@ -423,6 +423,7 @@ extension ASCManager {
         trackSlots = [:]
         savedTrackState = [:]
         screenshotImageCache = [:]
+        screenshotPreviewFailures = []
         isLoadingTab = [:]
         tabError = [:]
         loadedTabs = []

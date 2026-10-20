@@ -8,6 +8,7 @@ struct AppleIDLoginSheet: View {
     @State private var isLoading = true
     @State private var browserID = UUID()
     @State private var isResettingBrowser = false
+    @State private var validationMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,19 +38,30 @@ struct AppleIDLoginSheet: View {
 
             Divider()
 
-            ZStack {
-                ASCWebView(
-                    isLoading: $isLoading,
-                    onSessionCaptured: { session in
-                        guard !isResettingBrowser else { return }
-                        irisLog("AppleIDLoginSheet: onSessionCaptured called, \(session.cookies.count) cookies")
-                        onSessionCaptured(session)
-                        dismiss()
-                    }
-                )
-                .id(browserID)
+            if let validationMessage {
+                Text(validationMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
 
-                if isLoading {
+            ZStack {
+                if !isResettingBrowser {
+                    ASCWebView(
+                        isLoading: $isLoading,
+                        validationMessage: $validationMessage,
+                        onSessionCaptured: { session in
+                            guard !isResettingBrowser else { return }
+                            irisLog("AppleIDLoginSheet: onSessionCaptured called, \(session.cookies.count) cookies")
+                            onSessionCaptured(session)
+                            dismiss()
+                        }
+                    )
+                    .id(browserID)
+                }
+
+                if isLoading || isResettingBrowser {
                     ProgressView("Loading App Store Connect…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(.background.opacity(0.8))
@@ -65,6 +77,7 @@ struct AppleIDLoginSheet: View {
 
 struct ASCWebView: NSViewRepresentable {
     @Binding var isLoading: Bool
+    @Binding var validationMessage: String?
     var onSessionCaptured: (IrisSession) -> Void
 
     // A stable, app-scoped (not shared with Safari) *persistent* data store.
@@ -77,7 +90,7 @@ struct ASCWebView: NSViewRepresentable {
     // identifier-scoped store lets the WebView remember the ASC session
     // (and Apple's device trust) across launches like a normal browser
     // would, while keeping it fully isolated from the user's actual Safari
-    // data. The cookie-capture flow below is unchanged.
+    // data. A captured cookie is validated before it is reused outside WebKit.
     private static let persistentStoreID = UUID(uuidString: "6F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D")!
 
     @MainActor static func resetBrowser() async {
@@ -109,143 +122,145 @@ struct ASCWebView: NSViewRepresentable {
         Coordinator(parent: self)
     }
 
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        coordinator.cancel()
+        nsView.navigationDelegate = nil
+        nsView.stopLoading()
+    }
+
+    @MainActor
     class Coordinator: NSObject, WKNavigationDelegate {
         let parent: ASCWebView
         weak var webView: WKWebView?
         private var hasCapture = false
+        private var gate = ASCWebCaptureGate()
         private var pollTimer: Timer?
+        private var validationTask: Task<Void, Never>?
+        private var nextValidationAt = Date.distantPast
 
-        init(parent: ASCWebView) {
-            self.parent = parent
-        }
+        init(parent: ASCWebView) { self.parent = parent }
 
-        deinit {
+        deinit { pollTimer?.invalidate(); validationTask?.cancel() }
+
+        func cancel() {
+            gate.cancel()
             pollTimer?.invalidate()
+            pollTimer = nil
+            validationTask?.cancel()
+            validationTask = nil
         }
-
-        // MARK: - Cookie Polling
 
         func startPolling() {
-            irisLog("startPolling: starting 2s cookie poll timer")
             pollTimer?.invalidate()
-            pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-                self?.pollCookies()
+            pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.pollSession() }
             }
         }
 
-        private func pollCookies() {
-            guard !hasCapture, let webView else { return }
+        private func pollSession() {
+            // Persisted myacinfo alone does not prove that sign-in or 2FA has
+            // completed. Never capture from idmsa or while a redirect is loading.
+            guard !hasCapture, let webView, !webView.isLoading,
+                  ASCWebAuthentication.isAppStoreConnectURL(webView.url),
+                  Date() >= nextValidationAt,
+                  let token = gate.begin() else { return }
 
-            webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
-                guard let self, !self.hasCapture else { return }
-
-                let hasMyacinfo = cookies.contains { $0.name == "myacinfo" }
-                let url = webView.url?.absoluteString ?? "(nil)"
-                irisLog("pollCookies: \(cookies.count) cookies, hasMyacinfo=\(hasMyacinfo), url=\(url)")
-
-                guard hasMyacinfo else { return }
-
-                irisLog("pollCookies: myacinfo detected! extracting cookies now")
-                self.pollTimer?.invalidate()
-                self.pollTimer = nil
-                self.extractCookies(from: webView)
+            validationTask = Task { @MainActor [weak self, weak webView] in
+                guard let self, let webView else { return }
+                do {
+                    let script = """
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 15000);
+                    try {
+                        const response = await fetch('/olympus/v1/session', {
+                            credentials: 'include', cache: 'no-store', signal: controller.signal,
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        return {status: response.status, body: await response.text()};
+                    } finally { clearTimeout(timer); }
+                    """
+                    let result: Any = try await withCheckedThrowingContinuation { continuation in
+                        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
+                            continuation.resume(with: result)
+                        }
+                    }
+                    guard self.gate.accepts(token), !Task.isCancelled,
+                          ASCWebAuthentication.isAppStoreConnectURL(webView.url) else { return }
+                    guard let result = result as? [String: Any],
+                          let status = result["status"] as? Int,
+                          let body = result["body"] as? String else {
+                        throw ASCWebAuthenticationError.invalidResponse
+                    }
+                    let email = try ASCWebAuthentication.authenticatedEmail(statusCode: status, data: Data(body.utf8))
+                    let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
+                        webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
+                            continuation.resume(returning: cookies)
+                        }
+                    }
+                    guard self.gate.accepts(token), !Task.isCancelled else { return }
+                    let now = Date()
+                    let appleCookies = cookies.filter { cookie in
+                        let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                        return (domain == "apple.com" || domain.hasSuffix(".apple.com"))
+                            && (cookie.expiresDate.map { $0 > now } ?? true)
+                    }
+                    let session = IrisSession(cookies: appleCookies.map {
+                        .init(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path,
+                              expires: $0.expiresDate, secure: $0.isSecure, httpOnly: $0.isHTTPOnly)
+                    }, email: email, capturedAt: now)
+                    guard !ASCWebAuthentication.cookieHeader(from: session.cookies).isEmpty else {
+                        throw ASCWebAuthenticationError.notAuthenticated
+                    }
+                    self.parent.validationMessage = "Apple-Anmeldung wird für Blitz und ASC geprüft …"
+                    // The official importer validates the exact CLI transport and
+                    // stores the accepted bundle before we report success.
+                    try await ASCWebSessionCLIImporter().importSession(session)
+                    guard self.gate.accepts(token), !Task.isCancelled else { return }
+                    self.hasCapture = true
+                    self.pollTimer?.invalidate()
+                    self.pollTimer = nil
+                    self.gate.finish(token)
+                    self.parent.validationMessage = nil
+                    self.parent.onSessionCaptured(session)
+                } catch {
+                    guard self.gate.accepts(token), !Task.isCancelled else { return }
+                    self.gate.finish(token)
+                    self.nextValidationAt = Date().addingTimeInterval(10)
+                    // No response bodies, cookie values, or raw subprocess errors
+                    // are logged or displayed by the login sheet.
+                    self.parent.validationMessage = (error as? ASCWebAuthenticationError)?.errorDescription
+                        ?? (error as? ASCWebSessionCLIImporter.ImportError)?.errorDescription
+                        ?? "Die Anmeldung konnte noch nicht für ASC übernommen werden. Bitte schließe die Apple-Anmeldung ab; Blitz prüft sie erneut."
+                    irisLog("Apple web session validation failed; login remains open")
+                }
             }
         }
-
-        // MARK: - WKNavigationDelegate
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            let url = webView.url?.absoluteString ?? "(nil)"
-            irisLog("WKWebView: didStartProvisionalNavigation url=\(url)")
-            DispatchQueue.main.async { self.parent.isLoading = true }
+            gate.invalidate()
+            validationTask?.cancel()
+            validationTask = nil
+            nextValidationAt = .distantPast
+            parent.validationMessage = nil
+            parent.isLoading = true
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            let url = webView.url?.absoluteString ?? "(nil)"
-            irisLog("WKWebView: didFinish url=\(url)")
-            DispatchQueue.main.async { self.parent.isLoading = false }
+            parent.isLoading = false
+            pollSession()
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            irisLog("WKWebView: didFail error=\(error.localizedDescription)")
+            navigationFailed()
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            irisLog("WKWebView: didFailProvisionalNavigation error=\(error.localizedDescription)")
+            navigationFailed()
         }
 
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            let url = navigationAction.request.url?.absoluteString ?? "(nil)"
-            irisLog("WKWebView: decidePolicyFor url=\(url)")
-            decisionHandler(.allow)
-        }
-
-        // MARK: - Cookie Extraction
-
-        private func extractCookies(from webView: WKWebView) {
-            guard !hasCapture else {
-                irisLog("extractCookies: already captured, skipping")
-                return
-            }
-            hasCapture = true
-            irisLog("extractCookies: starting extraction")
-
-            // Fetch Apple ID email via synchronous XHR inside the WebView FIRST.
-            // This call to /olympus/v1/session also establishes the full ASC session
-            // and may set additional cookies (e.g. itctx, CSRF tokens) that are
-            // required for iris API calls. We capture cookies AFTER this completes.
-            let js = """
-            (function() {
-                try {
-                    var xhr = new XMLHttpRequest();
-                    xhr.open('GET', 'https://appstoreconnect.apple.com/olympus/v1/session', false);
-                    xhr.setRequestHeader('Accept', 'application/json');
-                    xhr.send();
-                    if (xhr.status === 200) {
-                        var j = JSON.parse(xhr.responseText);
-                        return (j.user && j.user.emailAddress) || null;
-                    }
-                    return null;
-                } catch(e) { return null; }
-            })()
-            """
-
-            DispatchQueue.main.async {
-                webView.evaluateJavaScript(js) { [weak self] result, error in
-                    let email = result as? String
-                    irisLog("extractCookies: fetched account email (present=\(email != nil)) error=\(error?.localizedDescription ?? "none")")
-
-                    // Now capture cookies AFTER the olympus session call,
-                    // so we include any cookies set by that response.
-                    webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-                        let appleCookies = cookies.filter { $0.domain.contains("apple.com") }
-                        irisLog("extractCookies: total cookies=\(cookies.count), apple.com cookies=\(appleCookies.count)")
-
-                        for c in appleCookies {
-                            irisLog("  cookie: \(c.name) domain=\(c.domain) path=\(c.path)")
-                        }
-
-                        let irisCookies = appleCookies.map { cookie in
-                            IrisSession.IrisCookie(
-                                name: cookie.name,
-                                value: cookie.value,
-                                domain: cookie.domain,
-                                path: cookie.path
-                            )
-                        }
-
-                        let session = IrisSession(
-                            cookies: irisCookies,
-                            email: email,
-                            capturedAt: Date()
-                        )
-
-                        irisLog("extractCookies: created IrisSession with \(irisCookies.count) cookies, calling onSessionCaptured")
-
-                        self?.parent.onSessionCaptured(session)
-                    }
-                }
-            }
+        private func navigationFailed() {
+            parent.isLoading = false
+            parent.validationMessage = ASCWebAuthenticationError.transport.errorDescription
         }
     }
 }

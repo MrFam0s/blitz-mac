@@ -142,7 +142,20 @@ final class AppState {
 
     // Terminal panel visibility (toggle only — does not affect session lifecycle)
     var showTerminal = false
-    var terminalPanelSize: CGFloat = 250
+    var terminalPanelSize: CGFloat {
+        get {
+            CGFloat(settingsStore.terminalPosition == "right"
+                ? settingsStore.terminalRightWidth : settingsStore.terminalBottomHeight)
+        }
+        set {
+            guard newValue.isFinite, newValue > 0 else { return }
+            if settingsStore.terminalPosition == "right" {
+                settingsStore.terminalRightWidth = Double(newValue)
+            } else {
+                settingsStore.terminalBottomHeight = Double(newValue)
+            }
+        }
+    }
 
     // Sheet control (toggled by menu bar, observed by ContentView)
     var showNewProjectSheet = false

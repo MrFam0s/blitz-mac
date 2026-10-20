@@ -24,7 +24,11 @@ struct AppTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Top navbar
-            topNavbar
+            ScrollView(.horizontal) {
+                topNavbar
+            }
+                .frame(height: 26)
+                .scrollIndicators(.hidden)
                 .blitzToolbar()
 
             Divider()

@@ -554,14 +554,14 @@ private struct IAPDetailRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row
-            HStack {
+            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                 Button(action: onToggle) {
                     HStack(spacing: 6) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2).foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(iap.attributes.name ?? "Unnamed").font(.body.weight(.medium))
-                            HStack(spacing: 8) {
+                            BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                                 Text(iap.attributes.productId ?? "").font(.caption).foregroundStyle(.secondary)
                                 Text(formatType(iap.attributes.inAppPurchaseType))
                                     .font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
@@ -571,7 +571,6 @@ private struct IAPDetailRow: View {
                     }
                 }
                 .buttonStyle(.plain)
-                Spacer()
                 if iap.attributes.state == "READY_TO_SUBMIT" {
                     SubmitForReviewButton(
                         itemName: iap.attributes.name ?? "IAP",
@@ -953,14 +952,14 @@ private struct SubscriptionDetailRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                 Button(action: onToggle) {
                     HStack(spacing: 6) {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2).foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(sub.attributes.name ?? "Unnamed").font(.body.weight(.medium))
-                            HStack(spacing: 8) {
+                            BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                                 Text(sub.attributes.productId ?? "").font(.caption).foregroundStyle(.secondary)
                                 Text(formatDuration(sub.attributes.subscriptionPeriod))
                                     .font(.caption).padding(.horizontal, 6).padding(.vertical, 2)
@@ -970,7 +969,6 @@ private struct SubscriptionDetailRow: View {
                     }
                 }
                 .buttonStyle(.plain)
-                Spacer()
                 if sub.attributes.state == "READY_TO_SUBMIT" {
                     SubmitForReviewButton(
                         itemName: sub.attributes.name ?? "Subscription",

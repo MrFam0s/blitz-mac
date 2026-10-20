@@ -47,7 +47,7 @@ struct ContentView: View {
         guard appState.settingsStore.terminalPosition == "right" else {
             return baseMinContentSize
         }
-        return max(baseMinContentSize, AppTabView.minimumSingleLineWidth)
+        return 360
     }
 
     private var appleIDLoginBinding: Binding<Bool> {
@@ -323,7 +323,8 @@ struct ContentView: View {
                 showPanel: appState.showTerminal,
                 panelSize: $appState.terminalPanelSize,
                 minPanelSize: 120,
-                minContentSize: terminalSplitMinContentSize
+                minContentSize: terminalSplitMinContentSize,
+                onResizeEnded: { appState.settingsStore.save() }
             ) {
                 DetailView(appState: appState)
             } panel: {

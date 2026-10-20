@@ -714,21 +714,21 @@ extension ASCManager {
     // MARK: - Web Session Helpers (for IAP attachment queries)
 
     func ascWebSessionCookieHeader() -> String? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard let storeData = Self.readKeychainItem(service: "asc-web-session", account: "asc:web-session:store"),
-              let store = try? JSONSerialization.jsonObject(with: storeData) as? [String: Any],
-              let lastKey = store["last_key"] as? String,
-              let sessions = store["sessions"] as? [String: Any],
-              let sessionDict = sessions[lastKey] as? [String: Any],
-              let cookies = sessionDict["cookies"] as? [String: [[String: Any]]] else {
+              let store = try? decoder.decode(ASCWebSessionStore.self, from: storeData),
+              let key = store.lastKey, let session = store.sessions[key] else {
             return nil
         }
 
-        let cookieHeader = cookies.values.flatMap { $0 }.compactMap { cookie -> String? in
-            guard let name = cookie["name"] as? String,
-                  let value = cookie["value"] as? String,
-                  !name.isEmpty else { return nil }
-            return name.hasPrefix("DES") ? "\(name)=\"\(value)\"" : "\(name)=\(value)"
-        }.joined(separator: "; ")
+        let cookies = session.cookies["https://appstoreconnect.apple.com/", default: []].map {
+            IrisSession.IrisCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path,
+                                   expires: $0.expires, secure: $0.secure, httpOnly: $0.httpOnly)
+        }
+        let cookieHeader = ASCWebAuthentication.cookieHeader(
+            from: cookies, for: URL(string: "https://appstoreconnect.apple.com/iris/v1/")!
+        )
 
         return cookieHeader.isEmpty ? nil : cookieHeader
     }

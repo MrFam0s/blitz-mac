@@ -230,7 +230,7 @@ import AppKit
         height: 2796
     )
 
-    #expect(screenshot.imageURL?.absoluteString == "https://example.com/400x800.png")
+    #expect(screenshot.imageURL?.absoluteString == "https://example.com/554x1200.png")
     #expect(screenshot.originalImageURL?.absoluteString == "https://example.com/1290x2796.png")
 }
 
@@ -580,4 +580,70 @@ private func editableScreenshotManager() -> ASCManager {
         previousSlots: [TrackSlot(id: "local", localPath: path, localImage: makeTestImage(), ascScreenshot: nil, isFromASC: false)])
     #expect(slots[0]?.localPath == path)
     #expect(slots[0]?.localImage == nil)
+}
+
+@Test func screenshotPreviewURLPreservesLandscapeDimensions() {
+    let screenshot = makeScreenshot(id: "mac", fileName: "mac.png",
+                                    templateURL: "https://example.com/{w}x{h}.{f}", width: 2880, height: 1800)
+    #expect(screenshot.imageURL?.absoluteString == "https://example.com/1200x750.png")
+    let small = makeScreenshot(id: "small", fileName: "small.png",
+                              templateURL: "https://example.com/{w}x{h}.{f}", width: 400, height: 800)
+    #expect(small.imageURL?.absoluteString == "https://example.com/400x800.png")
+}
+
+@Test func screenshotDeliveryStateDistinguishesProcessingFromFailureAndCompletion() {
+    func shot(_ state: String, errors: [ASCScreenshot.Attributes.AssetDeliveryState.DeliveryError]? = nil) -> ASCScreenshot {
+        ASCScreenshot(id: state, attributes: .init(fileName: "image.png", fileSize: nil, imageAsset: nil,
+            assetDeliveryState: .init(state: state, errors: errors)))
+    }
+    #expect(shot("AWAITING_UPLOAD").isProcessing)
+    #expect(shot("UPLOAD_COMPLETE").isProcessing)
+    #expect(shot("PROCESSING").isProcessing)
+    #expect(!shot("COMPLETE").isProcessing)
+    #expect(!shot("FAILED").isProcessing)
+    #expect(shot("FAILED").hasError)
+    #expect(!shot("UPLOAD_COMPLETE", errors: [.init(code: "INVALID_IMAGE", description: "Invalid image")]).isProcessing)
+    #expect(!shot("UNKNOWN").isProcessing)
+}
+
+@MainActor
+@Test func screenshotPreviewFailureClearsAfterSuccessfulRetry() async {
+    let manager = editableScreenshotManager()
+    let shot = makeScreenshot(id: "retry", fileName: "retry.png", templateURL: "https://example.com/retry.png")
+    await manager.hydrateScreenshotImageCache(screenshots: ["set": [shot]], force: false, loader: { _ in nil })
+    #expect(manager.screenshotPreviewFailures.contains(shot.id))
+    #expect(manager.cachedScreenshotImage(for: shot.id) == nil)
+    let image = makeTestImage()
+    await manager.hydrateScreenshotImageCache(screenshots: ["set": [shot]], force: false, loader: { _ in image })
+    #expect(!manager.screenshotPreviewFailures.contains(shot.id))
+    #expect(manager.cachedScreenshotImage(for: shot.id) === image)
+}
+
+@MainActor
+@Test func screenshotWithoutPreviewURLIsNotMarkedAsDownloadFailure() async {
+    let manager = editableScreenshotManager()
+    let shot = makeScreenshot(id: "processing", fileName: "processing.png")
+    await manager.hydrateScreenshotImageCache(screenshots: ["set": [shot]], force: false, loader: { _ in
+        Issue.record("A screenshot without a CDN URL must not request an image")
+        return nil
+    })
+    #expect(!manager.screenshotPreviewFailures.contains(shot.id))
+}
+
+@MainActor
+@Test func processingScreenshotDoesNotSubstituteUnverifiedLocalPreview() throws {
+    let manager = editableScreenshotManager()
+    let path = try writeValidScreenshotPNG(width: 1290, height: 2796, fileName: "processing-local.png")
+    defer { try? FileManager.default.removeItem(atPath: path) }
+    let image = makeTestImage()
+    let local = TrackSlot(id: "local", localPath: path, localImage: image, ascScreenshot: nil, isFromASC: false)
+    let set = makeScreenshotSet(id: "set", displayType: "APP_IPHONE_67", count: 1)
+    let shot = ASCScreenshot(id: "uploaded", attributes: .init(
+        fileName: URL(fileURLWithPath: path).lastPathComponent, fileSize: nil, imageAsset: nil,
+        assetDeliveryState: .init(state: "UPLOAD_COMPLETE", errors: nil)))
+    manager.updateScreenshotCache(locale: "en-US", sets: [set], screenshots: [set.id: [shot]])
+    let slots = manager.buildTrackSlotsFromASC(displayType: "APP_IPHONE_67", locale: "en-US", previousSlots: [local])
+    #expect(slots[0]?.id == "uploaded")
+    #expect(slots[0]?.localImage == nil)
+    #expect(slots[0]?.ascScreenshot?.isProcessing == true)
 }

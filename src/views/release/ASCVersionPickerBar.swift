@@ -12,12 +12,13 @@ struct ASCVersionPickerBar<Content: View>: View {
             HStack(spacing: 10) {
                 versionSelection
                 Spacer()
-                releaseActions
-                content
+                releaseActions.fixedSize()
+                content.fixedSize()
             }
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) { versionSelection; Spacer(); content }
-                HStack(spacing: 10) { Spacer(); releaseActions }
+            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+                versionSelection
+                content
+                releaseActions
             }
         }
     }
@@ -30,7 +31,9 @@ struct ASCVersionPickerBar<Content: View>: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 190)
+            .labelsHidden()
+            .accessibilityLabel("Version")
+            .frame(width: 136)
         }
         if let version = asc.selectedVersion { stateBadge(version.attributes.appStoreState ?? "") }
     }
@@ -39,7 +42,8 @@ struct ASCVersionPickerBar<Content: View>: View {
         if let onCreateDraft {
             Button("Versionsentwurf anlegen", action: onCreateDraft)
                 .buttonStyle(.bordered)
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
                 .disabled(!asc.canCreateVersion || asc.newVersionCreationBlocker != nil)
                 .help(asc.newVersionCreationBlocker == nil
                       ? "Entwurf zum Bearbeiten von Texten und Medien anlegen. Es wird nichts eingereicht."
@@ -48,7 +52,8 @@ struct ASCVersionPickerBar<Content: View>: View {
         if let onPublishUpdate {
             Button("Update automatisch veröffentlichen", action: onPublishUpdate)
                 .buttonStyle(.borderedProminent)
-                .fixedSize()
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
                 .disabled(!asc.canStartReleaseAutomation)
                 .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
         }

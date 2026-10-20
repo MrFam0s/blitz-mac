@@ -164,7 +164,10 @@ struct AppInformationView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        .frame(width: 160)
+                        .labelsHidden()
+                        .accessibilityLabel("Locale")
+                        .help("Language of the store listing")
+                        .frame(width: 110)
                     }
                     if isSaving {
                         HStack(spacing: 4) {
@@ -193,107 +196,31 @@ struct AppInformationView: View {
             }
 
             if current != nil {
-                HStack(alignment: .top, spacing: 0) {
-                    // Left: main content
+                GeometryReader { geometry in
+                    let usesColumns = geometry.size.width >= 800
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
-                            // App Identity header
                             if let app = asc.app {
-                                HStack(spacing: 8) {
-                                    Text(app.name)
-                                        .font(.title3.weight(.semibold))
-                                    Spacer()
-                                }
-                                .padding(.bottom, 4)
+                                Text(app.name)
+                                    .font(.title3.weight(.semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
 
-                            editableField("Name", text: $title, fieldKey: "title", maxChars: 30)
-                            editableField("Subtitle", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
-                            editableMultilineField("Description", text: $descriptionText, fieldKey: "description", maxChars: 4000)
-                            editableField("Keywords", text: $keywords, fieldKey: "keywords", maxChars: 100)
-                            editableMultilineField("Promotional Text", text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
-                            editableMultilineField("What's New", text: $whatsNew, fieldKey: "whatsNew")
-
-                            // Advanced section at bottom of main scroll
+                            let columns = usesColumns
+                                ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
+                                : AnyLayout(VStackLayout(alignment: .leading, spacing: 24))
+                            columns {
+                                localizedContentFields
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                categoryAndLinks
+                                    .frame(width: usesColumns ? 280 : nil)
+                                    .frame(maxWidth: usesColumns ? nil : .infinity, alignment: .leading)
+                            }
                             advancedSection(isLoading: isLoading)
                         }
                         .blitzPagePadding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-
-                    Divider()
-
-                    // Right sidebar: Category & Links
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            Text("Category & Links")
-                                .font(.callout.weight(.semibold))
-                                .foregroundStyle(.secondary)
-
-                            // Primary Category
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Primary Category")
-                                    .font(.callout.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                Picker("", selection: $primaryCategory) {
-                                    Text("Select…").tag("")
-                                    ForEach(Self.categories, id: \.0) { id, label in
-                                        Text(label).tag(id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .disabled(!asc.canEditField("primaryCategory"))
-                                .onChange(of: primaryCategory) { _, newValue in
-                                    guard !suppressAutomaticWrites, isCurrentForm else { return }
-                                    guard !newValue.isEmpty else { return }
-                                    guard newValue != asc.appInfo?.primaryCategoryId else { return }
-                                    Task {
-                                        guard isCurrentForm else { return }
-                                        isSaving = true
-                                        await asc.updateAppInfoField("primaryCategory", value: newValue)
-                                        isSaving = false
-                                    }
-                                }
-                            }
-
-                            // Content Rights
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Content Rights")
-                                    .font(.callout.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                Picker("", selection: $contentRights) {
-                                    Text("Select…").tag("")
-                                    ForEach(Self.contentRightsOptions, id: \.0) { id, label in
-                                        Text(label).tag(id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .disabled(!asc.canEditField("contentRightsDeclaration"))
-                                .onChange(of: contentRights) { _, newValue in
-                                    guard !suppressAutomaticWrites, isCurrentForm else { return }
-                                    guard !newValue.isEmpty else { return }
-                                    guard newValue != asc.app?.contentRightsDeclaration else { return }
-                                    Task {
-                                        guard isCurrentForm else { return }
-                                        isSaving = true
-                                        await asc.updateAppInfoField("contentRightsDeclaration", value: newValue)
-                                        isSaving = false
-                                    }
-                                }
-                            }
-
-                            // Copyright
-                            editableField("Copyright", text: $copyright, fieldKey: "copyright")
-
-                            Divider()
-
-                            editableField("Privacy Policy URL", text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
-                            editableField("Support URL", text: $supportUrl, fieldKey: "supportUrl")
-                            editableField("Marketing URL", text: $marketingUrl, fieldKey: "marketingUrl")
-                        }
-                        .padding(20)
-                    }
-                    .frame(width: 280)
-                    .background(.background.secondary.opacity(0.4))
                 }
             } else if asc.localizations.isEmpty {
                 if isLoading {
@@ -330,6 +257,88 @@ struct AppInformationView: View {
                     Task { await saveField(oldField) }
                 }
             }
+        }
+    }
+
+    private var localizedContentFields: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Store Listing")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+            editableField("Name", text: $title, fieldKey: "title", maxChars: 30)
+            editableField("Subtitle", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
+            editableMultilineField("Description", text: $descriptionText, fieldKey: "description", maxChars: 4000)
+            editableField("Keywords", text: $keywords, fieldKey: "keywords", maxChars: 100)
+            editableMultilineField("Promotional Text", text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
+            editableMultilineField("What's New", text: $whatsNew, fieldKey: "whatsNew")
+        }
+    }
+
+    private var categoryAndLinks: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Category & Links")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+            // Primary Category
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Primary Category")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $primaryCategory) {
+                    Text("Select…").tag("")
+                    ForEach(Self.categories, id: \.0) { id, label in
+                        Text(label).tag(id)
+                    }
+                }
+                .labelsHidden()
+                .disabled(!asc.canEditField("primaryCategory"))
+                .onChange(of: primaryCategory) { _, newValue in
+                    guard !suppressAutomaticWrites, isCurrentForm else { return }
+                    guard !newValue.isEmpty else { return }
+                    guard newValue != asc.appInfo?.primaryCategoryId else { return }
+                    Task {
+                        guard isCurrentForm else { return }
+                        isSaving = true
+                        await asc.updateAppInfoField("primaryCategory", value: newValue)
+                        isSaving = false
+                    }
+                }
+            }
+
+            // Content Rights
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Content Rights")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $contentRights) {
+                    Text("Select…").tag("")
+                    ForEach(Self.contentRightsOptions, id: \.0) { id, label in
+                        Text(label).tag(id)
+                    }
+                }
+                .labelsHidden()
+                .disabled(!asc.canEditField("contentRightsDeclaration"))
+                .onChange(of: contentRights) { _, newValue in
+                    guard !suppressAutomaticWrites, isCurrentForm else { return }
+                    guard !newValue.isEmpty else { return }
+                    guard newValue != asc.app?.contentRightsDeclaration else { return }
+                    Task {
+                        guard isCurrentForm else { return }
+                        isSaving = true
+                        await asc.updateAppInfoField("contentRightsDeclaration", value: newValue)
+                        isSaving = false
+                    }
+                }
+            }
+
+            // Copyright
+            editableField("Copyright", text: $copyright, fieldKey: "copyright")
+
+            Divider()
+
+            editableField("Privacy Policy URL", text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
+            editableField("Support URL", text: $supportUrl, fieldKey: "supportUrl")
+            editableField("Marketing URL", text: $marketingUrl, fieldKey: "marketingUrl")
         }
     }
 
@@ -400,19 +409,18 @@ struct AppInformationView: View {
                         }
                     } else {
                         ForEach(Array(asc.appStoreVersions.prefix(5).enumerated()), id: \.element.id) { idx, version in
-                            HStack {
+                            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
                                 Text(version.attributes.versionString)
                                     .font(.callout.weight(.medium))
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 80, alignment: .leading)
+                                    .fixedSize()
                                 Text(version.attributes.releaseType ?? "—")
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
-                                    .frame(width: 150, alignment: .leading)
+                                    .fixedSize()
                                 Text(version.attributes.appStoreState ?? "—")
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
-                                Spacer()
                                 if let date = version.attributes.createdDate {
                                     Text(ascShortDate(date))
                                         .font(.caption)

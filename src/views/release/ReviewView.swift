@@ -407,17 +407,30 @@ struct ReviewView: View {
     }
 
     private func threeLevelPicker(_ label: String, selection: Binding<String>) -> some View {
-        HStack {
-            Text(label)
-                .font(.callout)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Picker("", selection: selection) {
-                Text("None").tag("NONE")
-                Text("Infrequent or Mild").tag("INFREQUENT_OR_MILD")
-                Text("Frequent or Intense").tag("FREQUENT_OR_INTENSE")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text(label).fixedSize()
+                Spacer(minLength: 0)
+                frequencyPicker(selection: selection).frame(width: 220)
             }
-            .frame(width: 220)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label).fixedSize(horizontal: false, vertical: true)
+                frequencyPicker(selection: selection)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+        .font(.callout)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+    }
+
+    private func frequencyPicker(selection: Binding<String>) -> some View {
+        Picker("Frequency", selection: selection) {
+            Text("None").tag("NONE")
+            Text("Infrequent or Mild").tag("INFREQUENT_OR_MILD")
+            Text("Frequent or Intense").tag("FREQUENT_OR_INTENSE")
+        }
+        .labelsHidden()
     }
 
     // MARK: - Review Contact Form
@@ -425,7 +438,7 @@ struct ReviewView: View {
     @ViewBuilder
     private var reviewContactForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("First Name").font(.caption).foregroundStyle(.secondary)
                     TextField("First Name", text: $contactFirstName)
@@ -470,7 +483,7 @@ struct ReviewView: View {
             Toggle("Demo account required", isOn: $demoRequired)
 
             if demoRequired {
-                HStack(spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Username").font(.caption).foregroundStyle(.secondary)
                         TextField("Demo username", text: $demoName)

@@ -57,7 +57,10 @@ private struct SlotDisplayState {
     let hasError: Bool
 
     var borderColor: Color {
-        hasError ? .red : (isSynced ? .green : .orange)
+        if hasError { return .red }
+        if slot?.ascScreenshot?.isProcessing == true { return .orange }
+        if slot?.localImage == nil { return .secondary }
+        return isSynced ? .green : .orange
     }
 }
 
@@ -121,6 +124,7 @@ struct ScreenshotsView: View {
     @State private var selectedDevice: ScreenshotDeviceType = .iPhone
     @State private var importError: String?
     @State private var isDropTargeted = false
+    @State private var previewSlot: TrackSlot?
 
     // Drag reorder state
     @State private var draggingSlot: TrackSlot?
@@ -456,7 +460,7 @@ struct ScreenshotsView: View {
     }
 
     private func slotDragGesture(for slot: TrackSlot) -> some Gesture {
-        DragGesture(minimumDistance: 2, coordinateSpace: .named("trackArea"))
+        DragGesture(minimumDistance: 6, coordinateSpace: .named("trackArea"))
             .onChanged { value in
                 if draggingSlot == nil {
                     beginDrag(for: slot, with: value)
@@ -568,6 +572,12 @@ struct ScreenshotsView: View {
             resetDragState()
             loadTrackForDevice()
         }
+        .sheet(item: $previewSlot) { slot in
+            if let image = slot.localImage {
+                ScreenshotPreviewSheet(image: image, title: slot.ascScreenshot?.attributes.fileName
+                    ?? slot.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Screenshot")
+            }
+        }
         .alert("Import Error", isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
@@ -581,50 +591,71 @@ struct ScreenshotsView: View {
     // MARK: - Layout
 
     private var trackToolbar: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                devicePicker
+                Spacer(minLength: 8)
+                trackActions
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                devicePicker
+                HStack { Spacer(minLength: 0); trackActions }
+            }
+        }
+        .blitzToolbar()
+    }
+
+    @ViewBuilder
+    private var devicePicker: some View {
+        if availableDeviceTypes.count > 1 {
+            Picker("Device", selection: $selectedDevice) {
+                ForEach(availableDeviceTypes) { device in
+                    Text(device.label).tag(device)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 240)
+        }
+    }
+
+    private var trackActions: some View {
         HStack(spacing: 12) {
-            if availableDeviceTypes.count > 1 {
-                Picker("", selection: $selectedDevice) {
-                    ForEach(availableDeviceTypes) { device in
-                        Text(device.label).tag(device)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    Label {
+                        Text("Synced")
+                    } icon: {
+                        Circle().fill(.green).frame(width: 8, height: 8)
+                    }
+                    Label {
+                        Text("Changed")
+                    } icon: {
+                        Circle().fill(.orange).frame(width: 8, height: 8)
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 240)
+                .font(.caption).foregroundStyle(.secondary)
+                Color.clear.frame(width: 0, height: 0)
             }
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                Circle().fill(.green).frame(width: 8, height: 8)
-                Text("Synced").font(.caption).foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 4) {
-                Circle().fill(.orange).frame(width: 8, height: 8)
-                Text("Changed").font(.caption).foregroundStyle(.secondary)
-            }
-
-            Text("\(filledSlotCount)/10 slots")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
+            Text("\(filledSlotCount)/10")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize()
+                .help("\(filledSlotCount) of 10 screenshot slots used")
             Button {
                 Task { await save() }
             } label: {
                 if asc.isSyncing {
                     HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.small)
+                        ProgressView().controlSize(.small)
                         Text("Saving...")
                     }
                 } else {
                     Label("Save", systemImage: "arrow.up.circle")
                 }
             }
+            .fixedSize()
             .disabled(!asc.canEditField("screenshots") || !hasChanges || asc.isSyncing)
         }
-        .blitzToolbar()
     }
 
     @ViewBuilder
@@ -644,7 +675,12 @@ struct ScreenshotsView: View {
     }
 
     private func trackCanvas(in size: CGSize) -> some View {
-        let screenshotHeight = size.height * 0.65
+        let widestAspectRatio = currentTrack.compactMap { $0 }.reduce(selectedDevice.placeholderAspectRatio) { widest, slot in
+            max(widest, screenshotAspectRatio(for: slot))
+        }
+        // A landscape Mac image must also fit when the terminal takes half the window.
+        let availableWidth = max(1, size.width - BlitzLayout.pageInset * 2)
+        let screenshotHeight = max(1, min(480, size.height * 0.65, availableWidth / widestAspectRatio))
 
         return ZStack {
             trackScrollView(screenshotHeight: screenshotHeight, minHeight: size.height)
@@ -755,9 +791,11 @@ struct ScreenshotsView: View {
         screenshotHeight: CGFloat
     ) -> some View {
         ZStack(alignment: .topTrailing) {
-            slotImageContent(slot: slot, displayState: displayState, screenshotHeight: screenshotHeight)
-                .contentShape(Rectangle())
-                .highPriorityGesture(slotDragGesture(for: slot), including: asc.canEditField("screenshots") && !asc.isSyncing ? .all : .none)
+            interactiveSlotImage(slot: slot, displayState: displayState, screenshotHeight: screenshotHeight)
+                .accessibilityAction(named: Text("Vorschau öffnen")) {
+                    if slot.localImage != nil { previewSlot = slot }
+                }
+                .help(slot.localImage != nil ? "Klicken, um die Vorschau zu vergrößern" : "")
 
             if asc.canEditField("screenshots") {
                 Button {
@@ -783,52 +821,93 @@ struct ScreenshotsView: View {
     }
 
     @ViewBuilder
+    private func interactiveSlotImage(
+        slot: TrackSlot,
+        displayState: SlotDisplayState,
+        screenshotHeight: CGFloat
+    ) -> some View {
+        let image = slotImageContent(slot: slot, displayState: displayState, screenshotHeight: screenshotHeight)
+            .contentShape(Rectangle())
+        let tap = TapGesture().onEnded { if slot.localImage != nil { previewSlot = slot } }
+        if slot.localImage == nil {
+            // Placeholder controls such as Retry must receive their own clicks.
+            // Reordering resumes once an actual preview image is available.
+            image
+        } else if asc.canEditField("screenshots") && !asc.isSyncing {
+            // Resolve the two interactions together: a click opens the image,
+            // while a deliberate drag reorders it without opening the sheet.
+            image.highPriorityGesture(slotDragGesture(for: slot).exclusively(before: tap))
+        } else {
+            // A .none drag mask also suppresses this view's tap recognizer.
+            // Locked screenshots therefore get only the preview gesture.
+            image.gesture(tap)
+        }
+    }
+
+    private func screenshotAspectRatio(for slot: TrackSlot) -> CGFloat {
+        if let image = slot.localImage, image.size.width > 0, image.size.height > 0 {
+            return image.size.width / image.size.height
+        }
+        if let asset = slot.ascScreenshot?.attributes.imageAsset,
+           let width = asset.width, let height = asset.height, width > 0, height > 0 {
+            return CGFloat(width) / CGFloat(height)
+        }
+        return selectedDevice.placeholderAspectRatio
+    }
+
     private func slotImageContent(
         slot: TrackSlot,
         displayState: SlotDisplayState,
         screenshotHeight: CGFloat
     ) -> some View {
-        if displayState.hasError {
-            slotPlaceholder(screenshotHeight: screenshotHeight) {
-                VStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.red)
-
-                    if let description = slot.ascScreenshot?.errorDescription, !description.isEmpty {
-                        Text(description)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(.horizontal, 12)
+        let width = screenshotHeight * screenshotAspectRatio(for: slot)
+        return VStack(spacing: 8) {
+            Group {
+                if displayState.hasError {
+                    screenshotMessage(icon: "exclamationmark.circle.fill", title: "Upload fehlgeschlagen",
+                                      detail: slot.ascScreenshot?.errorDescription)
+                } else if let image = slot.localImage {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                } else if slot.ascScreenshot?.isProcessing == true {
+                    screenshotMessage(icon: "clock", title: "Apple verarbeitet das Bild",
+                                      detail: "Die Vorschau ist nach der Verarbeitung verfügbar.", canRetry: true)
+                } else if slot.ascScreenshot?.imageURL != nil, !asc.screenshotPreviewFailures.contains(slot.id) {
+                    VStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Vorschau wird geladen …").font(.caption).foregroundStyle(.secondary)
                     }
+                } else {
+                    screenshotMessage(icon: "photo.badge.exclamationmark", title: "Vorschau nicht verfügbar",
+                                      detail: slot.isFromASC ? "Das Bild ist gespeichert, die Vorschau konnte aber nicht geladen werden."
+                                          : "Die lokale Bilddatei konnte nicht geladen werden.", canRetry: slot.isFromASC)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(.red, lineWidth: 2)
-            )
-        } else if let image = slot.localImage {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: screenshotHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(displayState.borderColor, lineWidth: 2)
-                )
-        } else if slot.ascScreenshot?.imageURL != nil {
-            slotPlaceholder(icon: "photo", screenshotHeight: screenshotHeight)
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(displayState.borderColor, lineWidth: 2))
-        } else {
-            slotPlaceholder(icon: "photo", screenshotHeight: screenshotHeight)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(displayState.borderColor, lineWidth: 2)
-                )
+            .frame(width: width, height: screenshotHeight)
+            .background(Color(.controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(displayState.borderColor, lineWidth: 2))
+
+            if slot.localImage != nil, slot.ascScreenshot?.isProcessing == true {
+                Label("Apple verarbeitet das Bild", systemImage: "clock")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
+        .frame(width: width)
+    }
+
+    private func screenshotMessage(icon: String, title: String, detail: String?, canRetry: Bool = false) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.title2)
+            Text(title).font(.callout.weight(.medium))
+            if let detail, !detail.isEmpty { Text(detail).font(.caption) }
+            if canRetry {
+                Button("Erneut laden") { Task { await loadSelectedLocaleData(force: true) } }
+                    .controlSize(.small).disabled(asc.isSyncing)
+            }
+        }
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+        .padding(16)
     }
 
     private func emptySlotView(index: Int, screenshotHeight: CGFloat) -> some View {
@@ -1067,5 +1146,30 @@ private struct FileDropDelegate: DropDelegate {
 
     func validateDrop(info: DropInfo) -> Bool {
         !info.itemProviders(for: [.fileURL]).isEmpty
+    }
+}
+
+private struct ScreenshotPreviewSheet: View {
+    let image: NSImage
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title).font(.headline).lineLimit(1).truncationMode(.middle)
+                Spacer()
+                Button("Schließen") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(16)
+            Divider()
+            GeometryReader { geometry in
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+            .padding(16)
+        }
+        .frame(width: min(1000, max(360, (NSApp.keyWindow?.frame.width ?? 1000) - 80)),
+               height: min(760, max(300, (NSApp.keyWindow?.frame.height ?? 760) - 100)))
     }
 }

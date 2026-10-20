@@ -66,7 +66,7 @@ struct BetaInfoView: View {
 
         VStack(spacing: 0) {
             // Locale picker toolbar
-            HStack {
+            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                 if !locs.isEmpty {
                     Picker("Locale", selection: $selectedLocId) {
                         ForEach(locs) { loc in
@@ -75,7 +75,9 @@ struct BetaInfoView: View {
                     }
                     .pickerStyle(.menu)
                     .disabled(isSaving)
-                    .frame(width: 180)
+                    .labelsHidden()
+                    .accessibilityLabel("Locale")
+                    .frame(width: 110)
                     .onChange(of: locs.count) { _, _ in
                         if selectedLocId.isEmpty, let first = asc.betaLocalizations.first {
                             selectedLocId = first.id
@@ -94,7 +96,6 @@ struct BetaInfoView: View {
                         }
                     }
                 }
-                Spacer()
                 if saveSuccess {
                     Label("Saved", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)

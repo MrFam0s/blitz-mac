@@ -35,10 +35,9 @@ struct AnalyticsView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                HStack {
+                BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 8) {
                     Text("Analytics")
                         .font(BlitzLayout.pageTitle)
-                    Spacer()
                     Picker("Range", selection: $dateRange) {
                         ForEach(DateRange.allCases, id: \.self) {
                             Text($0.rawValue).tag($0)

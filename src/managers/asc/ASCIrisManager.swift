@@ -322,6 +322,9 @@ struct IrisSession: Codable, Sendable {
         let value: String
         let domain: String
         let path: String
+        var expires: Date? = nil
+        var secure: Bool? = nil
+        var httpOnly: Bool? = nil
     }
 
     private static let keychainService = "dev.blitz.iris-session"

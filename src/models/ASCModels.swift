@@ -318,7 +318,21 @@ struct ASCScreenshot: Codable, Identifiable {
     }
 
     var imageURL: URL? {
-        renderedImageURL(width: 400, height: 800, format: "png")
+        guard let width = attributes.imageAsset?.width, width > 0,
+              let height = attributes.imageAsset?.height, height > 0 else {
+            return renderedImageURL(width: 400, height: 800, format: "png")
+        }
+        let scale = min(1, 1200.0 / Double(max(width, height)))
+        return renderedImageURL(
+            width: max(1, Int((Double(width) * scale).rounded())),
+            height: max(1, Int((Double(height) * scale).rounded())),
+            format: "png"
+        )
+    }
+
+    var isProcessing: Bool {
+        guard !hasError, let state = attributes.assetDeliveryState?.state?.uppercased() else { return false }
+        return ["AWAITING_UPLOAD", "UPLOAD_COMPLETE", "PROCESSING"].contains(state)
     }
 
     var originalImageURL: URL? {
