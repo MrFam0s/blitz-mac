@@ -4,10 +4,8 @@ struct SettingsView: View {
     @Bindable var settings: SettingsService
     @Bindable var appState: AppState
     var mcpServer: MCPServerService?
-    @AppStorage("appWallSyncConsented") private var appWallSyncEnabled: Bool = false
-    @AppStorage("appWallSyncPromptShown") private var appWallSyncPromptShown: Bool = false
-    @AppStorage("appWallShareReviewerFeedback") private var appWallShareReviewerFeedback: Bool = true
 
+    @State private var selectedSection: SettingsSection = .general
     @State private var showClearCredentialsConfirm = false
     @State private var showTerminalPicker = false
     @State private var showSkipPermsDetail = false
@@ -15,14 +13,23 @@ struct SettingsView: View {
     @State private var terminalResetWarning: String?
     @State private var shellIntegrationError: String?
 
+    private enum SettingsSection: String, CaseIterable, Identifiable {
+        case general = "Allgemein"
+        case integrations = "Integrationen"
+        case permissions = "Freigaben"
+        case maintenance = "Wartung"
+
+        var id: String { rawValue }
+    }
+
     private let gateableCategories: [(ApprovalRequest.ToolCategory, String)] = [
-        (.ascFormMutation, "ASC form editing"),
-        (.ascScreenshotMutation, "ASC screenshot upload"),
-        (.ascSubmitMutation, "ASC submit for review"),
-        (.buildPipeline, "Build pipeline"),
-        (.projectMutation, "Project mutations"),
-        (.settingsMutation, "Settings mutations"),
-        (.simulatorControl, "Simulator control"),
+        (.ascFormMutation, "Store-Texte und Metadaten ändern"),
+        (.ascScreenshotMutation, "Screenshots hochladen"),
+        (.ascSubmitMutation, "Zur App-Prüfung einreichen"),
+        (.buildPipeline, "Builds ausführen"),
+        (.projectMutation, "Projekte ändern"),
+        (.settingsMutation, "Einstellungen ändern"),
+        (.simulatorControl, "Simulator steuern"),
     ]
 
     private var configuredTerminal: TerminalApp {
@@ -38,110 +45,38 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            defaultsSection
-            appWallSection
-
-            Section("Simulator") {
-                Toggle("Show Cursor Overlay", isOn: $settings.showCursor)
-
-                if settings.showCursor {
-                    HStack {
-                        Text("Cursor Size")
-                        Slider(value: $settings.cursorSize, in: 10...40, step: 2)
-                        Text("\(Int(settings.cursorSize))px")
-                            .monospacedDigit()
-                            .frame(width: 40, alignment: .trailing)
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Einstellungen")
+                .font(.title2.bold())
+            Picker("Bereich", selection: $selectedSection) {
+                ForEach(SettingsSection.allCases) { section in
+                    Text(section.rawValue).tag(section)
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
 
-            Section("Permissions") {
-                Toggle("Auto-navigate to tab on tool call", isOn: $settings.autoNavEnabled)
-                    .onChange(of: settings.autoNavEnabled) { _, _ in settings.save() }
-
-                Toggle("Approve all", isOn: Binding(
-                    get: {
-                        gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? false }
-                    },
-                    set: { newValue in
-                        for (category, _) in gateableCategories {
-                            settings.permissionToggles[category.rawValue] = newValue
-                        }
-                        settings.save()
-                    }
-                ))
-                .fontWeight(.medium)
-
-                ForEach(gateableCategories, id: \.0.rawValue) { category, label in
-                    Toggle(label, isOn: Binding(
-                        get: { settings.permissionToggles[category.rawValue] ?? false },
-                        set: { newValue in
-                            settings.permissionToggles[category.rawValue] = newValue
-                            settings.save()
-                        }
-                    ))
+            Form {
+                switch selectedSection {
+                case .general:
+                    generalSection
+                    simulatorSection
+                case .integrations:
+                    MCPSetupSection(mcpServer: mcpServer)
+                    shellSection
+                case .permissions:
+                    agentPermissionsSection
+                    blitzPermissionsSection
+                case .maintenance:
+                    maintenanceSection
                 }
             }
-
-            MCPSetupSection(mcpServer: mcpServer)
-
-            Section("Updates") {
-                UpdateSettingsRow(autoUpdate: appState.autoUpdate)
-            }
-
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("App Store Connect Credentials")
-                        Spacer()
-                        if appState.ascManager.credentials != nil {
-                            Text("Configured")
-                                .font(.callout)
-                                .foregroundStyle(.green)
-                        } else {
-                            Text("Not set")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button("Clear Credentials", role: .destructive) {
-                        showClearCredentialsConfirm = true
-                    }
-                    .disabled(appState.ascManager.credentials == nil)
-
-                    Text("This will remove your saved API key, Key ID, and Issuer ID. You will need to re-enter them to use App Store Connect features.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            } header: {
-                Text("Danger Zone")
-            }
-            .confirmationDialog(
-                "Clear App Store Connect Credentials?",
-                isPresented: $showClearCredentialsConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Clear Credentials", role: .destructive) {
-                    appState.ascManager.deleteCredentials()
-                }
-            } message: {
-                Text("This action cannot be undone. You will need to re-enter your API credentials to access App Store Connect data.")
-            }
-
-            Section("About") {
-                HStack {
-                    Text("Blitz")
-                    Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
-                        .foregroundStyle(.secondary)
-                }
-            }
+            .formStyle(.grouped)
+            .id(selectedSection)
         }
-        .formStyle(.grouped)
-        .frame(maxWidth: 500)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .frame(maxWidth: 700)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {
             appState.ascManager.loadStoredCredentialsIfNeeded()
             refreshTerminalResetWarning()
@@ -158,10 +93,8 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Defaults Section
-
-    private var defaultsSection: some View {
-        Section("Defaults") {
+    private var generalSection: some View {
+        Section("Terminal & KI-Agent") {
             // Terminal picker
             HStack {
                 Text("Terminal")
@@ -183,7 +116,7 @@ struct SettingsView: View {
 
                     Divider()
 
-                    Button("Choose Custom...") {
+                    Button("Andere App auswählen …") {
                         showTerminalPicker = true
                     }
                 } label: {
@@ -210,7 +143,7 @@ struct SettingsView: View {
 
             // Agent CLI picker
             HStack {
-                Text("AI Agent")
+                Text("KI-Agent")
                 Spacer()
                 Menu {
                     ForEach(AIAgent.allCases, id: \.rawValue) { agent in
@@ -238,28 +171,18 @@ struct SettingsView: View {
                 .fixedSize()
             }
 
-            // Whitelist Blitz MCP tools
-            Toggle("Allow all Blitz MCP tool calls", isOn: Binding(
-                get: { settings.whitelistBlitzMCPTools },
-                set: { newValue in
-                    settings.whitelistBlitzMCPTools = newValue
-                    settings.save()
-                    refreshAgentPermissionFiles()
-                }
-            ))
-
-            Toggle("Allow all ASC CLI calls", isOn: Binding(
-                get: { settings.allowASCCLICalls },
-                set: { newValue in
-                    settings.allowASCCLICalls = newValue
-                    settings.save()
-                    refreshAgentPermissionFiles()
-                }
-            ))
+            if currentTerminal.isBuiltIn {
+                LabeledContent("Terminalschrift", value: TerminalFont.resolved.displayName ?? TerminalFont.resolved.fontName)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("Installierte Nerd Fonts werden für Shell-Symbole automatisch bevorzugt.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             // Send default prompt toggle
             VStack(alignment: .leading, spacing: 4) {
-                Toggle("Send tab-specific prompt on launch", isOn: Binding(
+                Toggle("Beim Start einen Auftrag zum aktuellen Tab senden", isOn: Binding(
                     get: { settings.sendDefaultPrompt },
                     set: { newValue in
                         settings.sendDefaultPrompt = newValue
@@ -268,31 +191,39 @@ struct SettingsView: View {
                 ))
 
                 learnMore(isExpanded: $showAskAIDetail) {
-                    Text("When enabled, Blitz automatically sends a context-aware prompt to \(currentAgent.displayName) based on the current tab (e.g. Store Listing, Screenshots, App Review). Disable to start with a blank session.")
+                    Text("Blitz sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
                 }
             }
 
-            // Skip permissions toggle (only for agents that support it)
-            if currentAgent.skipPermissionsFlag != nil {
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Skip agent permissions", isOn: Binding(
-                        get: { settings.skipAgentPermissions },
-                        set: { newValue in
-                            settings.skipAgentPermissions = newValue
-                            settings.save()
-                        }
-                    ))
+            Toggle("Bei Werkzeugaufrufen zum passenden Tab wechseln", isOn: $settings.autoNavEnabled)
+                .onChange(of: settings.autoNavEnabled) { _, _ in settings.save() }
+        }
+    }
 
-                    learnMore(isExpanded: $showSkipPermsDetail) {
-                        Text("Launches \(currentAgent.displayName) with \(currentAgent.skipPermissionsFlag ?? ""). The agent will not ask for confirmation before running tools.")
-                    }
+    private var simulatorSection: some View {
+        Section("Simulator") {
+            Toggle("Berührungen im Simulator anzeigen", isOn: $settings.showCursor)
+                .onChange(of: settings.showCursor) { _, _ in settings.save() }
+            if settings.showCursor {
+                HStack {
+                    Text("Zeigergröße")
+                    Slider(value: $settings.cursorSize, in: 10...40, step: 2)
+                        .accessibilityLabel("Zeigergröße")
+                    Text("\(Int(settings.cursorSize)) px")
+                        .monospacedDigit()
+                        .frame(width: 45, alignment: .trailing)
                 }
+                .onChange(of: settings.cursorSize) { _, _ in settings.save() }
             }
+        }
+    }
 
+    private var shellSection: some View {
+        Section("ASC im externen Terminal") {
             VStack(alignment: .leading, spacing: 4) {
                 let shellIntegration = ShellIntegrationService()
 
-                Toggle("Enable ASC shell integration", isOn: Binding(
+                Toggle("ASC für externe Terminals bereitstellen", isOn: Binding(
                     get: { settings.enableASCShellIntegration },
                     set: { newValue in
                         shellIntegrationError = nil
@@ -306,11 +237,11 @@ struct SettingsView: View {
                 .disabled(!shellIntegration.isSupported && !settings.enableASCShellIntegration)
 
                 if shellIntegration.isSupported {
-                    Text("Adds a managed Blitz block to \(shellIntegration.targetRCFileLabel) so manually opened shells can find `asc` on PATH.")
+                    Text("Stellt `asc` auch in separat geöffneten Terminals bereit. Dafür verwaltet Blitz einen Eintrag in \(shellIntegration.targetRCFileLabel).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("Automatic shell integration only supports zsh and bash. Detected \(shellIntegration.shellKind.displayName).")
+                    Text("Die automatische Einrichtung unterstützt zsh und bash. Erkannt: \(shellIntegration.shellKind.displayName).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -324,30 +255,126 @@ struct SettingsView: View {
         }
     }
 
-    private var appWallSection: some View {
-        Section("App Wall") {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Sync to App Wall", isOn: Binding(
-                    get: { appWallSyncEnabled },
+    private var agentPermissionsSection: some View {
+        Section("KI-Agent") {
+            // Whitelist Blitz MCP tools
+            Toggle("Blitz-Werkzeuge im Agenten automatisch erlauben", isOn: Binding(
+                get: { settings.whitelistBlitzMCPTools },
+                set: { newValue in
+                    settings.whitelistBlitzMCPTools = newValue
+                    settings.save()
+                    refreshAgentPermissionFiles()
+                }
+            ))
+
+            Toggle("ASC-Befehle im Agenten automatisch erlauben", isOn: Binding(
+                get: { settings.allowASCCLICalls },
+                set: { newValue in
+                    settings.allowASCCLICalls = newValue
+                    settings.save()
+                    refreshAgentPermissionFiles()
+                }
+            ))
+
+            // Skip permissions toggle (only for agents that support it)
+            if currentAgent.skipPermissionsFlag != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Rückfragen des Agenten überspringen", isOn: Binding(
+                        get: { settings.skipAgentPermissions },
+                        set: { newValue in
+                            settings.skipAgentPermissions = newValue
+                            settings.save()
+                        }
+                    ))
+
+                    learnMore(isExpanded: $showSkipPermsDetail) {
+                        Text("\(currentAgent.displayName) führt Werkzeuge ohne seine üblichen Bestätigungen aus. Die Freigaben für Aktionen in Blitz gelten zusätzlich.")
+                    }
+                }
+            }
+
+        }
+    }
+
+    private var blitzPermissionsSection: some View {
+        Section {
+            Text("Aktivierte Aktionen führt Blitz ohne zusätzliche Rückfrage aus.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Toggle("Alle Blitz-Aktionen automatisch erlauben", isOn: Binding(
+                get: {
+                    gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? false }
+                },
+                set: { newValue in
+                    for (category, _) in gateableCategories {
+                        settings.permissionToggles[category.rawValue] = newValue
+                    }
+                    settings.save()
+                }
+            ))
+            .fontWeight(.medium)
+
+            ForEach(gateableCategories, id: \.0.rawValue) { category, label in
+                Toggle(label, isOn: Binding(
+                    get: { settings.permissionToggles[category.rawValue] ?? false },
                     set: { newValue in
-                        appWallSyncEnabled = newValue
-                        appWallSyncPromptShown = true
+                        settings.permissionToggles[category.rawValue] = newValue
+                        settings.save()
                     }
                 ))
-
-                Text("Controls whether Blitz syncs your apps to the App Wall and participates in launch auto-sync.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Share reviewer feedback", isOn: $appWallShareReviewerFeedback)
-
-                Text("Publishes synced reviewer messages, rejection reasons, and guideline references on the App Wall. Turn this off to keep reviewer feedback private while still syncing app and submission history.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+        } header: {
+            Text("Aktionen in Blitz")
         }
+    }
+
+    @ViewBuilder
+    private var maintenanceSection: some View {
+        Section("Blitz") {
+            LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
+            LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")
+            UpdateSettingsRow(autoUpdate: appState.autoUpdate)
+        }
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Zugangsdaten")
+                    Spacer()
+                    if appState.ascManager.credentials != nil {
+                        Text("Eingerichtet")
+                            .font(.callout)
+                            .foregroundStyle(.green)
+                    } else {
+                        Text("Nicht eingerichtet")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Button("Zugangsdaten entfernen", role: .destructive) {
+                    showClearCredentialsConfirm = true
+                }
+                .disabled(appState.ascManager.credentials == nil)
+
+                Text("Entfernt den gespeicherten API-Schlüssel samt Kennungen. Danach ist für App Store Connect eine erneute Einrichtung nötig.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("App Store Connect")
+        }
+        .confirmationDialog(
+            "App-Store-Connect-Zugangsdaten entfernen?",
+            isPresented: $showClearCredentialsConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Zugangsdaten entfernen", role: .destructive) {
+                appState.ascManager.deleteCredentials()
+            }
+        } message: {
+            Text("Der gespeicherte API-Schlüssel und seine Kennungen werden lokal entfernt. Für App Store Connect musst du sie anschließend erneut hinterlegen.")
+        }
+
     }
 
     private func learnMore<Content: View>(isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content) -> some View {
@@ -361,7 +388,7 @@ struct SettingsView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .bold))
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
-                    Text("Learn more...")
+                    Text("Details")
                 }
                 .font(.caption)
                 .foregroundStyle(Color.accentColor)
@@ -457,7 +484,7 @@ struct SettingsView: View {
     private func refreshTerminalResetWarning() {
         let resolution = settings.resolveDefaultTerminal()
         if let missing = resolution.replacedMissingTerminal {
-            terminalResetWarning = "\(missing.displayName) is no longer installed. Reset to Terminal."
+            terminalResetWarning = "\(missing.displayName) ist nicht mehr installiert. Terminal wird stattdessen verwendet."
         }
     }
 }

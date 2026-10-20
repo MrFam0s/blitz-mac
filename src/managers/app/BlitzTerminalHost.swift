@@ -320,6 +320,9 @@ final class BlitzTerminalView: TerminalView, TerminalViewDelegate, BlitzPTYProce
 
     private lazy var process = BlitzPTYProcess(delegate: self)
     private var localKeyEventMonitor: Any?
+    private var localScrollEventMonitor: Any?
+    private var pendingScrollLines: CGFloat = 0
+    var isActiveForInput = true
 
     var onProcessTerminated: ((Int32?) -> Void)?
     var onTitleChanged: ((String) -> Void)?
@@ -339,14 +342,31 @@ final class BlitzTerminalView: TerminalView, TerminalViewDelegate, BlitzPTYProce
         if let localKeyEventMonitor {
             NSEvent.removeMonitor(localKeyEventMonitor)
         }
+        if let localScrollEventMonitor {
+            NSEvent.removeMonitor(localScrollEventMonitor)
+        }
     }
 
     private func setup() {
         terminalDelegate = self
+        terminal.changeScrollback(10_000)
         localKeyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             guard let self else { return event }
             guard self.window?.firstResponder === self else { return event }
             return self.normalizedKeyEvent(from: event)
+        }
+        // SwiftTerm's macOS scrollWheel implementation is not open for overriding.
+        // NSHostingView hit testing does not reliably return its embedded NSView.
+        // Scope by the active session and its visible bounds instead.
+        localScrollEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, let window = self.window,
+                  window === event.window || (event.window == nil && window.isKeyWindow) else { return event }
+            let windowPoint = event.window == nil
+                ? window.convertPoint(fromScreen: NSEvent.mouseLocation) : event.locationInWindow
+            let point = self.convert(windowPoint, from: nil)
+            guard self.acceptsScroll(at: point) else { return event }
+            self.handleScrollWheel(event, location: point)
+            return nil
         }
     }
 
@@ -402,7 +422,70 @@ final class BlitzTerminalView: TerminalView, TerminalViewDelegate, BlitzPTYProce
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 
     func terminalProcess(_ process: BlitzPTYProcess, didReceive data: ArraySlice<UInt8>) {
+        receiveOutput(data)
+    }
+
+    func receiveOutput(_ data: ArraySlice<UInt8>) {
+        let previousBuffer = terminal.buffer
+        let readingHistory = canScroll && scrollPosition < 1
+        let previousRow = terminal.getTopVisibleRow()
         feed(byteArray: data)
+        // SwiftTerm follows new output even when the reader has scrolled up.
+        // Keep that viewport until the reader explicitly returns to the bottom.
+        if readingHistory, !terminal.isCurrentBufferAlternate, terminal.buffer === previousBuffer {
+            scrollTo(row: min(previousRow, terminal.getTopVisibleRow()))
+        }
+    }
+
+    func acceptsScroll(at point: NSPoint) -> Bool {
+        isActiveForInput && !isHiddenOrHasHiddenAncestor && visibleRect.contains(point)
+    }
+
+    private func handleScrollWheel(_ event: NSEvent, location: NSPoint) {
+        if event.phase.contains(.began) { pendingScrollLines = 0 }
+        scrollWheel(
+            deltaY: event.scrollingDeltaY,
+            precise: event.hasPreciseScrollingDeltas,
+            location: location,
+            modifiers: event.modifierFlags
+        )
+    }
+
+    func scrollWheel(deltaY: CGFloat, precise: Bool, location: NSPoint, modifiers: NSEvent.ModifierFlags = []) {
+        guard deltaY.isFinite, deltaY != 0 else { return }
+        let cellHeight = max(1, getOptimalFrameSize().height / CGFloat(terminal.rows))
+        if pendingScrollLines * deltaY < 0 { pendingScrollLines = 0 }
+        pendingScrollLines += precise ? deltaY / cellHeight : deltaY
+        let lines = Int(min(abs(pendingScrollLines), CGFloat(terminal.rows)))
+        guard lines > 0 else { return }
+        let up = pendingScrollLines > 0
+        pendingScrollLines = pendingScrollLines.truncatingRemainder(dividingBy: 1)
+
+        let reportsWheel: Bool
+        switch terminal.mouseMode {
+        case .vt200, .buttonEventTracking, .anyEvent: reportsWheel = allowMouseReporting
+        default: reportsWheel = false
+        }
+        if reportsWheel && !modifiers.contains(.shift) {
+            let scrollerWidth = NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+            let cellWidth = max(1, (getOptimalFrameSize().width - scrollerWidth) / CGFloat(terminal.cols))
+            let pixelX = max(0, Int(location.x))
+            let pixelY = max(0, Int(bounds.height - location.y))
+            // SwiftTerm 1.12's legacy mouse encoder converts to UInt8 before clamping.
+            // Bound grid coordinates to its representable range; pixel mode retains precision.
+            let col = min(222, terminal.cols - 1, Int(CGFloat(pixelX) / cellWidth))
+            let row = min(222, terminal.rows - 1, Int(CGFloat(pixelY) / cellHeight))
+            let flags = terminal.encodeButton(button: up ? 4 : 5, release: false,
+                shift: false, meta: modifiers.contains(.option), control: modifiers.contains(.control))
+            for _ in 0..<lines {
+                terminal.sendEvent(buttonFlags: flags, x: col, y: row, pixelX: pixelX, pixelY: pixelY)
+            }
+        } else if terminal.isCurrentBufferAlternate && !modifiers.contains(.shift) {
+            // Full-screen programs without mouse reporting can still handle Page Up/Down.
+            if up { pageUp() } else { pageDown() }
+        } else {
+            if up { scrollUp(lines: lines) } else { scrollDown(lines: lines) }
+        }
     }
 
     func terminalProcess(_ process: BlitzPTYProcess, didTerminateWith exitCode: Int32?) {

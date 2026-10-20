@@ -31,7 +31,6 @@ extension ASCManager {
             lines.append("  activeProjectId: \(appState.activeProjectId ?? "nil")")
             lines.append("  activeTab: \(appState.activeTab.rawValue)")
             lines.append("  activeAppSubTab: \(appState.activeAppSubTab.rawValue)")
-            lines.append("  activeDashboardSubTab: \(appState.activeDashboardSubTab.rawValue)")
             if let project = appState.activeProject {
                 lines.append("  activeProject.name: \(project.name)")
                 lines.append("  activeProject.path: \(project.path)")

@@ -20,7 +20,7 @@ final class SettingsService {
     var cursorSize: Double = 20
     var defaultSimulatorUDID: String?
 
-    // Permission toggles: category rawValue → requires approval (default true)
+    // Permission toggles: category rawValue → approved without prompting (default false)
     var permissionToggles: [String: Bool] = [:]
 
     // Auto-navigate to tab on MCP tool call

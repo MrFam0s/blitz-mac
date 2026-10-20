@@ -7,6 +7,20 @@ struct TerminalStartupProcess {
     let execName: String?
 }
 
+/// Prefer an installed monospace Nerd Font so shell prompt icons and Powerline
+/// separators render without installing fonts or changing the user's shell.
+@MainActor
+enum TerminalFont {
+    static let resolved: NSFont = {
+        let names = ["JetBrainsMonoNFM-Regular", "MesloLGS-NF-Regular",
+                     "HackNFM-Regular", "FiraCodeNFM-Reg"]
+        for name in names {
+            if let font = NSFont(name: name, size: 13) { return font }
+        }
+        return NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    }()
+}
+
 /// A single terminal session backed by a pseudo-terminal process.
 /// The `terminalView` is created once and reused across show/hide cycles.
 @MainActor
@@ -28,7 +42,7 @@ final class TerminalSession: Identifiable {
         let termView = BlitzTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
         termView.nativeBackgroundColor = NSColor(red: 0.1, green: 0.1, blue: 0.1, alpha: 1)
         termView.nativeForegroundColor = NSColor.white
-        termView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        termView.font = TerminalFont.resolved
         self.terminalView = termView
 
         let sessionId = id

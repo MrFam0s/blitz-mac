@@ -114,17 +114,10 @@ struct ASCOverview: View {
 
     @ViewBuilder
     private var dataStatus: some View {
-        if asc.isTabLoading(.app) || !asc.overviewFailedFields.isEmpty {
+        if asc.isTabLoading(.app) {
             HStack(spacing: 8) {
-                if asc.isTabLoading(.app) {
-                    ProgressView().controlSize(.mini)
-                    Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
-                } else {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-                    Text("Some data could not be refreshed. Saved values remain visible.")
-                    Button("Retry") { Task { await asc.refreshTabData(.app) } }
-                        .buttonStyle(.bordered).controlSize(.small)
-                }
+                ProgressView().controlSize(.mini)
+                Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
             }
             .font(.caption)
             .foregroundStyle(.secondary)

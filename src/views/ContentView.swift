@@ -160,7 +160,6 @@ struct ContentView: View {
         }
         .task {
             await appState.projectManager.loadProjects()
-            await appState.performLaunchAppWallSyncIfNeeded()
             await appState.autoUpdate.checkForUpdate()
 
             // Load any stored ASC credentials up front so the Dashboard can render

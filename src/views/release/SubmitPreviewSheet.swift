@@ -139,7 +139,7 @@ struct SubmitPreviewSheet: View {
             if selectedBuildId.isEmpty {
                 selectedBuildId = asc.selectedVersionBuild?.id ?? validBuilds.first?.id ?? ""
             }
-            appIcon = loadAppIcon()
+            appIcon = await loadAppIcon()
         }
     }
 
@@ -337,34 +337,8 @@ struct SubmitPreviewSheet: View {
 
     // MARK: - App Icon Loading
 
-    private func loadAppIcon() -> NSImage? {
-        guard let projectId = appState.activeProjectId else { return nil }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-
-        let blitzPath = "\(home)/.blitz/projects/\(projectId)/assets/AppIcon/icon_1024.png"
-        if let image = NSImage(contentsOfFile: blitzPath) {
-            return image
-        }
-
-        let projectDir = "\(home)/.blitz/projects/\(projectId)"
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(atPath: projectDir) else { return nil }
-        while let file = enumerator.nextObject() as? String {
-            guard file.hasSuffix("AppIcon.appiconset/Contents.json") else { continue }
-            let contentsPath = "\(projectDir)/\(file)"
-            guard let data = fm.contents(atPath: contentsPath),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let images = json["images"] as? [[String: Any]] else { continue }
-            for entry in images {
-                if let filename = entry["filename"] as? String {
-                    let iconDir = (contentsPath as NSString).deletingLastPathComponent
-                    let iconPath = "\(iconDir)/\(filename)"
-                    if let image = NSImage(contentsOfFile: iconPath) {
-                        return image
-                    }
-                }
-            }
-        }
-        return nil
+    private func loadAppIcon() async -> NSImage? {
+        guard let project = appState.activeProject else { return nil }
+        return await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path)
     }
 }

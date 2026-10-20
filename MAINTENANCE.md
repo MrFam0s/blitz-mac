@@ -2,6 +2,70 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.49 — dashboard, terminal and settings cleanup
+
+Project icons now share one background resolver across the dashboard, sidebar,
+icon editor and submission preview. It chooses the largest decodable image by
+actual pixel dimensions, independent of asset order or point-size declarations.
+At equal resolution, the generated project icon and standard appearance take
+precedence over alternate appearances. Missing/corrupt assets and build trees
+are skipped. Existing imports pick up the improved selection after restarting.
+
+The integrated terminal retains 10,000 scrollback lines and preserves the current
+viewport when output arrives while reading history. Wheel/trackpad input is
+forwarded using the full-screen application's negotiated mouse protocol;
+programs without mouse reporting receive Page Up/Down in the alternate screen.
+Shift-scroll keeps local history control. Normal shell scrolling remains local.
+Precise trackpad deltas accumulate instead of dropping small movements.
+An installed monospace Nerd Font is preferred (JetBrains Mono, Meslo, Hack,
+then Fira Code) for Powerline separators and shell icons, with the system
+monospace font as a fallback. No font download or shell changes are needed.
+
+The overview no longer repeats a generic warning banner after partial refreshes.
+Dashboard app titles are centered below their icons, including wrapped titles;
+status glyphs have balanced spacing so they do not shift the title off-center.
+Loading progress remains visible, individual readiness rows still distinguish
+failed reads/saved values from missing required fields, and the existing toolbar
+refresh button retries the overview. Submission checks still require fresh data.
+
+Settings are grouped into General, Integrations, Permissions and Maintenance.
+The existing values and approval behavior are preserved; cursor visibility and
+size changes are now saved immediately. Settings stays pinned at the bottom of
+the sidebar with version/build metadata underneath, while navigation can scroll
+in smaller windows.
+
+`package.json` now maintains an independent positive integer `buildNumber`
+(starting at 49 for this release). Increment it for every distributed build,
+including rebuilds of the same marketing version. The bundler validates this
+counter and writes it to `CFBundleVersion`; `version` remains the source for
+`CFBundleShortVersionString`. Both the sidebar and Settings read these bundle
+values, so they identify the installed artifact rather than the source checkout.
+
+The Blitz App Wall has been removed completely: community browsing, sync sheets,
+launch sync, network services, payload models and build-time ingest configuration.
+The dashboard now only shows the user's own apps. Old Wall preferences are inert;
+removing this client feature does not delete any previously published server data.
+
+The previously uncommitted iPhone MCP maintenance source is also saved in the
+personal [iPhone MCP fork](https://github.com/MrFam0s/iPhone-mcp/tree/maintenance/blitz-tooling).
+Its source changes match the already bundled overlay; the runtime package stays
+at 0.1.18-blitz.1. Tests run locally; the Maintenance checks workflow remains
+manual-only and paused. The maintained branch does not trigger the upstream
+main/master workflows. No paid GitHub services are enabled.
+
+Validation: all 183 remaining Swift tests pass (seven retired Wall tests removed),
+as do 17 Node and seven Python iPhone MCP tests, eight offline installer tests,
+and the ASC/iPhone helper contract checks. Native terminal verification delivered
+13 upward and 13 downward wheel events to a full-screen SGR mouse application;
+normal shell history retained and scrolled through 800 numbered lines.
+The original resumed Codex conversation also scrolled to older tool messages
+and returned to the latest response without sending a new prompt.
+The installed Developer ID signed app was checked at normal and smaller window
+sizes: centered titles, removed refresh banner, all four settings sections,
+fixed sidebar footer, and correctly rendered Nerd Font shell separators/icons.
+The pinned Settings entry shares the native sidebar row styling and selection
+behavior used by the rest of the navigation.
+
 ## 1.0.36
 
 - Retain Apple sign-in browser cookies in a persistent, app-specific WebKit store ([upstream PR 26](https://github.com/blitzdotdev/blitz-mac/pull/26)). Apple can still expire sessions or require 2FA. The first sign-in after this update establishes the persistent browser state.

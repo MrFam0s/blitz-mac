@@ -131,3 +131,65 @@ private func writeTestAppIcon(to projectRoot: URL) throws {
     try writeTestAppIcon(to: root)
     #expect(await ProjectAppIconLoader.loadStatus(for: projectId, projectPath: root.path) == "Configured")
 }
+
+@Test func projectIconChoosesActualPixelsInsteadOfAssetOrderOrPointSize() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let set = root.appendingPathComponent("Assets.xcassets/AppIcon.appiconset")
+    try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
+    try writePixelIcon(to: set.appendingPathComponent("small.png"), pixels: 32)
+    try writePixelIcon(to: set.appendingPathComponent("large.png"), pixels: 1024)
+    try writeIconContents(to: set, images: [
+        ["filename": "small.png", "size": "1024x1024"],
+        ["filename": "large.png", "size": "512x512", "scale": "2x"]
+    ])
+    let id = UUID().uuidString
+    let path = await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path)
+    #expect(path == set.appendingPathComponent("large.png").path)
+    let image = await ProjectAppIconLoader.loadImage(for: id, projectPath: root.path)
+    #expect(image?.representations.map(\.pixelsWide).max() == 1024)
+}
+
+@Test func projectIconSkipsBrokenFilesAndPrefersDefaultAppearanceAtEqualSize() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let set = root.appendingPathComponent("Assets.xcassets/AppIcon.appiconset")
+    try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
+    try Data("not an image".utf8).write(to: set.appendingPathComponent("broken.png"))
+    try writePixelIcon(to: set.appendingPathComponent("dark.png"), pixels: 1024)
+    try writePixelIcon(to: set.appendingPathComponent("regular.png"), pixels: 1024)
+    try writeIconContents(to: set, images: [
+        ["filename": "missing.png"], ["filename": "broken.png"],
+        ["filename": "dark.png", "appearances": [["appearance": "luminosity", "value": "dark"]]],
+        ["filename": "regular.png"]
+    ])
+    let path = await ProjectAppIconLoader.loadPath(for: UUID().uuidString, projectPath: root.path)
+    #expect(path == set.appendingPathComponent("regular.png").path)
+}
+
+@Test func projectIconDoesNotPreferLowResolutionGeneratedCopy() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    try writeTestAppIcon(to: root)
+    let generated = root.appendingPathComponent("assets/AppIcon/icon_1024.png")
+    try FileManager.default.createDirectory(at: generated.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try writePixelIcon(to: generated, pixels: 32)
+    let id = UUID().uuidString
+    #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path)?.hasSuffix("AppIcon.png") == true)
+    try writePixelIcon(to: generated, pixels: 1024)
+    _ = await ProjectAppIconLoader.refreshImage(for: id, projectPath: root.path)
+    #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path) == generated.path)
+}
+
+private func writePixelIcon(to url: URL, pixels: Int) throws {
+    let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+    let data = try #require(bitmap.representation(using: .png, properties: [:]))
+    try data.write(to: url)
+}
+
+private func writeIconContents(to set: URL, images: [[String: Any]]) throws {
+    try JSONSerialization.data(withJSONObject: ["images": images])
+        .write(to: set.appendingPathComponent("Contents.json"))
+}

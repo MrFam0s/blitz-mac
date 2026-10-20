@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import SwiftTerm
 import Testing
 @testable import Blitz
 
@@ -261,4 +262,88 @@ private final class PTYProbeDelegate: BlitzPTYProcessDelegate {
     func windowSize(for process: BlitzPTYProcess) -> winsize {
         winsize(ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0)
     }
+}
+
+
+@MainActor @Test func terminalScrollbackRetainsOlderMessagesAndDoesNotJumpOnOutput() {
+    let view = BlitzTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
+    let output = (1...800).map { "message \($0)\r\n" }.joined()
+    view.receiveOutput(Array(output.utf8)[...])
+    #expect(view.canScroll)
+    view.scroll(toPosition: 0)
+    #expect(String(decoding: view.getTerminal().getBufferAsData(), as: UTF8.self).contains("message 1\n"))
+    view.scroll(toPosition: 0.5)
+    let row = view.getTerminal().getTopVisibleRow()
+    view.receiveOutput(Array("new message\r\n".utf8)[...])
+    #expect(view.getTerminal().getTopVisibleRow() == row)
+    view.scrollWheel(deltaY: 3, precise: false, location: .zero)
+    #expect(view.getTerminal().getTopVisibleRow() < row)
+    view.scrollWheel(deltaY: -3, precise: false, location: .zero)
+    #expect(view.getTerminal().getTopVisibleRow() == row)
+    view.scroll(toPosition: 1)
+    let bottom = view.getTerminal().getTopVisibleRow()
+    view.receiveOutput(Array("follow new output\r\n".utf8)[...])
+    #expect(view.getTerminal().getTopVisibleRow() > bottom)
+}
+
+@MainActor @Test func terminalWheelReachesFullScreenMouseApplications() {
+    let view = BlitzTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
+    let probe = TerminalInputProbe()
+    view.terminalDelegate = probe
+    view.feed(text: "\u{1b}[?1049h\u{1b}[?1000h\u{1b}[?1006h")
+    view.scrollWheel(deltaY: 1, precise: false, location: NSPoint(x: 0, y: 400))
+    view.scrollWheel(deltaY: -1, precise: false, location: NSPoint(x: 0, y: 400))
+    #expect(probe.output == "\u{1b}[<64;1;1M\u{1b}[<65;1;1M")
+    probe.output = ""
+    view.scrollWheel(deltaY: 1, precise: false, location: .zero, modifiers: .shift)
+    #expect(probe.output.isEmpty)
+}
+
+@MainActor @Test func terminalTrackpadAccumulatesSmallDeltasAndSupportsKeyboardPaging() {
+    let view = BlitzTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
+    let probe = TerminalInputProbe()
+    view.terminalDelegate = probe
+    view.feed(text: "\u{1b}[?1049h")
+    let cellHeight = view.getOptimalFrameSize().height / CGFloat(view.getTerminal().rows)
+    view.scrollWheel(deltaY: cellHeight / 2, precise: true, location: .zero)
+    #expect(probe.output.isEmpty)
+    view.scrollWheel(deltaY: cellHeight / 2, precise: true, location: .zero)
+    #expect(probe.output == "\u{1b}[5~")
+    probe.output = ""
+    view.scrollWheel(deltaY: -1, precise: false, location: .zero)
+    #expect(probe.output == "\u{1b}[6~")
+}
+
+@MainActor @Test func terminalLegacyMouseWheelIsSafeInWideWindows() {
+    let view = BlitzTerminalView(frame: NSRect(x: 0, y: 0, width: 5000, height: 400))
+    let probe = TerminalInputProbe()
+    view.terminalDelegate = probe
+    view.feed(text: "\u{1b}[?1049h\u{1b}[?1000h")
+    view.scrollWheel(deltaY: 1, precise: false, location: NSPoint(x: 4990, y: 400))
+    #expect(!probe.output.isEmpty)
+}
+
+private final class TerminalInputProbe: TerminalViewDelegate {
+    var output = ""
+    func clipboardCopy(source: TerminalView, content: Data) {}
+    func send(source: TerminalView, data: ArraySlice<UInt8>) { output += String(decoding: data, as: UTF8.self) }
+    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+    func setTerminalTitle(source: TerminalView, title: String) {}
+    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+    func scrolled(source: TerminalView, position: Double) {}
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+}
+
+@MainActor @Test func terminalScrollRoutingExcludesInactiveHiddenAndOutsideViews() {
+    let container = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
+    let view = BlitzTerminalView(frame: container.bounds)
+    container.addSubview(view)
+    let point = NSPoint(x: 20, y: 20)
+    #expect(view.acceptsScroll(at: point))
+    #expect(!view.acceptsScroll(at: NSPoint(x: 900, y: 20)))
+    view.isActiveForInput = false
+    #expect(!view.acceptsScroll(at: point))
+    view.isActiveForInput = true
+    container.isHidden = true
+    #expect(!view.acceptsScroll(at: point))
 }

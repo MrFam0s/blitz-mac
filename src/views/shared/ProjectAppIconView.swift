@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 private enum ProjectAppIconLookupState {
@@ -55,7 +56,7 @@ enum ProjectAppIconLoader {
         NotificationCenter.default.post(name: didInvalidateNotification, object: projectId)
     }
 
-    private static func loadPath(for projectId: String, projectPath: String) async -> String? {
+    static func loadPath(for projectId: String, projectPath: String) async -> String? {
         switch cachedPath(for: projectId) {
         case .resolved(let path):
             return path
@@ -95,34 +96,17 @@ enum ProjectAppIconLoader {
     private static func findIconPath(projectPath: String) -> String? {
         let fm = FileManager.default
         let projectDir = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
-
+        var candidates: [IconCandidate] = []
         let generatedIcon = projectDir.appendingPathComponent("assets/AppIcon/icon_1024.png")
-        if fm.fileExists(atPath: generatedIcon.path) {
-            return generatedIcon.path
+        if let candidate = IconCandidate(url: generatedIcon, priority: 2) {
+            candidates.append(candidate)
         }
-
-        let searchRoots = [
-            projectDir.appendingPathComponent("ios"),
-            projectDir.appendingPathComponent("macos"),
-            projectDir
-        ]
-
-        for root in searchRoots where fm.fileExists(atPath: root.path) {
-            if let path = findIconPath(in: root, using: fm) {
-                return path
-            }
-        }
-
-        return nil
-    }
-
-    private static func findIconPath(in root: URL, using fm: FileManager) -> String? {
         guard let enumerator = fm.enumerator(
-            at: root,
+            at: projectDir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return nil
+            return candidates.first?.url.path
         }
 
         while let entry = enumerator.nextObject() as? URL {
@@ -143,14 +127,37 @@ enum ProjectAppIconLoader {
 
             for image in images {
                 guard let filename = image["filename"] as? String else { continue }
-                let iconPath = entry.deletingLastPathComponent().appendingPathComponent(filename).path
-                if fm.fileExists(atPath: iconPath) {
-                    return iconPath
+                let directory = entry.deletingLastPathComponent().resolvingSymlinksInPath()
+                let url = directory.appendingPathComponent(filename).resolvingSymlinksInPath()
+                guard url.deletingLastPathComponent() == directory else { continue }
+                let appearances = image["appearances"] as? [[String: Any]] ?? []
+                if let candidate = IconCandidate(url: url, priority: appearances.isEmpty ? 1 : 0) {
+                    candidates.append(candidate)
                 }
             }
         }
+        return candidates.sorted {
+            if $0.pixels != $1.pixels { return $0.pixels > $1.pixels }
+            if $0.priority != $1.priority { return $0.priority > $1.priority }
+            return $0.url.path < $1.url.path
+        }.first?.url.path
+    }
 
-        return nil
+    private struct IconCandidate {
+        let url: URL
+        let pixels: Int
+        let priority: Int
+
+        init?(url: URL, priority: Int) {
+            // Asset entries are unordered and point sizes (e.g. 512@2x) are not pixels.
+            // Decode off the main thread to reject missing/corrupt images as well.
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+                  image.width > 0, image.height > 0 else { return nil }
+            self.url = url
+            self.pixels = min(image.width, image.height)
+            self.priority = priority
+        }
     }
 }
 

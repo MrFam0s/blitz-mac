@@ -11,6 +11,7 @@ struct AssetsView: View {
     @State private var isDropTargeted = false
     @State private var importError: String?
     @State private var isGenerating = false
+    @State private var iconRevision = UUID()
     @State private var showColorGenerator = false
     @State private var iconColor: Color = .blue
 
@@ -41,7 +42,7 @@ struct AssetsView: View {
             Divider()
             iconGridPanel
         }
-        .onAppear { loadExistingIcons() }
+        .task(id: projectId) { await loadExistingIcons() }
         .alert("Import Error", isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
@@ -200,57 +201,22 @@ struct AssetsView: View {
 
     // MARK: - Load Existing Icons
 
-    private func loadExistingIcons() {
-        // 1. Try blitz internal path
-        if let basePath = iconBasePath {
-            let path1024 = "\(basePath)/icon_1024.png"
-            if FileManager.default.fileExists(atPath: path1024),
-               let image = NSImage(contentsOfFile: path1024) {
-                sourceIcon = image
-                sourceIconName = "icon_1024.png"
-                for (_, size) in iconSizes {
-                    let path = "\(basePath)/icon_\(size).png"
-                    if let img = NSImage(contentsOfFile: path) {
-                        generatedIcons[size] = img
-                    }
-                }
-                return
-            }
-        }
-
-        // 2. Try xcassets (e.g., icons set via MCP or Xcode)
-        if let (image, name) = findXcassetsIcon() {
-            sourceIcon = image
-            sourceIconName = name
-            generateAllSizes(from: image, saveToDisk: false)
-        }
-    }
-
-    /// Searches the project directory for an AppIcon in xcassets.
-    private func findXcassetsIcon() -> (NSImage, String)? {
-        guard let projectId else { return nil }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let projectDir = "\(home)/.blitz/projects/\(projectId)"
-        let fm = FileManager.default
-
-        guard let enumerator = fm.enumerator(atPath: projectDir) else { return nil }
-        while let file = enumerator.nextObject() as? String {
-            guard file.hasSuffix("AppIcon.appiconset/Contents.json") else { continue }
-            let contentsPath = "\(projectDir)/\(file)"
-            guard let data = fm.contents(atPath: contentsPath),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let images = json["images"] as? [[String: Any]] else { continue }
-            for entry in images {
-                if let filename = entry["filename"] as? String {
-                    let iconDir = (contentsPath as NSString).deletingLastPathComponent
-                    let iconPath = "\(iconDir)/\(filename)"
-                    if let nsImage = NSImage(contentsOfFile: iconPath) {
-                        return (nsImage, filename)
-                    }
-                }
-            }
-        }
-        return nil
+    @MainActor
+    private func loadExistingIcons() async {
+        guard let project = appState.activeProject else { return }
+        let revision = UUID()
+        iconRevision = revision
+        sourceIcon = nil
+        sourceIconName = nil
+        generatedIcons = [:]
+        isGenerating = false
+        guard let path = await ProjectAppIconLoader.loadPath(for: project.id, projectPath: project.path),
+              let image = await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path),
+              !Task.isCancelled, appState.activeProjectId == project.id,
+              iconRevision == revision else { return }
+        sourceIcon = image
+        sourceIconName = URL(fileURLWithPath: path).lastPathComponent
+        generateAllSizes(from: image, saveToDisk: false)
     }
 
     // MARK: - Actions
@@ -309,6 +275,8 @@ struct AssetsView: View {
 
     private func generateAllSizes(from source: NSImage, saveToDisk: Bool) {
         guard let cgSource = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let revision = UUID()
+        iconRevision = revision
 
         let basePath = iconBasePath
         let sizes = iconSizes
@@ -360,6 +328,7 @@ struct AssetsView: View {
 
             let finalIcons = icons
             await MainActor.run {
+                guard appState.activeProjectId == pid, iconRevision == revision else { return }
                 generatedIcons = finalIcons
                 isGenerating = false
                 if let pid {

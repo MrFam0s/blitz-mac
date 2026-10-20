@@ -89,28 +89,6 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Sub-tabs within the Dashboard tab (top navbar)
-enum DashboardSubTab: String, CaseIterable, Identifiable {
-    case myApps
-    case allApps
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .myApps: "My Apps"
-        case .allApps: "All Apps"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .myApps: "folder"
-        case .allApps: "globe"
-        }
-    }
-}
-
 /// Sub-tabs within the App tab (top navbar)
 enum AppSubTab: String, CaseIterable, Identifiable {
     case overview
@@ -149,7 +127,6 @@ final class AppState {
     var activeProjectId: String?
     var activeTab: AppTab = .dashboard
     var activeAppSubTab: AppSubTab = .overview
-    var activeDashboardSubTab: DashboardSubTab = .myApps
     var selectedOverlaySkin: TouchOverlaySkin = .laser
 
     // Child observable managers
@@ -176,7 +153,6 @@ final class AppState {
     var showApprovalAlert: Bool = false
     var toolExecutor: MCPExecutor?
     var mcpServer: MCPServerService?
-    var hasAttemptedLaunchAppWallSync = false
 
     init() {
         ascManager.appState = self
@@ -237,40 +213,7 @@ final class AppState {
         await simulatorStream.stopStreaming()
     }
 
-    func performLaunchAppWallSyncIfNeeded() async {
-        guard !hasAttemptedLaunchAppWallSync else { return }
-        hasAttemptedLaunchAppWallSync = true
 
-        guard UserDefaults.standard.bool(forKey: "appWallSyncConsented") else {
-            Log("[AppWall] launch auto-sync skipped: sync toggle is off")
-            return
-        }
-
-        let projects = projectManager.projects
-        guard !projects.isEmpty else {
-            Log("[AppWall] launch auto-sync skipped: no local projects loaded")
-            return
-        }
-
-        guard let credentials = ascManager.credentials ?? ASCCredentials.load() else {
-            Log("[AppWall] launch auto-sync skipped: missing ASC credentials")
-            return
-        }
-
-        do {
-            let result = try await AppWallSyncRunner.syncLocalLiveApps(
-                projects: projects,
-                credentials: credentials
-            )
-            if let warning = result.warning {
-                Log("[AppWall] launch auto-sync completed with warnings: success=\(result.successCount) warning=\(warning)")
-            } else {
-                Log("[AppWall] launch auto-sync completed: success=\(result.successCount)")
-            }
-        } catch {
-            Log("[AppWall] launch auto-sync failed: \(error.localizedDescription)")
-        }
-    }
 }
 
 // SettingsStore is SettingsService (defined in Services/SettingsService.swift)

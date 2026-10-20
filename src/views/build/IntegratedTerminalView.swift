@@ -24,6 +24,7 @@ struct TerminalSessionView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         let termView = session.terminalView
+        termView.isActiveForInput = isActive
         // Re-embed only if the session's view isn't already in this container
         if termView.superview !== nsView {
             nsView.subviews.forEach { $0.removeFromSuperview() }

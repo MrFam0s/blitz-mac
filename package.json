@@ -1,6 +1,7 @@
 {
   "name": "blitz-macos",
-  "version": "1.0.48",
+  "version": "1.0.49",
+  "buildNumber": 49,
   "type": "module",
   "private": true,
   "scripts": {

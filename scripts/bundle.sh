@@ -81,25 +81,17 @@ else
     echo "Analytics disabled for this build: debug builds do not embed analytics config."
 fi
 
-APP_WALL_PLIST_KEYS=""
-if [ "$CONFIG" != "debug" ]; then
-    if [ -n "${APPWALL_INGEST_TOKEN:-}" ]; then
-        APP_WALL_TOKEN_ESCAPED="$(xml_escape "$APPWALL_INGEST_TOKEN")"
-        echo "Embedding App Wall ingest token for this build."
-        APP_WALL_PLIST_KEYS="
-    <key>BlitzAppWallToken</key>
-    <string>$APP_WALL_TOKEN_ESCAPED</string>"
-    else
-        echo "App Wall sync disabled for this build: no APPWALL_INGEST_TOKEN provided."
-    fi
-else
-    echo "App Wall sync disabled for this build: debug builds do not embed App Wall ingest config."
-fi
-
 # Read version from package.json
 VERSION=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/package.json','utf8')); process.stdout.write(p.version)" 2>/dev/null \
   || grep '"version"' "$ROOT_DIR/package.json" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
-echo "Building $APP_NAME.app v$VERSION ($CONFIG)..."
+# Keep the marketing version and the distribution build counter independent.
+BUILD_NUMBER=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/package.json','utf8')); process.stdout.write(String(p.buildNumber))" 2>/dev/null \
+  || sed -n 's/.*"buildNumber": *\([0-9][0-9]*\).*/\1/p' "$ROOT_DIR/package.json")
+if ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: package.json buildNumber must be a positive integer." >&2
+    exit 1
+fi
+echo "Building $APP_NAME.app v$VERSION, build $BUILD_NUMBER ($CONFIG)..."
 
 # Build
 # Use the same engine for both products. Xcode 27 defaults to swiftbuild,
@@ -239,7 +231,7 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleDisplayName</key>
     <string>Blitz</string>
     <key>CFBundleVersion</key>
-    <string>$VERSION</string>
+    <string>$BUILD_NUMBER</string>
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
     <key>CFBundlePackageType</key>
@@ -259,7 +251,6 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>NSCameraUsageDescription</key>
     <string>Blitz needs camera access to capture physical iOS device screens via USB.</string>
 $ANALYTICS_PLIST_KEYS
-$APP_WALL_PLIST_KEYS
 </dict>
 </plist>
 PLIST

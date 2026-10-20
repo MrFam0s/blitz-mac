@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings section showing MCP server status and Claude Code config
+/// Shared Blitz MCP status plus optional manual Claude Code configuration.
 struct MCPSetupSection: View {
     let mcpServer: MCPServerService?
 
@@ -8,16 +8,16 @@ struct MCPSetupSection: View {
     @State private var copied = false
 
     var body: some View {
-        Section("Claude Code (MCP)") {
+        Section("Blitz-Werkzeuge (MCP)") {
             HStack {
-                Text("MCP Server")
+                Text("Verbindung")
                 Spacer()
                 if serverRunning {
                     HStack(spacing: 4) {
                         Circle()
                             .fill(.green)
                             .frame(width: 8, height: 8)
-                        Text("Ready via local socket")
+                        Text("Bereit")
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -25,7 +25,7 @@ struct MCPSetupSection: View {
                         Circle()
                             .fill(.red)
                             .frame(width: 8, height: 8)
-                        Text("Not running")
+                        Text("Nicht verbunden")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -35,7 +35,7 @@ struct MCPSetupSection: View {
                 copyConfigToClipboard()
             } label: {
                 HStack {
-                    Text(copied ? "Copied!" : "Copy Config to Clipboard")
+                    Text(copied ? "Kopiert" : "Konfiguration für Claude Code kopieren")
                     Spacer()
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .foregroundStyle(.secondary)
@@ -43,7 +43,7 @@ struct MCPSetupSection: View {
             }
             .buttonStyle(.plain)
 
-            Text("Add the copied JSON to ~/.claude.json under \"mcpServers\" to connect Claude Code to Blitz.")
+            Text("Für die manuelle Einrichtung in Claude Code: JSON unter \"mcpServers\" in ~/.claude.json einfügen.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

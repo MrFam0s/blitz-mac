@@ -3,8 +3,6 @@ import SwiftUI
 struct DashboardView: View {
     @Bindable var appState: AppState
     @State private var dashboardSummary = DashboardSummaryStore.shared
-    @State private var appWallRefreshRevision = 0
-    @State private var isRefreshingAllApps = false
     @State private var visibility = DashboardVisibilityStore.shared
     @State private var searchText = ""
     @State private var showsHiddenApps = false
@@ -31,7 +29,7 @@ struct DashboardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Sub-tab navbar
+            // Dashboard controls
             topNavbar
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -39,8 +37,8 @@ struct DashboardView: View {
 
             Divider()
 
-            // Sub-tab content
-            subTabContent
+            // Apps
+            myAppsContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .alert("Couldn’t update Dashboard", isPresented: Binding(
@@ -57,38 +55,13 @@ struct DashboardView: View {
 
     private var topNavbar: some View {
         HStack(spacing: 2) {
-            ForEach(DashboardSubTab.allCases) { tab in
-                Button {
-                    appState.activeDashboardSubTab = tab
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: tab.systemImage)
-                            .font(.system(size: 11))
-                        Text(tab.label)
-                            .font(.system(size: 12, weight: .medium))
-                            .lineLimit(1)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        appState.activeDashboardSubTab == tab
-                            ? Color.accentColor.opacity(0.12)
-                            : Color.clear
-                    )
-                    .foregroundStyle(
-                        appState.activeDashboardSubTab == tab
-                            ? Color.accentColor
-                            : Color.secondary
-                    )
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-            }
+            Label("My Apps", systemImage: "folder")
+                .font(.headline)
+                .foregroundStyle(.secondary)
 
             Spacer()
 
-            if appState.activeDashboardSubTab == .myApps {
+            Group {
                 HStack(spacing: 5) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
@@ -119,9 +92,9 @@ struct DashboardView: View {
             }
 
             Button {
-                forceRefreshCurrentSubTab()
+                forceRefreshApps()
             } label: {
-                if isRefreshingCurrentSubTab {
+                if isRefreshingApps {
                     ProgressView()
                         .controlSize(.small)
                 } else {
@@ -130,26 +103,8 @@ struct DashboardView: View {
                 }
             }
             .buttonStyle(.borderless)
-            .disabled(isRefreshingCurrentSubTab)
+            .disabled(isRefreshingApps)
             .help(refreshButtonHelpText)
-        }
-    }
-
-    // MARK: - Sub-tab Content
-
-    @ViewBuilder
-    private var subTabContent: some View {
-        switch appState.activeDashboardSubTab {
-        case .myApps:
-            myAppsContent
-        case .allApps:
-            AllAppsView(
-                appState: appState,
-                refreshRevision: appWallRefreshRevision,
-                onRefreshStateChange: { isRefreshing in
-                    isRefreshingAllApps = isRefreshing
-                }
-            )
         }
     }
 
@@ -171,22 +126,10 @@ struct DashboardView: View {
     private var summaryLoadingStatusText: String {
         dashboardSummary.loadingSummaryStatusText ?? "Loading apps…"
     }
-    private var isRefreshingCurrentSubTab: Bool {
-        switch appState.activeDashboardSubTab {
-        case .myApps:
-            return dashboardSummary.isLoading(for: summaryHydrationKey)
-        case .allApps:
-            return isRefreshingAllApps
-        }
+    private var isRefreshingApps: Bool {
+        dashboardSummary.isLoading(for: summaryHydrationKey)
     }
-    private var refreshButtonHelpText: String {
-        switch appState.activeDashboardSubTab {
-        case .myApps:
-            return "Force refresh My Apps"
-        case .allApps:
-            return "Refresh All Apps"
-        }
-    }
+    private var refreshButtonHelpText: String { "Force refresh My Apps" }
 
     private var myAppsContent: some View {
         ScrollView {
@@ -311,7 +254,7 @@ struct DashboardView: View {
             isLoading: dashboardSummary.isLoadingSummary,
             loadingText: summaryLoadingStatusText,
             refreshedAt: dashboardSummary.refreshedAt,
-            retry: { forceRefreshCurrentSubTab() },
+            retry: { forceRefreshApps() },
             openSettings: { appState.activeTab = .settings }
         )
     }
@@ -397,10 +340,15 @@ struct DashboardView: View {
             HStack(spacing: 3) {
                 statusIcon(for: row)
                     .font(.system(size: 9))
+                    .frame(width: 10)
                 Text(row.name)
                     .font(.callout.weight(.medium))
                     .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                // Balance the status glyph so the title itself stays below the icon's center.
+                Color.clear.frame(width: 10, height: 1)
             }
+            .frame(maxWidth: .infinity)
 
             if row.source == .localOnly {
                 Text("Local only")
@@ -521,15 +469,8 @@ struct DashboardView: View {
         )
     }
 
-    private func forceRefreshCurrentSubTab() {
-        switch appState.activeDashboardSubTab {
-        case .myApps:
-            Task {
-                await hydrateSummary(force: true)
-            }
-        case .allApps:
-            appWallRefreshRevision += 1
-        }
+    private func forceRefreshApps() {
+        Task { await hydrateSummary(force: true) }
     }
 
     // MARK: - Helpers
