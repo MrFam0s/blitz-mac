@@ -101,11 +101,11 @@ struct SimulatorView: View {
                         .font(.largeTitle)
                         .foregroundStyle(.orange)
                     Text(errorMessage)
-                        .font(.system(size: 13))
+                        .font(BlitzLayout.bodyFont)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: 8) {
                         if stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission {
                             Button("Open System Settings") {
                                 if stream.needsScreenRecordingPermission {
@@ -122,7 +122,10 @@ struct SimulatorView: View {
                         }
                         .buttonStyle(.borderedProminent)
                     }
+                    .font(BlitzLayout.toolbarFont)
+                    .controlSize(.small)
                 }
+                .blitzPagePadding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if appState.simulatorManager.isBooting {
                 VStack(spacing: 12) {
@@ -138,6 +141,8 @@ struct SimulatorView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .multilineTextAlignment(.center)
+                .blitzPagePadding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 12) {
@@ -169,6 +174,8 @@ struct SimulatorView: View {
                         .disabled(appState.simulatorManager.selectedDeviceID == nil)
                     }
                 }
+                .multilineTextAlignment(.center)
+                .blitzPagePadding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 

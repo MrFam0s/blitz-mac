@@ -36,11 +36,23 @@ struct AssetsView: View {
     ]
 
     var body: some View {
-        HStack(spacing: 0) {
-            sourcePanel
-                .frame(width: 220)
-            Divider()
-            iconGridPanel
+        GeometryReader { geometry in
+            if geometry.size.width < 620 {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        compactSourcePanel
+                        Divider()
+                        iconGridContent
+                    }
+                }
+            } else {
+                HStack(spacing: 0) {
+                    sourcePanel
+                        .frame(width: 220)
+                    Divider()
+                    ScrollView { iconGridContent }
+                }
+            }
         }
         .task(id: projectId) { await loadExistingIcons() }
         .alert("Import Error", isPresented: Binding(
@@ -58,34 +70,65 @@ struct AssetsView: View {
 
     // MARK: - Source Panel (Left)
 
+    private var compactSourcePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Source Icon")
+                .font(BlitzLayout.pageTitle)
+            HStack(alignment: .top, spacing: 16) {
+                dropZone(height: 128)
+                    .frame(width: 128)
+                VStack(alignment: .leading, spacing: 8) {
+                    sourceActions
+                    sourceCaption
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .blitzPagePadding()
+        .background(.background.secondary)
+    }
+
     private var sourcePanel: some View {
         VStack(spacing: 16) {
             Text("Source Icon")
-                .font(.headline)
+                .font(BlitzLayout.pageTitle)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            dropZone
+            dropZone(height: 180)
+            sourceActions
+            Spacer()
+            sourceCaption
+        }
+        .padding(BlitzLayout.pageInset)
+        .background(.background.secondary)
+    }
 
+    private var sourceActions: some View {
+        VStack(spacing: 8) {
             Button {
                 openIconPicker()
             } label: {
                 Label("Choose File", systemImage: "plus.circle")
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-
-            Divider()
 
             Button {
                 showColorGenerator = true
             } label: {
                 Label("Generate from Color", systemImage: "wand.and.stars")
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+        }
+        .font(BlitzLayout.toolbarFont)
+        .controlSize(.small)
+    }
 
-            Spacer()
-
+    private var sourceCaption: some View {
+        VStack(alignment: .leading, spacing: 4) {
             if sourceIcon != nil {
                 Text("1024 \u{00d7} 1024")
                     .font(.caption)
@@ -96,14 +139,13 @@ struct AssetsView: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(name)
                 }
             }
         }
-        .padding(16)
-        .background(.background.secondary)
     }
 
-    private var dropZone: some View {
+    private func dropZone(height: CGFloat) -> some View {
         ZStack {
             if let icon = sourceIcon {
                 Image(nsImage: icon)
@@ -124,7 +166,7 @@ struct AssetsView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 180)
+        .frame(height: height)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(isDropTargeted ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
@@ -144,40 +186,38 @@ struct AssetsView: View {
 
     // MARK: - Icon Grid (Right)
 
-    private var iconGridPanel: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                Text("App Icon")
-                    .font(BlitzLayout.pageTitle)
+    private var iconGridContent: some View {
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            Text("App Icon")
+                .font(BlitzLayout.pageTitle)
 
-                if isGenerating {
-                    HStack {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Generating icons\u{2026}")
-                            .font(.callout)
+            if isGenerating {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Generating icons\u{2026}")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 16)],
+                spacing: 16
+            ) {
+                ForEach(iconSizes, id: \.1) { label, size in
+                    VStack(spacing: 6) {
+                        iconImage(size: size)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                        Text(label)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 16)],
-                    spacing: 16
-                ) {
-                    ForEach(iconSizes, id: \.1) { label, size in
-                        VStack(spacing: 6) {
-                            iconImage(size: size)
-                                .frame(width: 80, height: 80)
-                                .clipShape(RoundedRectangle(cornerRadius: 18))
-                            Text(label)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
             }
-            .blitzPagePadding()
         }
+        .blitzPagePadding()
     }
 
     @ViewBuilder

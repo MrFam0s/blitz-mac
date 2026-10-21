@@ -50,7 +50,7 @@ struct GroupsView: View {
                 }
             } else {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: BlitzLayout.sectionSpacing) {
                         let internal_ = asc.betaGroups.filter { $0.attributes.isInternalGroup == true }
                         let external = asc.betaGroups.filter { $0.attributes.isInternalGroup != true }
 
@@ -61,7 +61,7 @@ struct GroupsView: View {
                             groupSection("External Groups", groups: external, color: .green)
                         }
                     }
-                    .padding(20)
+                    .blitzPagePadding()
                 }
             }
         }
@@ -70,7 +70,7 @@ struct GroupsView: View {
     private func groupSection(_ title: String, groups: [ASCBetaGroup], color: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.headline)
+                .font(BlitzLayout.sectionTitle)
 
             VStack(spacing: 0) {
                 ForEach(Array(groups.enumerated()), id: \.element.id) { idx, group in
@@ -86,14 +86,15 @@ struct GroupsView: View {
     }
 
     private func groupRow(_ group: ASCBetaGroup, color: Color) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: group.attributes.isInternalGroup == true ? "person.fill.badge.plus" : "person.2.fill")
                 .foregroundStyle(color)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.attributes.name)
-                    .font(.callout.weight(.medium))
+                    .font(BlitzLayout.bodyFont.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
 
                 BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                     if group.attributes.isInternalGroup == true {
@@ -112,17 +113,18 @@ struct GroupsView: View {
                     }
                 }
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if let appId = asc.app?.id {
                 Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/testflight/groups")!) {
                     Image(systemName: "arrow.up.right.square")
                         .foregroundStyle(.secondary)
                 }
+                .fixedSize()
+                .help("Open group in App Store Connect")
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, BlitzLayout.cardInset)
         .padding(.vertical, 12)
     }
 

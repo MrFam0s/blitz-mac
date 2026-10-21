@@ -51,7 +51,7 @@ struct ReviewsView: View {
             } else {
                 List(asc.customerReviews) { review in
                     reviewRow(review)
-                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 12, leading: BlitzLayout.pageInset, bottom: 12, trailing: BlitzLayout.pageInset))
                 }
                 .listStyle(.plain)
             }
@@ -60,13 +60,15 @@ struct ReviewsView: View {
 
     private func reviewRow(_ review: ASCCustomerReview) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                starRating(review.attributes.rating)
-                if let territory = review.attributes.territory {
-                    Text(flagEmoji(territory))
-                        .font(.callout)
+            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                HStack(spacing: 8) {
+                    starRating(review.attributes.rating)
+                    if let territory = review.attributes.territory {
+                        Text(flagEmoji(territory))
+                            .font(.callout)
+                    }
                 }
-                Spacer()
+                .fixedSize()
                 if let date = review.attributes.createdDate {
                     Text(ascShortDate(date))
                         .font(.caption)
@@ -76,21 +78,23 @@ struct ReviewsView: View {
 
             if let title = review.attributes.title, !title.isEmpty {
                 Text(title)
-                    .font(.callout.weight(.semibold))
+                    .font(BlitzLayout.sectionTitle)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let body = review.attributes.body, !body.isEmpty {
                 Text(body)
-                    .font(.callout)
+                    .font(BlitzLayout.bodyFont)
                     .foregroundStyle(.secondary)
-                    .lineLimit(4)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
                 if let nickname = review.attributes.reviewerNickname {
                     Text("by \(nickname)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if let appId = asc.app?.id {
@@ -98,6 +102,7 @@ struct ReviewsView: View {
                         Text("Reply")
                             .font(.caption.weight(.medium))
                     }
+                    .fixedSize()
                 }
             }
         }

@@ -9,12 +9,13 @@ struct DeviceBuildView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text("Physical Device Build")
-                .font(.headline)
+                .font(BlitzLayout.pageTitle)
             Text("Connect an iOS device via USB to build and run.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
+        .blitzPagePadding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

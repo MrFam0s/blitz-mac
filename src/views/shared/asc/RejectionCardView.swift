@@ -31,7 +31,7 @@ struct RejectionCardView<Footer: View>: View {
                 footer()
             }
         }
-        .padding(16)
+        .padding(BlitzLayout.cardInset)
         .background(Color.red.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
@@ -44,17 +44,18 @@ struct RejectionCardView<Footer: View>: View {
 
     @ViewBuilder
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(expanded ? 90 : 0))
             Image(systemName: "xmark.circle.fill")
-                .font(.title2)
+                .font(.system(size: 15))
                 .foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Version \(version.attributes.versionString) Rejected")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let date = version.attributes.createdDate {
                     Text("Submitted \(ascShortDate(date))")
                         .font(.caption)
@@ -73,16 +74,17 @@ struct RejectionCardView<Footer: View>: View {
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 Text("Review History")
-                    .font(.callout.weight(.semibold))
+                    .font(BlitzLayout.sectionTitle)
 
                 ForEach(asc.reviewSubmissions.prefix(5)) { submission in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(submissionStateColor(submission.attributes.state ?? ""))
-                            .frame(width: 8, height: 8)
-                        Text(submissionStateLabel(submission.attributes.state ?? ""))
-                            .font(.callout)
-                        Spacer()
+                    BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(submissionStateColor(submission.attributes.state ?? ""))
+                                .frame(width: 8, height: 8)
+                            Text(submissionStateLabel(submission.attributes.state ?? ""))
+                                .font(.callout)
+                        }
                         if let date = submission.attributes.submittedDate {
                             Text(ascShortDate(date))
                                 .font(.caption)
@@ -107,7 +109,7 @@ struct RejectionCardView<Footer: View>: View {
             if !rejected.isEmpty || !accepted.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Review Items")
-                        .font(.callout.weight(.semibold))
+                        .font(BlitzLayout.sectionTitle)
 
                     ForEach(submissionItems) { item in
                         HStack(spacing: 8) {
@@ -139,7 +141,7 @@ struct RejectionCardView<Footer: View>: View {
         if let rd = asc.reviewDetail {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Submitted Review Info")
-                    .font(.callout.weight(.semibold))
+                    .font(BlitzLayout.sectionTitle)
 
                 if let notes = rd.attributes.notes, !notes.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
@@ -190,7 +192,7 @@ struct RejectionCardView<Footer: View>: View {
 
         VStack(alignment: .leading, spacing: 10) {
             Text("Apple's Feedback")
-                .font(.callout.weight(.semibold))
+                .font(BlitzLayout.sectionTitle)
 
             if asc.isLoadingIrisFeedback && cycles.isEmpty {
                 HStack(spacing: 8) {
@@ -220,40 +222,63 @@ struct RejectionCardView<Footer: View>: View {
     private var signInPrompt: some View {
         switch asc.irisSessionState {
         case .noSession, .unknown:
-            HStack(spacing: 10) {
-                Image(systemName: "person.badge.key")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text("Sign in with your Apple ID to see Apple's detailed review feedback.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Sign In") { asc.showAppleIDLogin = true }
-                    .buttonStyle(.bordered)
-            }
-            .padding(10)
-            .background(.background.tertiary)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            signInCard(
+                icon: "person.badge.key",
+                message: "Sign in with your Apple ID to see Apple's detailed review feedback.",
+                buttonTitle: "Sign In",
+                color: .secondary
+            )
         case .expired:
-            HStack(spacing: 10) {
-                Image(systemName: "clock.badge.exclamationmark")
-                    .font(.title3)
-                    .foregroundStyle(.orange)
-                Text("Apple ID session expired.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Sign In Again") { asc.showAppleIDLogin = true }
-                    .buttonStyle(.bordered)
-            }
-            .padding(10)
-            .background(.background.tertiary)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            signInCard(
+                icon: "clock.badge.exclamationmark",
+                message: "Apple ID session expired.",
+                buttonTitle: "Sign In Again",
+                color: .orange
+            )
         case .valid:
             Text("No rejection feedback found in the Resolution Center.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func signInCard(icon: String, message: String, buttonTitle: String, color: Color) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                signInExplanation(icon: icon, message: message, color: color)
+                    .frame(width: 260, alignment: .leading)
+                Spacer(minLength: 0)
+                signInButton(buttonTitle).fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                signInExplanation(icon: icon, message: message, color: color)
+                HStack {
+                    Spacer(minLength: 0)
+                    signInButton(buttonTitle)
+                }
+            }
+        }
+        .padding(BlitzLayout.cardInset)
+        .background(.background.tertiary)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func signInExplanation(icon: String, message: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundStyle(color)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func signInButton(_ title: String) -> some View {
+        Button(title) { asc.showAppleIDLogin = true }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
     }
 
     @ViewBuilder
@@ -268,17 +293,19 @@ struct RejectionCardView<Footer: View>: View {
     @ViewBuilder
     private func feedbackCycleView(_ cycle: IrisFeedbackCycle) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
                 if let submissionId = cycle.submissionId, !submissionId.isEmpty {
                     Text(submissionId)
                         .font(.caption2.monospaced())
                         .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .help(submissionId)
                 } else {
                     Text("Archived Thread")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                Spacer()
                 Text(ascLongDate(cycle.occurredAt))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

@@ -62,6 +62,8 @@ struct BuildsView: View {
                                 }
                             }
                             .pickerStyle(.menu)
+                            .font(BlitzLayout.toolbarFont)
+                            .controlSize(.small)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .blitzPagePadding()
                             Divider()
@@ -102,8 +104,10 @@ struct BuildsView: View {
             HStack {
                 Text("Version \(build.attributes.version)")
                     .font(.callout.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 stateBadge(build.attributes.processingState ?? "Unknown")
+                    .fixedSize()
             }
             HStack {
                 if let date = build.attributes.uploadedDate {
@@ -125,31 +129,33 @@ struct BuildsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Build \(build.attributes.version)")
-                    .font(.title3.weight(.semibold))
-                    .padding(.bottom, 16)
+                    .font(BlitzLayout.pageTitle)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, BlitzLayout.sectionSpacing)
 
                 InfoRow(label: "Build Number", value: build.attributes.version)
-                Divider().padding(.leading, 150)
+                Divider()
                 InfoRow(label: "Processing State", value: build.attributes.processingState ?? "—")
-                Divider().padding(.leading, 150)
+                Divider()
 
                 if let date = build.attributes.uploadedDate {
                     InfoRow(label: "Uploaded", value: ascLongDate(date))
-                    Divider().padding(.leading, 150)
+                    Divider()
                 }
                 if let expiry = build.attributes.expirationDate {
                     InfoRow(label: "Expires", value: ascShortDate(expiry))
-                    Divider().padding(.leading, 150)
+                    Divider()
                 }
                 if let minOS = build.attributes.minOsVersion {
-                    InfoRow(label: "Min OS Version", value: "iOS \(minOS)")
-                    Divider().padding(.leading, 150)
+                    InfoRow(label: "Min OS Version", value: minOS)
+                    Divider()
                 }
                 InfoRow(label: "Expired", value: build.attributes.expired == true ? "Yes" : "No")
-                Divider().padding(.leading, 150)
+                Divider()
                 InfoRow(label: "Build ID", value: build.id)
             }
-            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .blitzPagePadding()
         }
     }
 

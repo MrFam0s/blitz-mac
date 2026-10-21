@@ -53,17 +53,19 @@ struct TestsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Automate Testing with AI Agents", systemImage: "sparkles")
                 .font(BlitzLayout.pageTitle)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text("In a Blitz project directory, you can ask agents to use iPhones to test features and find bugs. Using Blitz's **iPhone-MCP**, your agent can tap, swipe, and type in both simulated and physical iPhone devices.")
-                .font(.body)
+                .font(BlitzLayout.bodyFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     // MARK: - Status
 
     private var statusBadge: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Circle()
                 .fill(iphoneMCPConfigured ? .green : .orange)
                 .frame(width: 8, height: 8)
@@ -72,6 +74,7 @@ struct TestsView: View {
                  : "iPhone-MCP not found — open a project to get started")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -129,12 +132,14 @@ private struct ExampleCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(title, systemImage: icon)
-                .font(.title3.weight(.medium))
+                .font(BlitzLayout.sectionTitle)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Prompt block
             HStack(alignment: .top, spacing: 8) {
                 Text(prompt)
                     .font(.system(size: 13, design: .monospaced))
+                    .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,8 +158,9 @@ private struct ExampleCard: View {
 
             // Preview text
             Text(preview)
-                .font(.body)
+                .font(BlitzLayout.bodyFont)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Expand/collapse
             Button {
@@ -180,7 +186,7 @@ private struct ExampleCard: View {
             }
         }
         .clipped()
-        .padding(20)
+        .padding(BlitzLayout.cardInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 12))
     }

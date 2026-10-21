@@ -184,7 +184,7 @@ struct InfoRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.callout)
+        .font(BlitzLayout.bodyFont)
         .padding(.vertical, 6)
     }
 }

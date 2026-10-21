@@ -65,60 +65,70 @@ struct BetaInfoView: View {
         let current = locs.first { $0.id == selectedLocId } ?? locs.first
 
         VStack(spacing: 0) {
-            // Locale picker toolbar
-            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Beta Info")
+                        .font(BlitzLayout.pageTitle)
+                    Spacer()
+                    ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Refresh beta info")
+                }
+
                 if !locs.isEmpty {
-                    Picker("Locale", selection: $selectedLocId) {
-                        ForEach(locs) { loc in
-                            Text(loc.attributes.locale).tag(loc.id)
+                    HStack(spacing: 10) {
+                        Picker("Locale", selection: $selectedLocId) {
+                            ForEach(locs) { loc in
+                                Text(loc.attributes.locale).tag(loc.id)
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(isSaving)
-                    .labelsHidden()
-                    .accessibilityLabel("Locale")
-                    .frame(width: 110)
-                    .onChange(of: locs.count) { _, _ in
-                        if selectedLocId.isEmpty, let first = asc.betaLocalizations.first {
-                            selectedLocId = first.id
-                            loadLocalization(first)
+                        .pickerStyle(.menu)
+                        .disabled(isSaving)
+                        .labelsHidden()
+                        .accessibilityLabel("Locale")
+                        .frame(width: 110)
+                        .onChange(of: locs.count) { _, _ in
+                            if selectedLocId.isEmpty, let first = asc.betaLocalizations.first {
+                                selectedLocId = first.id
+                                loadLocalization(first)
+                            }
                         }
-                    }
-                    .onAppear {
-                        if selectedLocId.isEmpty, let first = locs.first {
-                            selectedLocId = first.id
-                            loadLocalization(first)
+                        .onAppear {
+                            if selectedLocId.isEmpty, let first = locs.first {
+                                selectedLocId = first.id
+                                loadLocalization(first)
+                            }
                         }
-                    }
-                    .onChange(of: selectedLocId) { _, newId in
-                        if let loc = locs.first(where: { $0.id == newId }) {
-                            loadLocalization(loc)
+                        .onChange(of: selectedLocId) { _, newId in
+                            if let loc = locs.first(where: { $0.id == newId }) {
+                                loadLocalization(loc)
+                            }
                         }
+
+                        Spacer(minLength: 0)
+                        if saveSuccess {
+                            Label("Saved", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .fixedSize()
+                        }
+                        Button {
+                            save(locId: current?.id ?? selectedLocId)
+                        } label: {
+                            if isSaving {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Text("Save")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isSaving || current == nil || formRevision != asc.projectRevision || !hasEdits)
                     }
                 }
-                if saveSuccess {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                }
+
                 if let error = saveError {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Button {
-                    save(locId: current?.id ?? selectedLocId)
-                } label: {
-                    if isSaving {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Save")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isSaving || current == nil || formRevision != asc.projectRevision || !hasEdits)
-                ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Refresh beta info")
             }
             .blitzToolbar()
 
@@ -126,6 +136,7 @@ struct BetaInfoView: View {
 
             if current == nil && !locs.isEmpty {
                 ContentUnavailableView("Select a locale", systemImage: "doc.text")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if locs.isEmpty {
                 if asc.isTabLoading(.betaInfo) {
                     ASCTabLoadingPlaceholder(
@@ -138,10 +149,11 @@ struct BetaInfoView: View {
                         systemImage: "doc.text",
                         description: Text("No beta app localizations found.")
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                         editField("Beta Description",
                                   text: $editDescription,
                                   hint: "Describe what testers should focus on",
@@ -167,18 +179,19 @@ struct BetaInfoView: View {
 
     @ViewBuilder
     private func editField(_ label: String, text: Binding<String>, hint: String, multiline: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.callout.weight(.medium))
+        VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
+            Text(label).font(BlitzLayout.sectionTitle)
             if multiline {
                 TextEditor(text: text)
-                    .font(.body)
-                    .frame(height: 100)
+                    .font(BlitzLayout.bodyFont)
+                    .frame(minHeight: 140)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
                     )
             } else {
                 TextField(hint, text: text)
+                    .font(BlitzLayout.bodyFont)
                     .textFieldStyle(.roundedBorder)
             }
         }

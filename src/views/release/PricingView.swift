@@ -169,7 +169,9 @@ private struct SectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 16) {
             content()
         }
-        .padding(16)
+        .font(BlitzLayout.bodyFont)
+        .padding(BlitzLayout.cardInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
@@ -190,7 +192,7 @@ private struct AppPricingSection: View {
         let isLoading = asc.isTabLoading(.monetization)
         SectionCard {
             Label("Pricing & Availability", systemImage: "dollarsign.circle")
-                .font(.headline)
+                .font(BlitzLayout.sectionTitle)
 
             if isLoading && asc.appPricePoints.isEmpty && asc.currentAppPricePointId == nil && asc.scheduledAppPricePointId == nil {
                 HStack(spacing: 8) {
@@ -205,6 +207,7 @@ private struct AppPricingSection: View {
                         Text("Free App").font(.body.weight(.medium))
                         Text("Your app will be available for free on the App Store.")
                             .font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                     Toggle("", isOn: Binding(
@@ -222,6 +225,7 @@ private struct AppPricingSection: View {
                         }
                     ))
                         .labelsHidden()
+                        .fixedSize()
                 }
 
                 if !isFree {
@@ -375,7 +379,7 @@ private struct InAppPurchasesSection: View {
         SectionCard {
             HStack {
                 Label("In-App Purchases", systemImage: "cart")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Button(showCreateForm ? "Cancel" : "Create") {
                     showCreateForm.toggle()
@@ -700,7 +704,7 @@ private struct SubscriptionsSection: View {
         SectionCard {
             HStack {
                 Label("Subscriptions", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Button(showCreateForm ? "Cancel" : "Create") {
                     showCreateForm.toggle()

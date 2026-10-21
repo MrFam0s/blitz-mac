@@ -30,12 +30,19 @@ struct FeedbackView: View {
         let isLoadingFeedback = asc.isFeedbackLoading(for: effectiveBuildId)
 
         VStack(spacing: 0) {
-            // Build picker toolbar
-            HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Feedback")
+                        .font(BlitzLayout.pageTitle)
+                    Spacer()
+                    if isLoadingFeedback {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Refresh feedback tab")
+                }
+
                 if !builds.isEmpty {
-                    Text("Build:")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
                     Picker("Build", selection: $localSelectedBuildId) {
                         ForEach(builds) { build in
                             Text("v\(build.attributes.version)")
@@ -43,21 +50,14 @@ struct FeedbackView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .labelsHidden()
                     .accessibilityLabel("Build")
-                    .frame(width: 130)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .onAppear {
                         if localSelectedBuildId.isEmpty {
                             localSelectedBuildId = asc.selectedBuildId ?? builds.first?.id ?? ""
                         }
                     }
                 }
-                Spacer()
-                if isLoadingFeedback {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Refresh feedback tab")
             }
             .blitzToolbar()
 
@@ -94,7 +94,7 @@ struct FeedbackView: View {
             } else {
                 List(feedback) { item in
                     feedbackRow(item)
-                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                        .listRowInsets(EdgeInsets(top: 12, leading: BlitzLayout.pageInset, bottom: 12, trailing: BlitzLayout.pageInset))
                 }
                 .listStyle(.plain)
             }
@@ -114,12 +114,10 @@ struct FeedbackView: View {
 
     private func feedbackRow(_ item: ASCBetaFeedback) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "person.circle")
-                    .foregroundStyle(.secondary)
-                Text(item.attributes.emailAddress ?? "Anonymous")
-                    .font(.callout.weight(.medium))
-                Spacer()
+            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
+                Label(item.attributes.emailAddress ?? "Anonymous", systemImage: "person.circle")
+                    .font(BlitzLayout.bodyFont.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 if let ts = item.attributes.timestamp {
                     Text(ascShortDate(ts))
                         .font(.caption)
@@ -150,7 +148,7 @@ struct FeedbackView: View {
 
             if let comment = item.attributes.comment, !comment.isEmpty {
                 Text(comment)
-                    .font(.callout)
+                    .font(BlitzLayout.bodyFont)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }

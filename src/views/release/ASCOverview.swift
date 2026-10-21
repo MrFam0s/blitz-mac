@@ -82,7 +82,7 @@ struct ASCOverview: View {
             Divider()
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                 headerRow
                 dataStatus
 
@@ -98,8 +98,7 @@ struct ASCOverview: View {
                 // 4. Local source
                 localSourceCard
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .blitzPagePadding()
         }
         }
     }
@@ -135,8 +134,8 @@ struct ASCOverview: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(app.name)
-                        .font(.headline)
-                        .lineLimit(1)
+                        .font(BlitzLayout.pageTitle)
+                        .fixedSize(horizontal: false, vertical: true)
                         .help(app.name)
                     HStack(spacing: 4) {
                         Text(app.bundleId)
@@ -279,7 +278,7 @@ struct ASCOverview: View {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundStyle(.blue)
                 Text("Listing Health")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Text(listingHealthSummaryText)
                     .font(.caption)
@@ -297,7 +296,7 @@ struct ASCOverview: View {
             .background(.background.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
-        .padding(14)
+        .padding(BlitzLayout.cardInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -360,9 +359,28 @@ struct ASCOverview: View {
         value.count > limit ? String(value.prefix(limit)) + "…" : value
     }
 
-    @ViewBuilder
     private func submissionReadinessRow(_ field: SubmissionReadiness.FieldStatus) -> some View {
-        HStack {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                submissionReadinessLabel(field)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 0)
+                submissionReadinessValue(field)
+                    .frame(minWidth: 80, alignment: .trailing)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                submissionReadinessLabel(field)
+                submissionReadinessValue(field)
+                    .padding(.leading, 20)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    private func submissionReadinessLabel(_ field: SubmissionReadiness.FieldStatus) -> some View {
+        HStack(alignment: .top, spacing: 8) {
             if field.label == "Build" && asc.buildPipelinePhase != .idle {
                 ProgressView().controlSize(.small)
                 Text(field.label).font(.callout).foregroundStyle(.orange)
@@ -382,7 +400,11 @@ struct ASCOverview: View {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
                 Text(field.label).font(.callout)
             }
-            Spacer()
+        }
+    }
+
+    private func submissionReadinessValue(_ field: SubmissionReadiness.FieldStatus) -> some View {
+        HStack(spacing: 6) {
             if field.label == "Build" && asc.buildPipelinePhase != .idle {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(asc.buildPipelinePhase.rawValue)
@@ -440,8 +462,7 @@ struct ASCOverview: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
+        .help(field.value ?? field.label)
     }
 
     // MARK: - Compact version summary
@@ -499,20 +520,17 @@ struct ASCOverview: View {
 
     private var submissionReadinessSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Submission Readiness")
-                    .font(.headline)
-
-                Spacer()
-                let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
-                let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
-
-                if !asc.canCreateUpdate {
-                    Button(showStatus ? "View Status" : "Submit for Review") {
-                        showPreview = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!showStatus && !asc.submissionReadiness.isComplete)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    Text("Submission Readiness")
+                        .font(BlitzLayout.sectionTitle)
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    submissionReadinessAction.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Submission Readiness").font(BlitzLayout.sectionTitle)
+                    submissionReadinessAction
                 }
             }
 
@@ -527,6 +545,20 @@ struct ASCOverview: View {
         }
     }
 
+    @ViewBuilder
+    private var submissionReadinessAction: some View {
+        let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
+        let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
+        if !asc.canCreateUpdate {
+            Button(showStatus ? "View Status" : "Submit for Review") {
+                showPreview = true
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(!showStatus && !asc.submissionReadiness.isComplete)
+        }
+    }
+
     // MARK: - 3. Screenshots
 
     private var screenshotsCard: some View {
@@ -535,7 +567,7 @@ struct ASCOverview: View {
                 Image(systemName: "photo.on.rectangle.angled")
                     .foregroundStyle(.pink)
                 Text("Screenshots")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Button("Generate new screenshots") {
                     // Slot for the sibling screenshot-generation workstream.
@@ -567,7 +599,7 @@ struct ASCOverview: View {
                 }
             }
         }
-        .padding(14)
+        .padding(BlitzLayout.cardInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -622,7 +654,7 @@ struct ASCOverview: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(.teal)
                 Text("Activity")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
 
@@ -645,7 +677,7 @@ struct ASCOverview: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }
-        .padding(14)
+        .padding(BlitzLayout.cardInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -659,7 +691,7 @@ struct ASCOverview: View {
                 Image(systemName: "folder.fill.badge.gearshape")
                     .foregroundStyle(.orange)
                 Text("Local Source")
-                    .font(.headline)
+                    .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
 
@@ -712,7 +744,7 @@ struct ASCOverview: View {
                 }
             }
         }
-        .padding(14)
+        .padding(BlitzLayout.cardInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -798,12 +830,10 @@ struct ASCOverview: View {
     }
 
     private func submissionHistoryRow(_ event: ASCSubmissionHistoryEvent) -> some View {
-        HStack {
+        BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 6) {
             Text(event.versionString)
                 .font(.body.weight(.medium))
-                .frame(width: 80, alignment: .leading)
             submissionEventBadge(event.eventType)
-            Spacer()
             Text(ascLongDate(event.occurredAt))
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -530,7 +530,7 @@ struct ScreenshotsView: View {
                                 .labelsHidden()
                                 .accessibilityLabel("Locale")
                                 .help("Language of the store listing")
-                                .frame(width: 110)
+                                .frame(width: 110, alignment: .leading)
                             }
                         }
                         .blitzToolbar()
@@ -543,7 +543,10 @@ struct ScreenshotsView: View {
                     if !asc.canEditField("screenshots") {
                         Label(asc.screenshotEditingMessage, systemImage: "lock.fill")
                             .font(.callout).foregroundStyle(.secondary)
-                            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, BlitzLayout.pageInset)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     writeErrorBanner
@@ -600,6 +603,8 @@ struct ScreenshotsView: View {
                 HStack { Spacer(minLength: 0); trackActions }
             }
         }
+        .font(.system(size: 12))
+        .controlSize(.small)
         .blitzToolbar()
     }
 
@@ -659,15 +664,17 @@ struct ScreenshotsView: View {
     @ViewBuilder
     private var writeErrorBanner: some View {
         if let error = asc.writeError {
-            HStack {
+            HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-            .padding(6)
-            .frame(maxWidth: .infinity)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, BlitzLayout.pageInset)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(.red.opacity(0.08))
         }
     }

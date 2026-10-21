@@ -2,6 +2,39 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.52 — consistent detail layouts beside the terminal
+
+Release, TestFlight, Insights, Settings and local tools share page and card
+insets, compact toolbars and section heading sizes. Long contact names, group
+names, feedback metadata and version history wrap without fixed label columns.
+Readiness labels stay visible at narrow widths; long values retain a full-value
+tooltip. Save errors and review text are no longer cut off after a fixed number
+of lines. Analytics keeps its toolbar above the scrollable content.
+
+Settings switches its section picker to a menu when the segments cannot fit.
+Long terminal names stay within the settings row with their full name in a
+tooltip. Below 620 points, the Icon page places a compact source panel above the
+icon grid in one scroll view. Dashboard counters wrap as complete items, and
+the undo message has its own row above the create/import actions. Existing
+editing state, save guards and actions remain unchanged.
+
+Native inspection also corrected the empty Beta Info page's vertically centered
+toolbar, aligned wrapped locale pickers, expanded Review cards to the same width,
+and reduced chart tick density. Build details no longer assume every minimum OS
+version belongs to iOS.
+
+Validation: 213 Swift tests and the native release bundle build pass. Independent
+review found no blocking issue. Native UI checks covered a 361-point app pane
+beside the terminal: Overview, App Information, Screenshots, Monetization, Review
+(including long rejection notes), Analytics, Builds, Settings, Icon, Tests and
+Dashboard. Groups, Beta Info, Feedback and customer Reviews were checked with
+the available empty states; populated variants and save failures were reviewed
+in code, without changing Store data. The final fixes were rechecked in installed
+build 56, then the approximately 509-point app pane was restored. The existing
+Codex conversation resumed without a new task. The bundle passes strict deep
+signature verification with the unchanged Developer ID requirement. Simulator
+and physical-device behavior was not exercised for these layout changes.
+
 ## 1.0.51 — resume project conversations and clarify the working layout
 
 Opening the integrated terminal with Codex selects an existing live Codex tab

@@ -36,6 +36,7 @@ struct MCPSetupSection: View {
             } label: {
                 HStack {
                     Text(copied ? "Kopiert" : "Konfiguration für Claude Code kopieren")
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .foregroundStyle(.secondary)
@@ -46,6 +47,7 @@ struct MCPSetupSection: View {
             Text("Für die manuelle Einrichtung in Claude Code: JSON unter \"mcpServers\" in ~/.claude.json einfügen.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .task {
             await refreshStatus()

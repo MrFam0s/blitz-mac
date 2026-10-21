@@ -45,16 +45,22 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
             Text("Einstellungen")
                 .font(BlitzLayout.pageTitle)
-            Picker("Bereich", selection: $selectedSection) {
-                ForEach(SettingsSection.allCases) { section in
-                    Text(section.rawValue).tag(section)
+            ViewThatFits(in: .horizontal) {
+                sectionPicker
+                    .pickerStyle(.segmented)
+                    .fixedSize(horizontal: true, vertical: false)
+                HStack {
+                    Text("Bereich")
+                    Spacer(minLength: 8)
+                    sectionPicker
+                        .pickerStyle(.menu)
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .font(BlitzLayout.toolbarFont)
+            .controlSize(.small)
 
             Form {
                 switch selectedSection {
@@ -72,6 +78,7 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            .font(BlitzLayout.bodyFont)
             .id(selectedSection)
         }
         .blitzPagePadding()
@@ -89,6 +96,30 @@ struct SettingsView: View {
                 terminalResetWarning = nil
                 settings.defaultTerminal = TerminalApp.custom(url.path).settingsValue
                 settings.save()
+            }
+        }
+    }
+
+    private var sectionPicker: some View {
+        Picker("Bereich", selection: $selectedSection) {
+            ForEach(SettingsSection.allCases) { section in
+                Text(section.rawValue).tag(section)
+            }
+        }
+        .labelsHidden()
+    }
+
+    private func settingValue(_ title: String, value: String) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title).fixedSize()
+                Spacer(minLength: 8)
+                Text(value).fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                Text(value)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -123,6 +154,10 @@ struct SettingsView: View {
                     HStack(spacing: 4) {
                         terminalAppIcon(currentTerminal, size: 16)
                         Text(currentTerminal.displayName)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 140, alignment: .trailing)
+                            .help(currentTerminal.displayName)
                         Image(systemName: "chevron.up.chevron.down")
                             .font(.caption2)
                     }
@@ -172,7 +207,7 @@ struct SettingsView: View {
             }
 
             if currentTerminal.isBuiltIn {
-                LabeledContent("Terminalschrift", value: TerminalFont.resolved.displayName ?? TerminalFont.resolved.fontName)
+                settingValue("Terminalschrift", value: TerminalFont.resolved.displayName ?? TerminalFont.resolved.fontName)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Text("Installierte Nerd Fonts werden für Shell-Symbole automatisch bevorzugt.")
@@ -181,7 +216,7 @@ struct SettingsView: View {
             }
 
             if currentTerminal.isBuiltIn && currentAgent == .codex {
-                LabeledContent("Codex-Sitzung", value: "Letzte Sitzung im Projekt fortsetzen")
+                settingValue("Codex-Sitzung", value: "Letzte Sitzung im Projekt fortsetzen")
                     .font(.callout)
                 Text("Ohne frühere Sitzung startet eine neue Unterhaltung. Beim Öffnen wird kein Auftrag gesendet; mit /new beginnst du eine neue Unterhaltung.")
                     .font(.caption)

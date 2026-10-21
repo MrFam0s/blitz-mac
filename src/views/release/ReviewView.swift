@@ -119,10 +119,9 @@ struct ReviewView: View {
                 // Current version status card
                 if let version = selectedVersion {
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
+                        BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 8) {
                             Text("Version \(version.attributes.versionString)")
-                                .font(.title3.weight(.semibold))
-                            Spacer()
+                                .font(BlitzLayout.pageTitle)
                             stateBadge(version.attributes.appStoreState ?? "Unknown")
                         }
                         if let date = version.attributes.createdDate {
@@ -131,7 +130,8 @@ struct ReviewView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(BlitzLayout.cardInset)
                     .background(.background.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
@@ -157,7 +157,7 @@ struct ReviewView: View {
                                 .rotationEffect(.degrees(ageRatingExpanded ? 90 : 0))
                                 .animation(.easeInOut(duration: 0.15), value: ageRatingExpanded)
                             Text("Age Rating")
-                                .font(.headline)
+                                .font(BlitzLayout.sectionTitle)
                             Spacer()
                             if asc.ageRatingDeclaration != nil {
                                 Text("Configured")
@@ -188,7 +188,8 @@ struct ReviewView: View {
                         ageRatingForm
                     }
                 }
-                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(BlitzLayout.cardInset)
                 .background(.background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
@@ -202,26 +203,29 @@ struct ReviewView: View {
                                 .font(.caption.weight(.semibold))
                                 .rotationEffect(.degrees(contactExpanded ? 90 : 0))
                                 .animation(.easeInOut(duration: 0.15), value: contactExpanded)
-                            Text("Review Contact")
-                                .font(.headline)
-                            Spacer()
-                            if let rd = asc.reviewDetail,
-                               rd.attributes.contactFirstName != nil {
-                                Text("\(rd.attributes.contactFirstName ?? "") \(rd.attributes.contactLastName ?? "")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else if isLoading {
-                                HStack(spacing: 6) {
-                                    ProgressView().controlSize(.small)
-                                    Text("Loading…")
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Review Contact")
+                                    .font(BlitzLayout.sectionTitle)
+                                if let rd = asc.reviewDetail,
+                                   rd.attributes.contactFirstName != nil {
+                                    Text("\(rd.attributes.contactFirstName ?? "") \(rd.attributes.contactLastName ?? "")")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else if isLoading {
+                                    HStack(spacing: 6) {
+                                        ProgressView().controlSize(.small)
+                                        Text("Loading…")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                } else {
+                                    Text("Not configured")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
                                 }
-                            } else {
-                                Text("Not configured")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
                             }
+                            Spacer(minLength: 0)
                         }
                         .contentShape(Rectangle())
                     }
@@ -231,14 +235,15 @@ struct ReviewView: View {
                         reviewContactForm
                     }
                 }
-                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(BlitzLayout.cardInset)
                 .background(.background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 // Build & Compliance
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Build & Compliance")
-                        .font(.headline)
+                        .font(BlitzLayout.sectionTitle)
 
                     if asc.builds.isEmpty {
                         if isLoading {
@@ -274,21 +279,21 @@ struct ReviewView: View {
                             }
                     }
                 }
-                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(BlitzLayout.cardInset)
                 .background(.background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 // All versions
                 if asc.appStoreVersions.count > 1 {
                     Text("All Versions")
-                        .font(.headline)
+                        .font(BlitzLayout.sectionTitle)
 
                     VStack(spacing: 0) {
                         ForEach(Array(asc.appStoreVersions.enumerated()), id: \.element.id) { idx, version in
-                            HStack {
+                            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 6) {
                                 Text(version.attributes.versionString)
                                     .font(.body.weight(.medium))
-                                    .frame(width: 80, alignment: .leading)
                                 stateBadge(version.attributes.appStoreState ?? "Unknown")
                                 if version.attributes.appStoreState != "REJECTED",
                                    wasVersionPreviouslyRejected(version) {
@@ -300,7 +305,6 @@ struct ReviewView: View {
                                         .foregroundStyle(.red)
                                         .clipShape(Capsule())
                                 }
-                                Spacer()
                                 if let date = version.attributes.createdDate {
                                     Text(ascShortDate(date))
                                         .font(.caption)
@@ -314,6 +318,7 @@ struct ReviewView: View {
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.background.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
@@ -434,13 +439,13 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("First Name").font(.caption).foregroundStyle(.secondary)
+                    Text("First Name").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                     TextField("First Name", text: $contactFirstName)
                         .textFieldStyle(.roundedBorder)
                         .focused($contactFocused, equals: "firstName")
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Last Name").font(.caption).foregroundStyle(.secondary)
+                    Text("Last Name").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                     TextField("Last Name", text: $contactLastName)
                         .textFieldStyle(.roundedBorder)
                         .focused($contactFocused, equals: "lastName")
@@ -448,21 +453,21 @@ struct ReviewView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Email").font(.caption).foregroundStyle(.secondary)
+                Text("Email").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextField("email@example.com", text: $contactEmail)
                     .textFieldStyle(.roundedBorder)
                     .focused($contactFocused, equals: "email")
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Phone").font(.caption).foregroundStyle(.secondary)
+                Text("Phone").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextField("+1 650 555 0100", text: $contactPhone)
                     .textFieldStyle(.roundedBorder)
                     .focused($contactFocused, equals: "phone")
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Notes").font(.caption).foregroundStyle(.secondary)
+                Text("Notes").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextEditor(text: $contactNotes)
                     .font(.body)
                     .frame(minHeight: 60, maxHeight: 120)
@@ -479,13 +484,13 @@ struct ReviewView: View {
             if demoRequired {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Username").font(.caption).foregroundStyle(.secondary)
+                        Text("Username").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                         TextField("Demo username", text: $demoName)
                             .textFieldStyle(.roundedBorder)
                             .focused($contactFocused, equals: "demoName")
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Password").font(.caption).foregroundStyle(.secondary)
+                        Text("Password").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                         SecureField("Demo password", text: $demoPassword)
                             .textFieldStyle(.roundedBorder)
                             .focused($contactFocused, equals: "demoPassword")

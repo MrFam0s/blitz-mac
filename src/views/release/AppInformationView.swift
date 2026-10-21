@@ -170,7 +170,7 @@ struct AppInformationView: View {
                         .labelsHidden()
                         .accessibilityLabel("Locale")
                         .help("Language of the store listing")
-                        .frame(width: 110)
+                        .frame(width: 110, alignment: .leading)
                     }
                     if isSaving {
                         HStack(spacing: 4) {
@@ -187,23 +187,26 @@ struct AppInformationView: View {
             if !asc.canEditField("description") || !asc.canEditField("title") {
                 Label("Gesperrte Angaben sind schreibgeschützt. Werbetext und Copyright bleiben bearbeitbar. Für andere Änderungen eine bearbeitbare Version auswählen.", systemImage: "lock.fill")
                     .font(.callout).foregroundStyle(.secondary)
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, BlitzLayout.pageInset)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if current != nil {
                 GeometryReader { geometry in
                     let usesColumns = geometry.size.width >= 800
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                             if let app = asc.app {
                                 Text(app.name)
-                                    .font(.title3.weight(.semibold))
+                                    .font(BlitzLayout.pageTitle)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
 
                             let columns = usesColumns
                                 ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
-                                : AnyLayout(VStackLayout(alignment: .leading, spacing: 24))
+                                : AnyLayout(VStackLayout(alignment: .leading, spacing: BlitzLayout.sectionSpacing))
                             columns {
                                 localizedContentFields
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -256,9 +259,9 @@ struct AppInformationView: View {
     }
 
     private var localizedContentFields: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
             Text("Store Listing")
-                .font(.callout.weight(.semibold))
+                .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             editableField("Name", text: $title, fieldKey: "title", maxChars: 30)
             editableField("Subtitle", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
@@ -270,9 +273,9 @@ struct AppInformationView: View {
     }
 
     private var categoryAndLinks: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
             Text("Category & Links")
-                .font(.callout.weight(.semibold))
+                .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             // Primary Category
             VStack(alignment: .leading, spacing: 6) {
@@ -369,14 +372,14 @@ struct AppInformationView: View {
                     if let app = asc.app {
                         Group {
                             InfoRow(label: "App ID", value: app.id)
-                            Divider().padding(.leading, 150).opacity(0.5)
+                            Divider().opacity(0.5)
                             InfoRow(label: "Bundle ID", value: app.bundleId)
                             if let locale = app.primaryLocale {
-                                Divider().padding(.leading, 150).opacity(0.5)
+                                Divider().opacity(0.5)
                                 InfoRow(label: "Primary Locale", value: locale)
                             }
                             if let vendor = app.vendorNumber {
-                                Divider().padding(.leading, 150).opacity(0.5)
+                                Divider().opacity(0.5)
                                 InfoRow(label: "Vendor Number", value: vendor)
                             }
                         }
@@ -436,10 +439,10 @@ struct AppInformationView: View {
                     if let project = appState.activeProject {
                         Group {
                             InfoRow(label: "Project Name", value: project.name)
-                            Divider().padding(.leading, 150).opacity(0.5)
+                            Divider().opacity(0.5)
                             InfoRow(label: "Project Type", value: project.type.rawValue)
                             if let bid = project.metadata.bundleIdentifier {
-                                Divider().padding(.leading, 150).opacity(0.5)
+                                Divider().opacity(0.5)
                                 InfoRow(label: "Bundle ID (local)", value: bid)
                             }
                         }
@@ -514,14 +517,14 @@ struct AppInformationView: View {
                             }
                         }
                     }
-                    .padding(16)
+                    .padding(BlitzLayout.cardInset)
                     .background(.background.secondary.opacity(0.6))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .transition(.opacity)
             }
         }
-        .padding(.top, 24)
+        .padding(.top, 8)
     }
 
     private func advancedSectionHeader(_ title: String) -> some View {

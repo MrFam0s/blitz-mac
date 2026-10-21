@@ -33,104 +33,118 @@ struct AnalyticsView: View {
     private var analyticsContent: some View {
         let hasVendor = asc.app?.vendorNumber != nil
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 8) {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
                     Text("Analytics")
                         .font(BlitzLayout.pageTitle)
-                    Picker("Range", selection: $dateRange) {
-                        ForEach(DateRange.allCases, id: \.self) {
-                            Text($0.rawValue).tag($0)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .accessibilityLabel("Date range")
-                    .frame(width: 240)
+                    Spacer()
                     ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: "Refresh analytics tab")
                 }
-
-                if !hasVendor {
-                    vendorNumberNotice
-                } else {
-                    salesReportsNotice
+                Picker("Range", selection: $dateRange) {
+                    ForEach(DateRange.allCases, id: \.self) {
+                        Text($0.rawValue).tag($0)
+                    }
                 }
-
-                // Placeholder chart with mock data to illustrate layout
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Downloads (sample)")
-                        .font(.headline)
-
-                    Chart(mockDownloadData(for: dateRange)) { point in
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("Downloads", point.value)
-                        )
-                        .foregroundStyle(.blue)
-
-                        AreaMark(
-                            x: .value("Date", point.date),
-                            y: .value("Downloads", point.value)
-                        )
-                        .foregroundStyle(.blue.opacity(0.1))
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .day, count: dateRange == .last7Days ? 1 : dateRange == .last30Days ? 5 : 15)) {
-                            AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks { value in
-                            AxisValueLabel()
-                            AxisGridLine()
-                        }
-                    }
-                    .frame(height: 200)
-
-                    Text("Sample data only — connect sales reports for live data")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(16)
-                .background(.background.secondary)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .accessibilityLabel("Date range")
+                .frame(maxWidth: 300, alignment: .leading)
             }
-            .blitzPagePadding()
+            .blitzToolbar()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+
+                    if !hasVendor {
+                        vendorNumberNotice
+                    } else {
+                        salesReportsNotice
+                    }
+
+                    // Placeholder chart with mock data to illustrate layout
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Downloads (sample)")
+                            .font(BlitzLayout.sectionTitle)
+
+                        Chart(mockDownloadData(for: dateRange)) { point in
+                            LineMark(
+                                x: .value("Date", point.date),
+                                y: .value("Downloads", point.value)
+                            )
+                            .foregroundStyle(.blue)
+
+                            AreaMark(
+                                x: .value("Date", point.date),
+                                y: .value("Downloads", point.value)
+                            )
+                            .foregroundStyle(.blue.opacity(0.1))
+                        }
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .day, count: dateRange == .last7Days ? 2 : dateRange == .last30Days ? 7 : 21)) {
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                            }
+                        }
+                        .chartYAxis {
+                            AxisMarks { value in
+                                AxisValueLabel()
+                                AxisGridLine()
+                            }
+                        }
+                        .frame(height: 200)
+
+                        Text("Sample data only — connect sales reports for live data")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(BlitzLayout.cardInset)
+                    .background(.background.secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .blitzPagePadding()
+            }
         }
     }
 
     private var vendorNumberNotice: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: "info.circle")
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Sales Reports Require Vendor Number")
-                    .font(.callout.weight(.medium))
+                    .font(BlitzLayout.sectionTitle)
                 Text("Your app's vendor number is not available. This is typically shown on the Payments and Financial Reports page in App Store Connect.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(BlitzLayout.cardInset)
         .background(.blue.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var salesReportsNotice: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: "info.circle")
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Live Sales Data Coming Soon")
-                    .font(.callout.weight(.medium))
-                Text("Sales report fetching via the ASC API is in development. The chart above shows sample data.")
+                    .font(BlitzLayout.sectionTitle)
+                Text("Sales report fetching via the ASC API is in development. The chart below shows sample data.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(BlitzLayout.cardInset)
         .background(.blue.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }

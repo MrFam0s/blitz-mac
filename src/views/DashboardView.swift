@@ -169,7 +169,7 @@ struct DashboardView: View {
                 }
                 // Compact counts describe visible apps, independent of the search filter.
                 if !showsHiddenApps {
-                    HStack(spacing: 10) {
+                    BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                         statCard(
                             title: "Live on Store",
                             value: statValue(visibleSummary.liveCount),
@@ -188,7 +188,6 @@ struct DashboardView: View {
                             color: .red,
                             icon: "xmark.seal.fill"
                         )
-                        Spacer(minLength: 0)
                     }
                 }
 
@@ -234,36 +233,41 @@ struct DashboardView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let lastHiddenApp {
-                    Text("\(lastHiddenApp.name) removed from Dashboard.")
-                        .font(.callout)
-                        .lineLimit(2)
-                    Button("Undo") { setHidden(false, for: lastHiddenApp) }
-                    Button { self.lastHiddenApp = nil } label: {
-                        Image(systemName: "xmark")
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(lastHiddenApp.name) removed from Dashboard.")
+                            .font(.callout)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        Button("Undo") { setHidden(false, for: lastHiddenApp) }
+                        Button { self.lastHiddenApp = nil } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Dismiss")
                     }
-                    .buttonStyle(.plain)
-                    .help("Dismiss")
                 }
-                Spacer(minLength: 8)
-                Button {
-                    appState.showNewProjectSheet = true
-                } label: {
-                    Label("Create App", systemImage: "plus")
-                        .font(.body.weight(.medium))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
+                HStack(spacing: 12) {
+                    Spacer(minLength: 0)
+                    Button {
+                        appState.showNewProjectSheet = true
+                    } label: {
+                        Label("Create App", systemImage: "plus")
+                            .font(.body.weight(.medium))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
 
-                Button {
-                    appState.showImportProjectSheet = true
-                } label: {
-                    Label("Import App", systemImage: "square.and.arrow.down")
-                        .font(.body.weight(.medium))
+                    Button {
+                        appState.showImportProjectSheet = true
+                    } label: {
+                        Label("Import App", systemImage: "square.and.arrow.down")
+                            .font(.body.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
             }
             .blitzToolbar()
         }
