@@ -155,7 +155,10 @@ struct AppInformationView: View {
             if asc.app != nil {
                 ASCVersionPickerBar(
                     asc: asc,
-                    selection: selectedVersionBinding
+                    selection: selectedVersionBinding,
+                    appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
+                    refreshTab: .appInformation,
+                    refreshHelpText: "Refresh app information"
                 ) {
                     if !locales.isEmpty {
                         Picker("Locale", selection: selectedLocaleBinding) {
@@ -175,14 +178,6 @@ struct AppInformationView: View {
                             Text("Saving…").font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    if let appId = asc.app?.id {
-                        Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/appstore")!) {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.callout)
-                        }
-                        .help("Open in App Store Connect")
-                    }
-                    ASCTabRefreshButton(asc: asc, tab: .appInformation, helpText: "Refresh app information")
                 }
                 .blitzToolbar()
             }

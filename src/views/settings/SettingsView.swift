@@ -180,18 +180,25 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Send default prompt toggle
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Beim Start einen Auftrag zum aktuellen Tab senden", isOn: Binding(
-                    get: { settings.sendDefaultPrompt },
-                    set: { newValue in
-                        settings.sendDefaultPrompt = newValue
-                        settings.save()
-                    }
-                ))
+            if currentTerminal.isBuiltIn && currentAgent == .codex {
+                LabeledContent("Codex-Sitzung", value: "Letzte Sitzung im Projekt fortsetzen")
+                    .font(.callout)
+                Text("Ohne frühere Sitzung startet eine neue Unterhaltung. Beim Öffnen wird kein Auftrag gesendet; mit /new beginnst du eine neue Unterhaltung.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Beim Start einen Auftrag zum aktuellen Tab senden", isOn: Binding(
+                        get: { settings.sendDefaultPrompt },
+                        set: { newValue in
+                            settings.sendDefaultPrompt = newValue
+                            settings.save()
+                        }
+                    ))
 
-                learnMore(isExpanded: $showAskAIDetail) {
-                    Text("Blitz sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
+                    learnMore(isExpanded: $showAskAIDetail) {
+                        Text("Blitz sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
+                    }
                 }
             }
 

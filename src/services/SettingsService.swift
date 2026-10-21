@@ -1,6 +1,20 @@
 import Foundation
 import os
 
+enum MainWindowLayout {
+    static let frameAutosaveName = "BlitzMainWindow"
+    // Outer window size; the sidebar leaves roughly 550 points for the app and
+    // 480 for the terminal, matching the side-by-side working layout.
+    static let defaultFrameSize = CGSize(width: 1230, height: 925)
+
+    static func initialFrameSize(visibleSize: CGSize) -> CGSize {
+        CGSize(
+            width: min(defaultFrameSize.width, visibleSize.width),
+            height: min(defaultFrameSize.height, visibleSize.height)
+        )
+    }
+}
+
 /// Reads/writes ~/.blitz/settings.json
 @MainActor
 @Observable
@@ -35,7 +49,7 @@ final class SettingsService {
     var whitelistBlitzMCPTools: Bool = true
     var allowASCCLICalls: Bool = false
     var enableASCShellIntegration: Bool = false
-    var terminalPosition: String = "bottom"  // "bottom" or "right"
+    var terminalPosition: String = "right"  // "bottom" or "right"
     var terminalRightWidth: Double = 480
     var terminalBottomHeight: Double = 250
 
@@ -61,7 +75,9 @@ final class SettingsService {
         if let whitelist = json["whitelistBlitzMCPTools"] as? Bool { whitelistBlitzMCPTools = whitelist }
         if let allowASCCLI = json["allowASCCLICalls"] as? Bool { allowASCCLICalls = allowASCCLI }
         if let shellIntegration = json["enableASCShellIntegration"] as? Bool { enableASCShellIntegration = shellIntegration }
-        if let termPos = json["terminalPosition"] as? String { terminalPosition = termPos }
+        if let termPos = json["terminalPosition"] as? String, ["bottom", "right"].contains(termPos) {
+            terminalPosition = termPos
+        }
         terminalRightWidth = Self.validTerminalSize(json["terminalRightWidth"], fallback: 480)
         terminalBottomHeight = Self.validTerminalSize(json["terminalBottomHeight"], fallback: 250)
     }

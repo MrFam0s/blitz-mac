@@ -515,7 +515,10 @@ struct ScreenshotsView: View {
                     if asc.app != nil {
                         ASCVersionPickerBar(
                             asc: asc,
-                            selection: selectedVersionBinding
+                            selection: selectedVersionBinding,
+                            appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/ios/version/inflight") },
+                            refreshTab: .screenshots,
+                            refreshHelpText: "Refresh screenshots"
                         ) {
                             if !asc.localizations.isEmpty {
                                 Picker("Locale", selection: selectedLocaleBinding) {
@@ -524,16 +527,11 @@ struct ScreenshotsView: View {
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .frame(width: 160)
+                                .labelsHidden()
+                                .accessibilityLabel("Locale")
+                                .help("Language of the store listing")
+                                .frame(width: 110)
                             }
-                            if let appId = asc.app?.id {
-                                Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/distribution/ios/version/inflight")!) {
-                                    Image(systemName: "arrow.up.right.square")
-                                        .font(.callout)
-                                }
-                                .help("Open in App Store Connect")
-                            }
-                            ASCTabRefreshButton(asc: asc, tab: .screenshots, helpText: "Refresh screenshots")
                         }
                         .blitzToolbar()
                     }

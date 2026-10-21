@@ -43,17 +43,11 @@ struct MonetizationView: View {
             if asc.app != nil {
                 ASCVersionPickerBar(
                     asc: asc,
-                    selection: selectedVersionBinding
-                ) {
-                    if let appId = asc.app?.id {
-                        Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/distribution/pricing")!) {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.callout)
-                        }
-                        .help("Open in App Store Connect")
-                    }
-                    ASCTabRefreshButton(asc: asc, tab: .monetization, helpText: "Refresh monetization data")
-                }
+                    selection: selectedVersionBinding,
+                    appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/pricing") },
+                    refreshTab: .monetization,
+                    refreshHelpText: "Refresh monetization data"
+                )
                 .blitzToolbar()
             }
 

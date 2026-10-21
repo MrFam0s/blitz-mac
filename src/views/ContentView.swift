@@ -80,10 +80,10 @@ struct ContentView: View {
 
             let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
             let prompt = settings.sendDefaultPrompt ? ConnectAIPopover.prompt(for: appState.activeTab) : nil
-            appState.terminalManager.createAgentSession(
+            appState.terminalManager.openAgentSession(
                 projectPath: appState.activeProject?.path,
                 agent: agent,
-                prompt: prompt,
+                defaultPrompt: prompt,
                 skipPermissions: settings.skipAgentPermissions
             )
         } else {
@@ -293,6 +293,8 @@ struct ContentView: View {
     private func configureWindow(forOnboarding isOnboarding: Bool) {
         guard let window = mainWindow else { return }
         if isOnboarding {
+            // Never persist the temporary onboarding frame as the working size.
+            window.setFrameAutosaveName("")
             window.toolbar?.isVisible = false
             window.styleMask.remove(.resizable)
             window.titlebarAppearsTransparent = true
@@ -305,8 +307,18 @@ struct ContentView: View {
             window.styleMask.insert(.resizable)
             window.contentMinSize = NSSize(width: 800, height: 600)
             window.toolbar?.isVisible = true
-            window.setContentSize(NSSize(width: 1200, height: 900))
-            window.center()
+            if !window.setFrameUsingName(MainWindowLayout.frameAutosaveName) {
+                let visibleFrame = (window.screen ?? NSScreen.main)?.visibleFrame
+                let size = MainWindowLayout.initialFrameSize(
+                    visibleSize: visibleFrame?.size ?? MainWindowLayout.defaultFrameSize
+                )
+                window.setFrame(NSRect(origin: window.frame.origin, size: size), display: true)
+                window.center()
+            }
+            if let screen = window.screen ?? NSScreen.main {
+                window.setFrame(window.constrainFrameRect(window.frame, to: screen), display: true)
+            }
+            window.setFrameAutosaveName(MainWindowLayout.frameAutosaveName)
         }
     }
 

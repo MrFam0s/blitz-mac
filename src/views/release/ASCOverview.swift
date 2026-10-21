@@ -71,17 +71,11 @@ struct ASCOverview: View {
                     asc: asc,
                     selection: selectedVersionBinding,
                     onCreateDraft: { asc.showVersionDraftSheet = true },
-                    onPublishUpdate: { asc.showReleaseAutomationSheet = true }
-                ) {
-                    if let appId = asc.app?.id {
-                        Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/appstore")!) {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.callout)
-                        }
-                        .help("Open in App Store Connect")
-                    }
-                    ASCTabRefreshButton(asc: asc, tab: .app, helpText: "Refresh overview data")
-                }
+                    onPublishUpdate: { asc.showReleaseAutomationSheet = true },
+                    appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
+                    refreshTab: .app,
+                    refreshHelpText: "Refresh overview data"
+                )
                 .blitzToolbar()
             }
 

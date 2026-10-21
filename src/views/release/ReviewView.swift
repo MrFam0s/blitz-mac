@@ -104,17 +104,11 @@ struct ReviewView: View {
             if asc.app != nil {
                 ASCVersionPickerBar(
                     asc: asc,
-                    selection: selectedVersionBinding
-                ) {
-                    if let appId = asc.app?.id {
-                        Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/distribution/reviewsubmissions")!) {
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.callout)
-                        }
-                        .help("Open in App Store Connect")
-                    }
-                    ASCTabRefreshButton(asc: asc, tab: .review, helpText: "Refresh review data")
-                }
+                    selection: selectedVersionBinding,
+                    appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/reviewsubmissions") },
+                    refreshTab: .review,
+                    refreshHelpText: "Refresh review data"
+                )
                 .blitzToolbar()
             }
 

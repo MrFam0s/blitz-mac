@@ -7,6 +7,35 @@ struct TerminalStartupProcess {
     let execName: String?
 }
 
+/// Opening the panel is navigation, not a new task. Codex owns history lookup
+/// and its no-history fallback; Blitz only supplies the real project directory.
+struct TerminalOpeningOptions {
+    let projectPath: String?
+    let prompt: String?
+    let resumeLastSession: Bool
+
+    init(projectPath: String?, agent: AIAgent, defaultPrompt: String?) {
+        let directory = Self.canonicalProjectDirectory(projectPath)
+        self.projectPath = directory
+        self.prompt = agent == .codex ? nil : defaultPrompt
+        self.resumeLastSession = agent == .codex && directory != nil
+    }
+
+    static func canonicalProjectDirectory(_ path: String?) -> String? {
+        guard let path, !path.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else { return nil }
+        return url.path
+    }
+
+    static func codexReuseKey(projectPath: String?, agent: AIAgent) -> String? {
+        guard agent == .codex, let path = canonicalProjectDirectory(projectPath) else { return nil }
+        return "terminal:codex:\(path)"
+    }
+}
+
 /// Prefer an installed monospace Nerd Font so shell prompt icons and Powerline
 /// separators render without installing fonts or changing the user's shell.
 @MainActor
@@ -132,9 +161,14 @@ final class TerminalManager {
     nonisolated static func agentStartupProcess(
         agent: AIAgent,
         prompt: String? = nil,
-        skipPermissions: Bool = false
+        skipPermissions: Bool = false,
+        resumeLastSession: Bool = false
     ) -> TerminalStartupProcess {
         var commandParts = [shellQuote(agent.cliCommand)]
+        // An explicit task always starts fresh, even if a caller also asks to resume.
+        if agent == .codex, resumeLastSession, prompt?.isEmpty != false {
+            commandParts += [shellQuote("resume"), shellQuote("--last")]
+        }
         if skipPermissions, let flag = agent.skipPermissionsFlag {
             commandParts.append(shellQuote(flag))
         }
@@ -222,12 +256,42 @@ final class TerminalManager {
     }
 
     @discardableResult
+    func openAgentSession(
+        projectPath: String?,
+        agent: AIAgent,
+        defaultPrompt: String? = nil,
+        skipPermissions: Bool = false
+    ) -> TerminalSession {
+        let options = TerminalOpeningOptions(
+            projectPath: projectPath, agent: agent, defaultPrompt: defaultPrompt
+        )
+        if let key = TerminalOpeningOptions.codexReuseKey(projectPath: options.projectPath, agent: agent),
+           let id = agentSessionRegistry.existing(
+                for: key,
+                activeIDs: Set(sessions.filter { !$0.isTerminated }.map(\.id)),
+                preferredID: activeSessionId
+           ),
+           let existing = sessions.first(where: { $0.id == id }) {
+            activeSessionId = id
+            return existing
+        }
+        return createAgentSession(
+            projectPath: options.projectPath,
+            agent: agent,
+            prompt: options.prompt,
+            skipPermissions: skipPermissions,
+            resumeLastSession: options.resumeLastSession
+        )
+    }
+
+    @discardableResult
     func createAgentSession(
         projectPath: String?,
         agent: AIAgent,
         prompt: String? = nil,
         skipPermissions: Bool = false,
-        reuseKey: String? = nil
+        reuseKey: String? = nil,
+        resumeLastSession: Bool = false
     ) -> TerminalSession {
         if let reuseKey,
            let id = agentSessionRegistry.existing(for: reuseKey, activeIDs: Set(sessions.filter { !$0.isTerminated }.map(\.id))),
@@ -243,7 +307,8 @@ final class TerminalManager {
             startupProcess: Self.agentStartupProcess(
                 agent: agent,
                 prompt: prompt,
-                skipPermissions: skipPermissions
+                skipPermissions: skipPermissions,
+                resumeLastSession: resumeLastSession
             ),
             onTerminated: { [weak self] id in
                 self?.sessions.first { $0.id == id }?.markTerminated()
@@ -255,6 +320,10 @@ final class TerminalManager {
         sessions.append(session)
         activeSessionId = session.id
         if let reuseKey { agentSessionRegistry.register(session.id, for: reuseKey) }
+        // Explicit AI actions also count as the project's live Codex session.
+        if let key = TerminalOpeningOptions.codexReuseKey(projectPath: projectPath, agent: agent) {
+            agentSessionRegistry.register(session.id, for: key)
+        }
         return session
     }
 

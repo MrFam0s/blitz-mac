@@ -52,41 +52,69 @@ struct DashboardView: View {
     // MARK: - Top Navbar
 
     private var topNavbar: some View {
-        HStack(spacing: 10) {
-            Label("My Apps", systemImage: "folder")
-                .font(BlitzLayout.pageTitle)
-
-            Spacer()
-
-            Group {
-                HStack(spacing: 5) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search apps", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .accessibilityLabel("Search apps by name or bundle ID")
-                    if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
-                            Image(systemName: "xmark.circle.fill")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Clear search")
-                    }
-                }
-                .padding(6)
-                .frame(width: 190)
-                .background(.background, in: RoundedRectangle(cornerRadius: 6))
-
-                Button {
-                    showsHiddenApps.toggle()
-                } label: {
-                    Label(showsHiddenApps ? "Back to My Apps" : "Hidden Apps (\(hiddenAppCount))",
-                          systemImage: showsHiddenApps ? "square.grid.2x2" : "eye.slash")
-                }
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 8)
-                .help("View and restore apps removed from this dashboard")
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                dashboardTitle
+                searchField.frame(width: 220)
+                Spacer(minLength: 8)
+                dashboardTools
             }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    dashboardTitle
+                    Spacer(minLength: 8)
+                    dashboardTools
+                }
+                searchField
+            }
+        }
+    }
+
+    private var dashboardTitle: some View {
+        Label("My Apps", systemImage: "folder")
+            .font(BlitzLayout.pageTitle)
+            .fixedSize()
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search apps", text: $searchText)
+                .textFieldStyle(.plain)
+                .accessibilityLabel("Search apps by name or bundle ID")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+                .help("Clear search")
+            }
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var dashboardTools: some View {
+        HStack(spacing: 12) {
+            Button {
+                showsHiddenApps.toggle()
+            } label: {
+                Label(showsHiddenApps ? "Back to My Apps" : "Hidden Apps (\(hiddenAppCount))",
+                      systemImage: showsHiddenApps ? "square.grid.2x2" : "eye.slash")
+            }
+            .buttonStyle(.borderless)
+            .fixedSize()
+            .help("View and restore apps removed from this dashboard")
 
             Button {
                 forceRefreshApps()
@@ -102,7 +130,9 @@ struct DashboardView: View {
             .buttonStyle(.borderless)
             .disabled(isRefreshingApps)
             .help(refreshButtonHelpText)
+            .frame(width: 24, height: 28)
         }
+        .fixedSize()
     }
 
     private var appRows: [DashboardAppRow] { dashboardSummary.rows(linking: projects) }

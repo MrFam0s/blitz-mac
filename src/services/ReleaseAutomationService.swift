@@ -174,11 +174,17 @@ enum ReleaseAutomationService {
 
 /// Retain the session while the agent remains interactive, including after it asks a question.
 struct AgentSessionRegistry {
-    private var sessions: [String: UUID] = [:]
-    mutating func existing(for key: String, activeIDs: Set<UUID>) -> UUID? {
-        guard let id = sessions[key] else { return nil }
-        guard activeIDs.contains(id) else { sessions.removeValue(forKey: key); return nil }
-        return id
+    private var sessions: [String: [UUID]] = [:]
+    mutating func existing(for key: String, activeIDs: Set<UUID>, preferredID: UUID? = nil) -> UUID? {
+        let available = (sessions[key] ?? []).filter { activeIDs.contains($0) }
+        sessions[key] = available.isEmpty ? nil : available
+        if let preferredID, available.contains(preferredID) { return preferredID }
+        return available.last
     }
-    mutating func register(_ id: UUID, for key: String) { sessions[key] = id }
+    mutating func register(_ id: UUID, for key: String) {
+        var registered = sessions[key] ?? []
+        registered.removeAll { $0 == id }
+        registered.append(id)
+        sessions[key] = registered
+    }
 }

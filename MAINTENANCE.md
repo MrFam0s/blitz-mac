@@ -2,6 +2,45 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.51 — resume project conversations and clarify the working layout
+
+Opening the integrated terminal with Codex selects an existing live Codex tab
+for the project, including tabs started by explicit AI actions. Otherwise it runs
+`codex resume --last` in the resolved project directory, without a new prompt.
+Codex performs its own directory-filtered history lookup and starts a fresh chat
+when there is no history. No `--all` lookup or catch-all retry is used. Missing
+project directories start fresh without looking up a home-directory conversation.
+Symlinked Blitz project paths match their real source directories. Explicit AI
+actions retain fresh task prompts; other agents and the plain-shell plus button
+keep their existing behavior. Existing permission preferences are unchanged.
+Manually started agents inside plain shell tabs are not tracked for tab reuse.
+
+The initial main window is approximately 1230 by 925 points, clamped to the
+available screen. macOS remembers subsequent window size and position separately
+from onboarding. New settings place the terminal on the right at 480 points,
+leaving approximately 550 points for app content; saved layout choices survive.
+Version, status and locale sit beside a grouped Store-link/refresh toolbar.
+Draft and publishing actions have their own second row and only wrap within
+that group when the pane is especially narrow. Compact controls share a leading
+edge, utility icons are secondary, and unavailable publishing actions use the
+same neutral button treatment as other disabled actions.
+Dashboard search sits beside My Apps in a clearly bounded field with an inline
+clear button, or in its own full-width row when the header is narrow.
+
+Validation: 213 Swift tests pass. New regressions cover canonical project paths,
+invalid directories, suppression of passive tasks, fresh explicit tasks, argument
+quoting, permission flags, live-session reuse and project separation, window
+sizing and saved layout choices. The installed Codex CLI 0.163.0 was also tested
+in an empty project: `resume --last` opened an idle fresh conversation and exited
+normally without sending a task. Independent review found no blocking issue.
+Native UI verification confirmed project history restoration without a new task,
+reuse of the live tab on another toolbar click, a fully visible header at a
+361-point app-pane width, and restoration of a resized window after relaunch.
+Final build 54 also passed native UI checks for dashboard filtering and clearing,
+the search field's separate row beside the terminal, and the compact two-row
+version header with neutral disabled actions. The installed bundle passes strict
+deep signature verification and retains the existing Developer ID requirement.
+
 ## 1.0.50 — narrow detail panes and verified Apple web sign-in
 
 App Information changes to a single column below 800 points without recreating

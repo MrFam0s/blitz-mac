@@ -5,21 +5,53 @@ struct ASCVersionPickerBar<Content: View>: View {
     var selection: Binding<String>
     var onCreateDraft: (() -> Void)? = nil
     var onPublishUpdate: (() -> Void)? = nil
+    var appStoreURL: URL? = nil
+    var refreshTab: AppTab? = nil
+    var refreshHelpText: String = "Refresh this tab"
     @ViewBuilder var content: Content
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+                    versionSelection
+                    content
+                }
+                toolbarTools
+                    .fixedSize()
+            }
+
+            // Keep release operations together below the version context. At
+            // especially narrow widths they may wrap, but never mix with tools.
+            if onCreateDraft != nil || onPublishUpdate != nil {
+                BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+                    releaseActions
+                }
+            }
+        }
+        .font(.system(size: 12))
+        .controlSize(.small)
+    }
+
+    @ViewBuilder private var toolbarTools: some View {
+        if appStoreURL != nil || refreshTab != nil {
             HStack(spacing: 10) {
-                versionSelection
-                Spacer()
-                releaseActions.fixedSize()
-                content.fixedSize()
+                if let appStoreURL {
+                    Link(destination: appStoreURL) {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(width: 20, height: 24)
+                    }
+                    .accessibilityLabel("Open in App Store Connect")
+                    .help("Open in App Store Connect")
+                }
+                if let refreshTab {
+                    ASCTabRefreshButton(asc: asc, tab: refreshTab, helpText: refreshHelpText)
+                        .frame(width: 20, height: 24)
+                }
             }
-            BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
-                versionSelection
-                content
-                releaseActions
-            }
+            .foregroundStyle(.secondary)
+            .tint(.secondary)
         }
     }
 
@@ -33,7 +65,8 @@ struct ASCVersionPickerBar<Content: View>: View {
             .pickerStyle(.menu)
             .labelsHidden()
             .accessibilityLabel("Version")
-            .frame(width: 136)
+            .fixedSize(horizontal: true, vertical: true)
+            .frame(height: 24, alignment: .leading)
         }
         if let version = asc.selectedVersion { stateBadge(version.attributes.appStoreState ?? "") }
     }
@@ -50,13 +83,22 @@ struct ASCVersionPickerBar<Content: View>: View {
                       : "Es gibt bereits eine unveröffentlichte Version. Wähle sie zum Bearbeiten aus.")
         }
         if let onPublishUpdate {
-            Button("Update automatisch veröffentlichen", action: onPublishUpdate)
-                .buttonStyle(.borderedProminent)
-                .fixedSize(horizontal: false, vertical: true)
-                .multilineTextAlignment(.center)
-                .disabled(!asc.canStartReleaseAutomation)
-                .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
+            if asc.canStartReleaseAutomation {
+                publishUpdateButton(action: onPublishUpdate)
+                    .buttonStyle(.borderedProminent)
+            } else {
+                publishUpdateButton(action: onPublishUpdate)
+                    .buttonStyle(.bordered)
+                    .disabled(true)
+            }
         }
+    }
+
+    private func publishUpdateButton(action: @escaping () -> Void) -> some View {
+        Button("Update automatisch veröffentlichen", action: action)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
+            .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
     }
 
     private func stateBadge(_ state: String) -> some View {
@@ -79,17 +121,31 @@ struct ASCVersionPickerBar<Content: View>: View {
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.vertical, 3)
             .background(color.opacity(0.12))
             .foregroundStyle(color)
             .clipShape(Capsule())
+            .frame(height: 24)
     }
 }
 
 extension ASCVersionPickerBar where Content == EmptyView {
-    init(asc: ASCManager, selection: Binding<String>) {
+    init(
+        asc: ASCManager,
+        selection: Binding<String>,
+        onCreateDraft: (() -> Void)? = nil,
+        onPublishUpdate: (() -> Void)? = nil,
+        appStoreURL: URL? = nil,
+        refreshTab: AppTab? = nil,
+        refreshHelpText: String = "Refresh this tab"
+    ) {
         self.asc = asc
         self.selection = selection
+        self.onCreateDraft = onCreateDraft
+        self.onPublishUpdate = onPublishUpdate
+        self.appStoreURL = appStoreURL
+        self.refreshTab = refreshTab
+        self.refreshHelpText = refreshHelpText
         self.content = EmptyView()
     }
 }
