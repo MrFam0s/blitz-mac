@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
 /// Uses ASC's supported, locked import path. The older aggregate export alone
@@ -8,7 +9,7 @@ struct ASCWebSessionCLIImporter {
 
         var errorDescription: String? {
             switch self {
-            case .helperUnavailable: return "Der ASC-Helfer ist nicht verfügbar. Bitte Blitz neu starten."
+            case .helperUnavailable: return "Der ASC-Helfer ist nicht verfügbar. Bitte Blitz Neo neu starten."
             case .invalidSession: return "Apple hat noch keine vollständige Anmeldung bestätigt."
             case .rejected: return "ASC konnte die Apple-Anmeldung nicht bestätigen oder speichern. Bitte die Anmeldung abschließen und erneut prüfen."
             case .timedOut: return "Die Prüfung der Apple-Anmeldung hat zu lange gedauert. Bitte erneut versuchen."

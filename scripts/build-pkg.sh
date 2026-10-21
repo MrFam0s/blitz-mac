@@ -1,5 +1,6 @@
 #!/bin/bash
-# Build Blitz.pkg installer from the Swift .app bundle
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+# Build Blitz Neo installer from the Swift .app bundle
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,8 +10,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 [ -f "$ROOT_DIR/.env" ] && set -a && source "$ROOT_DIR/.env" && set +a
 
 # Config
-APP_NAME="Blitz"
-IDENTIFIER="com.blitz.macos"
+APP_NAME="Blitz Neo"
+ARTIFACT_NAME="BlitzNeo"
+IDENTIFIER="org.amosystems.BlitzNeo"
 VERSION=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/package.json','utf8')); process.stdout.write(p.version)" 2>/dev/null \
   || grep '"version"' "$ROOT_DIR/package.json" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
 
@@ -21,7 +23,7 @@ SOURCE_APP="$ROOT_DIR/.build/$APP_NAME.app"
 PKG_SCRIPTS="$ROOT_DIR/scripts/pkg-scripts"
 ENTITLEMENTS="$ROOT_DIR/scripts/Entitlements.plist"
 BUILD_DIR="$ROOT_DIR/build/pkg"
-OUTPUT_PKG="$ROOT_DIR/build/$APP_NAME-$VERSION.pkg"
+OUTPUT_PKG="$ROOT_DIR/build/$ARTIFACT_NAME-$VERSION.pkg"
 REQUIRE_SIGNED_RELEASE="${BLITZ_REQUIRE_SIGNED_RELEASE:-0}"
 
 # Require production signing inputs when strict mode is enabled.
@@ -51,7 +53,7 @@ fi
 
 # Clean build dir and stale .pkg files
 rm -rf "$BUILD_DIR"
-rm -f "$ROOT_DIR/build/$APP_NAME-"*.pkg
+rm -f "$ROOT_DIR/build/$ARTIFACT_NAME-"*.pkg
 mkdir -p "$BUILD_DIR/payload"
 
 # Copy app to build dir (use ditto to avoid ._  Apple Double files)
@@ -146,15 +148,15 @@ pkgbuild \
     --scripts "$SCRIPTS_STAGING" \
     --identifier "$IDENTIFIER" \
     --version "$VERSION" \
-    "$BUILD_DIR/$APP_NAME-component.pkg"
+    "$BUILD_DIR/$ARTIFACT_NAME-component.pkg"
 
-if [ ! -f "$BUILD_DIR/$APP_NAME-component.pkg" ]; then
+if [ ! -f "$BUILD_DIR/$ARTIFACT_NAME-component.pkg" ]; then
     echo "ERROR: Failed to create component package"
     exit 1
 fi
 
 # Size sanity check
-PKG_SIZE=$(stat -f%z "$BUILD_DIR/$APP_NAME-component.pkg" 2>/dev/null || echo 0)
+PKG_SIZE=$(stat -f%z "$BUILD_DIR/$ARTIFACT_NAME-component.pkg" 2>/dev/null || echo 0)
 if [ "$PKG_SIZE" -gt 1000000 ]; then
     echo "   Component package looks good ($PKG_SIZE bytes)"
 else
@@ -167,8 +169,8 @@ echo "Creating distribution.xml..."
 cat > "$BUILD_DIR/distribution.xml" << EOF
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-    <title>Blitz</title>
-    <organization>com.blitz</organization>
+    <title>Blitz Neo</title>
+    <organization>org.amosystems</organization>
     <domains enable_localSystem="true"/>
     <options hostArchitectures="arm64,x86_64" rootVolumeOnly="true"/>
     <options customize="never" require-scripts="true" rootVolumeOnly="true"/>
@@ -184,7 +186,7 @@ cat > "$BUILD_DIR/distribution.xml" << EOF
         <pkg-ref id="$IDENTIFIER"/>
     </choice>
 
-    <pkg-ref id="$IDENTIFIER" version="$VERSION" onConclusion="none">$APP_NAME-component.pkg</pkg-ref>
+    <pkg-ref id="$IDENTIFIER" version="$VERSION" onConclusion="none">$ARTIFACT_NAME-component.pkg</pkg-ref>
 </installer-gui-script>
 EOF
 
@@ -238,9 +240,9 @@ echo "Built: $OUTPUT_PKG"
 echo "   Size: $(du -h "$OUTPUT_PKG" | cut -f1)"
 echo ""
 echo "To install:"
-echo "   open $OUTPUT_PKG"
+printf '   open %q\n' "$OUTPUT_PKG"
 echo ""
 echo "Or via command line:"
-echo "   sudo installer -pkg $OUTPUT_PKG -target / -verbose"
+printf '   sudo installer -pkg %q -target / -verbose\n' "$OUTPUT_PKG"
 echo ""
 echo "Done."

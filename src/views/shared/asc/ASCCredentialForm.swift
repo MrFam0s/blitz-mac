@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -136,7 +137,7 @@ struct ASCCredentialForm: View {
                             .foregroundStyle(.tertiary)
 
                         if privateKeyFileName != nil && resolvedKeyID == nil {
-                            Text("Use the original downloaded .p8 filename so Blitz can detect the Apple key automatically.")
+                            Text("Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically.")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -261,7 +262,7 @@ struct ASCCredentialForm: View {
 
     private func save() {
         guard let resolvedKeyID else {
-            saveError = "Use the original downloaded .p8 filename so Blitz can detect the Apple key automatically."
+            saveError = "Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically."
             return
         }
         isSaving = true

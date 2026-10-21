@@ -3,6 +3,8 @@ name: asc-privacy-nutrition-labels
 description: Set up App Store privacy nutrition labels (data collection declarations) for an app. Use when the user needs to declare what data their app collects, how it's used, and whether it's linked to the user. Handles both "no data collected" and full data collection declarations.
 ---
 
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
 # asc privacy nutrition labels
 
 Use this skill to configure App Store privacy nutrition labels for an app. This is the "App Privacy" section in App Store Connect where you declare what data your app collects, what purposes it's used for, and how it's protected.
@@ -245,7 +247,7 @@ asc web privacy pull --app "APP_ID" --pretty
 
 ## Session Authentication
 
-If `asc web privacy` commands fail with 401 or session errors, authenticate via the Blitz MCP tool:
+If `asc web privacy` commands fail with 401 or session errors, authenticate via the Blitz Neo MCP tool:
 
 ```
 Call the asc_web_auth MCP tool to open the Apple ID login window

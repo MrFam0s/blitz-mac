@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct TestsView: View {
@@ -55,7 +56,7 @@ struct TestsView: View {
                 .font(BlitzLayout.pageTitle)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("In a Blitz project directory, you can ask agents to use iPhones to test features and find bugs. Using Blitz's **iPhone-MCP**, your agent can tap, swipe, and type in both simulated and physical iPhone devices.")
+            Text("In a Blitz Neo project directory, you can ask agents to use iPhones to test features and find bugs. Using Blitz Neo's **iPhone-MCP**, your agent can tap, swipe, and type in both simulated and physical iPhone devices.")
                 .font(BlitzLayout.bodyFont)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

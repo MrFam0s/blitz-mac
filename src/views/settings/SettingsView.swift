@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct SettingsView: View {
@@ -232,7 +233,7 @@ struct SettingsView: View {
                     ))
 
                     learnMore(isExpanded: $showAskAIDetail) {
-                        Text("Blitz sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
+                        Text("Blitz Neo sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
                     }
                 }
             }
@@ -279,7 +280,7 @@ struct SettingsView: View {
                 .disabled(!shellIntegration.isSupported && !settings.enableASCShellIntegration)
 
                 if shellIntegration.isSupported {
-                    Text("Stellt `asc` auch in separat geöffneten Terminals bereit. Dafür verwaltet Blitz einen Eintrag in \(shellIntegration.targetRCFileLabel).")
+                    Text("Stellt `asc` auch in separat geöffneten Terminals bereit. Dafür verwaltet Blitz Neo einen Eintrag in \(shellIntegration.targetRCFileLabel).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -300,7 +301,7 @@ struct SettingsView: View {
     private var agentPermissionsSection: some View {
         Section("KI-Agent") {
             // Whitelist Blitz MCP tools
-            Toggle("Blitz-Werkzeuge im Agenten automatisch erlauben", isOn: Binding(
+            Toggle("Blitz-Neo-Werkzeuge im Agenten automatisch erlauben", isOn: Binding(
                 get: { settings.whitelistBlitzMCPTools },
                 set: { newValue in
                     settings.whitelistBlitzMCPTools = newValue
@@ -330,7 +331,7 @@ struct SettingsView: View {
                     ))
 
                     learnMore(isExpanded: $showSkipPermsDetail) {
-                        Text("\(currentAgent.displayName) führt Werkzeuge ohne seine üblichen Bestätigungen aus. Die Freigaben für Aktionen in Blitz gelten zusätzlich.")
+                        Text("\(currentAgent.displayName) führt Werkzeuge ohne seine üblichen Bestätigungen aus. Die Freigaben für Aktionen in Blitz Neo gelten zusätzlich.")
                     }
                 }
             }
@@ -340,10 +341,10 @@ struct SettingsView: View {
 
     private var blitzPermissionsSection: some View {
         Section {
-            Text("Aktivierte Aktionen führt Blitz ohne zusätzliche Rückfrage aus.")
+            Text("Aktivierte Aktionen führt Blitz Neo ohne zusätzliche Rückfrage aus.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Toggle("Alle Blitz-Aktionen automatisch erlauben", isOn: Binding(
+            Toggle("Alle Blitz-Neo-Aktionen automatisch erlauben", isOn: Binding(
                 get: {
                     gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? false }
                 },
@@ -366,13 +367,13 @@ struct SettingsView: View {
                 ))
             }
         } header: {
-            Text("Aktionen in Blitz")
+            Text("Aktionen in Blitz Neo")
         }
     }
 
     @ViewBuilder
     private var maintenanceSection: some View {
-        Section("Blitz") {
+        Section("Blitz Neo") {
             LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
             LabeledContent("Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")
             UpdateSettingsRow(autoUpdate: appState.autoUpdate)

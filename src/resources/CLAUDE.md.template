@@ -1,22 +1,24 @@
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
 # {{PROJECT_TYPE_HEADER}}
 
 ## blitz-macos
 
-This project is opened in **Blitz**, a native macOS iOS/macOS development IDE with integrated simulator streaming. The user sees Build, Release, Insights, Testflight tab groups, and can see simulator view in Build>Simulator tab.
+This project is opened in **Blitz Neo**, a native macOS iOS/macOS development IDE with integrated simulator streaming. The user sees Build, Release, Insights, Testflight tab groups, and can see simulator view in Build>Simulator tab.
 
 ### MCP Servers
 
 Two MCP servers are configured in `.mcp.json`:
 
-- **`blitz-macos`** — Controls the Blitz app: project state, tab navigation, App Store Connect forms, build pipeline, settings.
+- **`blitz-macos`** — Controls the Blitz Neo app: project state, tab navigation, App Store Connect forms, build pipeline, settings.
 - **`blitz-iphone`** — Controls the iOS device/simulator: tap, swipe, type, screenshots, UI hierarchy. See [iPhone MCP docs](https://github.com/blitzdotdev/iPhone-mcp).
-- **`asc` CLI** — A bundled Go binary at `~/.blitz/bin/asc` for direct App Store Connect API access. Shares credentials with Blitz MCP tools automatically (no separate login needed).
+- **`asc` CLI** — A bundled Go binary at `~/.blitz/bin/asc` for direct App Store Connect API access. Shares credentials with Blitz Neo MCP tools automatically (no separate login needed).
 
 ### MCP Tools vs `asc` CLI vs Direct API Calls
 
 **Priority order: MCP tools → `asc` CLI → direct API calls (last resort).**
 
-**Default to MCP tools** for common workflows — they are opinionated, safe, and integrate with Blitz's UI (approval prompts, progress tracking, form validation). **When MCP tools don't cover an operation, use `asc` CLI** — it has 60+ subcommands covering nearly every ASC API endpoint and handles JWT auth, pagination, and retries. **Direct API calls (python scripts, curl to api.appstoreconnect.apple.com, urllib) should be an absolute last resort** — only when both MCP tools AND `asc` CLI genuinely cannot accomplish the task. Before writing any script, run `asc --help` and `asc <command> --help` to confirm the CLI doesn't already support it.
+**Default to MCP tools** for common workflows — they are opinionated, safe, and integrate with Blitz Neo's UI (approval prompts, progress tracking, form validation). **When MCP tools don't cover an operation, use `asc` CLI** — it has 60+ subcommands covering nearly every ASC API endpoint and handles JWT auth, pagination, and retries. **Direct API calls (python scripts, curl to api.appstoreconnect.apple.com, urllib) should be an absolute last resort** — only when both MCP tools AND `asc` CLI genuinely cannot accomplish the task. Before writing any script, run `asc --help` and `asc <command> --help` to confirm the CLI doesn't already support it.
 
 **Use MCP tools for:** filling ASC forms (`asc_fill_form`), reading tab/app state (`get_tab_state`), the build pipeline (`app_store_setup_signing` → `app_store_build` → `app_store_upload`), creating IAPs/subscriptions, setting prices, managing screenshots, and submitting for review.
 
@@ -33,7 +35,7 @@ Two MCP servers are configured in `.mcp.json`:
 | Upload IPA | `app_store_upload` (with polling) | `asc builds upload --path ./app.ipa` |
 | Financial reports | N/A | `asc finance download --period 2026-01` |
 
-Both tools share the same API key via Blitz's auth bridge (`~/.blitz/asc-agent/config.json`). If `asc` is not on PATH: `export PATH="$HOME/.blitz/bin:$PATH"`
+Both tools share the same API key via Blitz Neo's auth bridge (`~/.blitz/asc-agent/config.json`). If `asc` is not on PATH: `export PATH="$HOME/.blitz/bin:$PATH"`
 
 ### Testing Workflow
 
@@ -102,7 +104,7 @@ Three-level string fields (value "NONE"/"INFREQUENT_OR_MILD"/"FREQUENT_OR_INTENS
 
 ### get_tab_state
 
-Read the structured data state of any Blitz tab. Returns form field values, submission readiness, versions, builds, localizations, etc. **Use this instead of screenshots to read UI state.**
+Read the structured data state of any Blitz Neo tab. Returns form field values, submission readiness, versions, builds, localizations, etc. **Use this instead of screenshots to read UI state.**
 
 | param | type | required | notes |
 |---|---|---|---|

@@ -1,10 +1,11 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 import Metal
 import MetalKit
 import CoreVideo
 import os
 
-private let logger = Logger(subsystem: "com.blitz.macos", category: "MetalRenderer")
+private let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "MetalRenderer")
 
 // Shader source compiled at runtime — avoids Bundle.module resource path issues in .app bundles
 private let passthroughShaderSource = """

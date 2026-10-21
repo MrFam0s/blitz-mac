@@ -1,5 +1,6 @@
 #!/bin/bash
-# verify-build.sh — Build Blitz from source and compare against a released binary.
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+# verify-build.sh — Build Blitz Neo from source and compare against a released binary.
 #
 # Usage:
 #   bash scripts/verify-build.sh [version-tag]
@@ -28,10 +29,10 @@ echo "==> Generating checksums from local build..."
 LOCAL_CHECKSUMS="$VERIFY_DIR/local-checksums.txt"
 
 # Checksum the main executable
-shasum -a 256 .build/Blitz.app/Contents/MacOS/Blitz > "$LOCAL_CHECKSUMS"
+shasum -a 256 ".build/Blitz Neo.app/Contents/MacOS/Blitz" > "$LOCAL_CHECKSUMS"
 
 # Checksum all resource files (excluding code signature which varies by identity)
-find .build/Blitz.app/Contents/Resources -type f -exec shasum -a 256 {} + >> "$LOCAL_CHECKSUMS" 2>/dev/null || true
+find ".build/Blitz Neo.app/Contents/Resources" -type f -exec shasum -a 256 {} + >> "$LOCAL_CHECKSUMS" 2>/dev/null || true
 
 echo ""
 echo "==> Local build checksums:"
@@ -76,9 +77,9 @@ fi
 echo ""
 echo "==> Checksums saved to: $LOCAL_CHECKSUMS"
 echo ""
-echo "To compare manually against a downloaded Blitz.app.zip:"
-echo "  unzip Blitz.app.zip -d /tmp/blitz-release"
-echo "  shasum -a 256 /tmp/blitz-release/Blitz.app/Contents/MacOS/Blitz"
+echo "To compare manually against a downloaded BlitzNeo.app.zip:"
+echo "  unzip BlitzNeo.app.zip -d /tmp/blitz-release"
+echo '  shasum -a 256 "/tmp/blitz-release/Blitz Neo.app/Contents/MacOS/Blitz"'
 echo "  # Compare against the checksum above"
 
 rm -rf "$VERIFY_DIR"

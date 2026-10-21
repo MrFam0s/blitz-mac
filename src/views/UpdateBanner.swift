@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 // MARK: - Full-screen overlay
@@ -106,7 +107,7 @@ struct UpdateCardContent: View {
                 VStack(spacing: 6) {
                     Text("Installing Update")
                         .font(.title2.weight(.semibold))
-                    Text("Blitz will restart automatically.")
+                    Text("Blitz Neo will restart automatically.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

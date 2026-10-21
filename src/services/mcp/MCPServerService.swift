@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Darwin
 import Foundation
 
@@ -295,17 +296,17 @@ actor MCPServerService {
         var errorDescription: String? {
             switch self {
             case .socketCreationFailed:
-                return "Failed to create the Blitz MCP socket."
+                return "Failed to create the Blitz Neo MCP socket."
             case .bindFailed(let code):
-                return "Failed to bind Blitz MCP socket (\(code))."
+                return "Failed to bind Blitz Neo MCP socket (\(code))."
             case .listenFailed(let code):
-                return "Failed to listen on Blitz MCP socket (\(code))."
+                return "Failed to listen on Blitz Neo MCP socket (\(code))."
             case .invalidSocketPath:
-                return "Invalid Blitz MCP socket path."
+                return "Invalid Blitz Neo MCP socket path."
             case .readFailed(let code):
-                return "Failed to read from Blitz MCP socket (\(code))."
+                return "Failed to read from Blitz Neo MCP socket (\(code))."
             case .writeFailed(let code):
-                return "Failed to write to Blitz MCP socket (\(code))."
+                return "Failed to write to Blitz Neo MCP socket (\(code))."
             case .unknownTool(let tool):
                 return "Unknown MCP tool: \(tool)"
             case .invalidToolArgs:

@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 import os
 
@@ -26,7 +27,7 @@ final class SettingsService {
 
     /// Shared singleton for permission checks from non-UI code (e.g. ApprovalRequest)
     static let shared = SettingsService()
-    private static let logger = Logger(subsystem: "com.blitz.macos", category: "Settings")
+    private static let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "Settings")
 
     private let settingsURL: URL
 

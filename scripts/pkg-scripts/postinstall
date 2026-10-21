@@ -1,8 +1,9 @@
 #!/bin/bash
-# Blitz PKG Postinstall Script
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+# Blitz Neo PKG Postinstall Script
 # Sets up ~/.blitz directory and installs bundled toolchain pieces (Node, iPhone MCP, Python, idb).
 #
-# NOTE: The app itself (Blitz.app) is installed to /Applications by the PKG system,
+# NOTE: The app itself (Blitz Neo.app) is installed to /Applications by the PKG system,
 # NOT by this script. This script only handles post-installation setup.
 
 set -u  # Error on undefined variables (but not -e, we handle errors manually)
@@ -27,7 +28,7 @@ export CI=true
 export WRANGLER_SEND_METRICS=false
 
 echo "" >> "$LOG"
-echo "=== Blitz Postinstall $(date) ===" >> "$LOG"
+echo "=== Blitz Neo Postinstall $(date) ===" >> "$LOG"
 T_POSTINSTALL_START=$(date +%s)
 
 chmod 666 "$LOG" 2>/dev/null || true
@@ -37,7 +38,7 @@ show_error() {
     echo "FATAL: $message" >> "$LOG"
     run_as_user osascript \
         -e 'on run argv' \
-        -e 'display dialog (item 1 of argv) with title "Blitz — Installation Failed" buttons {"OK"} default button "OK" with icon stop' \
+        -e 'display dialog (item 1 of argv) with title "Blitz Neo — Installation Failed" buttons {"OK"} default button "OK" with icon stop' \
         -e 'end run' \
         -- "$message" 2>/dev/null || true
 }
@@ -53,7 +54,7 @@ show_progress() {
     echo "PROGRESS: $message" >> "$LOG"
     run_as_user osascript \
         -e 'on run argv' \
-        -e 'display notification (item 1 of argv) with title "Blitz Installer"' \
+        -e 'display notification (item 1 of argv) with title "Blitz Neo Installer"' \
         -e 'end run' \
         -- "$message" 2>/dev/null || true
 }
@@ -75,32 +76,13 @@ fi
 CONSOLE_TMPDIR=$(run_as_user getconf DARWIN_USER_TEMP_DIR 2>/dev/null || echo "/tmp")
 echo "Console user: $CONSOLE_USER (UID $CONSOLE_UID, home $CONSOLE_HOME)" >> "$LOG"
 
-APP_DIR="/Applications/Blitz.app"
+APP_DIR="/Applications/Blitz Neo.app"
 
-# ----------------------------------------------------------------------------
-# FIX PKG RELOCATION (can be removed once Tauri users have migrated)
-# macOS Installer may relocate Blitz.app to a .localized subdirectory when
-# stale pkg receipts from the old Tauri app exist. BundleIsRelocatable=false
-# and pkgutil --forget in preinstall are not sufficient because the installer
-# decides the install path BEFORE preinstall runs. Fix it after the fact.
-# Also forget old receipts now so the NEXT install won't relocate again.
-# ----------------------------------------------------------------------------
-if [ ! -d "$APP_DIR" ]; then
-    for d in /Applications/Blitz.localized /Applications/Blitz-*.localized; do
-        if [ -d "$d/Blitz.app" ]; then
-            echo "Fixing pkg relocation: moving $d/Blitz.app to $APP_DIR" >> "$LOG"
-            mv "$d/Blitz.app" "$APP_DIR"
-            rm -rf "$d"
-            break
-        fi
-    done
-
-    # Forget stale receipts so this doesn't happen on the next upgrade
-    for OLD_ID in dev.blitz.mac dev1.blitz.mac; do
-        pkgutil --forget "$OLD_ID" >> "$LOG" 2>&1 || true
-    done
+# The Neo package has its own identifier and is not relocatable. Never fall back
+# to the legacy app: setup must use the just-installed Neo bundle and its helpers.
+if [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_DIR/Contents/Info.plist" 2>/dev/null)" != "org.amosystems.BlitzNeo" ]; then
+    fail "Blitz Neo was not installed at $APP_DIR. Your existing Blitz installation was preserved."
 fi
-# ----------------------------------------------------------------------------
 
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
 
@@ -187,7 +169,7 @@ fi
 echo "TIMING: iphone-mcp install took $(( $(date +%s) - T_IPHONE_MCP_START ))s" >> "$LOG"
 
 if [ ! -d "$APP_DIR" ]; then
-    echo "WARNING: Blitz.app not found in /Applications — skipping chown (app may be installed later)." >> "$LOG"
+    echo "WARNING: Blitz Neo.app not found in /Applications — skipping chown (app may be installed later)." >> "$LOG"
 else
     # Make the app owned by the console user (not root) so the auto-updater
     # can replace it without requiring admin privileges.
@@ -319,20 +301,25 @@ if ! run_as_user env -i HOME="$CONSOLE_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin 
 fi
 
 # ============================================================================
-# Launch Blitz.app
+# Launch Blitz Neo.app
 # ============================================================================
 
-echo "Launching Blitz.app..." >> "$LOG"
+echo "Launching Blitz Neo.app..." >> "$LOG"
 # Quit any running Blitz app so `open` launches the new one.
 # The old Tauri app's executable is "app" (not "Blitz"), so killall won't work.
 # osascript quit-by-bundle-ID works for both old Tauri and new native app.
 run_as_user osascript -e 'tell application id "dev.blitz.mac" to quit' 2>/dev/null || true
 run_as_user osascript -e 'tell application id "dev1.blitz.mac" to quit' 2>/dev/null || true
 run_as_user osascript -e 'tell application id "com.blitz.macos" to quit' 2>/dev/null || true
+run_as_user osascript -e 'tell application id "org.amosystems.BlitzNeo" to quit' 2>/dev/null || true
 sleep 1
-run_as_user open /Applications/Blitz.app 2>> "$LOG" \
-    && echo "Blitz.app launched" >> "$LOG" \
-    || echo "WARNING: Failed to launch Blitz.app" >> "$LOG"
+if ! run_as_user /bin/bash "$RESOURCES_DIR/pkg-scripts/migrate-legacy-app.sh" \
+    "$APP_DIR" "/Applications/Blitz.app" "$CONSOLE_HOME/.blitz/backups" >> "$LOG" 2>&1; then
+    echo "WARNING: Previous Blitz app was retained; migration can be retried later." >> "$LOG"
+fi
+run_as_user open "$APP_DIR" 2>> "$LOG" \
+    && echo "Blitz Neo.app launched" >> "$LOG" \
+    || echo "WARNING: Failed to launch Blitz Neo.app" >> "$LOG"
 
 echo "TIMING: postinstall total took $(( $(date +%s) - T_POSTINSTALL_START ))s" >> "$LOG"
 echo "=== Postinstall completed ===" >> "$LOG"

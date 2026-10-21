@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
 enum ASCError: LocalizedError {
@@ -35,7 +36,7 @@ enum ASCError: LocalizedError {
     }
 
     var programLicenseAgreementMessage: String {
-        "Your team's Account Holder must accept the latest Apple Developer Program License Agreement before Blitz can continue this App Store Connect action."
+        "Your team's Account Holder must accept the latest Apple Developer Program License Agreement before Blitz Neo can continue this App Store Connect action."
     }
 
     private static func parseErrorMessages(_ body: String) -> String {

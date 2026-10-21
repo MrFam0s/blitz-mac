@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct ProjectBundleIDSelectorView: View {
@@ -66,7 +67,7 @@ struct ProjectBundleIDSelectorView: View {
                 return "No App Store Connect app was found for \(currentBundleId). Select or enter another bundle ID, or register a new one."
             }
 
-            return "Choose or enter which bundle ID Blitz should use for this project before loading App Store Connect data."
+            return "Choose or enter which bundle ID Blitz Neo should use for this project before loading App Store Connect data."
         }
 
         return "Switch which bundle ID this project uses for App Store Connect. You can select a detected value or enter one manually."
@@ -194,7 +195,7 @@ struct ProjectBundleIDSelectorView: View {
                     .textFieldStyle(.roundedBorder)
 
                 Text(selectionOptions.isEmpty
-                    ? "Enter a bundle ID manually if Blitz cannot detect one from the project."
+                    ? "Enter a bundle ID manually if Blitz Neo cannot detect one from the project."
                     : "Manual entry overrides the picker when filled in.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

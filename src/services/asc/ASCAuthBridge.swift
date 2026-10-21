@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
 struct ASCAuthBridge {
@@ -208,7 +209,7 @@ struct ASCAuthBridge {
         ASCD_PATH="${SELF_DIR}/ascd"
 
         if [ ! -x "${ASCD_PATH}" ]; then
-            echo "asc: Blitz helper not found at ${ASCD_PATH}. Start Blitz first." >&2
+            echo "asc: Blitz helper not found at ${ASCD_PATH}. Start Blitz Neo first." >&2
             exit 1
         fi
 

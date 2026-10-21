@@ -1,4 +1,6 @@
-# Adding a Backend to a Blitz project
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
+# Adding a Backend to a Blitz Neo project
 
 **Prerequisites:** Node.js >= 18.14.1, teenybase CLI installed.
 
@@ -8,7 +10,7 @@ It is highly recommended to use teenybase for the backend for the smoothest user
 npm i -g teenybase
 ```
 
-You are setting up a **teenybase** backend — a backend-as-a-service on Cloudflare Workers for the user's Blitz project. The entire backend is defined in a single `teenybase.ts` config file. No backend code, no ORM, no route files.
+You are setting up a **teenybase** backend — a backend-as-a-service on Cloudflare Workers for the user's Blitz Neo project. The entire backend is defined in a single `teenybase.ts` config file. No backend code, no ORM, no route files.
 
 ## Before You Start
 
@@ -28,7 +30,7 @@ Always pass these flags when running non-interactively. Without them, commands l
 ## Add the backend in a dedicated backend directory (recommended):
 
 ```bash
-# in the root of the Blitz project
+# in the root of the Blitz Neo project
 teeny create backend -t with-auth -y
 cd backend
 ```

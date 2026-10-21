@@ -1,3 +1,4 @@
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 name: Release Smoke Test
 
 on:
@@ -95,20 +96,20 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
           VERSION="${{ steps.version.outputs.version }}"
-          xcrun notarytool submit "build/Blitz-$VERSION.pkg" \
+          xcrun notarytool submit "build/BlitzNeo-$VERSION.pkg" \
             --key "$APPLE_API_KEY_PATH" \
             --key-id "$APPLE_API_KEY" \
             --issuer "$APPLE_API_ISSUER" \
             --wait
-          xcrun stapler staple "build/Blitz-$VERSION.pkg"
+          xcrun stapler staple "build/BlitzNeo-$VERSION.pkg"
 
       - name: Create smoke artifacts
         run: |
           cd .build
-          ditto -c -k --sequesterRsrc --keepParent Blitz.app Blitz.app.zip
-          shasum -a 256 Blitz.app.zip > SHA256SUMS.txt
-          find Blitz.app/Contents/MacOS -type f -perm +111 -exec shasum -a 256 {} + >> SHA256SUMS.txt
-          PKG_PATH="../build/Blitz-${{ steps.version.outputs.version }}.pkg"
+          ditto -c -k --sequesterRsrc --keepParent "Blitz Neo.app" BlitzNeo.app.zip
+          shasum -a 256 BlitzNeo.app.zip > SHA256SUMS.txt
+          find "Blitz Neo.app/Contents/MacOS" -type f -perm +111 -exec shasum -a 256 {} + >> SHA256SUMS.txt
+          PKG_PATH="../build/BlitzNeo-${{ steps.version.outputs.version }}.pkg"
           if [ -f "$PKG_PATH" ]; then
             shasum -a 256 "$PKG_PATH" >> SHA256SUMS.txt
           fi
@@ -116,10 +117,10 @@ jobs:
 
       - name: Verify arm64 smoke outputs
         run: |
-          test -f .build/Blitz.app.zip
+          test -f .build/BlitzNeo.app.zip
           test -f .build/SHA256SUMS.txt
-          test -f "build/Blitz-${{ steps.version.outputs.version }}.pkg"
-          ls -lh .build/Blitz.app.zip .build/SHA256SUMS.txt "build/Blitz-${{ steps.version.outputs.version }}.pkg"
+          test -f "build/BlitzNeo-${{ steps.version.outputs.version }}.pkg"
+          ls -lh .build/BlitzNeo.app.zip .build/SHA256SUMS.txt "build/BlitzNeo-${{ steps.version.outputs.version }}.pkg"
 
       - name: Write summary
         run: |
@@ -127,8 +128,8 @@ jobs:
             echo "## arm64 smoke verification"
             echo ""
             echo "- Version: ${{ steps.version.outputs.version }}"
-            echo "- Bundled app zip: .build/Blitz.app.zip"
-            echo "- Pkg: build/Blitz-${{ steps.version.outputs.version }}.pkg"
+            echo "- Bundled app zip: .build/BlitzNeo.app.zip"
+            echo "- Pkg: build/BlitzNeo-${{ steps.version.outputs.version }}.pkg"
             echo "- Checksums: .build/SHA256SUMS.txt"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -200,14 +201,14 @@ jobs:
           swift build -c release
           BLITZ_REQUIRE_SIGNED_RELEASE=1 bash scripts/bundle.sh release
           mkdir -p build
-          ditto -c -k --sequesterRsrc --keepParent .build/Blitz.app "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip"
-          shasum -a 256 "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip" > "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
+          ditto -c -k --sequesterRsrc --keepParent ".build/Blitz Neo.app" "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip"
+          shasum -a 256 "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip" > "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
 
       - name: Verify x86_64 smoke outputs
         run: |
-          test -f "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip"
-          test -f "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
-          ls -lh "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip" "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
+          test -f "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip"
+          test -f "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
+          ls -lh "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip" "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
 
       - name: Write summary
         run: |
@@ -215,8 +216,8 @@ jobs:
             echo "## x86_64 smoke verification"
             echo ""
             echo "- Version: ${{ steps.version.outputs.version }}"
-            echo "- App zip: build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip"
-            echo "- Checksum: build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
+            echo "- App zip: build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip"
+            echo "- Checksum: build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup keychain

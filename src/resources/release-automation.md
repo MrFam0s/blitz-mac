@@ -1,4 +1,6 @@
-# Blitz: Update automatisch veröffentlichen
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
+# Blitz Neo: Update automatisch veröffentlichen
 
 The user explicitly started “Update automatisch veröffentlichen” for the single target
 in the Target JSON below. Complete this release workflow in German, using the
@@ -13,9 +15,9 @@ and displayed live version are only hints from a bounded scan/cache, not proof
 of an update. Read applicable project instructions and release skills first.
 Keep the fixed project path, app ID, bundle ID and platform throughout. Verify
 the project and current Apple account/app identity before every mutation. Do not
-use UI-selection-dependent Blitz tools for mutations: another project can be
+use UI-selection-dependent Blitz Neo tools for mutations: another project can be
 selected while this terminal is running. Prefer ASC with explicit identifiers.
-Use the installed Blitz ASC wrapper, existing authentication and CLI help; do not
+Use the installed Blitz Neo ASC wrapper, existing authentication and CLI help; do not
 replace the helper, install tools globally, export keys or print credentials.
 
 ## Prepared drafts and existing Store content

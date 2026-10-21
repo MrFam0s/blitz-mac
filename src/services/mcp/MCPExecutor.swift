@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AppKit
 import Foundation
 import Security
@@ -339,7 +340,7 @@ actor MCPExecutor {
             let path = "/tmp/blitz-app-screenshot-\(Int(Date().timeIntervalSince1970)).png"
             let saved = await MainActor.run { () -> Bool in
                 guard let window = NSApp.windows.first(where: {
-                    $0.title != "Welcome to Blitz" && $0.canBecomeMain && $0.isVisible
+                    $0.title != "Welcome to Blitz Neo" && $0.canBecomeMain && $0.isVisible
                 }) ?? NSApp.mainWindow else {
                     return false
                 }
@@ -358,7 +359,7 @@ actor MCPExecutor {
                 }
                 return ((try? png.write(to: URL(fileURLWithPath: path))) != nil)
             }
-            return saved ? mcpText(path) : mcpText("Error: could not capture Blitz window screenshot")
+            return saved ? mcpText(path) : mcpText("Error: could not capture Blitz Neo window screenshot")
 
         default:
             throw MCPServerService.MCPError.unknownTool(name)

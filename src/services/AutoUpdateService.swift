@@ -1,9 +1,10 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AppKit
 import Foundation
 
 /// Handles checking for updates, downloading, and installing them.
 /// Mirrors the Tauri updater approach: fetch latest.json, download .app.zip,
-/// replace /Applications/Blitz.app via osascript, relaunch.
+/// replace /Applications/Blitz Neo.app via osascript, relaunch.
 @MainActor
 @Observable
 final class AutoUpdateManager {
@@ -151,7 +152,7 @@ final class AutoUpdateManager {
         """
 
         let relaunchScript = """
-        do shell script "(while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; open /Applications/Blitz.app) &>/dev/null &"
+        do shell script "(while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; open '/Applications/Blitz Neo.app') &>/dev/null &"
         """
 
         let process = Process()
@@ -189,7 +190,7 @@ final class AutoUpdateManager {
 
         // AppleScript statement 2: background wait-for-exit + relaunch
         let relaunchScript = """
-        do shell script "(while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; open /Applications/Blitz.app) &>/dev/null &"
+        do shell script "(while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; open '/Applications/Blitz Neo.app') &>/dev/null &"
         """
 
         let process = Process()
@@ -294,11 +295,11 @@ final class AutoUpdateManager {
         APP_SRC=$(find \\"$UNZIP_DIR\\" -maxdepth 1 -name '*.app' -type d | head -1); \
         if [ -z \\"$APP_SRC\\" ]; then echo 'Update failed: extracted app not found' >> \\"$UPDATE_LOG\\"; exit 1; fi; \
         BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \\"$APP_SRC/Contents/Info.plist\\" 2>> \\"$UPDATE_LOG\\" || true); \
-        if [ \\"$BUNDLE_ID\\" != 'com.blitz.macos' ]; then echo 'Update failed: unexpected bundle identifier' >> \\"$UPDATE_LOG\\"; exit 1; fi; \
+        if [ \\"$BUNDLE_ID\\" != 'org.amosystems.BlitzNeo' ]; then echo 'Update failed: unexpected bundle identifier' >> \\"$UPDATE_LOG\\"; exit 1; fi; \
         if [ ! -x \\"$APP_SRC/Contents/Helpers/ascd\\" ]; then echo 'Update failed: bundled ascd helper missing' >> \\"$UPDATE_LOG\\"; exit 1; fi; \
-        rm -rf /Applications/Blitz.app; \
-        mv \\"$APP_SRC\\" /Applications/Blitz.app; \
-        POSTINSTALL='/Applications/Blitz.app/Contents/Resources/pkg-scripts/postinstall'; \
+        rm -rf '/Applications/Blitz Neo.app'; \
+        mv \\"$APP_SRC\\" '/Applications/Blitz Neo.app'; \
+        POSTINSTALL='/Applications/Blitz Neo.app/Contents/Resources/pkg-scripts/postinstall'; \
         if [ -x \\"$POSTINSTALL\\" ]; then BLITZ_UPDATE_CONTEXT='auto-update' \\"$POSTINSTALL\\" '' '' '/' >> \\"$UPDATE_LOG\\" 2>&1; fi"
         """
     }

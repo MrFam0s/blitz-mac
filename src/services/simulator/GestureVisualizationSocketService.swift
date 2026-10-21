@@ -1,8 +1,9 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Darwin
 import Foundation
 import os
 
-private let gestureOverlayLogger = Logger(subsystem: "com.blitz.macos", category: "GestureVisualization")
+private let gestureOverlayLogger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "GestureVisualization")
 
 @MainActor
 @Observable
@@ -17,7 +18,7 @@ final class GestureVisualizationSocketService {
 
     init(
         socketURL: URL = BlitzPaths.gestureEventsSocket,
-        ioQueue: DispatchQueue = DispatchQueue(label: "com.blitz.macos.gesture-events", qos: .userInteractive),
+        ioQueue: DispatchQueue = DispatchQueue(label: "org.amosystems.BlitzNeo.gesture-events", qos: .userInteractive),
         autostart: Bool = true
     ) {
         self.socketURL = socketURL

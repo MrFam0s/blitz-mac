@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 import WebKit
 
@@ -211,7 +212,7 @@ struct ASCWebView: NSViewRepresentable {
                     guard !ASCWebAuthentication.cookieHeader(from: session.cookies).isEmpty else {
                         throw ASCWebAuthenticationError.notAuthenticated
                     }
-                    self.parent.validationMessage = "Apple-Anmeldung wird für Blitz und ASC geprüft …"
+                    self.parent.validationMessage = "Apple-Anmeldung wird für Blitz Neo und ASC geprüft …"
                     // The official importer validates the exact CLI transport and
                     // stores the accepted bundle before we report success.
                     try await ASCWebSessionCLIImporter().importSession(session)
@@ -230,7 +231,7 @@ struct ASCWebView: NSViewRepresentable {
                     // are logged or displayed by the login sheet.
                     self.parent.validationMessage = (error as? ASCWebAuthenticationError)?.errorDescription
                         ?? (error as? ASCWebSessionCLIImporter.ImportError)?.errorDescription
-                        ?? "Die Anmeldung konnte noch nicht für ASC übernommen werden. Bitte schließe die Apple-Anmeldung ab; Blitz prüft sie erneut."
+                        ?? "Die Anmeldung konnte noch nicht für ASC übernommen werden. Bitte schließe die Apple-Anmeldung ab; Blitz Neo prüft sie erneut."
                     irisLog("Apple web session validation failed; login remains open")
                 }
             }

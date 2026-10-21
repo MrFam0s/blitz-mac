@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
 /// Writes Blitz-owned agent config and installs Blitz-managed helper content.
@@ -174,18 +175,18 @@ struct ProjectAgentConfigService {
 
         let claudeMd = mcpsDir.appendingPathComponent("CLAUDE.md")
         let claudeMdContent = """
-        # Blitz — Global Agent Context
+        # Blitz Neo — Global Agent Context
 
-        This directory is used by Blitz to run agent sessions outside of a project context
+        This directory is used by Blitz Neo to run agent sessions outside of a project context
         (e.g. App Store Connect API key setup during onboarding).
 
         ## Available MCP Tools
 
         The `blitz-macos` MCP server is connected. Key tools for ASC setup:
 
-        - `asc_web_auth` — Opens the Apple ID login window in Blitz to authenticate a web session.
+        - `asc_web_auth` — Opens the Apple ID login window in Blitz Neo to authenticate a web session.
           Call this first if you get a 401 from iris APIs or if no web session exists.
-        - `asc_set_credentials` — Pre-fills the ASC credential form in Blitz with issuer ID
+        - `asc_set_credentials` — Pre-fills the ASC credential form in Blitz Neo with issuer ID
           and a path to the .p8 private key file. `keyId` is optional and can be derived from an
           Apple-named file like `AuthKey_<KEYID>.p8`. The user must confirm in the UI.
           Parameters: `issuerId` (string), `privateKeyPath` (string, absolute path to .p8 file),
@@ -337,7 +338,7 @@ struct ProjectAgentConfigService {
         if allowASCCLICalls {
             let ascPath = BlitzPaths.bin.appendingPathComponent("asc").path
             let rules = """
-            # Managed by Blitz. Allows ASC CLI commands without approval prompts.
+            # Managed by Blitz Neo. Allows ASC CLI commands without approval prompts.
             prefix_rule(pattern=["asc"], decision="allow")
             prefix_rule(pattern=["\(Self.escapeStarlarkString(ascPath))"], decision="allow")
             """
@@ -713,17 +714,17 @@ struct ProjectAgentConfigService {
     private static func claudeMdContent(projectType: ProjectType) -> String {
         guard let templateURL = Bundle.appResources.url(forResource: "CLAUDE.md", withExtension: "template"),
               var template = try? String(contentsOf: templateURL, encoding: .utf8) else {
-            return "# Blitz AI Agent Guide\n"
+            return "# Blitz Neo AI Agent Guide\n"
         }
 
         let header: String
         switch projectType {
         case .swift:
-            header = "Swift Project — Blitz AI Agent Guide"
+            header = "Swift Project — Blitz Neo AI Agent Guide"
         case .reactNative:
-            header = "React Native Project — Blitz AI Agent Guide"
+            header = "React Native Project — Blitz Neo AI Agent Guide"
         case .flutter:
-            header = "Flutter Project — Blitz AI Agent Guide"
+            header = "Flutter Project — Blitz Neo AI Agent Guide"
         }
         template = template.replacingOccurrences(of: "{{PROJECT_TYPE_HEADER}}", with: header)
 
@@ -733,7 +734,7 @@ struct ProjectAgentConfigService {
     private static func blitzRulesContent() -> String {
         guard let url = Bundle.appResources.url(forResource: "blitz-rules", withExtension: "md"),
               let content = try? String(contentsOf: url, encoding: .utf8) else {
-            return "# Blitz MCP Integration\n"
+            return "# Blitz Neo MCP Integration\n"
         }
         return content
     }

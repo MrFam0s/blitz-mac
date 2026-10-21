@@ -3,6 +3,8 @@ name: asc-team-key-create
 description: Create a new App Store Connect Team API Key with Admin permissions, download the one-time .p8 private key, and store it in ~/.blitz. Use when the user needs a new ASC API key for CLI auth, CI/CD, or external tooling.
 ---
 
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
 # asc team key create
 
 Use this skill to create a new App Store Connect API Key with Admin permissions via Apple's iris API, download the one-time .p8 private key, and save it to `~/.blitz`.
@@ -15,7 +17,7 @@ Use this skill to create a new App Store Connect API Key with Admin permissions 
 
 ## Preconditions
 
-- Web session file available at `~/.blitz/asc-agent/web-session.json`. If no session exists or it has expired (401), call the `asc_web_auth` MCP tool first — this opens the Apple ID login window in Blitz and captures the session automatically.
+- Web session file available at `~/.blitz/asc-agent/web-session.json`. If no session exists or it has expired (401), call the `asc_web_auth` MCP tool first — this opens the Apple ID login window in Blitz Neo and captures the session automatically.
 - The authenticated Apple ID must have Account Holder or Admin role.
 
 ## Workflow
@@ -28,7 +30,7 @@ Before anything else, check if a web session file already exists:
 test -f ~/.blitz/asc-agent/web-session.json && echo "SESSION_EXISTS" || echo "NO_SESSION"
 ```
 
-- If `NO_SESSION`: call the `asc_web_auth` MCP tool first to open the Apple ID login window in Blitz. Wait for it to complete before proceeding.
+- If `NO_SESSION`: call the `asc_web_auth` MCP tool first to open the Apple ID login window in Blitz Neo. Wait for it to complete before proceeding.
 - If `SESSION_EXISTS`: proceed to the next step.
 
 ### 2. Ask the user for a key name
@@ -172,14 +174,14 @@ print('WARNING: This .p8 file can only be downloaded ONCE. Keep it safe.')
 
 ### 4. Fill the credential form via MCP
 
-After the script succeeds, call the `asc_set_credentials` MCP tool to pre-fill the Blitz credential form:
+After the script succeeds, call the `asc_set_credentials` MCP tool to pre-fill the Blitz Neo credential form:
 
 ```
 asc_set_credentials(issuerId: "<issuer_id>", privateKeyPath: "~/.blitz/AuthKey_<key_id>.p8")
 ```
 
-`keyId` is optional here because Blitz can derive it from Apple's default `AuthKey_<KEYID>.p8` filename.
-This lets the user visually verify the values and confirm in Blitz.
+`keyId` is optional here because Blitz Neo can derive it from Apple's default `AuthKey_<KEYID>.p8` filename.
+This lets the user visually verify the values and confirm in Blitz Neo.
 
 ### 5. Report results to the user
 
@@ -187,12 +189,12 @@ After the script runs, report:
 - Key name and Key ID
 - Issuer ID
 - File path of the saved .p8
-- That the credential form has been pre-filled — they should verify and confirm in Blitz
+- That the credential form has been pre-filled — they should verify and confirm in Blitz Neo
 
 ## Common Errors
 
 ### 401 Not Authorized
-The web session has expired or doesn't exist. Call the `asc_web_auth` MCP tool — this opens the Apple ID login window in Blitz and refreshes `~/.blitz/asc-agent/web-session.json` automatically. Then retry the key creation script.
+The web session has expired or doesn't exist. Call the `asc_web_auth` MCP tool — this opens the Apple ID login window in Blitz Neo and refreshes `~/.blitz/asc-agent/web-session.json` automatically. Then retry the key creation script.
 
 ### Script fails after "Created API key" (or crashes with no output)
 The key may already exist in ASC. Do NOT re-run the script, which creates a duplicate. List keys
@@ -211,7 +213,7 @@ The key's one-time download window has passed (`canDownload` flipped to `false`)
 - **NEVER print, log, or echo session cookies.** The python script handles cookies internally.
 - Use the self-contained python script above — do NOT extract cookies separately or pass them as shell variables.
 - After creation, confirm the .p8 file exists and report the path.
-- If iris API returns 401, tell the user to re-authenticate via Blitz or `asc web auth login`.
+- If iris API returns 401, tell the user to re-authenticate via Blitz Neo or `asc web auth login`.
 - The iris API is rate-limited; the script includes 350ms+ delays between requests.
 - The .p8 private key file is saved with `0600` permissions (owner read/write only).
 

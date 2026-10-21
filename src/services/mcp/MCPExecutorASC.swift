@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AppKit
 import Foundation
 import ImageIO
@@ -803,7 +804,7 @@ extension MCPExecutor {
     ) async -> String? {
         let selectedLocale = await selectedScreenshotsLocale()
         if explicitlyRequestedLocale, selectedLocale != locale {
-            return "Error: screenshots locale '\(locale)' is not selected in Blitz. Call screenshots_switch_localization first."
+            return "Error: screenshots locale '\(locale)' is not selected in Blitz Neo. Call screenshots_switch_localization first."
         }
 
         await MainActor.run {
@@ -818,7 +819,7 @@ extension MCPExecutor {
             appState.ascManager.hasTrackState(displayType: displayType, locale: locale)
         }
         guard trackReady else {
-            return "Error: screenshot locale '\(locale)' is not prepared in Blitz. Call screenshots_switch_localization first."
+            return "Error: screenshot locale '\(locale)' is not prepared in Blitz Neo. Call screenshots_switch_localization first."
         }
         return nil
     }
@@ -1048,7 +1049,7 @@ extension MCPExecutor {
         }
         if explicitlyRequestedLocale, selectedLocale != locale {
             return mcpText(
-                "Error: screenshots locale '\(locale)' is not selected in Blitz. "
+                "Error: screenshots locale '\(locale)' is not selected in Blitz Neo. "
                     + "Call screenshots_switch_localization first."
             )
         }
@@ -1081,7 +1082,7 @@ extension MCPExecutor {
             if !trackReady {
                 if requestedDisplayType != nil {
                     return mcpText(
-                        "Error: screenshot locale '\(locale)' is not prepared in Blitz. "
+                        "Error: screenshot locale '\(locale)' is not prepared in Blitz Neo. "
                             + "Call screenshots_switch_localization first."
                     )
                 }
@@ -1112,7 +1113,7 @@ extension MCPExecutor {
 
         guard preparedTrackCount > 0 else {
             return mcpText(
-                "Error: screenshot locale '\(locale)' is not prepared in Blitz. "
+                "Error: screenshot locale '\(locale)' is not prepared in Blitz Neo. "
                     + "Call screenshots_switch_localization first."
             )
         }

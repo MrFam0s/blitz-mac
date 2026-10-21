@@ -1,3 +1,4 @@
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 name: Maintenance checks
 
 on:
@@ -38,6 +39,8 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
       - name: Swift regression tests
         run: swift test --build-system native
+      - name: App identity migration checks (offline)
+        run: python3 scripts/test-app-migration.py
       - name: IDB installer safety checks (offline)
         run: python3 scripts/test-idb-installer.py
       - name: ASC transport, protocol and CLI compatibility tests
@@ -54,10 +57,10 @@ jobs:
         run: bash scripts/bundle.sh release
       - name: Verify installed helper contract and app signature
         run: |
-          codesign --verify --deep --strict .build/Blitz.app
-          python3 scripts/verify-asc-helper.py .build/Blitz.app/Contents/Helpers/ascd
+          codesign --verify --deep --strict ".build/Blitz Neo.app"
+          python3 scripts/verify-asc-helper.py ".build/Blitz Neo.app/Contents/Helpers/ascd"
       - name: Verify archive checksum without cloud storage
         run: |
-          ditto -c -k --sequesterRsrc --keepParent .build/Blitz.app .build/Blitz.app.zip
-          shasum -a 256 .build/Blitz.app.zip > .build/Blitz.app.zip.sha256
-          cat .build/Blitz.app.zip.sha256
+          ditto -c -k --sequesterRsrc --keepParent ".build/Blitz Neo.app" .build/BlitzNeo.app.zip
+          shasum -a 256 .build/BlitzNeo.app.zip > .build/BlitzNeo.app.zip.sha256
+          cat .build/BlitzNeo.app.zip.sha256

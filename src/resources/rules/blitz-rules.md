@@ -1,23 +1,25 @@
-# Blitz MCP Integration
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
 
-This project is open in **Blitz**, a native macOS iOS development environment.
+# Blitz Neo MCP Integration
+
+This project is open in **Blitz Neo**, a native macOS iOS development environment.
 Two MCP servers are active in `.mcp.json`:
 
-- **`blitz-macos`** — Controls Blitz: navigate tabs, read project/simulator state,
+- **`blitz-macos`** — Controls Blitz Neo: navigate tabs, read project/simulator state,
   manage builds, fill App Store Connect forms, manage settings.
 - **`blitz-iphone`** — Controls the iOS simulator/device: tap, swipe, type text,
   take screenshots, inspect UI hierarchy. See blitz-iphone tool docs for full command list.
 
-Additionally, the **`asc`** CLI (a bundled Go binary for App Store Connect) is available at `~/.blitz/bin/asc`. It shares credentials with Blitz MCP tools automatically via an auth bridge — no separate login required.
+Additionally, the **`asc`** CLI (a bundled Go binary for App Store Connect) is available at `~/.blitz/bin/asc`. It shares credentials with Blitz Neo MCP tools automatically via an auth bridge — no separate login required.
 
-## When to use Blitz MCP tools vs `asc` CLI vs direct API calls
+## When to use Blitz Neo MCP tools vs `asc` CLI vs direct API calls
 
 **Default to MCP tools.** They are opinionated, safe, and designed for common workflows with built-in approval prompts for mutating operations. **When MCP tools don't cover an operation, use `asc` CLI** — it has 60+ subcommands covering nearly every App Store Connect API endpoint. **Direct API calls (python scripts, curl to api.appstoreconnect.apple.com, urllib, etc.) should be an absolute last resort** — only when both MCP tools AND `asc` CLI genuinely cannot accomplish the task. The `asc` CLI already handles JWT auth, pagination, error handling, and retries; writing raw API scripts bypasses all of that and is fragile.
 
 ### Use MCP tools when:
 - **Filling ASC forms** — `asc_fill_form` handles app information, monetization, age rating, review contact with validation and auto-navigation
 - **Reading app/tab state** — `get_tab_state` returns structured data (form values, submission readiness, builds, versions) without parsing CLI output
-- **Build pipeline** — `app_store_setup_signing` → `app_store_build` → `app_store_upload` is the standard flow with progress tracking in Blitz UI
+- **Build pipeline** — `app_store_setup_signing` → `app_store_build` → `app_store_upload` is the standard flow with progress tracking in Blitz Neo UI
 - **Creating IAPs/subscriptions** — `asc_create_iap` and `asc_create_subscription` handle the full creation flow (product + localization + pricing) in one call
 - **Setting prices** — `asc_set_app_price` for app pricing, including scheduled price changes
 - **Managing screenshots** — `screenshots_switch_localization` → `screenshots_put_track_slot` / `screenshots_remove_track_slot` / `screenshots_reorder_track` → `screenshots_save` for screenshot upload workflow
@@ -61,7 +63,7 @@ The `asc` CLI covers 60+ command groups — it almost certainly has what you nee
 
 ### Auth bridge
 
-Both MCP tools and `asc` CLI share the same App Store Connect API key credentials. When you authenticate in Blitz (via `asc_set_credentials` or the Settings UI), the auth bridge automatically syncs credentials to `~/.blitz/asc-agent/config.json`. The `asc` wrapper at `~/.blitz/bin/asc` reads from this config — no separate `asc auth init` needed.
+Both MCP tools and `asc` CLI share the same App Store Connect API key credentials. When you authenticate in Blitz Neo (via `asc_set_credentials` or the Settings UI), the auth bridge automatically syncs credentials to `~/.blitz/asc-agent/config.json`. The `asc` wrapper at `~/.blitz/bin/asc` reads from this config — no separate `asc auth init` needed.
 
 If `asc` is not on PATH, add it: `export PATH="$HOME/.blitz/bin:$PATH"`
 

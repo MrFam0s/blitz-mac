@@ -1,10 +1,13 @@
 #!/bin/bash
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 # Creates a proper macOS .app bundle from the SPM build.
 # Signs with Developer ID so TCC grants persist across rebuilds.
 set -e
 
 CONFIG="${1:-release}"
-APP_NAME="Blitz"
+APP_NAME="Blitz Neo"
+APP_EXECUTABLE="Blitz"
+BUNDLE_IDENTIFIER="org.amosystems.BlitzNeo"
 BUNDLE_DIR=".build/${APP_NAME}.app"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -117,7 +120,7 @@ mkdir -p "$BUNDLE_DIR/Contents/Resources"
 mkdir -p "$BUNDLE_DIR/Contents/Helpers"
 
 # Copy binary
-cp ".build/${CONFIG}/${APP_NAME}" "$BUNDLE_DIR/Contents/MacOS/${APP_NAME}"
+cp ".build/${CONFIG}/${APP_EXECUTABLE}" "$BUNDLE_DIR/Contents/MacOS/${APP_EXECUTABLE}"
 
 # Copy the standalone MCP helper that Codex launches directly over stdio.
 HELPER_BINARY=".build/${CONFIG}/blitz-macos-mcp"
@@ -152,24 +155,14 @@ fi
 
 cp "$ROOT_DIR/helpers/asc-overlay/LICENSE" "$BUNDLE_DIR/Contents/Resources/ASC-LICENSE"
 cp "$ROOT_DIR/helpers/asc-overlay/README.md" "$BUNDLE_DIR/Contents/Resources/ASC-PROVENANCE.md"
+cp "$ROOT_DIR/LICENSE" "$BUNDLE_DIR/Contents/Resources/LICENSE"
+cp "$ROOT_DIR/NOTICE" "$BUNDLE_DIR/Contents/Resources/NOTICE"
 
-# Generate app icon (.icns) from PNG
-ICON_PNG="$ROOT_DIR/src/resources/blitz-icon.png"
-ICON_ICNS="$BUNDLE_DIR/Contents/Resources/AppIcon.icns"
-if [ -f "$ICON_PNG" ]; then
-    if [ ! -f "$ICON_ICNS" ] || [ "$ICON_PNG" -nt "$ICON_ICNS" ]; then
-        ICONSET_DIR=$(mktemp -d)/Blitz.iconset
-        mkdir -p "$ICONSET_DIR"
-        for size in 16 32 128 256 512; do
-            sips -z $size $size "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}.png" >/dev/null 2>&1
-            double=$((size * 2))
-            sips -z $double $double "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" >/dev/null 2>&1
-        done
-        iconutil -c icns "$ICONSET_DIR" -o "$ICON_ICNS"
-        rm -rf "$(dirname "$ICONSET_DIR")"
-        echo "Generated AppIcon.icns"
-    fi
-fi
+# The Dock/Finder icon uses opaque full-bleed artwork and a compiled catalog.
+# The standalone rounded PNG remains separate for onboarding and website use.
+ICON_PARTIAL_PLIST="$ROOT_DIR/.build/app-icon-partial.plist"
+bash "$ROOT_DIR/scripts/build-app-icon.sh" \
+    "$ROOT_DIR/$BUNDLE_DIR/Contents/Resources" "$ICON_PARTIAL_PLIST"
 
 # Copy SPM resource bundles into Contents/Resources/ (standard macOS location).
 # NOTE: SPM's generated Bundle.module uses bundleURL (= .app root) which won't find
@@ -223,13 +216,11 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleExecutable</key>
     <string>Blitz</string>
     <key>CFBundleIdentifier</key>
-    <string>com.blitz.macos</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>$BUNDLE_IDENTIFIER</string>
     <key>CFBundleName</key>
-    <string>Blitz</string>
+    <string>$APP_NAME</string>
     <key>CFBundleDisplayName</key>
-    <string>Blitz</string>
+    <string>$APP_NAME</string>
     <key>CFBundleVersion</key>
     <string>$BUILD_NUMBER</string>
     <key>CFBundleShortVersionString</key>
@@ -247,13 +238,28 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>Blitz needs screen recording access to capture the iOS Simulator display.</string>
+    <string>Blitz Neo needs screen recording access to capture the iOS Simulator display.</string>
     <key>NSCameraUsageDescription</key>
-    <string>Blitz needs camera access to capture physical iOS device screens via USB.</string>
+    <string>Blitz Neo needs camera access to capture physical iOS device screens via USB.</string>
 $ANALYTICS_PLIST_KEYS
 </dict>
 </plist>
 PLIST
+
+# Merge Apple's generated icon metadata (including CFBundleIconName) so macOS
+# resolves the catalog normally. AppIcon.icns remains available for older tools.
+python3 - "$BUNDLE_DIR/Contents/Info.plist" "$ICON_PARTIAL_PLIST" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], "rb") as source:
+    info = plistlib.load(source)
+with open(sys.argv[2], "rb") as source:
+    icon_info = plistlib.load(source)
+if icon_info.get("CFBundleIconName") != "AppIcon":
+    raise SystemExit("Asset compiler did not declare the expected AppIcon")
+info.update(icon_info)
+with open(sys.argv[1], "wb") as destination:
+    plistlib.dump(info, destination, sort_keys=False)
+PY
 
 # Remove stale codesign temp files from previous failed signing attempts
 find "$BUNDLE_DIR" -name "*.cstemp" -delete 2>/dev/null || true
@@ -319,4 +325,4 @@ fi
 echo ""
 echo "Built: $BUNDLE_DIR (v$VERSION)"
 echo "Signed with: $SIGNING_IDENTITY"
-echo "Launch with: open $BUNDLE_DIR"
+printf 'Launch with: open %q\n' "$BUNDLE_DIR"

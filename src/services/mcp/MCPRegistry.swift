@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
 /// Static definitions for all MCP tools exposed by Blitz
@@ -65,7 +66,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "project_create",
-            description: "Create a new Blitz project",
+            description: "Create a new Blitz Neo project",
             properties: [
                 "name": ["type": "string", "description": "Project name"],
                 "type": ["type": "string", "description": "Project type (blitz, react-native, flutter, swift)", "enum": ["blitz", "react-native", "flutter", "swift"]],
@@ -137,7 +138,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "get_blitz_screenshot",
-            description: "Capture a screenshot of the Blitz macOS app main window",
+            description: "Capture a screenshot of the Blitz Neo macOS app main window",
             properties: [:],
             required: []
         ))
@@ -155,7 +156,7 @@ enum MCPRegistry {
         // -- Tab State --
         tools.append(tool(
             name: "get_tab_state",
-            description: "Get the structured data state of any Blitz tab. Returns form field values, submission readiness, versions, builds, localizations, etc. Use this instead of screenshots to read UI state. Legacy aliases `storeListing` and `appDetails` map to `appInformation`.",
+            description: "Get the structured data state of any Blitz Neo tab. Returns form field values, submission readiness, versions, builds, localizations, etc. Use this instead of screenshots to read UI state. Legacy aliases `storeListing` and `appDetails` map to `appInformation`.",
             properties: [
                 "tab": ["type": "string", "description": "Tab to read state from (defaults to currently active tab). 'app' or 'ascOverview' returns overview/submission readiness.", "enum": [
                     "app", "ascOverview", "overview",
@@ -169,10 +170,10 @@ enum MCPRegistry {
         // -- ASC Credentials --
         tools.append(tool(
             name: "asc_set_credentials",
-            description: "Pre-fill the App Store Connect API credential form with issuer ID and private key file. `keyId` is optional; when omitted, Blitz derives it from Apple's default `.p8` filename. The user must confirm in the UI. Works in both onboarding and release tabs.",
+            description: "Pre-fill the App Store Connect API credential form with issuer ID and private key file. `keyId` is optional; when omitted, Blitz Neo derives it from Apple's default `.p8` filename. The user must confirm in the UI. Works in both onboarding and release tabs.",
             properties: [
                 "issuerId": ["type": "string", "description": "Issuer ID (UUID format)"],
-                "keyId": ["type": "string", "description": "Optional key ID (10-character alphanumeric). If omitted, Blitz derives it from a filename like AuthKey_XXXXXXXXXX.p8."],
+                "keyId": ["type": "string", "description": "Optional key ID (10-character alphanumeric). If omitted, Blitz Neo derives it from a filename like AuthKey_XXXXXXXXXX.p8."],
                 "privateKeyPath": ["type": "string", "description": "Absolute path to the .p8 private key file (e.g. ~/.blitz/AuthKey_XXXXXXXXXX.p8)"]
             ],
             required: ["issuerId", "privateKeyPath"]
@@ -204,7 +205,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "app_information_switch_localization",
-            description: "Refresh app-information localizations from App Store Connect and switch the Blitz app-information tab to the requested locale.",
+            description: "Refresh app-information localizations from App Store Connect and switch the Blitz Neo app-information tab to the requested locale.",
             properties: [
                 "locale": ["type": "string", "description": "Locale code to select in the app-information tab (for example en-US or ja)"]
             ],
@@ -223,7 +224,7 @@ enum MCPRegistry {
         // -- Screenshot Track Tools --
         tools.append(tool(
             name: "screenshots_switch_localization",
-            description: "Refresh screenshot localizations from App Store Connect, switch the Blitz screenshots tab to the requested locale, and hydrate that locale's screenshot tracks. Call this before manipulating track slots or saving when targeting a specific locale.",
+            description: "Refresh screenshot localizations from App Store Connect, switch the Blitz Neo screenshots tab to the requested locale, and hydrate that locale's screenshot tracks. Call this before manipulating track slots or saving when targeting a specific locale.",
             properties: [
                 "locale": ["type": "string", "description": "Locale code to select in the screenshots tab (for example en-US or en-GB)"]
             ],
@@ -232,12 +233,12 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "screenshots_put_track_slot",
-            description: "Import a screenshot file directly into a specific track slot (1-10). If the slot is occupied, Blitz inserts the new screenshot there and shifts later slots right. If you are targeting a specific locale, call screenshots_switch_localization first.",
+            description: "Import a screenshot file directly into a specific track slot (1-10). If the slot is occupied, Blitz Neo inserts the new screenshot there and shifts later slots right. If you are targeting a specific locale, call screenshots_switch_localization first.",
             properties: [
                 "sourcePath": ["type": "string", "description": "Absolute path to the source image file"],
                 "slotIndex": ["type": "integer", "description": "Track slot position (1-10)"],
                 "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
-                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz."],
+                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."],
                 "fileName": ["type": "string", "description": "Optional stored file name for the imported image (defaults to the source file name, converting to .png when needed)"]
             ],
             required: ["sourcePath", "slotIndex"]
@@ -249,7 +250,7 @@ enum MCPRegistry {
             properties: [
                 "slotIndex": ["type": "integer", "description": "Track slot position (1-10)"],
                 "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
-                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz."]
+                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: ["slotIndex"]
         ))
@@ -264,7 +265,7 @@ enum MCPRegistry {
                     "items": ["type": "integer"] as [String: Any]
                 ] as [String: Any],
                 "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
-                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz."]
+                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: ["order"]
         ))
@@ -274,14 +275,14 @@ enum MCPRegistry {
             description: "Save screenshot track changes to App Store Connect. If displayType is provided, syncs that device family only; otherwise it syncs every prepared/staged device family for the current locale. If you are targeting a specific locale, call screenshots_switch_localization first.",
             properties: [
                 "displayType": ["type": "string", "description": "Optional display type. Omit it to sync every prepared/staged device family for the selected locale.", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
-                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz."]
+                "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: []
         ))
 
         tools.append(tool(
             name: "asc_select_version",
-            description: "Select an App Store version in Blitz by version ID or version string, then refresh the active release tab or overview.",
+            description: "Select an App Store version in Blitz Neo by version ID or version string, then refresh the active release tab or overview.",
             properties: [
                 "version": ["type": "string", "description": "Version ID or version string (for example \"1.2.3\")"]
             ],
@@ -344,7 +345,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_web_auth",
-            description: "Open the Apple ID login window in Blitz to authenticate a web session for App Store Connect. Use when the iris API returns 401 (session expired). The login captures cookies and syncs them to ~/.blitz/asc-agent/web-session.json for CLI skills. Requires user interaction (Apple ID + 2FA).",
+            description: "Open the Apple ID login window in Blitz Neo to authenticate a web session for App Store Connect. Use when the iris API returns 401 (session expired). The login captures cookies and syncs them to ~/.blitz/asc-agent/web-session.json for CLI skills. Requires user interaction (Apple ID + 2FA).",
             properties: [:],
             required: []
         ))
@@ -353,7 +354,7 @@ enum MCPRegistry {
             name: "asc_confirm_created_app",
             description: "Poll App Store Connect for the app record created from the current bundle-ID setup flow, then programmatically run the same confirmation path as the Confirm button in BundleIDSetupView. Retries up to 10 times before giving up.",
             properties: [
-                "bundleId": ["type": "string", "description": "Optional bundle ID override. If omitted, uses the pending bundle-ID setup flow in Blitz."]
+                "bundleId": ["type": "string", "description": "Optional bundle ID override. If omitted, uses the pending bundle-ID setup flow in Blitz Neo."]
             ],
             required: []
         ))

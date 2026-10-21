@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 /// Shared Blitz MCP status plus optional manual Claude Code configuration.
@@ -8,7 +9,7 @@ struct MCPSetupSection: View {
     @State private var copied = false
 
     var body: some View {
-        Section("Blitz-Werkzeuge (MCP)") {
+        Section("Blitz-Neo-Werkzeuge (MCP)") {
             HStack {
                 Text("Verbindung")
                 Spacer()

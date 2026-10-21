@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct AppCommands: Commands {
@@ -116,7 +117,7 @@ struct AppCommands: Commands {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Select a Blitz project folder"
+        panel.message = "Select a Blitz Neo project folder"
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 

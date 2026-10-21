@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct ImportProjectSheet: View {
@@ -80,7 +81,7 @@ struct ImportProjectSheet: View {
                         }
                     }
 
-                    Text("Multiple bundle IDs were discovered in this project. Choose the one Blitz should use for App Store Connect.")
+                    Text("Multiple bundle IDs were discovered in this project. Choose the one Blitz Neo should use for App Store Connect.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -90,7 +91,7 @@ struct ImportProjectSheet: View {
                         .font(.callout.weight(.medium))
                     Text(bundleId)
                         .font(.system(.callout, design: .monospaced))
-                    Text("Blitz will use the discovered bundle ID above. You can switch it later from the ASC overview.")
+                    Text("Blitz Neo will use the discovered bundle ID above. You can switch it later from the ASC overview.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

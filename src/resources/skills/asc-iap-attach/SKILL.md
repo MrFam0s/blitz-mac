@@ -3,6 +3,8 @@ name: asc-iap-attach
 description: Attach in-app purchases and subscriptions to an app version for App Store review. Use when the user has IAPs or subscriptions in "Ready to Submit" state that need to be included with a first-time version submission. Works for both first-time and subsequent submissions.
 ---
 
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
 # asc iap attach
 
 Use this skill to attach in-app purchases and/or subscriptions to an app version for App Store review. This is the equivalent of checking the boxes in the "Add In-App Purchases or Subscriptions" modal on the version page in App Store Connect.
@@ -22,7 +24,7 @@ This skill uses Apple's internal iris API (`/iris/v1/subscriptionSubmissions`) v
 
 ## Preconditions
 
-- Web session file available at `~/.blitz/asc-agent/web-session.json`. If no session exists or it has expired (401), call the `asc_web_auth` MCP tool first — this opens the Apple ID login window in Blitz and captures the session automatically.
+- Web session file available at `~/.blitz/asc-agent/web-session.json`. If no session exists or it has expired (401), call the `asc_web_auth` MCP tool first — this opens the Apple ID login window in Blitz Neo and captures the session automatically.
 - Know your app ID.
 - IAPs and/or subscriptions already exist and are in **Ready to Submit** state.
 - A build is uploaded and attached to the current app version.
@@ -246,7 +248,7 @@ After attachment, call `get_tab_state` for `ascOverview` to refresh the submissi
 The subscription is already attached — this is safe to ignore. HTTP 409 with this message means the item was previously attached.
 
 ### 401 Not Authorized (iris API)
-The web session has expired. Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz — this captures a fresh session and refreshes `~/.blitz/asc-agent/web-session.json` automatically. The user will need to complete Apple ID login + 2FA in the popup. After the tool returns success, retry the iris API calls.
+The web session has expired. Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz Neo — this captures a fresh session and refreshes `~/.blitz/asc-agent/web-session.json` automatically. The user will need to complete Apple ID login + 2FA in the popup. After the tool returns success, retry the iris API calls.
 
 ## Agent Behavior
 
@@ -256,7 +258,7 @@ The web session has expired. Call the `asc_web_auth` MCP tool to open the Apple 
 - **NEVER print, log, or echo session cookies.** The python scripts handle cookies internally without exposing them.
 - Use the self-contained python scripts above — do NOT extract cookies separately or pass them as shell variables.
 - If iris API returns 409 "already set to submit", treat as success.
-- If iris API returns 401, call the `asc_web_auth` MCP tool to open the login window in Blitz, then retry.
+- If iris API returns 401, call the `asc_web_auth` MCP tool to open the login window in Blitz Neo, then retry.
 - After attachment, call `get_tab_state` for `ascOverview` to refresh the submission readiness checklist.
 
 ## Notes

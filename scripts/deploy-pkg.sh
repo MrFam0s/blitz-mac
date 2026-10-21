@@ -1,5 +1,6 @@
 #!/bin/bash
-# Deploy Blitz.pkg and Blitz.app.zip to Cloudflare R2
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+# Deploy Blitz Neo installer and app archive to Cloudflare R2
 # Usage: ./scripts/deploy-pkg.sh [--snapshot]
 set -euo pipefail
 
@@ -37,8 +38,9 @@ export RCLONE_CONFIG_R2_REGION=auto
 R2_BUCKET="${R2_BUCKET:-blitzapp-releases-1}"
 
 # App metadata
-APP_NAME="Blitz"
-APP_ID="com.blitz.macos"
+APP_NAME="Blitz Neo"
+ARTIFACT_NAME="BlitzNeo"
+APP_ID="org.amosystems.BlitzNeo"
 VERSION=$(node -e "const p=JSON.parse(require('fs').readFileSync('$ROOT_DIR/package.json','utf8')); process.stdout.write(p.version)" 2>/dev/null \
   || grep '"version"' "$ROOT_DIR/package.json" | head -1 | sed 's/.*: *"\(.*\)".*/\1/')
 
@@ -47,7 +49,7 @@ SNAPSHOT=false
 [ "${1:-}" = "--snapshot" ] && SNAPSHOT=true
 
 # Resolve .pkg
-PKG="$ROOT_DIR/build/$APP_NAME-$VERSION.pkg"
+PKG="$ROOT_DIR/build/$ARTIFACT_NAME-$VERSION.pkg"
 [ ! -f "$PKG" ] && echo "ERROR: Expected $PKG but not found. Run 'npm run build:pkg' first." && exit 1
 
 FILENAME=$(basename "$PKG")
@@ -60,7 +62,7 @@ echo "  checksum: $CHECKSUM"
 
 # Zip .app for upload
 APP_DIR="$ROOT_DIR/.build/$APP_NAME.app"
-APP_ZIP="$ROOT_DIR/build/$APP_NAME-$VERSION.app.zip"
+APP_ZIP="$ROOT_DIR/build/$ARTIFACT_NAME-$VERSION.app.zip"
 if [ -d "$APP_DIR" ]; then
     echo "Zipping $APP_NAME.app..."
     (cd "$(dirname "$APP_DIR")" && zip -qry "$APP_ZIP" "$(basename "$APP_DIR")")

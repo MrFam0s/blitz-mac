@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import BlitzMCPCommon
 import Darwin
 import Foundation
@@ -22,17 +23,17 @@ struct BlitzMCPHelper {
         var errorDescription: String? {
             switch self {
             case .bridgeUnavailable:
-                return "Cannot connect to Blitz. Is it running?"
+                return "Cannot connect to Blitz Neo. Is it running?"
             case .responseTimeout:
-                return "Timed out waiting for a response from Blitz."
+                return "Timed out waiting for a response from Blitz Neo."
             case .emptyResponse:
-                return "Blitz returned an empty MCP response."
+                return "Blitz Neo returned an empty MCP response."
             case .invalidSocketPath:
-                return "Blitz MCP socket path is invalid."
+                return "Blitz Neo MCP socket path is invalid."
             case .socketCreateFailed:
-                return "Failed to open the Blitz MCP socket."
+                return "Failed to open the Blitz Neo MCP socket."
             case .writeFailed:
-                return "Failed to send the MCP request to Blitz."
+                return "Failed to send the MCP request to Blitz Neo."
             }
         }
     }
@@ -224,7 +225,7 @@ struct BlitzMCPHelper {
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let json = String(data: data, encoding: .utf8) else {
-            return #"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"Unknown Blitz MCP error."}}"#
+            return #"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"Unknown Blitz Neo MCP error."}}"#
         }
         return json
     }

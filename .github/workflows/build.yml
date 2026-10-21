@@ -1,3 +1,4 @@
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 name: Build & Verify
 
 on:
@@ -40,9 +41,9 @@ jobs:
       - name: Generate checksums
         run: |
           cd .build
-          ditto -c -k --sequesterRsrc --keepParent Blitz.app Blitz.app.zip
-          shasum -a 256 Blitz.app.zip > Blitz.app.zip.sha256
-          cat Blitz.app.zip.sha256
+          ditto -c -k --sequesterRsrc --keepParent "Blitz Neo.app" BlitzNeo.app.zip
+          shasum -a 256 BlitzNeo.app.zip > BlitzNeo.app.zip.sha256
+          cat BlitzNeo.app.zip.sha256
 
   build_x86_64:
     # Standard runners are free only while this repository is public.
@@ -77,9 +78,9 @@ jobs:
       - name: Generate checksums
         run: |
           cd .build
-          ditto -c -k --sequesterRsrc --keepParent Blitz.app Blitz-x86_64.app.zip
-          shasum -a 256 Blitz-x86_64.app.zip > Blitz-x86_64.app.zip.sha256
-          cat Blitz-x86_64.app.zip.sha256
+          ditto -c -k --sequesterRsrc --keepParent "Blitz Neo.app" BlitzNeo-x86_64.app.zip
+          shasum -a 256 BlitzNeo-x86_64.app.zip > BlitzNeo-x86_64.app.zip.sha256
+          cat BlitzNeo-x86_64.app.zip.sha256
 
   release:
     if: github.event.repository.private == false && github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
@@ -182,22 +183,22 @@ jobs:
         run: |
           echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
           VERSION=$(node -e "process.stdout.write(require('./package.json').version)")
-          xcrun notarytool submit "build/Blitz-$VERSION.pkg" \
+          xcrun notarytool submit "build/BlitzNeo-$VERSION.pkg" \
             --key "$APPLE_API_KEY_PATH" \
             --key-id "$APPLE_API_KEY" \
             --issuer "$APPLE_API_ISSUER" \
             --wait
-          xcrun stapler staple "build/Blitz-$VERSION.pkg"
+          xcrun stapler staple "build/BlitzNeo-$VERSION.pkg"
 
       - name: Create checksums
         run: |
           cd .build
-          ditto -c -k --sequesterRsrc --keepParent Blitz.app Blitz.app.zip
-          shasum -a 256 Blitz.app.zip > SHA256SUMS.txt
-          find Blitz.app/Contents/MacOS -type f -perm +111 -exec shasum -a 256 {} + >> SHA256SUMS.txt
+          ditto -c -k --sequesterRsrc --keepParent "Blitz Neo.app" BlitzNeo.app.zip
+          shasum -a 256 BlitzNeo.app.zip > SHA256SUMS.txt
+          find "Blitz Neo.app/Contents/MacOS" -type f -perm +111 -exec shasum -a 256 {} + >> SHA256SUMS.txt
           # Checksum the .pkg too
           VERSION=$(node -e "process.stdout.write(require('../package.json').version)")
-          PKG_PATH="../build/Blitz-$VERSION.pkg"
+          PKG_PATH="../build/BlitzNeo-$VERSION.pkg"
           if [ -f "$PKG_PATH" ]; then
             shasum -a 256 "$PKG_PATH" >> SHA256SUMS.txt
           fi
@@ -240,9 +241,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            .build/Blitz.app.zip
+            .build/BlitzNeo.app.zip
             .build/SHA256SUMS.txt
-            build/Blitz-${{ steps.version.outputs.version }}.pkg
+            build/BlitzNeo-${{ steps.version.outputs.version }}.pkg
           body: |
             ## What's New
 
@@ -250,11 +251,11 @@ jobs:
 
             ## Install
 
-            **First install:** Download `Blitz-${{ steps.version.outputs.version }}.pkg` and double-click to install.
+            **First install:** Download `BlitzNeo-${{ steps.version.outputs.version }}.pkg` and double-click to install.
 
-            **Already installed:** The app will auto-update, or download `Blitz.app.zip` to update manually.
+            **Already installed:** The app will auto-update, or download `BlitzNeo.app.zip` to update manually.
 
-            **Intel Macs:** Download `Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip` from the release assets for a native x86_64 build.
+            **Intel Macs:** Download `BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip` from the release assets for a native x86_64 build.
 
             ## Verify this build
 
@@ -352,8 +353,8 @@ jobs:
           swift build -c release
           bash scripts/bundle.sh release
           mkdir -p build
-          ditto -c -k --sequesterRsrc --keepParent .build/Blitz.app "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip"
-          shasum -a 256 "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip" > "build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
+          ditto -c -k --sequesterRsrc --keepParent ".build/Blitz Neo.app" "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip"
+          shasum -a 256 "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip" > "build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256"
 
       - name: Upload x86_64 release assets
         uses: softprops/action-gh-release@v2
@@ -361,8 +362,8 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
           files: |
-            build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip
-            build/Blitz-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256
+            build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip
+            build/BlitzNeo-${{ steps.version.outputs.version }}-x86_64.app.zip.sha256
 
       - name: Cleanup keychain
         if: always()

@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -1107,7 +1108,7 @@ private struct SubmitForReviewButton: View {
             }
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Apple requires the first IAP/Subscription to be submitted with an app version via the App Store Connect website.\n\nIn App Store Connect website: go to your app version, scroll to \"In-App Purchases and Subscriptions\", click \"Select In-App Purchases or Subscriptions\", check the items to include, then submit the version for review.\n\nAfter the first approval, future submissions can be done directly from Blitz.")
+            Text("Apple requires the first IAP/Subscription to be submitted with an app version via the App Store Connect website.\n\nIn App Store Connect website: go to your app version, scroll to \"In-App Purchases and Subscriptions\", click \"Select In-App Purchases or Subscriptions\", check the items to include, then submit the version for review.\n\nAfter the first approval, future submissions can be done directly from Blitz Neo.")
         }
         .overlay {
             if isSubmitting {

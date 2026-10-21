@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Darwin
 import Foundation
 
@@ -177,7 +178,7 @@ enum ProjectOpenError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notABlitzProject:
-            return "Not a Blitz project. The selected folder does not contain .blitz/project.json. Use Import to add an external project."
+            return "Not a Blitz Neo project. The selected folder does not contain .blitz/project.json. Use Import to add an external project."
         }
     }
 }

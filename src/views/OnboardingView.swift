@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AVKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -235,7 +236,7 @@ struct OnboardingView: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text("Welcome to Blitz")
+                    Text("Welcome to Blitz Neo")
                         .font(.system(size: 24, weight: .bold))
                     Text("Let's get you set up")
                         .font(.subheadline)
@@ -459,7 +460,7 @@ struct OnboardingView: View {
                         .font(.system(size: 20, weight: .bold))
 
                     Text(
-                        "Connect your API key to continue using Blitz. Your key is saved locally and never leaves your machine."
+                        "Connect your API key to continue using Blitz Neo. Your key is saved locally and never leaves your machine."
                     )
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -498,12 +499,12 @@ struct OnboardingView: View {
                             }
                         }
 
-                        Text("Blitz validates and saves this key when you press Next.")
+                        Text("Blitz Neo validates and saves this key when you press Next.")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
 
                         if ascPrivateKeyFileName != nil && resolvedASCKeyID == nil {
-                            Text("Use the original downloaded .p8 filename so Blitz can detect the Apple key automatically.")
+                            Text("Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically.")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -617,7 +618,7 @@ struct OnboardingView: View {
 
     private func validateAndSaveASCCredentials() {
         guard let resolvedASCKeyID else {
-            ascSaveError = "Use the original downloaded .p8 filename so Blitz can detect the Apple key automatically."
+            ascSaveError = "Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically."
             return
         }
         ascIsSaving = true
@@ -712,7 +713,7 @@ struct OnboardingView: View {
     private var slideAskAI: some View {
         VStack(spacing: 6) {
             slideHeader(
-                title: "Open \(selectedAgent.displayName) in Blitz",
+                title: "Open \(selectedAgent.displayName) in Blitz Neo",
                 subtitle: "Click the terminal icon anywhere to launch \(selectedAgent.displayName). Select one of your imported apps in the dashboard and ask it to submit your app to the App Store."
             )
 

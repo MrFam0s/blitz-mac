@@ -1,8 +1,9 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AppKit
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.blitz.macos", category: "SimulatorService")
+private let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "SimulatorService")
 
 /// High-level simulator management service
 actor SimulatorService: SimulatorDeviceService {

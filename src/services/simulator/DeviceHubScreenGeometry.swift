@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import ApplicationServices
 import Foundation
 import os
@@ -5,7 +6,7 @@ import os
 /// Device Hub has independent top and bottom controls. Use the actual screen
 /// container rather than applying the old Simulator's bezel estimates.
 enum DeviceHubScreenGeometry {
-    private static let logger = Logger(subsystem: "com.blitz.macos", category: "DeviceHubGeometry")
+    private static let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "DeviceHubGeometry")
 
     static func screenRect(processID: pid_t, windowTitle: String, windowFrame: CGRect) throws -> CGRect {
         guard AXIsProcessTrusted() else { throw SimulatorCaptureService.CaptureError.accessibilityDenied }

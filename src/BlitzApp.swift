@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
@@ -12,7 +13,8 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
             fileMenu.title = "Project"
         }
         // Set dock icon from bundled resource (needed for swift run / non-.app launches)
-        if let icon = Bundle.appResources.image(forResource: "blitz-icon") {
+        if Bundle.main.bundleURL.pathExtension != "app",
+           let icon = Bundle.appResources.image(forResource: "blitz-icon") {
             NSApp.applicationIconImage = icon
         }
     }
@@ -57,10 +59,17 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct BlitzApp: App {
     @NSApplicationDelegateAdaptor private var appDelegate: BlitzAppDelegate
-    @State private var appState = AppState()
+    @State private var appState: AppState
+
+    init() {
+        if Bundle.main.bundleIdentifier == AppIdentity.bundleIdentifier {
+            AppIdentity.migratePreferences()
+        }
+        _appState = State(initialValue: AppState())
+    }
 
     var body: some Scene {
-        Window("Blitz", id: "main") {
+        Window("Blitz Neo", id: "main") {
             ContentView(appState: appState)
                 .focusEffectDisabled()
                 .onAppear {
@@ -169,7 +178,7 @@ final class MCPBootstrap {
                            #!/bin/bash
                            HELPER="$HOME/.blitz/blitz-macos-mcp"
                            if [ ! -x "$HELPER" ]; then
-                               echo '{"jsonrpc":"2.0","id":null,"error":{"code":-1,"message":"Blitz MCP helper is not installed. Start Blitz first."}}' >&2
+                               echo '{"jsonrpc":"2.0","id":null,"error":{"code":-1,"message":"Blitz Neo MCP helper is not installed. Start Blitz Neo first."}}' >&2
                                exit 1
                            fi
                            exec "$HELPER" "$@"

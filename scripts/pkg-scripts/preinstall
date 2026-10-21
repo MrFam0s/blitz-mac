@@ -1,5 +1,6 @@
 #!/bin/bash
-# Blitz PKG Preinstall Script
+# Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+# Blitz Neo PKG Preinstall Script
 # Checks all prerequisites: Xcode, disk space, CLI tools, license, simulator runtime.
 # Shows errors via osascript dialogs using launchctl asuser for GUI access.
 
@@ -22,7 +23,7 @@ LOG="/tmp/blitz_install.log"
 : > "$LOG" 2>/dev/null || { rm -f "$LOG"; : > "$LOG"; } || LOG="/dev/null"
 
 echo "" >> "$LOG"
-echo "=== Blitz Preinstall $(date) ===" >> "$LOG"
+echo "=== Blitz Neo Preinstall $(date) ===" >> "$LOG"
 T_PREINSTALL_START=$(date +%s)
 
 # Make log file writable by all users so console user can write to it
@@ -46,7 +47,7 @@ show_status() {
     echo "STATUS: $message" >> "$LOG"
     run_as_user osascript \
         -e 'on run argv' \
-        -e 'display notification (item 1 of argv) with title "Blitz Installer"' \
+        -e 'display notification (item 1 of argv) with title "Blitz Neo Installer"' \
         -e 'end run' \
         -- "$message" 2>/dev/null || true
 }
@@ -64,66 +65,10 @@ fi
 
 ERRORS=()
 
-# ============================================================================
-# 0a. Clean up old Tauri-based Blitz app (dev.blitz.mac)
-# The Tauri app has a different bundle ID and icon — remove it to avoid
-# confusion with the new native app.
-# ============================================================================
-
-# ----------------------------------------------------------------------------
-# TAURI MIGRATION CLEANUP (can be removed once Tauri users have migrated)
-# Only runs if an old Tauri-based Blitz app is detected — skipped otherwise.
-# ----------------------------------------------------------------------------
-OLD_TAURI_APP="/Applications/Blitz.app"
-EXISTING_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$OLD_TAURI_APP/Contents/Info.plist" 2>/dev/null || echo "")
-
-if [ "$EXISTING_ID" = "dev.blitz.mac" ] || [ "$EXISTING_ID" = "dev1.blitz.mac" ]; then
-    echo "Found old Tauri Blitz app ($EXISTING_ID), running migration cleanup..." >> "$LOG"
-    killall Blitz 2>/dev/null || true
-    rm -rf "$OLD_TAURI_APP"
-    echo "Removed old Tauri Blitz.app" >> "$LOG"
-
-    # Forget stale pkg receipts and reset TCC for old Tauri bundle IDs
-    for OLD_ID in dev.blitz.mac dev1.blitz.mac; do
-        pkgutil --forget "$OLD_ID" >> "$LOG" 2>&1 || true
-        tccutil reset ScreenCapture "$OLD_ID" >> "$LOG" 2>&1 || true
-        tccutil reset Accessibility "$OLD_ID" >> "$LOG" 2>&1 || true
-    done
-
-    # Remove .localized directories left by previous pkg relocations
-    for d in /Applications/Blitz.localized /Applications/Blitz-*.localized; do
-        [ -d "$d" ] && rm -rf "$d" && echo "Removed stale install dir: $d" >> "$LOG"
-    done
-
-    echo "Tauri migration cleanup done" >> "$LOG"
-else
-    echo "No old Tauri app detected, skipping migration cleanup" >> "$LOG"
-fi
-# ----------------------------------------------------------------------------
-
-# ============================================================================
-# 0b. Reset TCC permissions (first install only)
-# With Developer ID signing, TCC entries persist across binary replacement
-# (matched on team ID, not CDHash). Only reset on first install.
-# ============================================================================
-
-# Check if a native Blitz.app (com.blitz.macos) is already installed
-NATIVE_EXISTS=false
-if [ -d "/Applications/Blitz.app" ]; then
-    EXISTING_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "/Applications/Blitz.app/Contents/Info.plist" 2>/dev/null || echo "")
-    if [ "$EXISTING_ID" = "com.blitz.macos" ]; then
-        NATIVE_EXISTS=true
-    fi
-fi
-
-if [ "$NATIVE_EXISTS" = false ]; then
-    echo "First install, resetting any stale TCC entries..." >> "$LOG"
-    tccutil reset ScreenCapture com.blitz.macos >> "$LOG" 2>&1 || true
-    tccutil reset Accessibility com.blitz.macos >> "$LOG" 2>&1 || true
-    echo "TCC entries reset for com.blitz.macos" >> "$LOG"
-else
-    echo "Upgrade detected, preserving existing TCC permissions" >> "$LOG"
-fi
+# The Neo identity is a separate macOS privacy domain. Do not reset TCC entries
+# or remove the previous app before a successful installation. Existing settings
+# are migrated by Blitz Neo on first launch; ~/.blitz data remains in place.
+# The postinstall step retires only the recognized native predecessor.
 
 # ============================================================================
 # 1. Disk space check
@@ -140,7 +85,7 @@ if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "loginwindow" ]; then
     CONSOLE_UID=$(id -u "$CONSOLE_USER" 2>/dev/null)
 fi
 
-# Base: 5 GB (Blitz.app ~0.5 + warm template ~4.5 including node_modules, Pods, xcodebuild)
+# Base: 5 GB (Blitz Neo.app ~0.5 + warm template ~4.5 including node_modules, Pods, xcodebuild)
 REQUIRED_MB=5120
 
 # +7 GB if iOS Simulator runtime is not installed
@@ -158,7 +103,7 @@ if [ "$AVAILABLE_MB" -lt "$REQUIRED_MB" ]; then
     AVAILABLE_GB=$(awk "BEGIN {printf \"%.1f\", $AVAILABLE_MB / 1024}")
     REQUIRED_GB=$(awk "BEGIN {printf \"%.1f\", $REQUIRED_MB / 1024}")
     ERRORS+=("Not enough disk space.\n\
-Blitz requires approximately ${REQUIRED_GB} GB of free space for installation, \
+Blitz Neo requires approximately ${REQUIRED_GB} GB of free space for installation, \
 but only ${AVAILABLE_GB} GB is available.\n\n\
 Free up some disk space and try again.")
 fi
@@ -207,7 +152,7 @@ Try opening Xcode once to complete setup, then re-run this installer.")
     else
         echo "FATAL: Xcode.app not found in any search path" >> "$LOG"
         ERRORS+=("Xcode is not installed.\n\
-Blitz requires the full Xcode app to build and run iOS apps.\n\n\
+Blitz Neo requires the full Xcode app to build and run iOS apps.\n\n\
 Please install Xcode from the App Store, then re-run this installer.")
     fi
 else
@@ -276,7 +221,7 @@ fi
 echo "TIMING: simulator check took $(( $(date +%s) - T_STEP ))s" >> "$LOG"
 
 if [ ${#ERRORS[@]} -gt 0 ]; then
-    MSG="Blitz requires the following to be fixed before installation:\n\n"
+    MSG="Blitz Neo requires the following to be fixed before installation:\n\n"
     for i in "${!ERRORS[@]}"; do
         MSG+="$((i+1)). ${ERRORS[$i]}\n\n"
     done
@@ -285,7 +230,7 @@ if [ ${#ERRORS[@]} -gt 0 ]; then
     echo "=== Preinstall FAILED with ${#ERRORS[@]} error(s) ===" >> "$LOG"
     printf "%b\n" "$MSG" >> "$LOG"
 
-    show_error "Blitz - Missing Prerequisites" "$(printf "%b" "$MSG")"
+    show_error "Blitz Neo - Missing Prerequisites" "$(printf "%b" "$MSG")"
     exit 1
 fi
 

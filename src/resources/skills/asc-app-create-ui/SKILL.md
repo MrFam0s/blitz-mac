@@ -1,9 +1,11 @@
 ---
 name: asc-app-create-ui
-description: Create an App Store Connect app via iris API using web session from Blitz
+description: Create an App Store Connect app via iris API using web session from Blitz Neo
 ---
 
-Create an App Store Connect app using Apple's iris API. Authentication is handled via a web session file at `~/.blitz/asc-agent/web-session.json` managed by Blitz.
+<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
+Create an App Store Connect app using Apple's iris API. Authentication is handled via a web session file at `~/.blitz/asc-agent/web-session.json` managed by Blitz Neo.
 
 Extract from the conversation context:
 - `bundleId` — the bundle identifier (e.g. `com.blitz.myapp`)
@@ -151,11 +153,11 @@ except urllib.error.HTTPError as e:
 "
 ```
 
-### 5. Auto-confirm the Blitz bundle-ID setup flow
+### 5. Auto-confirm the Blitz Neo bundle-ID setup flow
 
-After the iris API call succeeds, call the `asc_confirm_created_app` MCP tool immediately. This tool polls App Store Connect up to 10 times and, once the app is visible, programmatically triggers the same confirmation path as the `Confirm` button in Blitz's bundle-ID setup UI.
+After the iris API call succeeds, call the `asc_confirm_created_app` MCP tool immediately. This tool polls App Store Connect up to 10 times and, once the app is visible, programmatically triggers the same confirmation path as the `Confirm` button in Blitz Neo's bundle-ID setup UI.
 
-If the tool reports success, the manual confirmation step in Blitz is complete. If it fails after 10 retries, report that clearly to the user.
+If the tool reports success, the manual confirmation step in Blitz Neo is complete. If it fails after 10 retries, report that clearly to the user.
 
 ### 6. Report results
 
@@ -164,7 +166,7 @@ After success, report the App ID, bundle ID, name, and SKU to the user.
 ## Common Errors
 
 ### 401 Not Authorized
-Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz. Then retry.
+Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz Neo. Then retry.
 
 ### 409 Conflict
 An app with the same bundle ID or SKU may already exist. Try a different SKU.

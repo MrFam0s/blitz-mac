@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct ReleaseAutomationSheet: View {
@@ -63,7 +64,7 @@ struct ReleaseAutomationSheet: View {
                 Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
                 Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
             }.font(.callout)
-            Text("Startet \(agent.displayName) im Blitz-Terminal. Ohne neuen App-Stand oder vorbereitete Store-Änderungen wird nichts eingereicht. Fehlende Angaben oder fehlgeschlagene Tests stoppen den Ablauf.")
+            Text("Startet \(agent.displayName) im Blitz-Neo-Terminal. Ohne neuen App-Stand oder vorbereitete Store-Änderungen wird nichts eingereicht. Fehlende Angaben oder fehlgeschlagene Tests stoppen den Ablauf.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).font(.callout).foregroundStyle(.orange) }
             Divider()
@@ -166,7 +167,7 @@ struct VersionDraftSheet: View {
             Text("Versionsentwurf anlegen")
                 .font(.title2.weight(.semibold))
 
-            Text("Legt nur einen Entwurf in App Store Connect an. Danach könnt ihr Texte und Screenshots in Blitz oder per Codex bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
+            Text("Legt nur einen Entwurf in App Store Connect an. Danach könnt ihr Texte und Screenshots in Blitz Neo oder per Codex bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
 

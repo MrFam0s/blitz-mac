@@ -1,10 +1,11 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 import ScreenCaptureKit
 import CoreVideo
 import CoreMedia
 import os
 
-private let logger = Logger(subsystem: "com.blitz.macos", category: "SimulatorCapture")
+private let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "SimulatorCapture")
 
 /// ScreenCaptureKit-based simulator frame capture
 final class SimulatorCaptureService: NSObject, @unchecked Sendable {
@@ -323,11 +324,11 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
             case .ambiguousSimulatorName:
                 return "Multiple running simulators have the same name. Give your project simulator a unique name in Xcode, then retry."
             case .screenRecordingDenied(let msg):
-                return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz, reboot your Mac. (\(msg))"
+                return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz Neo. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz Neo, reboot your Mac. (\(msg))"
             case .captureStartFailed(let msg):
                 return "Failed to start capture: \(msg)"
             case .accessibilityDenied:
-                return "Allow Blitz in System Settings → Privacy & Security → Accessibility so it can locate the device screen inside Device Hub. Then retry."
+                return "Allow Blitz Neo in System Settings → Privacy & Security → Accessibility so it can locate the device screen inside Device Hub. Then retry."
             case .deviceScreenNotFound:
                 return "Could not locate the device screen inside Device Hub. Open the selected device in a compact window and retry."
             }

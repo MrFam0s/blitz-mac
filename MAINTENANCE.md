@@ -1,6 +1,41 @@
-# Maintenance fork
+# Blitz Neo maintenance fork
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
+
+## 1.0.53 — Blitz Neo identity
+
+The app display name and bundle folder are now Blitz Neo and Blitz Neo.app;
+the bundle identifier is `org.amosystems.BlitzNeo`. The executable and Swift
+module stay `Blitz`, preserving the existing build and helper structure.
+The new N/lightning icon replaces the original icon. The native Dock/Finder
+icon uses opaque full-bleed artwork in a compiled asset catalog, separate from
+the transparent standalone artwork used inside the app and on the website.
+Apple-generated icon metadata and compatibility ICNS are included. Installed
+bundles no longer override the system icon with the standalone PNG at launch. This remains a personal
+maintenance fork; no new public binary release is published by this change.
+
+`~/.blitz` data, project links, simulator choices, terminal settings, ASC profiles,
+Keychain service names and MCP names remain stable. The old cache directories are
+kept deliberately. First launch copies only selected UI preferences/window frames
+from `com.blitz.macos` without overwriting Neo preferences or copying pending
+restart instructions. macOS privacy grants cannot migrate to a new identity;
+Screen Recording/Accessibility/Keychain approval or Apple web login may be needed.
+
+The bundle, installer, updater and offline workflows now quote the app path with
+spaces. The package installer retains the exact old native app as a recoverable
+backup after checking the replacement. It does not reset TCC or delete user data.
+Local installation also keeps a rollback bundle. Workflow triggers and the policy
+of using free GitHub features only remain unchanged.
+
+Validation (build 58): 215 Swift tests, five offline app-migration checks,
+the native release build, strict deep Developer ID signature verification and
+the pinned ASC protocol/direct-CLI checks pass. Independent identity and icon
+packaging reviews found no blocking issue. Native UI inspection confirmed all
+11 projects, the migrated layout/preferences, the new name and build number.
+Finder's installed-app preview confirms one full-size icon without the grey
+outer tile. A live MCP handshake exposed all 37 existing tools after the rename.
+Simulator/physical-device permissions under the new bundle ID and older macOS
+icon presentation were not exercised in this change.
 
 ## 1.0.52 — consistent detail layouts beside the terminal
 

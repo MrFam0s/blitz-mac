@@ -1,7 +1,8 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.blitz.macos", category: "PortAllocator")
+private let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "PortAllocator")
 
 /// Find a free TCP port
 struct PortAllocator {
