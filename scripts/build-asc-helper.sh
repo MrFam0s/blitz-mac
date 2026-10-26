@@ -6,8 +6,8 @@ SOURCE_DIR="$ROOT_DIR/deps/App-Store-Connect-CLI-helper"
 STAGE_DIR="$ROOT_DIR/.build/asc-source"
 OUTPUT_DIR="$ROOT_DIR/.build/ascd-helper"
 GO_BINARY="${GO:-go}"
-ASC_VERSION="5.15.0"
-ASC_COMMIT="b9520c3865b54c5c02f905793ac3565fc2885aee"
+ASC_VERSION="5.17.0"
+ASC_COMMIT="ecad9f122524248749b6c44bb01e951734131889"
 
 if [ ! -f "$SOURCE_DIR/go.mod" ] || [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" != "$ASC_COMMIT" ]; then
     echo "ERROR: Initialize the pinned ASC submodule: git submodule update --init --recursive" >&2
