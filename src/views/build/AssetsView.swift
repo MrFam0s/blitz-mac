@@ -330,10 +330,15 @@ struct AssetsView: View {
 
         Task.detached {
             var icons: [Int: NSImage] = [:]
+            var saveError: String?
             let fm = FileManager.default
 
             if saveToDisk, let basePath {
-                try? fm.createDirectory(atPath: basePath, withIntermediateDirectories: true)
+                do {
+                    try fm.createDirectory(atPath: basePath, withIntermediateDirectories: true)
+                } catch {
+                    saveError = error.localizedDescription
+                }
             }
 
             for (_, size) in sizes {
@@ -356,48 +361,33 @@ struct AssetsView: View {
                     let bitmap = NSBitmapImageRep(cgImage: resized)
                     if let png = bitmap.representation(using: .png, properties: [:]) {
                         let path = "\(basePath)/icon_\(size).png"
-                        try? png.write(to: URL(fileURLWithPath: path))
+                        do {
+                            try png.write(to: URL(fileURLWithPath: path), options: .atomic)
+                        } catch {
+                            saveError = saveError ?? error.localizedDescription
+                        }
                     }
                 }
             }
 
             // Also update xcassets icon if present
             if saveToDisk, let projDir {
-                Self.updateXcassetsIcon(source: source, projectDir: projDir)
+                do {
+                    try ProjectAppIconCatalogWriter.write(source: cgSource, projectPath: projDir)
+                } catch {
+                    saveError = saveError ?? error.localizedDescription
+                }
             }
 
             let finalIcons = icons
+            let finalError = saveError
             await MainActor.run {
                 guard appState.activeProjectId == pid, iconRevision == revision else { return }
                 generatedIcons = finalIcons
                 isGenerating = false
+                if let finalError { importError = "Could not save app icons: \(finalError)" }
                 if let pid {
                     appState.ascManager.checkAppIcon(projectId: pid)
-                }
-            }
-        }
-    }
-
-    /// Copies the 1024×1024 source into the xcassets AppIcon.appiconset if one exists.
-    nonisolated private static func updateXcassetsIcon(source: NSImage, projectDir: String) {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(atPath: projectDir) else { return }
-        while let file = enumerator.nextObject() as? String {
-            guard file.hasSuffix("AppIcon.appiconset/Contents.json") else { continue }
-            let contentsPath = "\(projectDir)/\(file)"
-            guard let data = fm.contents(atPath: contentsPath),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let images = json["images"] as? [[String: Any]] else { continue }
-            for entry in images {
-                if let filename = entry["filename"] as? String {
-                    let iconDir = (contentsPath as NSString).deletingLastPathComponent
-                    let iconPath = "\(iconDir)/\(filename)"
-                    if let tiff = source.tiffRepresentation,
-                       let bitmap = NSBitmapImageRep(data: tiff),
-                       let png = bitmap.representation(using: .png, properties: [:]) {
-                        try? png.write(to: URL(fileURLWithPath: iconPath))
-                    }
-                    return
                 }
             }
         }

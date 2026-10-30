@@ -2,6 +2,29 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.55 — prefer the Xcode icon source
+
+Dashboard refresh previously rescanned icons but could still select an obsolete
+generated working copy over a changed Xcode asset of equal resolution. The icon
+loader now chooses the largest valid image in an AppIcon catalog and uses
+`assets/AppIcon/icon_1024.png` only when no usable catalog image exists.
+
+Icon imports also update every configured default-appearance image in the selected catalog
+at its declared pixel dimensions, instead of writing the 1024-pixel source to
+only the first filename. Separate dark/tinted files are preserved. Invalid
+filenames and dimensions are rejected before catalog writes, and save errors
+are shown in the existing import alert. Build 60 retains ASC 5.17.0.
+
+Validation: all 229 Swift tests pass, including regressions for stale generated
+copies, invalid catalog fallback, all configured icon sizes and safe import
+failures. Independent review found no remaining blocker. The native release
+build and strict deep Developer ID verification pass; the installed bundle
+retains the previous designated requirement. Installed protocol ping, direct
+CLI and cli.exec report ASC 5.17.0, with byte-identical app and terminal helpers.
+Native dashboard verification after refresh shows the updated DocReview icon
+and the remaining project icons. The previous installed bundle is retained for
+rollback. No Store mutations or cloud CI runs were performed.
+
 ## 1.0.54 — refresh dashboard icons and adopt ASC 5.17.0
 
 The dashboard's explicit refresh also reloads icons from linked local projects

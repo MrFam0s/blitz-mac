@@ -167,7 +167,7 @@ private func writeTestAppIcon(to projectRoot: URL) throws {
     #expect(path == set.appendingPathComponent("regular.png").path)
 }
 
-@Test func projectIconDoesNotPreferLowResolutionGeneratedCopy() async throws {
+@Test func projectIconPrefersCatalogOverStaleGeneratedCopies() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     try writeTestAppIcon(to: root)
@@ -176,9 +176,32 @@ private func writeTestAppIcon(to projectRoot: URL) throws {
     try writePixelIcon(to: generated, pixels: 32)
     let id = UUID().uuidString
     #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path)?.hasSuffix("AppIcon.png") == true)
+    for pixels in [1024, 2048] {
+        try writePixelIcon(to: generated, pixels: pixels)
+        _ = await ProjectAppIconLoader.refreshImage(for: id, projectPath: root.path)
+        #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path)?.hasSuffix("AppIcon.png") == true)
+    }
+}
+
+@Test func projectIconFallsBackToGeneratedCopyOnlyWithoutUsableCatalog() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let generated = root.appendingPathComponent("assets/AppIcon/icon_1024.png")
+    try FileManager.default.createDirectory(at: generated.deletingLastPathComponent(), withIntermediateDirectories: true)
     try writePixelIcon(to: generated, pixels: 1024)
+    let id = UUID().uuidString
+    #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path) == generated.path)
+
+    let set = root.appendingPathComponent("Assets.xcassets/AppIcon.appiconset")
+    try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
+    try writeIconContents(to: set, images: [["filename": "active.png"]])
+    try Data("broken image".utf8).write(to: set.appendingPathComponent("active.png"))
     _ = await ProjectAppIconLoader.refreshImage(for: id, projectPath: root.path)
     #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path) == generated.path)
+
+    try writePixelIcon(to: set.appendingPathComponent("active.png"), pixels: 512)
+    _ = await ProjectAppIconLoader.refreshImage(for: id, projectPath: root.path)
+    #expect(await ProjectAppIconLoader.loadPath(for: id, projectPath: root.path) == set.appendingPathComponent("active.png").path)
 }
 
 private func writePixelIcon(to url: URL, pixels: Int) throws {

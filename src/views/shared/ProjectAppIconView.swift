@@ -111,15 +111,14 @@ enum ProjectAppIconLoader {
         let projectDir = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
         var candidates: [IconCandidate] = []
         let generatedIcon = projectDir.appendingPathComponent("assets/AppIcon/icon_1024.png")
-        if let candidate = IconCandidate(url: generatedIcon, priority: 2) {
-            candidates.append(candidate)
-        }
+        // The Xcode catalog is the app's icon source. Generated working copies can
+        // outlive a redesign and are only a fallback when no usable catalog exists.
         guard let enumerator = fm.enumerator(
             at: projectDir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return candidates.first?.url.path
+            return IconCandidate(url: generatedIcon, priority: 0)?.url.path
         }
 
         while let entry = enumerator.nextObject() as? URL {
@@ -153,7 +152,7 @@ enum ProjectAppIconLoader {
             if $0.pixels != $1.pixels { return $0.pixels > $1.pixels }
             if $0.priority != $1.priority { return $0.priority > $1.priority }
             return $0.url.path < $1.url.path
-        }.first?.url.path
+        }.first?.url.path ?? IconCandidate(url: generatedIcon, priority: 0)?.url.path
     }
 
     private struct IconCandidate {
