@@ -1,12 +1,12 @@
 # ASC integration in Blitz
 
-Blitz 1.0.37 builds official ASC **5.15.0**, commit
-`b9520c3865b54c5c02f905793ac3565fc2885aee`, from
+Blitz Neo builds official ASC **5.17.0**, commit
+`ecad9f122524248749b6c44bb01e951734131889`, from
 https://github.com/rorkai/App-Store-Connect-CLI.
 
 The upstream source is an unmodified pinned submodule. `scripts/build-asc-helper.sh`
 exports it into `.build/asc-source`, adds this overlay and builds `cmd/ascd`.
-Go must satisfy upstream's `go.mod` (currently Go 1.27.2).
+Go must satisfy upstream's `go.mod` (currently Go 1.27.3).
 
 This adapter originates from the former Blitz ASC fork, commit
 `c17dc0836359dc272ad4df9521dc4b642e1dd13f` at

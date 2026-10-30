@@ -2,6 +2,45 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## Prepared ASC 5.17.0 update
+
+The maintenance update advances official ASC from 5.15.0
+(`b9520c3865b54c5c02f905793ac3565fc2885aee`) to stable release 5.17.0
+(`ecad9f122524248749b6c44bb01e951734131889`). The annotated upstream tag
+`0766d513b600786bf75c53c858a7565227e7ffe0` resolves to that commit; the
+GitHub release was published on 2026-10-25. The tag is unsigned, so verification
+here means agreement between the official API, Git ref and checked-out commit.
+Go 1.27.3 is required by the new upstream go.mod.
+
+The intervening releases improve web-authentication backoff and locked-account
+messages, typed API reads, screenshot set reads/reordering, TestFlight group
+resolution and command error classification. The existing Blitz protocol adapter
+and the shared implementation for app and CLI are retained. Historical validation
+entries below intentionally preserve the ASC version tested at that time.
+
+This change prepares a draft for human review. It does not install, merge,
+publish or alter any live Apple data or global Codex/Blitz configuration.
+
+Validation on macOS 27.0.1 / Xcode 27.1 / Apple Swift 6.4 / Go 1.27.3:
+- The helper build passes with the unchanged Blitz adapter.
+- Staged `go test -p=1 -parallel=4 -count=1 -timeout=20m -json
+  ./internal/asc ./internal/helper ./cmd/ascd` passes, without short mode.
+  All 2,014 CLI command-tree comparison cases pass; `cmd/ascd` compiles and has
+  no test files. HTTP regressions preserve 404/409/429 bodies, status and headers,
+  including Retry-After; redirect rejection and read/mutation ordering pass.
+- Protocol ping, direct CLI version and `cli.exec version` pass both before
+  bundling and from the final bundled helper.
+- All 215 Swift tests pass with `--build-system native --jobs 4`.
+- The native release bundle uses the newly built helper, with four build jobs.
+  Its ad-hoc signature passes `codesign --verify --deep --strict`.
+- Independent source review found no blocking compatibility issue. No live Store,
+  device, installation or cloud-CI test was run; human review remains pending.
+
+The Go 1.27.3 darwin/arm64 archive was downloaded from the official Go site and
+verified before project-local extraction using SHA-256
+`dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2`.
+The previous project-local toolchain and global configuration remain unchanged.
+
 ## 1.0.53 — Blitz Neo identity
 
 The app display name and bundle folder are now Blitz Neo and Blitz Neo.app;
