@@ -394,26 +394,8 @@ struct DashboardView: View {
     @ViewBuilder
     private func ascIcon(for row: DashboardAppRow) -> some View {
         if let iconURL = row.iconURL {
-            AsyncImage(url: iconURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                case .empty:
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.accentColor.opacity(0.08))
-                            .frame(width: 56, height: 56)
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                case .failure:
-                    fallbackIcon(name: row.name)
-                @unknown default:
-                    fallbackIcon(name: row.name)
-                }
+            DashboardRemoteIconView(url: iconURL, refreshRevision: dashboardSummary.iconRefreshRevision) {
+                fallbackIcon(name: row.name)
             }
             .frame(width: 56, height: 56)
         } else {
@@ -488,6 +470,7 @@ struct DashboardView: View {
         appState.ascManager.loadStoredCredentialsIfNeeded()
         let accountKey = DashboardSummaryStore.accountKey(for: appState.ascManager.credentials)
         guard let service = appState.ascManager.service else {
+            if force { dashboardSummary.refreshIcons(for: projects) }
             dashboardSummary.markUnavailable(for: hydrationKey, accountKey: accountKey, issue: .missingCredentials)
             return
         }

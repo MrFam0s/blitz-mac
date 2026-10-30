@@ -14,6 +14,7 @@ enum ProjectAppIconLoader {
     private static let imageCache = NSCache<NSString, NSImage>()
     private static let lock = NSLock()
     private static var pathCache: [String: ProjectAppIconLookupState] = [:]
+    private static var cacheRevisions: [String: Int] = [:]
     private static let skippedDirectories: Set<String> = [
         "node_modules",
         "Pods",
@@ -28,6 +29,7 @@ enum ProjectAppIconLoader {
     }
 
     static func loadImage(for projectId: String, projectPath: String) async -> NSImage? {
+        let revision = cacheState(for: projectId).revision
         if let cached = cachedImage(for: projectId) {
             return cached
         }
@@ -37,8 +39,7 @@ enum ProjectAppIconLoader {
             return nil
         }
 
-        imageCache.setObject(image, forKey: projectId as NSString)
-        return image
+        return cacheImage(image, for: projectId, revision: revision) ? image : nil
     }
 
     static func loadStatus(for projectId: String, projectPath: String) async -> String? {
@@ -57,7 +58,8 @@ enum ProjectAppIconLoader {
     }
 
     static func loadPath(for projectId: String, projectPath: String) async -> String? {
-        switch cachedPath(for: projectId) {
+        let state = cacheState(for: projectId)
+        switch state.path {
         case .resolved(let path):
             return path
         case .missing:
@@ -70,26 +72,37 @@ enum ProjectAppIconLoader {
             findIconPath(projectPath: projectPath)
         }.value
 
-        cachePath(path, for: projectId)
-        return path
+        return cachePath(path, for: projectId, revision: state.revision) ? path : nil
     }
 
-    private static func cachedPath(for projectId: String) -> ProjectAppIconLookupState {
+    private static func cacheState(for projectId: String) -> (path: ProjectAppIconLookupState, revision: Int) {
         lock.lock()
         defer { lock.unlock() }
-        return pathCache[projectId] ?? .unresolved
+        return (pathCache[projectId] ?? .unresolved, cacheRevisions[projectId] ?? 0)
     }
 
-    private static func cachePath(_ path: String?, for projectId: String) {
+    private static func cachePath(_ path: String?, for projectId: String, revision: Int) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        guard revision == cacheRevisions[projectId, default: 0] else { return false }
         pathCache[projectId] = path.map(ProjectAppIconLookupState.resolved) ?? .missing
+        return true
+    }
+
+    private static func cacheImage(_ image: NSImage, for projectId: String, revision: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard revision == cacheRevisions[projectId, default: 0] else { return false }
+        imageCache.setObject(image, forKey: projectId as NSString)
+        return true
     }
 
     private static func resetCache(for projectId: String) {
         lock.lock()
+        defer { lock.unlock() }
+        // Older detached scans must not repopulate either cache after a refresh.
+        cacheRevisions[projectId, default: 0] += 1
         pathCache.removeValue(forKey: projectId)
-        lock.unlock()
         imageCache.removeObject(forKey: projectId as NSString)
     }
 
@@ -161,6 +174,11 @@ enum ProjectAppIconLoader {
     }
 }
 
+private struct ProjectAppIconIdentity: Hashable {
+    let id: String
+    let path: String
+}
+
 struct ProjectAppIconView<Placeholder: View>: View {
     let project: Project
     let size: CGFloat
@@ -168,6 +186,12 @@ struct ProjectAppIconView<Placeholder: View>: View {
     let placeholder: () -> Placeholder
 
     @State private var icon: NSImage?
+    @State private var displayedIconIdentity: ProjectAppIconIdentity
+    @State private var loadRevision = 0
+
+    private var iconIdentity: ProjectAppIconIdentity {
+        ProjectAppIconIdentity(id: project.id, path: project.path)
+    }
 
     init(
         project: Project,
@@ -180,6 +204,7 @@ struct ProjectAppIconView<Placeholder: View>: View {
         self.cornerRadius = cornerRadius
         self.placeholder = placeholder
         _icon = State(initialValue: ProjectAppIconLoader.cachedImage(for: project.id))
+        _displayedIconIdentity = State(initialValue: ProjectAppIconIdentity(id: project.id, path: project.path))
     }
 
     var body: some View {
@@ -194,13 +219,14 @@ struct ProjectAppIconView<Placeholder: View>: View {
             }
         }
         .frame(width: size, height: size)
-        .task(id: project.id) {
+        .task(id: iconIdentity) {
             await loadIcon()
         }
         .onReceive(NotificationCenter.default.publisher(for: ProjectAppIconLoader.didInvalidateNotification)) { notification in
             guard let invalidatedProjectId = notification.object as? String,
                   invalidatedProjectId == project.id else { return }
-            Task { await loadIcon(forceRefresh: true) }
+            // invalidate already reset the shared caches; multiple visible copies can reuse the fresh load.
+            Task { await loadIcon() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             guard icon == nil else { return }
@@ -210,23 +236,35 @@ struct ProjectAppIconView<Placeholder: View>: View {
 
     @MainActor
     private func loadIcon(forceRefresh: Bool = false) async {
-        if !forceRefresh, let cached = ProjectAppIconLoader.cachedImage(for: project.id) {
+        loadRevision += 1
+        let revision = loadRevision
+        let identity = iconIdentity
+        let pathChanged = displayedIconIdentity.id == identity.id && displayedIconIdentity.path != identity.path
+        if displayedIconIdentity != identity {
+            icon = nil
+            displayedIconIdentity = identity
+        }
+        let shouldRefresh = forceRefresh || pathChanged
+        if !shouldRefresh, let cached = ProjectAppIconLoader.cachedImage(for: project.id) {
             icon = cached
             return
         }
 
-        icon = nil
-        if forceRefresh {
-            icon = await ProjectAppIconLoader.refreshImage(
+        let replacement: NSImage?
+        if shouldRefresh {
+            replacement = await ProjectAppIconLoader.refreshImage(
                 for: project.id,
                 projectPath: project.path
             )
-            return
+        } else {
+            replacement = await ProjectAppIconLoader.loadImage(
+                for: project.id,
+                projectPath: project.path
+            )
         }
-
-        icon = await ProjectAppIconLoader.loadImage(
-            for: project.id,
-            projectPath: project.path
-        )
+        // A temporarily missing/unfinished asset must not erase a working icon.
+        guard revision == loadRevision, displayedIconIdentity == identity,
+              !Task.isCancelled, let replacement else { return }
+        icon = replacement
     }
 }

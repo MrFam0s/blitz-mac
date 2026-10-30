@@ -193,3 +193,48 @@ private func writeIconContents(to set: URL, images: [[String: Any]]) throws {
     try JSONSerialization.data(withJSONObject: ["images": images])
         .write(to: set.appendingPathComponent("Contents.json"))
 }
+
+@MainActor
+@Test func dashboardForceRefreshReloadsChangedLocalIconEvenWhenASCIsOffline() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let set = root.appendingPathComponent("Assets.xcassets/AppIcon.appiconset")
+    try FileManager.default.createDirectory(at: set, withIntermediateDirectories: true)
+    let file = set.appendingPathComponent("icon.png")
+    try writePixelIcon(to: file, pixels: 32)
+    try writeIconContents(to: set, images: [["filename": "icon.png"]])
+    let project = Project(id: UUID().uuidString,
+                          metadata: BlitzProjectMetadata(name: "Example", type: .swift), path: root.path)
+    let old = try #require(await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path))
+    #expect(old.representations.map(\.pixelsWide).max() == 32)
+    try writePixelIcon(to: file, pixels: 128)
+
+    let store = DashboardSummaryStore(cacheURL: root.appendingPathComponent("cache.json"), accountKeyOverride: "test")
+    await store.refresh(for: "test", accountKey: "test", service: OfflineIconDashboardFetcher(),
+                        projects: [project], force: true)
+
+    #expect(store.loadIssue == .offline)
+    #expect(store.iconRefreshRevision == 1)
+    let refreshed = try #require(await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path))
+    #expect(refreshed.representations.map(\.pixelsWide).max() == 128)
+
+    // The next refresh must also discard the cached path and discover the best new asset.
+    try writePixelIcon(to: set.appendingPathComponent("large.png"), pixels: 1024)
+    try writeIconContents(to: set, images: [["filename": "icon.png"], ["filename": "large.png"]])
+    store.refreshIcons(for: [project])
+    #expect(await ProjectAppIconLoader.loadPath(for: project.id, projectPath: project.path) == set.appendingPathComponent("large.png").path)
+    // Dashboard and sidebar subscribers share one invalidation and load concurrently.
+    async let first = ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path)
+    async let second = ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path)
+    let (dashboard, sidebar) = await (first, second)
+    #expect(dashboard?.representations.map(\.pixelsWide).max() == 1024)
+    #expect(sidebar?.representations.map(\.pixelsWide).max() == 1024)
+}
+
+private struct OfflineIconDashboardFetcher: DashboardFetching {
+    func fetchAllApps(appStoreStateFilter: String?) async throws -> [ASCApp] {
+        throw URLError(.notConnectedToInternet)
+    }
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] { [] }
+    func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? { nil }
+}

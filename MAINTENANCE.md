@@ -2,7 +2,33 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
-## Prepared ASC 5.17.0 update
+## 1.0.54 — refresh dashboard icons and adopt ASC 5.17.0
+
+The dashboard's explicit refresh also reloads icons from linked local projects
+and App Store image URLs, including images replaced at the same path or URL.
+Local projects are rescanned for the best available icon resolution. A failed
+image refresh keeps the last displayed icon instead of replacing it with a
+placeholder. Local icons can refresh even when ASC credentials are unavailable.
+
+Build 59 adopts the reviewed ASC 5.17.0 update from PR #1. The app and terminal
+continue to use the same bundled protocol adapter and CLI implementation.
+The local installation retains the existing Developer ID identity and bundle
+identifier; no GitHub release, Store upload or global configuration change is
+part of this update.
+
+Validation: all 221 Swift tests pass, including six new icon-refresh regressions.
+These cover replaced local files, newly available larger icons, concurrent loads,
+remote URL changes, same-URL downloads, failed-image retention, remount caching
+and stale responses. Independent review found no remaining blocker. The native
+release bundle and installed app pass strict deep Developer ID verification with
+the same designated requirement as build 58. Protocol ping, direct CLI and
+cli.exec all report the pinned ASC 5.17.0; installed app and terminal helpers are
+byte-identical. Native UI checks confirm build 59, successful Dashboard refresh,
+the updated linked-project icon and filtering/clearing search. Remote image
+replacement/failure was tested with injected responses, not Store mutations.
+The previous installed bundle is retained as a local rollback copy.
+
+## ASC 5.17.0 integration
 
 The maintenance update advances official ASC from 5.15.0
 (`b9520c3865b54c5c02f905793ac3565fc2885aee`) to stable release 5.17.0
@@ -18,8 +44,9 @@ resolution and command error classification. The existing Blitz protocol adapter
 and the shared implementation for app and CLI are retained. Historical validation
 entries below intentionally preserve the ASC version tested at that time.
 
-This change prepares a draft for human review. It does not install, merge,
-publish or alter any live Apple data or global Codex/Blitz configuration.
+The update was initially prepared as a draft, then approved and merged in PR #1.
+The preparation did not alter the installed app, live Apple data or global
+Codex/Blitz configuration. Local installation is recorded with build 59 above.
 
 Validation on macOS 27.0.1 / Xcode 27.1 / Apple Swift 6.4 / Go 1.27.3:
 - The helper build passes with the unchanged Blitz adapter.
@@ -34,7 +61,8 @@ Validation on macOS 27.0.1 / Xcode 27.1 / Apple Swift 6.4 / Go 1.27.3:
 - The native release bundle uses the newly built helper, with four build jobs.
   Its ad-hoc signature passes `codesign --verify --deep --strict`.
 - Independent source review found no blocking compatibility issue. No live Store,
-  device, installation or cloud-CI test was run; human review remains pending.
+  device, installation or cloud-CI test was run during preparation. Human review
+  was subsequently approved for PR #1.
 
 The Go 1.27.3 darwin/arm64 archive was downloaded from the official Go site and
 verified before project-local extraction using SHA-256

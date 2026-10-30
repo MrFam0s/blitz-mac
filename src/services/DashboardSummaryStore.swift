@@ -77,6 +77,7 @@ final class DashboardSummaryStore {
     var isLoadingSummary = false
     var loadingSummaryStatusText: String?
 
+    private(set) var iconRefreshRevision = 0
     private(set) var cacheKey: String?
     private(set) var refreshedAt: Date?
     private(set) var loadIssue: DashboardLoadIssue?
@@ -188,6 +189,14 @@ final class DashboardSummaryStore {
         loadingSummaryStatusText = nil
     }
 
+    /// Explicit refresh also updates icons whose project path or remote URL is unchanged.
+    func refreshIcons(for projects: [Project]) {
+        iconRefreshRevision += 1
+        for project in projects {
+            ProjectAppIconLoader.invalidate(for: project.id)
+        }
+    }
+
     func refresh(
         for key: String,
         accountKey: String?,
@@ -199,6 +208,7 @@ final class DashboardSummaryStore {
             return
         }
 
+        if force { refreshIcons(for: projects) }
         beginLoading(for: key, accountKey: accountKey)
         let token = revision
 

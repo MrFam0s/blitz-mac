@@ -99,6 +99,8 @@ private struct DashboardTestFetcher: DashboardFetching {
     var failure: Error? = nil
     var statusFailure = false
     var empty = false
+    var iconURL: URL? = nil
+    var iconFailure = false
     func fetchAllApps(appStoreStateFilter: String?) async throws -> [ASCApp] {
         if let failure { throw failure }
         if empty { return [] }
@@ -111,7 +113,11 @@ private struct DashboardTestFetcher: DashboardFetching {
         [{"id":"v1","attributes":{"versionString":"1.0","appStoreState":"READY_FOR_SALE","platform":"IOS"}}]
         """.utf8))
     }
-    func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? { nil }
+    func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? {
+        #expect(dimension == 1024)
+        if iconFailure { throw URLError(.timedOut) }
+        return iconURL
+    }
 }
 
 private actor DelayedDashboardFetcher: DashboardFetching {
@@ -159,4 +165,22 @@ private actor DelayedDashboardFetcher: DashboardFetching {
     #expect(store.refreshedAt == nil)
     #expect(store.isShowingSavedData)
     #expect(store.shouldRefresh(for: "account"))
+}
+
+@MainActor
+@Test func dashboardRefreshUpdatesIconURLAndPreservesItOnLookupFailure() async throws {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    let oldURL = try #require(URL(string: "https://example.invalid/old-icon.png"))
+    let newURL = try #require(URL(string: "https://example.invalid/new-icon.png"))
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(iconURL: oldURL), projects: [])
+    #expect(store.appRows.first?.iconURL == oldURL)
+    #expect(store.iconRefreshRevision == 0)
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(iconURL: newURL), projects: [], force: true)
+    #expect(store.appRows.first?.iconURL == newURL)
+    #expect(store.iconRefreshRevision == 1)
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(iconFailure: true), projects: [], force: true)
+    #expect(store.appRows.first?.iconURL == newURL)
+    #expect(store.iconRefreshRevision == 2)
 }
