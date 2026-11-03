@@ -94,26 +94,30 @@ struct BundleIDSetupView: View {
         "WeatherKit",
     ]
 
-    private func sanitize(_ input: String) -> String {
-        input.lowercased()
-            .replacingOccurrences(of: " ", with: "")
-            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
+    // Keep the spelling supplied by the project or user; bundle-ID components
+    // must not be silently lowercased before registration.
+    static func sanitizeComponent(_ input: String) -> String {
+        input.filter { $0.isLetter || $0.isNumber || $0 == "-" }
     }
 
-    private var bundleIdPreview: String {
-        let prefix = sanitize(bundlePrefix)
-        let org = sanitize(organization)
-        let app = sanitize(appName)
+    static func bundleIdentifier(prefix: String, organization: String, appName: String) -> String {
+        let prefix = sanitizeComponent(prefix)
+        let org = sanitizeComponent(organization)
+        let app = sanitizeComponent(appName)
         guard !prefix.isEmpty, !org.isEmpty, !app.isEmpty else {
             return "\(prefix.isEmpty ? "com" : prefix)...."
         }
         return "\(prefix).\(org).\(app)"
     }
 
+    private var bundleIdPreview: String {
+        Self.bundleIdentifier(prefix: bundlePrefix, organization: organization, appName: appName)
+    }
+
     private var isFormValid: Bool {
-        !sanitize(bundlePrefix).isEmpty
-            && !sanitize(organization).isEmpty
-            && !sanitize(appName).isEmpty
+        !Self.sanitizeComponent(bundlePrefix).isEmpty
+            && !Self.sanitizeComponent(organization).isEmpty
+            && !Self.sanitizeComponent(appName).isEmpty
     }
 
     var body: some View {
@@ -469,7 +473,7 @@ struct BundleIDSetupView: View {
         }
 
         // Otherwise, pre-fill app name from project name
-        appName = sanitize(metadata.name)
+        appName = Self.sanitizeComponent(metadata.name)
     }
 
     private func registerBundleId() {
@@ -602,7 +606,7 @@ struct BundleIDSetupView: View {
     private func launchClaudeCodeForAppCreate(bundleId: String) {
         // Resolve the public name before choosing the permanent SKU: project folders
         // and bundle-ID suffixes can retain an old name after an app is renamed.
-        let prompt = "Create a new \(platform.rawValue) App Store Connect app for \(bundleId). Confirm the public app name using the project context and ask the user what primary language they want (e.g. en-US for English). Use the confirmed app name followed by '-\(platform.rawValue)' as the SKU, preserving capitalization and without adding random digits (for example, ClubBundle-iOS). If Apple requires changes to the SKU's characters or the SKU is already taken, ask the user for an alternative. Then use the /asc-app-create-ui skill with the selected platform."
+        let prompt = "Create a new \(platform.rawValue) App Store Connect app for \(bundleId). Preserve this bundle ID exactly, including capitalization; do not derive or lowercase it from the app name or project folder. Confirm the public app name using the project context and ask the user what primary language they want (e.g. en-US for English). Use the confirmed app name followed by '-\(platform.rawValue)' as the SKU, preserving capitalization and without adding random digits (for example, ClubBundle-iOS). If Apple requires changes to the SKU's characters or the SKU is already taken, ask the user for an alternative. Then use the /asc-app-create-ui skill with the selected platform."
 
         var projectPath: String? = nil
         if let projectId = asc.loadedProjectId {

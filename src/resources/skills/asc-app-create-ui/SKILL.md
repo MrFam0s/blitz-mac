@@ -8,7 +8,7 @@ description: Create an App Store Connect app via iris API using web session from
 Create an App Store Connect app using Apple's iris API. Authentication is handled via a web session file at `~/.blitz/asc-agent/web-session.json` managed by Blitz Neo.
 
 Extract from the conversation context:
-- `bundleId` — the bundle identifier (e.g. `com.blitz.myapp`)
+- `bundleId` — the exact supplied bundle identifier, preserving capitalization (e.g. `org.amosystems.ClubBundle`); do not regenerate it from the app name or project folder
 - `appName` — the confirmed public app name, which may differ from the project folder or bundle-ID suffix
 - `platform` — the selected project platform (`iOS` or `macOS`); ask if it is unresolved
 - `sku` — an explicitly selected SKU, or `<ConfirmedAppName>-<platform>` as resolved below

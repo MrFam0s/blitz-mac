@@ -2,6 +2,23 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.57 — preserve bundle-ID capitalization
+
+The bundle-ID setup form keeps the original capitalization when prefilling the
+project name, displaying the identifier and registering it. `ClubBundle` now
+produces `org.amosystems.ClubBundle`, without silently lowercasing the suffix.
+The app-creation prompt and bundled skill explicitly preserve the supplied ID.
+Existing project metadata and Apple records are not migrated or renamed.
+Build 62 retains ASC 5.17.0.
+
+Validation (2026-11-03): four targeted bundle-ID regressions and all 233 Swift
+tests pass. Independent review found no blocker. The native release build,
+strict deep Developer ID verification and bundled/installed ASC protocol and
+CLI checks pass. Native startup shows 1.0.57 / 62 and the existing lowercase
+ClubBundle ID unchanged. No Apple registration or app creation was performed
+as a test. The previous installed build is retained for rollback; no cloud CI
+was triggered.
+
 ## 1.0.56 — app-name-based SKUs
 
 The App Store Connect creation prompt now resolves the confirmed public app name
