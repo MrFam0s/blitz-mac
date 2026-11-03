@@ -18,6 +18,17 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
     )
 
     init(versions: [ASCAppStoreVersion]) {
+        // A newer release on one platform must not hide another platform's review.
+        let platforms = Set(versions.map { ASCReleaseStatus.normalize($0.attributes.platform) })
+        if platforms.count > 1 {
+            let statuses = platforms.map { platform in
+                ASCDashboardProjectStatus(versions: versions.filter { ASCReleaseStatus.normalize($0.attributes.platform) == platform })
+            }
+            isLiveOnStore = statuses.contains { $0.isLiveOnStore }
+            isPendingReview = statuses.contains { $0.isPendingReview }
+            isRejected = statuses.contains { $0.isRejected }
+            return
+        }
         let sortedVersions = ASCReleaseStatus.sortedVersionsByRecency(versions)
         let liveIndex = sortedVersions.firstIndex {
             ASCReleaseStatus.liveStates.contains(
@@ -77,6 +88,37 @@ enum ASCReleaseStatus {
         "REMOVED_FROM_SALE",
         "DEVELOPER_REMOVED_FROM_SALE",
     ]
+
+    static let publishedStates = liveStates.union(removedStates).union(["REPLACED_WITH_NEW_VERSION"])
+
+    static func inferredPlatform(from versions: [ASCAppStoreVersion]) -> ProjectPlatform? {
+        guard !versions.isEmpty else { return nil }
+        let names = Set(versions.map { normalize($0.attributes.platform) })
+        guard names.count == 1, let name = names.first else { return nil }
+        return ProjectPlatform.allCases.first { $0.ascPlatformValue == name }
+    }
+
+    static func versions(_ versions: [ASCAppStoreVersion], for platform: ProjectPlatform?) -> [ASCAppStoreVersion] {
+        guard let platform else { return versions }
+        return versions.filter { normalize($0.attributes.platform) == platform.ascPlatformValue }
+    }
+
+    /// Store versions are one to three numeric components, strictly increasing.
+    static func newVersionError(_ value: String, history: [ASCAppStoreVersion]) -> String? {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ReleaseAutomationService.compareVersions(value, value) != nil else {
+            return "Die Version muss aus ein bis drei Zahlengruppen bestehen, z. B. 1.4.2."
+        }
+        for previous in history {
+            guard let order = ReleaseAutomationService.compareVersions(value, previous.attributes.versionString) else {
+                return "Die vorhandene Version \(previous.attributes.versionString) konnte nicht verglichen werden."
+            }
+            guard order == .orderedDescending else {
+                return "Die neue Version muss höher als \(previous.attributes.versionString) sein."
+            }
+        }
+        return nil
+    }
 
     static let pendingReviewStates: Set<String> = [
         "ACCEPTED",
@@ -152,7 +194,7 @@ enum ASCReleaseStatus {
 
     static func isCurrentUpdateCandidate(_ state: String?) -> Bool {
         let normalized = normalize(state)
-        return !normalized.isEmpty && !isLive(normalized) && !isRemoved(normalized)
+        return !normalized.isEmpty && !publishedStates.contains(normalized)
     }
 
     static func normalize(_ state: String?) -> String {
@@ -248,4 +290,9 @@ enum ASCReleaseStatus {
         let formatter = ISO8601DateFormatter()
         return formatter.date(from: trimmed)
     }
+}
+
+// ASC uses a different spelling than the local project platform.
+extension ProjectPlatform {
+    var ascPlatformValue: String { self == .macOS ? "MAC_OS" : "IOS" }
 }

@@ -304,7 +304,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_open_submit_preview",
-            description: "Check submission readiness and open the Submit for Review modal. Returns list of missing required fields if incomplete.",
+            description: "Read submission readiness and open the Submit for Review modal. Does not attach a build or submit anything. Returns missing required fields when incomplete.",
             properties: [:],
             required: []
         ))
@@ -387,7 +387,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "app_store_build",
-            description: "Build an IPA for App Store submission. Archives the Xcode project and exports a signed IPA.",
+            description: "Archive the selected app and export a signed IPA or macOS PKG. Returns the explicit artifact path for app_store_upload; verifies exported app identity, version and build against the archive.",
             properties: [
                 "scheme": ["type": "string", "description": "Xcode scheme (auto-detected if omitted)"],
                 "configuration": ["type": "string", "description": "Build configuration (default: Release)"]
@@ -397,12 +397,12 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "app_store_upload",
-            description: "Upload an IPA to App Store Connect / TestFlight. Optionally polls until build processing completes.",
+            description: "Upload an explicit IPA or macOS PKG to the captured app and platform. Verifies artifact identity, version, build and encryption metadata. Optionally waits for processing and attaches only to the captured matching editable version.",
             properties: [
-                "ipaPath": ["type": "string", "description": "Path to IPA file (uses latest build output if omitted)"],
+                "ipaPath": ["type": "string", "description": "Required path to the exact IPA or macOS PKG returned by app_store_build. No global latest-export fallback."],
                 "skipPolling": ["type": "boolean", "description": "Skip waiting for build processing (default: false)"]
             ],
-            required: []
+            required: ["ipaPath"]
         ))
 
         return tools

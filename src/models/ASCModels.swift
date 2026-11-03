@@ -395,6 +395,28 @@ struct ASCBuild: Codable, Identifiable {
     let id: String
     let attributes: Attributes
 
+    var relationships: Relationships? = nil
+    var preReleaseVersion: ASCPreReleaseVersion? = nil
+
+    struct Relationships: Codable {
+        var app: Relationship?
+        var preReleaseVersion: Relationship?
+    }
+    struct Relationship: Codable {
+        var data: Identifier?
+    }
+    struct Identifier: Codable {
+        var id: String
+    }
+    var appId: String? { relationships?.app?.data?.id }
+
+    func matchesRelease(appId: String, versionString: String, platform: ProjectPlatform) -> Bool {
+        self.appId == appId
+            && preReleaseVersion?.attributes.version == versionString
+            && preReleaseVersion?.attributes.platform == platform.ascPlatformValue
+            && attributes.processingState == "VALID" && attributes.expired != true
+    }
+
     struct Attributes: Codable {
         let version: String
         let uploadedDate: String?
@@ -819,4 +841,65 @@ struct ASCProfile: Decodable, Identifiable {
         let profileState: String?
     }
     let attributes: Attributes
+}
+
+struct ASCPreReleaseVersion: Codable {
+    let id: String
+    let attributes: Attributes
+    struct Attributes: Codable {
+        let version: String
+        let platform: String
+    }
+}
+
+/// JSON:API included resources have different attribute shapes. Decode by type
+/// so including the app guarantees relationship linkage without treating it as a train.
+struct ASCBuildIncludedResource: Decodable {
+    let preReleaseVersion: ASCPreReleaseVersion?
+    private enum CodingKeys: String, CodingKey { case type }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        if try values.decode(String.self, forKey: .type) == "preReleaseVersions" {
+            preReleaseVersion = try ASCPreReleaseVersion(from: decoder)
+        } else { preReleaseVersion = nil }
+    }
+}
+struct ASCBuildListResponse: Decodable {
+    let data: [ASCBuild]
+    let included: [ASCBuildIncludedResource]?
+    let links: ASCPaginatedResponse<ASCBuild>.Links?
+
+    var builds: [ASCBuild] {
+        data.map { build in
+            var result = build
+            result.preReleaseVersion = included?.compactMap(\.preReleaseVersion).first { $0.id == build.relationships?.preReleaseVersion?.data?.id }
+            return result
+        }
+    }
+}
+struct ASCBuildResponse: Decodable {
+    let data: ASCBuild?
+    let included: [ASCBuildIncludedResource]?
+    private enum CodingKeys: String, CodingKey { case data, included }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        data = try values.decode(ASCBuild?.self, forKey: .data)
+        included = try values.decodeIfPresent([ASCBuildIncludedResource].self, forKey: .included)
+    }
+    var build: ASCBuild? {
+        guard var result = data else { return nil }
+        result.preReleaseVersion = included?.compactMap(\.preReleaseVersion).first { $0.id == result.relationships?.preReleaseVersion?.data?.id }
+        return result
+    }
+}
+
+/// JSON:API uses an explicit null for a missing relationship. A response without
+/// the data key is malformed, not evidence that review details do not exist.
+struct ASCReviewDetailResponse: Decodable {
+    let data: ASCReviewDetail?
+    private enum CodingKeys: String, CodingKey { case data }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        data = try values.decode(ASCReviewDetail?.self, forKey: .data)
+    }
 }

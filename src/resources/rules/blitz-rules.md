@@ -19,12 +19,14 @@ Additionally, the **`asc`** CLI (a bundled Go binary for App Store Connect) is a
 ### Use MCP tools when:
 - **Filling ASC forms** — `asc_fill_form` handles app information, monetization, age rating, review contact with validation and auto-navigation
 - **Reading app/tab state** — `get_tab_state` returns structured data (form values, submission readiness, builds, versions) without parsing CLI output
-- **Build pipeline** — `app_store_setup_signing` → `app_store_build` → `app_store_upload` is the standard flow with progress tracking in Blitz Neo UI
+- **Build pipeline** — `app_store_setup_signing` → `app_store_build` → `app_store_upload` is the standard flow with progress tracking in Blitz Neo UI. Pass the exact returned IPA/PKG path as `ipaPath`; uploads never infer the latest export from other projects. Keep the captured app, account, platform, version and build fixed. An identity mismatch or unknown encryption declaration must be resolved before uploading.
 - **Creating IAPs/subscriptions** — `asc_create_iap` and `asc_create_subscription` handle the full creation flow (product + localization + pricing) in one call
 - **Setting prices** — `asc_set_app_price` for app pricing, including scheduled price changes
 - **Managing screenshots** — `screenshots_switch_localization` → `screenshots_put_track_slot` / `screenshots_remove_track_slot` / `screenshots_reorder_track` → `screenshots_save` for screenshot upload workflow
-- **Submission** — `asc_open_submit_preview` checks readiness and opens the submit modal
+- **Submission** — `asc_open_submit_preview` reads readiness and opens the submit modal without attaching a build or submitting. Choose a build matching the intended app, platform and marketing version explicitly.
 - **Anything with a dedicated MCP tool** — the tool exists because it handles the common case safely
+
+For the automatic release workflow, follow its captured target and explicit ASC IDs. Its stricter release instructions take precedence over the general MCP preference above.
 
 ### Use `asc` CLI when:
 - **Listing/querying resources** — `asc builds list`, `asc versions list`, `asc apps list` for quick lookups not exposed by MCP
@@ -57,7 +59,8 @@ The `asc` CLI covers 60+ command groups — it almost certainly has what you nee
 | Create a subscription | `asc_create_subscription` (one call) | `asc subscriptions create` + `asc subscriptions add-localization` + `asc pricing set` (three steps) |
 | List all builds | Not available via MCP | `asc builds list` |
 | Add beta testers | Not available via MCP | `asc testflight add-tester --email user@example.com` |
-| Upload IPA | `app_store_upload` (with polling) | `asc builds upload --path ./app.ipa` |
+| Upload IPA | `app_store_upload` with explicit `ipaPath` | `asc builds upload --app APP_ID --ipa ./app.ipa` |
+| Upload macOS PKG | `app_store_upload` with explicit `ipaPath` | `asc builds upload --app APP_ID --pkg ./app.pkg --platform MAC_OS --version VERSION --build-number BUILD` |
 | Get financial reports | Not available via MCP | `asc finance download --period 2026-01` |
 | Manage provisioning profiles | `app_store_setup_signing` (automated) | `asc profiles list`, `asc profiles create` (manual control) |
 

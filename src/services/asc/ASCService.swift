@@ -293,10 +293,16 @@ final class AppStoreConnectService {
     // MARK: - App Store Versions
 
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] {
-        let resp = try await get("apps/\(appId)/appStoreVersions", queryItems: [
-            URLQueryItem(name: "limit", value: "50")
-        ], as: ASCListResponse<ASCAppStoreVersion>.self)
-        return ASCReleaseStatus.sortedVersionsByRecency(resp.data)
+        var versions: [ASCAppStoreVersion] = []
+        var next: String? = "apps/\(appId)/appStoreVersions"
+        var visited: Set<String> = []
+        while let path = next {
+            guard visited.insert(path).inserted else { throw ASCError.notFound("Repeated version-history page.") }
+            let response = try await get(path, queryItems: visited.count == 1 ? [URLQueryItem(name: "limit", value: "200")] : [], as: ASCPaginatedResponse<ASCAppStoreVersion>.self)
+            versions.append(contentsOf: response.data)
+            next = response.links?.next
+        }
+        return ASCReleaseStatus.sortedVersionsByRecency(versions)
     }
 
     // MARK: - Localizations
@@ -340,21 +346,32 @@ final class AppStoreConnectService {
     // MARK: - Builds
 
     func fetchBuilds(appId: String) async throws -> [ASCBuild] {
-        let resp = try await get("builds", queryItems: [
-            URLQueryItem(name: "filter[app]", value: appId),
-            URLQueryItem(name: "sort", value: "-uploadedDate"),
-            URLQueryItem(name: "limit", value: "50")
-        ], as: ASCListResponse<ASCBuild>.self)
-        return resp.data
+        var builds: [ASCBuild] = []
+        var next: String? = "builds"
+        var visited: Set<String> = []
+        while let path = next {
+            guard visited.insert(path).inserted else { throw ASCError.notFound("Repeated build-history page.") }
+            let query = visited.count == 1 ? [
+                URLQueryItem(name: "filter[app]", value: appId),
+                URLQueryItem(name: "sort", value: "-uploadedDate"),
+                URLQueryItem(name: "limit", value: "200"),
+                URLQueryItem(name: "include", value: "preReleaseVersion,app"),
+                URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion")
+            ] : []
+            let response = try await get(path, queryItems: query, as: ASCBuildListResponse.self)
+            builds.append(contentsOf: response.builds)
+            next = response.links?.next
+        }
+        return builds
     }
 
     func fetchBuild(id: String) async throws -> ASCBuild {
-        let resp = try await get(
-            "builds/\(id)",
-            queryItems: [URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken")],
-            as: ASCSingleResponse<ASCBuild>.self
-        )
-        return resp.data
+        let response = try await get("builds/\(id)", queryItems: [
+            URLQueryItem(name: "include", value: "preReleaseVersion,app"),
+            URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion")
+        ], as: ASCBuildResponse.self)
+        guard let build = response.build else { throw ASCError.notFound("Build \(id) was not found.") }
+        return build
     }
 
     func fetchBuild(forAppStoreVersionId versionId: String) async throws -> ASCBuild {
@@ -1592,12 +1609,11 @@ final class AppStoreConnectService {
             let body = String(data: response.body, encoding: .utf8) ?? ""
             throw ASCError.httpError(response.statusCode, body)
         }
-        guard !response.body.isEmpty,
-              let decoded = try? JSONDecoder().decode(ASCSingleResponse<ASCReviewDetail>.self, from: response.body),
-              !decoded.data.isPlaceholder else {
+        let decoded = try JSONDecoder().decode(ASCReviewDetailResponse.self, from: response.body)
+        guard let detail = decoded.data, !detail.isPlaceholder else {
             throw ASCError.notFound("Review detail for version \(versionId)")
         }
-        return decoded.data
+        return detail
     }
 
     // MARK: - Fetch: AppInfoLocalization
@@ -1822,15 +1838,19 @@ final class AppStoreConnectService {
     }
 
     func fetchBuildAttachedToVersion(versionId: String) async throws -> ASCBuild? {
+        let attached: ASCBuild?
         do {
-            let resp = try await get(
-                "appStoreVersions/\(versionId)/build",
-                as: ASCSingleResponse<ASCBuild>.self
-            )
-            return resp.data
+            // This endpoint returns BuildWithoutIncludesResponse. Hydration is
+            // supported only by /builds/{id}; a missing linked resource is an error.
+            let response = try await get("appStoreVersions/\(versionId)/build", queryItems: [
+                URLQueryItem(name: "fields[builds]", value: "version")
+            ], as: ASCBuildResponse.self)
+            attached = response.data
         } catch let ASCError.httpError(code, _) where code == 404 {
             return nil
         }
+        guard let attached else { return nil }
+        return try await fetchBuild(id: attached.id)
     }
 
     // MARK: - Fetch Review Submissions

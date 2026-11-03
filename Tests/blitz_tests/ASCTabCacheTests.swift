@@ -7,7 +7,7 @@ private func decodeTab<T: Decodable>(_ json: String, as: T.Type = T.self) -> T {
     try! JSONDecoder().decode(T.self, from: Data(json.utf8))
 }
 private let cacheApp: ASCApp = decodeTab(#"{"id":"app-a","attributes":{"name":"Example","bundleId":"org.example.cache","primaryLocale":"de-DE"}}"#)
-private let cacheVersion: ASCAppStoreVersion = decodeTab(#"{"id":"version-a","attributes":{"versionString":"1.0","appStoreState":"PREPARE_FOR_SUBMISSION"}}"#)
+private let cacheVersion: ASCAppStoreVersion = decodeTab(#"{"id":"version-a","attributes":{"versionString":"1.0","appStoreState":"PREPARE_FOR_SUBMISSION","platform":"IOS"}}"#)
 private let cacheText: ASCVersionLocalization = decodeTab(#"{"id":"loc-a","attributes":{"locale":"de-DE","description":"Saved text"}}"#)
 private let cacheBuild: ASCBuild = decodeTab(#"{"id":"build-a","attributes":{"version":"12"}}"#)
 private let pixelPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jY1sAAAAASUVORK5CYII=")!
@@ -19,6 +19,7 @@ private let pixelPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQA
     manager.selectedVersionId = cacheVersion.id
     manager.localizations = [cacheText]
     manager.loadedProjectId = "example"
+    manager.releasePlatform = .iOS
     return manager
 }
 private func temporaryCache() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
@@ -64,7 +65,7 @@ private func temporaryCache() -> URL { FileManager.default.temporaryDirectory.ap
     manager.trackSlots[key] = [TrackSlot(id: "local-draft", localPath: "/tmp/draft.png", localImage: nil, ascScreenshot: nil, isFromASC: false)] + Array(repeating: nil, count: 9)
     #expect(entry.apply(to: manager, tab: .screenshots))
     #expect(manager.trackSlots[key]?.first??.id == "local-draft")
-    manager.appStoreVersions.append(decodeTab(#"{"id":"another-version","attributes":{"versionString":"2.0"}}"#))
+    manager.appStoreVersions.append(decodeTab(#"{"id":"another-version","attributes":{"versionString":"2.0","platform":"IOS"}}"#))
     manager.prepareForVersionSelection("another-version")
     #expect(!entry.apply(to: manager, tab: .screenshots))
 }

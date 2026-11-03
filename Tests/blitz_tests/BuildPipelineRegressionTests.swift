@@ -44,8 +44,8 @@ import Testing
     #expect(hint?.contains("1024x1024 App Store icon") == true)
 }
 
-@Test func buildsUploadCommandArgumentsUseHelperUploadPath() {
-    let args = BuildPipelineService.buildsUploadCommandArguments(
+@Test func buildsUploadCommandArgumentsUseHelperUploadPath() throws {
+    let args = try BuildPipelineService.buildsUploadCommandArguments(
         appId: "6761669298",
         artifactPath: "/tmp/NotesApp.ipa",
         platform: .iOS,

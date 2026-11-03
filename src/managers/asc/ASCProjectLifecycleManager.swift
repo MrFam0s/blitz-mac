@@ -214,6 +214,8 @@ extension ASCManager {
     func prepareForProjectSwitch(to projectId: String, bundleId: String?) {
         if loadedProjectId == projectId,
            app?.bundleId == bundleId, app != nil { return }
+        let platform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform
+        defer { releasePlatform = platform }
         cacheCurrentProjectSnapshot()
         resetProjectData(preserveCredentials: true)
 
@@ -253,6 +255,9 @@ extension ASCManager {
             resetProjectData(preserveCredentials: true)
             loadedProjectId = projectId
         }
+        if let platform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform {
+            releasePlatform = platform
+        }
         let revision = projectRevision
         credentialsError = nil
         if app == nil, let bundle, !bundle.isEmpty,
@@ -279,8 +284,10 @@ extension ASCManager {
 
     func saveCredentials(_ creds: ASCCredentials, projectId: String, bundleId: String?) async throws {
         try creds.save()
+        let previousPlatform = loadedProjectId == projectId ? configuredReleasePlatform : nil
         resetProjectData(preserveCredentials: false)
         loadedProjectId = projectId
+        releasePlatform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform ?? previousPlatform
         credentials = creds
         service = AppStoreConnectService(credentials: creds)
         credentialsError = nil
@@ -374,6 +381,7 @@ extension ASCManager {
         }
 
         app = nil
+        releasePlatform = nil
         isLoadingCredentials = false
         credentialsError = nil
         isLoadingApp = false

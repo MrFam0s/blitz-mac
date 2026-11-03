@@ -8,7 +8,24 @@ protocol ASCVersionCreationService {
     func createVersionLocalization(versionId: String, locale: String, fields: [String: String]) async throws -> ASCVersionLocalization
     func createOrPatchReviewDetail(versionId: String, attributes: [String: Any]) async throws -> ASCReviewDetail
     func attachBuild(versionId: String, buildId: String) async throws
+    func fetchBuild(id: String) async throws -> ASCBuild
+    func patchLocalization(id: String, fields: [String: String]) async throws
 }
+// Test doubles without copy conflicts or optional build attachment stay minimal.
+extension ASCVersionCreationService {
+    func fetchBuild(id: String) async throws -> ASCBuild { throw ASCError.notFound("Build identity could not be checked.") }
+    func patchLocalization(id: String, fields: [String: String]) async throws { throw ASCError.notFound("Existing localization could not be updated.") }
+}
+protocol ASCVersionBuildService {
+    func fetchBuildAttachedToVersion(versionId: String) async throws -> ASCBuild?
+}
+protocol ASCReleaseSubmissionService: ASCVersionBuildService {
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
+    func fetchBuild(id: String) async throws -> ASCBuild
+    func attachBuild(versionId: String, buildId: String) async throws
+    func submitForReview(appId: String, versionId: String) async throws
+}
+extension AppStoreConnectService: ASCReleaseSubmissionService {}
 extension AppStoreConnectService: ASCVersionCreationService {}
 
 // MARK: - Release Manager
@@ -22,26 +39,47 @@ extension ASCManager {
         .review,
     ]
 
+    var releaseVersions: [ASCAppStoreVersion] {
+        // No local project and multiple store platforms: require an explicit
+        // platform rather than mixing unrelated version histories.
+        guard releasePlatform != nil || loadedProjectId == nil else { return [] }
+        return ASCReleaseStatus.versions(appStoreVersions, for: releasePlatform)
+    }
+
+    func selectReleasePlatform(_ platform: ProjectPlatform?) {
+        guard configuredReleasePlatform != platform else { return }
+        releasePlatform = platform
+        prepareForVersionSelection(nil, force: true)
+        syncSelectedVersion()
+    }
+
+    func releaseOperationTarget() -> ASCReleaseOperationTarget? {
+        guard let app else { return nil }
+        return ASCReleaseOperationTarget(revision: projectRevision, projectId: loadedProjectId,
+            appId: app.id, bundleId: app.bundleId, accountKey: DashboardSummaryStore.accountKey(for: credentials), credentialRevision: credentialActivationRevision,
+            versionId: selectedVersion?.id, platform: releasePlatform)
+    }
+
     // MARK: - Version Selection
 
     var liveVersion: ASCAppStoreVersion? {
-        ASCReleaseStatus.currentLiveVersion(for: appStoreVersions)
+        ASCReleaseStatus.currentLiveVersion(for: releaseVersions)
     }
 
     var currentUpdateVersion: ASCAppStoreVersion? {
-        ASCReleaseStatus.currentUpdateVersion(for: appStoreVersions)
+        ASCReleaseStatus.currentUpdateVersion(for: releaseVersions)
     }
 
     var editableVersion: ASCAppStoreVersion? {
-        ASCReleaseStatus.currentEditableVersion(for: appStoreVersions)
+        ASCReleaseStatus.currentEditableVersion(for: releaseVersions)
     }
 
     var selectedVersion: ASCAppStoreVersion? {
         if let selectedVersionId,
-           let match = appStoreVersions.first(where: { $0.id == selectedVersionId }) {
+           let match = releaseVersions.first(where: { $0.id == selectedVersionId }) {
             return match
         }
-        return ASCReleaseStatus.defaultSelectedVersion(for: appStoreVersions)
+        return ASCReleaseStatus.defaultSelectedVersion(for: releaseVersions)
     }
 
     var selectedVersionIsEditable: Bool {
@@ -49,17 +87,17 @@ extension ASCManager {
     }
 
     var canCreateVersion: Bool {
-        app?.id != nil
+        app?.id != nil && releasePlatform != nil
     }
 
     var canStartReleaseAutomation: Bool {
         guard app != nil else { return false }
         if let current = currentUpdateVersion { return ASCReleaseStatus.isEditable(current.attributes.appStoreState) }
-        return liveVersion != nil
+        return releaseVersions.contains { ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.appStoreState)) }
     }
 
     var canCreateUpdate: Bool {
-        liveVersion != nil && currentUpdateVersion == nil
+        currentUpdateVersion == nil && releaseVersions.contains { ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.appStoreState)) }
     }
 
     /// ASC only allows a new version to be created when there is no existing
@@ -78,7 +116,7 @@ extension ASCManager {
            ASCReleaseStatus.isEditable(selectedVersion.attributes.appStoreState) {
             return selectedVersion.id
         }
-        return editableVersion?.id
+        return nil
     }
 
     func version(matching identifier: String?) -> ASCAppStoreVersion? {
@@ -86,7 +124,7 @@ extension ASCManager {
               !identifier.isEmpty else {
             return nil
         }
-        return appStoreVersions.first(where: {
+        return releaseVersions.first(where: {
             $0.id == identifier || $0.attributes.versionString == identifier
         })
     }
@@ -131,27 +169,27 @@ extension ASCManager {
     func syncSelectedVersion(preferredVersionId: String? = nil) -> String? {
         let preferred = preferredVersionId?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let preferred,
-           appStoreVersions.contains(where: { $0.id == preferred }) {
+           releaseVersions.contains(where: { $0.id == preferred }) {
             selectedVersionId = preferred
             return preferred
         }
 
         if let selectedVersionId,
-           appStoreVersions.contains(where: { $0.id == selectedVersionId }) {
+           releaseVersions.contains(where: { $0.id == selectedVersionId }) {
             return selectedVersionId
         }
 
         let resolved = currentUpdateVersion?.id
             ?? editableVersion?.id
             ?? liveVersion?.id
-            ?? ASCReleaseStatus.defaultSelectedVersion(for: appStoreVersions)?.id
+            ?? ASCReleaseStatus.defaultSelectedVersion(for: releaseVersions)?.id
         selectedVersionId = resolved
         return resolved
     }
 
-    func prepareForVersionSelection(_ versionId: String?) {
+    func prepareForVersionSelection(_ versionId: String?, force: Bool = false) {
         let trimmedVersionId = versionId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedVersionId != selectedVersionId else { return }
+        guard force || trimmedVersionId != selectedVersionId else { return }
 
         // Version switches invalidate every cache whose contents come from a
         // version-scoped ASC resource, so the next tab refresh starts cleanly.
@@ -196,67 +234,56 @@ extension ASCManager {
         }
     }
 
-    func refreshSelectedVersionBuild() async {
-        guard let service else {
+    func refreshSelectedVersionBuild(using serviceOverride: (any ASCVersionBuildService)? = nil) async {
+        guard let service = serviceOverride ?? service, let target = releaseOperationTarget(),
+              let versionId = target.versionId else {
             selectedVersionBuild = nil
             return
         }
-        guard let versionId = selectedVersion?.id else {
+        do {
+            let build = try await service.fetchBuildAttachedToVersion(versionId: versionId)
+            guard target.matches(self), !Task.isCancelled else { return }
+            selectedVersionBuild = build
+        } catch {
+            guard target.matches(self), !Task.isCancelled else { return }
             selectedVersionBuild = nil
-            return
         }
-        selectedVersionBuild = try? await service.fetchBuildAttachedToVersion(versionId: versionId)
     }
 
     // MARK: - Build Attachment
 
-    func attachBuild(buildId: String) async {
-        guard let service else { return }
-        guard let versionId = submittableVersionId else {
-            writeError = "No editable app store version found to attach a build to."
-            await ASCUpdateLogger.shared.event("attach_build_failed", metadata: [
-                "buildId": buildId,
-                "reason": "no_editable_version",
-            ])
-            return
-        }
-
-        let startedAt = Date()
-        await ASCUpdateLogger.shared.event("attach_build_started", metadata: [
-            "buildId": buildId,
-            "versionId": versionId,
-        ])
-
+    @discardableResult
+    func attachBuild(buildId: String, expectedTarget: ASCReleaseOperationTarget? = nil,
+                     using serviceOverride: (any ASCReleaseSubmissionService)? = nil) async -> Bool {
+        guard let service = serviceOverride ?? service, let target = expectedTarget ?? releaseOperationTarget(),
+              target.matches(self), let versionId = target.versionId, let platform = target.platform else { return false }
         writeError = nil
         do {
+            let versions = try await service.fetchAppStoreVersions(appId: target.appId)
+            try target.check(self)
+            guard let version = ASCReleaseStatus.versions(versions, for: platform).first(where: { $0.id == versionId }),
+                  ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
+                throw ASCError.notFound("Die ausgewählte Version ist nicht mehr bearbeitbar.")
+            }
+            let build = try await service.fetchBuild(id: buildId)
+            try target.check(self)
+            guard build.matchesRelease(appId: target.appId, versionString: version.attributes.versionString, platform: platform) else {
+                throw ASCError.notFound("Der Build passt nicht zu App, Plattform oder Version oder ist nicht verwendbar.")
+            }
             try await service.attachBuild(versionId: versionId, buildId: buildId)
-            selectedVersionBuild = builds.first(where: { $0.id == buildId })
-            await ASCUpdateLogger.shared.event("attach_build_succeeded", metadata: [
-                "buildId": buildId,
-                "versionId": versionId,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "build.attach",
-                success: true,
-                startedAt: startedAt
-            )
+            try target.check(self)
+            selectedVersionBuild = build
+            return true
         } catch {
+            guard target.matches(self), !Task.isCancelled else { return false }
             writeError = error.localizedDescription
-            await ASCUpdateLogger.shared.event("attach_build_failed", metadata: [
-                "buildId": buildId,
-                "error": error.localizedDescription,
-                "versionId": versionId,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "build.attach",
-                success: false,
-                startedAt: startedAt
-            )
+            return false
         }
     }
 
     // MARK: - Version Creation
 
+    @discardableResult
     func createUpdateVersion(
         versionString: String,
         platform: ProjectPlatform,
@@ -264,21 +291,14 @@ extension ASCManager {
         copyMetadata: Bool = true,
         copyReviewDetail: Bool = true,
         attachBuildId: String? = nil,
+        expectedTarget: ASCReleaseOperationTarget? = nil,
         using serviceOverride: (any ASCVersionCreationService)? = nil
-    ) async {
-        guard !isCreatingVersion else { return }
-        guard let service = serviceOverride ?? service, let appId = app?.id else {
-            versionCreationError = "Keine App oder ASC-Verbindung ausgewählt."
-            await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
-                "reason": "missing_service_or_app",
-                "versionString": versionString,
-            ])
-            return
-        }
-
-        let revision = projectRevision
-        func checkTarget() throws {
-            guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { throw CancellationError() }
+    ) async -> ASCAppStoreVersion? {
+        guard !isCreatingVersion else { return nil }
+        guard let service = serviceOverride ?? service, let target = expectedTarget ?? releaseOperationTarget(),
+              target.matches(self), target.platform == nil || target.platform == platform else {
+            versionCreationError = "Keine unveränderte App oder ASC-Verbindung ausgewählt."
+            return nil
         }
         let operation = UUID()
         versionCreationOperation = operation
@@ -290,220 +310,156 @@ extension ASCManager {
             }
         }
         versionCreationError = nil
-
         let trimmedVersion = versionString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedVersion.isEmpty else {
-            versionCreationError = "Version string is required."
-            await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
-                "reason": "empty_version_string",
-            ])
-            return
+        guard ASCReleaseStatus.newVersionError(trimmedVersion, history: []) == nil else {
+            versionCreationError = ASCReleaseStatus.newVersionError(trimmedVersion, history: [])
+            return nil
         }
-
-        if appStoreVersions.contains(where: {
-            $0.attributes.versionString.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedVersion
-        }) {
-            versionCreationError = "Version \(trimmedVersion) already exists."
-            await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
-                "reason": "duplicate_version",
-                "versionString": trimmedVersion,
-            ])
-            return
-        }
-
-        if let blockerMessage = newVersionCreationBlockerMessage(desiredVersionString: trimmedVersion),
-           let blocker = newVersionCreationBlocker {
-            versionCreationError = blockerMessage
-            await ASCUpdateLogger.shared.event("create_update_blocked", metadata: [
-                "blockingState": blocker.attributes.appStoreState ?? "unknown",
-                "blockingVersionId": blocker.id,
-                "blockingVersionString": blocker.attributes.versionString,
-                "versionString": trimmedVersion,
-            ])
-            return
-        }
-
-        let startedAt = Date()
-        await ASCUpdateLogger.shared.event("create_update_started", metadata: [
-            "appId": appId,
-            "attachBuildId": attachBuildId ?? "nil",
-            "copyFromVersionId": copyFromVersionId ?? "nil",
-            "copyMetadata": copyMetadata ? "true" : "false",
-            "copyReviewDetail": copyReviewDetail ? "true" : "false",
-            "versionString": trimmedVersion,
-        ])
-
+        var createdVersion: ASCAppStoreVersion?
         do {
-            let freshVersions = try await service.fetchAppStoreVersions(appId: appId)
-            try checkTarget()
-            appStoreVersions = freshVersions
-            guard !freshVersions.contains(where: { $0.attributes.versionString == trimmedVersion }) else {
-                throw ASCError.notFound("Version \(trimmedVersion) existiert bereits. Bitte den vorhandenen Entwurf öffnen.")
+            let freshVersions = try await service.fetchAppStoreVersions(appId: target.appId)
+            try target.check(self)
+            let platformVersions = ASCReleaseStatus.versions(freshVersions, for: platform)
+            if let error = ASCReleaseStatus.newVersionError(trimmedVersion, history: platformVersions) {
+                throw ASCError.notFound(error)
             }
-            if let blocker = newVersionCreationBlockerMessage(desiredVersionString: trimmedVersion) { throw ASCError.notFound(blocker) }
-            // Snapshot any source data up front so the copy phase is deterministic
-            // even if the selected version changes while the task is running.
-            let sourceVersion = version(matching: copyFromVersionId)
-                ?? liveVersion
-                ?? currentUpdateVersion
-                ?? appStoreVersions.first
-
+            if let blocker = ASCReleaseStatus.currentUpdateVersion(for: platformVersions) {
+                throw ASCError.notFound("Version \(blocker.attributes.versionString) ist bereits in Vorbereitung oder Prüfung. Bitte diesen Entwurf öffnen.")
+            }
+            appStoreVersions = freshVersions
+            // nil means default source; the empty string is an explicit “Keine”.
+            let sourceVersion: ASCAppStoreVersion?
+            if let identifier = copyFromVersionId?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                if identifier.isEmpty { sourceVersion = nil }
+                else if let source = platformVersions.first(where: { $0.id == identifier || $0.attributes.versionString == identifier }) { sourceVersion = source }
+                else { throw ASCError.notFound("Die gewählte Quellversion gehört nicht zu dieser App und Plattform.") }
+            } else {
+                sourceVersion = ASCReleaseStatus.currentLiveVersion(for: platformVersions)
+                    ?? platformVersions.first { ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.appStoreState)) }
+            }
             let sourceLocalizations: [ASCVersionLocalization]
             if copyMetadata, let sourceVersion {
                 sourceLocalizations = try await service.fetchLocalizations(versionId: sourceVersion.id)
-            } else {
-                sourceLocalizations = []
-            }
-
+                try target.check(self)
+            } else { sourceLocalizations = [] }
             let sourceReviewDetail: ASCReviewDetail?
             if copyReviewDetail, let sourceVersion {
-                sourceReviewDetail = try? await service.fetchReviewDetail(versionId: sourceVersion.id)
-            } else {
-                sourceReviewDetail = nil
-            }
+                do { sourceReviewDetail = try await service.fetchReviewDetail(versionId: sourceVersion.id) }
+                catch ASCError.notFound { sourceReviewDetail = nil }
+                catch let ASCError.httpError(code, _) where code == 404 { sourceReviewDetail = nil }
+                try target.check(self)
+            } else { sourceReviewDetail = nil }
 
-            try checkTarget()
-            // Create the new version first, then hydrate it with copied metadata
-            // and the optional attached build.
-            let createdVersion = try await service.createAppStoreVersion(
-                appId: appId,
-                versionString: trimmedVersion,
-                platform: platform.ascPlatformValue,
-                copyright: sourceVersion?.attributes.copyright,
-                releaseType: "MANUAL"
-            )
-            await ASCUpdateLogger.shared.event("create_update_created_version", metadata: [
-                "sourceVersionId": sourceVersion?.id ?? "nil",
-                "versionId": createdVersion.id,
-                "versionString": trimmedVersion,
-            ])
-
-            if copyMetadata {
-                for localization in sourceLocalizations {
-                    do {
-                        try checkTarget()
-                        _ = try await service.createVersionLocalization(
-                            versionId: createdVersion.id,
-                            locale: localization.attributes.locale,
-                            fields: versionLocalizationFieldsToCopy(localization)
-                        )
-                        await ASCUpdateLogger.shared.event("create_update_copied_localization", metadata: [
-                            "locale": localization.attributes.locale,
-                            "versionId": createdVersion.id,
-                        ])
-                    } catch let ascError as ASCError where ascError.isConflict {
-                        await ASCUpdateLogger.shared.event("create_update_skipped_localization", metadata: [
-                            "locale": localization.attributes.locale,
-                            "reason": "conflict",
-                            "versionId": createdVersion.id,
-                        ])
-                        continue
-                    }
+            var attachedBuild: ASCBuild?
+            if let buildId = attachBuildId?.trimmingCharacters(in: .whitespacesAndNewlines), !buildId.isEmpty {
+                let build = try await service.fetchBuild(id: buildId)
+                try target.check(self)
+                guard build.matchesRelease(appId: target.appId, versionString: trimmedVersion, platform: platform) else {
+                    throw ASCError.notFound("Der Build passt nicht zu App, Plattform oder neuer Version oder ist nicht verwendbar.")
                 }
+                attachedBuild = build
             }
-
-            try checkTarget()
-            if copyReviewDetail, let sourceReviewDetail {
-                _ = try await service.createOrPatchReviewDetail(
-                    versionId: createdVersion.id,
-                    attributes: reviewDetailAttributesToCopy(sourceReviewDetail)
-                )
-                await ASCUpdateLogger.shared.event("create_update_copied_review_detail", metadata: [
-                    "versionId": createdVersion.id,
-                ])
+            try target.check(self)
+            let created = try await service.createAppStoreVersion(appId: target.appId,
+                versionString: trimmedVersion, platform: platform.ascPlatformValue,
+                copyright: copyMetadata ? sourceVersion?.attributes.copyright : nil, releaseType: "MANUAL")
+            createdVersion = created
+            try target.check(self)
+            for localization in sourceLocalizations {
+                let fields = versionLocalizationFieldsToCopy(localization)
+                do {
+                    _ = try await service.createVersionLocalization(versionId: created.id, locale: localization.attributes.locale, fields: fields)
+                } catch let error as ASCError where error.isConflict {
+                    try target.check(self)
+                    // Apple can create the primary localization automatically. Only
+                    // resolve that exact conflict; other failures remain visible.
+                    let existing = try await service.fetchLocalizations(versionId: created.id)
+                    try target.check(self)
+                    guard let destination = existing.first(where: { $0.attributes.locale == localization.attributes.locale }) else { throw error }
+                    try await service.patchLocalization(id: destination.id, fields: fields)
+                }
+                try target.check(self)
             }
-
-            try checkTarget()
-            if let attachBuildId,
-               !attachBuildId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                try await service.attachBuild(versionId: createdVersion.id, buildId: attachBuildId)
-                await ASCUpdateLogger.shared.event("create_update_attached_build", metadata: [
-                    "buildId": attachBuildId,
-                    "versionId": createdVersion.id,
-                ])
+            if let sourceReviewDetail {
+                _ = try await service.createOrPatchReviewDetail(versionId: created.id, attributes: reviewDetailAttributesToCopy(sourceReviewDetail))
+                try target.check(self)
             }
-
-            let refreshedVersions = try await service.fetchAppStoreVersions(appId: appId)
-            try checkTarget()
+            if let attachedBuild {
+                try await service.attachBuild(versionId: created.id, buildId: attachedBuild.id)
+                try target.check(self)
+            }
+            let refreshedVersions = try await service.fetchAppStoreVersions(appId: target.appId)
+            try target.check(self)
             appStoreVersions = refreshedVersions
-            prepareForVersionSelection(createdVersion.id)
-            syncSelectedVersion(preferredVersionId: createdVersion.id)
+            prepareForVersionSelection(created.id)
+            syncSelectedVersion(preferredVersionId: created.id)
             showVersionDraftSheet = false
             await refreshTabData(.app)
-            await ASCUpdateLogger.shared.event("create_update_succeeded", metadata: [
-                "versionId": createdVersion.id,
-                "versionString": trimmedVersion,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "version.create",
-                success: true,
-                startedAt: startedAt
-            )
+            return created
         } catch {
-            guard revision == projectRevision else { return }
-            versionCreationError = error.localizedDescription
-            await ASCUpdateLogger.shared.event("create_update_failed", metadata: [
-                "error": error.localizedDescription,
-                "versionString": trimmedVersion,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "version.create",
-                success: false,
-                startedAt: startedAt
-            )
+            guard target.matches(self), !Task.isCancelled else { return nil }
+            if let createdVersion {
+                if !appStoreVersions.contains(where: { $0.id == createdVersion.id }) { appStoreVersions.insert(createdVersion, at: 0) }
+                // Preserve the created draft and report partial completion explicitly;
+                // a retry must repair it rather than create another version.
+                versionCreationError = "Entwurf \(createdVersion.attributes.versionString) wurde angelegt, aber nicht vollständig vorbereitet: \(error.localizedDescription)"
+            } else { versionCreationError = error.localizedDescription }
+            return nil
         }
-
     }
 
     // MARK: - Submission
 
-    func submitForReview(attachBuildId: String? = nil) async {
-        guard let service else { return }
-        guard let appId = app?.id, let versionId = submittableVersionId else {
-            submissionError = "No editable app store version is selected."
-            await ASCUpdateLogger.shared.event("submit_for_review_failed", metadata: [
-                "reason": "no_editable_version",
-            ])
-            return
-        }
+    @discardableResult
+    func submitForReview(attachBuildId: String? = nil, expectedTarget: ASCReleaseOperationTarget? = nil,
+                         using serviceOverride: (any ASCReleaseSubmissionService)? = nil) async -> Bool {
+        guard !isSubmitting, let service = serviceOverride ?? service,
+              let target = expectedTarget ?? releaseOperationTarget(), target.matches(self),
+              let versionId = target.versionId, let platform = target.platform else { return false }
+        let operation = UUID()
+        releaseSubmissionOperation = operation
         isSubmitting = true
         submissionError = nil
-        let startedAt = Date()
-        await ASCUpdateLogger.shared.event("submit_for_review_started", metadata: [
-            "appId": appId,
-            "attachBuildId": attachBuildId ?? "nil",
-            "versionId": versionId,
-        ])
-        do {
-            // Attach build if specified
-            if let buildId = attachBuildId {
-                try await service.attachBuild(versionId: versionId, buildId: buildId)
-                selectedVersionBuild = builds.first(where: { $0.id == buildId })
+        defer {
+            if releaseSubmissionOperation == operation {
+                isSubmitting = false
+                releaseSubmissionOperation = nil
             }
-            try await service.submitForReview(appId: appId, versionId: versionId)
-            isSubmitting = false
+        }
+        do {
+            let versions = try await service.fetchAppStoreVersions(appId: target.appId)
+            try target.check(self)
+            guard let version = ASCReleaseStatus.versions(versions, for: platform).first(where: { $0.id == versionId }),
+                  ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
+                throw ASCError.notFound("Die ausgewählte Version ist nicht mehr zur Einreichung bearbeitbar.")
+            }
+            let build: ASCBuild?
+            if let buildId = attachBuildId, !buildId.isEmpty { build = try await service.fetchBuild(id: buildId) }
+            else { build = try await service.fetchBuildAttachedToVersion(versionId: versionId) }
+            try target.check(self)
+            guard let build, build.matchesRelease(appId: target.appId, versionString: version.attributes.versionString, platform: platform) else {
+                throw ASCError.notFound("Kein verwendbarer Build für diese App, Plattform und Version ausgewählt.")
+            }
+            if serviceOverride == nil {
+                await syncOverviewSubmissionReadiness(forceRefresh: true)
+                try target.check(self)
+                guard submissionReadiness.isComplete(selectingBuild: build) else {
+                    throw ASCError.notFound("Erforderliche Angaben fehlen oder konnten nicht frisch geprüft werden.")
+                }
+            }
+            if attachBuildId != nil {
+                try await service.attachBuild(versionId: versionId, buildId: build.id)
+                try target.check(self)
+            }
+            selectedVersionBuild = build
+            try await service.submitForReview(appId: target.appId, versionId: versionId)
+            try target.check(self)
             await refreshTabData(.app)
-            await ASCUpdateLogger.shared.event("submit_for_review_succeeded", metadata: [
-                "appId": appId,
-                "versionId": versionId,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "submit.review",
-                success: true,
-                startedAt: startedAt
-            )
+            return true
         } catch {
-            isSubmitting = false
+            guard target.matches(self), !Task.isCancelled else { return false }
             submissionError = error.localizedDescription
-            await ASCUpdateLogger.shared.event("submit_for_review_failed", metadata: [
-                "error": error.localizedDescription,
-                "versionId": versionId,
-            ])
-            AnalyticsService.trackBlitzManagedASCUsage(
-                commandType: "submit.review",
-                success: false,
-                startedAt: startedAt
-            )
+            return false
         }
     }
 
@@ -592,16 +548,5 @@ private extension ASCManager {
             attributes["notes"] = notes
         }
         return attributes
-    }
-}
-
-private extension ProjectPlatform {
-    var ascPlatformValue: String {
-        switch self {
-        case .iOS:
-            return "IOS"
-        case .macOS:
-            return "MAC_OS"
-        }
     }
 }

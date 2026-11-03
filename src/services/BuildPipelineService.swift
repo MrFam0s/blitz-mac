@@ -1,4 +1,204 @@
 import Foundation
+import CoreFoundation
+
+/// Identity read from the actual upload payload, never inferred from a filename or UI selection.
+struct BuildArtifactMetadata: Equatable, Sendable {
+    let bundleID: String
+    let shortVersion: String
+    let buildNumber: String
+    let platform: ProjectPlatform
+    let usesNonExemptEncryption: Bool?
+
+    struct ValidationError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    static func numericComponents(_ value: String) -> [String]? {
+        let components = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(components.count), components.allSatisfy({
+            !$0.isEmpty && $0.allSatisfy { $0 >= "0" && $0 <= "9" }
+        }) else { return nil }
+        return components.map { component in
+            let trimmed = component.drop(while: { $0 == "0" })
+            return trimmed.isEmpty ? "0" : String(trimmed)
+        }
+    }
+
+    /// Compare numeric components without converting arbitrarily large input to Int.
+    static func compareNumbers(_ lhs: String, _ rhs: String) -> ComparisonResult? {
+        guard var left = numericComponents(lhs), var right = numericComponents(rhs) else { return nil }
+        while left.count < 3 { left.append("0") }
+        while right.count < 3 { right.append("0") }
+        for (a, b) in zip(left, right) where a != b {
+            if a.count != b.count { return a.count < b.count ? .orderedAscending : .orderedDescending }
+            return a < b ? .orderedAscending : .orderedDescending
+        }
+        return .orderedSame
+    }
+
+    static func fromPlist(_ data: Data, platform: ProjectPlatform) throws -> Self {
+        guard let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            throw ValidationError(message: "The artifact's Info.plist is not a dictionary.")
+        }
+        func requiredString(_ key: String) throws -> String {
+            guard let value = plist[key] as? String, !value.isEmpty,
+                  value == value.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                throw ValidationError(message: "The artifact has no valid \(key). Rebuild before uploading.")
+            }
+            return value
+        }
+        let bundleID = try requiredString("CFBundleIdentifier")
+        let version = try requiredString("CFBundleShortVersionString")
+        let build = try requiredString("CFBundleVersion")
+        guard numericComponents(version) != nil,
+              let buildParts = numericComponents(build), buildParts.first != "0" else {
+            throw ValidationError(message: "Version '\(version)' and build '\(build)' must contain one to three numeric components; the build must start with a positive number.")
+        }
+        let declaredPlatforms = (plist["CFBundleSupportedPlatforms"] as? [String]) ?? []
+        let platformName = plist["DTPlatformName"] as? String
+        let allowedName = platform == .macOS ? "macosx" : "iphoneos"
+        guard !declaredPlatforms.isEmpty || platformName?.isEmpty == false else {
+            throw ValidationError(message: "The artifact does not declare its platform (CFBundleSupportedPlatforms or DTPlatformName). Rebuild it with the intended Xcode destination before uploading.")
+        }
+        if (!declaredPlatforms.isEmpty && declaredPlatforms.map({ $0.lowercased() }) != [allowedName])
+            || (platformName != nil && platformName?.lowercased() != allowedName) {
+            throw ValidationError(message: "The artifact platform does not match \(platform.rawValue). Simulator builds cannot be uploaded.")
+        }
+        var encryption: Bool?
+        if let value = plist["ITSAppUsesNonExemptEncryption"] {
+            guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
+                throw ValidationError(message: "ITSAppUsesNonExemptEncryption must be a Boolean describing the app's actual encryption use.")
+            }
+            encryption = number.boolValue
+        }
+        return Self(bundleID: bundleID, shortVersion: version, buildNumber: build,
+                    platform: platform, usesNonExemptEncryption: encryption)
+    }
+
+    func validate(bundleID expectedBundleID: String, platform expectedPlatform: ProjectPlatform, version: String? = nil) throws {
+        guard bundleID == expectedBundleID, platform == expectedPlatform else {
+            throw ValidationError(message: "Artifact identity mismatch: \(bundleID) (\(platform.rawValue)); expected \(expectedBundleID) (\(expectedPlatform.rawValue)).")
+        }
+        if let version, shortVersion != version {
+            throw ValidationError(message: "Artifact version \(shortVersion) does not match the selected App Store version \(version). Select the matching version or rebuild; no upload was started.")
+        }
+    }
+
+    func validateExportMatchesArchive(_ archive: Self) throws {
+        guard self == archive else {
+            throw ValidationError(message: "Export changed the archived app identity, version, build number or encryption declaration. Archive: \(archive.bundleID) \(archive.shortVersion) (\(archive.buildNumber)); export: \(bundleID) \(shortVersion) (\(buildNumber)). Rebuild before uploading.")
+        }
+    }
+
+    /// No shell interpolation: paths containing quotes, spaces or shell syntax remain literal arguments.
+    private static func commandData(_ executable: String, _ arguments: [String], limit: Int = 8 * 1024 * 1024) throws -> Data {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("BlitzArtifactCommand-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let errorURL = directory.appendingPathComponent("stderr")
+        _ = FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+        let errorHandle = try FileHandle(forWritingTo: errorURL)
+        defer { try? errorHandle.close() }
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = pipe
+        process.standardError = errorHandle
+        try process.run()
+        var data = Data()
+        while let chunk = try pipe.fileHandleForReading.read(upToCount: 64 * 1024), !chunk.isEmpty {
+            guard data.count + chunk.count <= limit else {
+                process.terminate()
+                process.waitUntilExit()
+                throw ValidationError(message: "Artifact metadata exceeds the allowed size.")
+            }
+            data.append(chunk)
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let errorData = try Data(contentsOf: errorURL)
+            let message = String(decoding: errorData.prefix(8192), as: UTF8.self)
+            throw ValidationError(message: "Cannot inspect artifact: \(URL(fileURLWithPath: executable).lastPathComponent) failed (\(process.terminationStatus)): \(message)")
+        }
+        return data
+    }
+
+    static func read(artifactURL: URL, platform: ProjectPlatform) async throws -> Self {
+        try await Task.detached(priority: .userInitiated) {
+            let url = artifactURL.standardizedFileURL
+            let expectedExtension = platform == .macOS ? "pkg" : "ipa"
+            guard url.pathExtension.lowercased() == expectedExtension,
+                  FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError(message: "Provide an existing .\(expectedExtension) for the selected \(platform.rawValue) app.")
+            }
+            if platform == .iOS {
+                let listing = try commandData("/usr/bin/unzip", ["-Z1", url.path])
+                let entries = String(decoding: listing, as: UTF8.self).components(separatedBy: .newlines)
+                let plistEntries = entries.filter { entry in
+                    let parts = entry.split(separator: "/", omittingEmptySubsequences: false)
+                    return parts.count == 3 && parts[0] == "Payload" && parts[1].hasSuffix(".app") && parts[2] == "Info.plist"
+                }
+                guard plistEntries.count == 1, let entry = plistEntries.first else {
+                    throw ValidationError(message: "The IPA must contain exactly one top-level application's Info.plist.")
+                }
+                return try fromPlist(commandData("/usr/bin/unzip", ["-p", url.path, entry]), platform: platform)
+            }
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent("BlitzArtifactPackage-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let payloadPaths = String(decoding: try commandData("/usr/sbin/pkgutil", ["--payload-files", url.path]), as: UTF8.self)
+            guard !payloadPaths.components(separatedBy: .newlines).contains(where: {
+                $0.hasPrefix("/") || $0.split(separator: "/").contains("..")
+            }) else { throw ValidationError(message: "The package contains unsafe payload paths.") }
+            let expanded = root.appendingPathComponent("expanded")
+            _ = try commandData("/usr/sbin/pkgutil", ["--expand-full", url.path, expanded.path])
+            let apps = try topLevelApps(in: expanded)
+            guard apps.count == 1, let app = apps.first else {
+                throw ValidationError(message: "The PKG must contain exactly one top-level application; found \(apps.count).")
+            }
+            return try readApp(app, root: expanded, platform: platform)
+        }.value
+    }
+
+    private static func topLevelApps(in directory: URL) throws -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isSymbolicLinkKey]) else {
+            throw ValidationError(message: "Cannot inspect expanded package.")
+        }
+        var apps: [URL] = []
+        for case let url as URL in enumerator {
+            if try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true {
+                enumerator.skipDescendants()
+                continue
+            }
+            if url.pathExtension == "app" {
+                apps.append(url)
+                enumerator.skipDescendants()
+            }
+        }
+        return apps
+    }
+
+    private static func readApp(_ app: URL, root: URL, platform: ProjectPlatform) throws -> Self {
+        let info = app.appendingPathComponent(platform == .macOS ? "Contents/Info.plist" : "Info.plist").resolvingSymlinksInPath()
+        guard info.path.hasPrefix(root.resolvingSymlinksInPath().path + "/") else {
+            throw ValidationError(message: "Application metadata points outside its artifact.")
+        }
+        let size = try info.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size <= 8 * 1024 * 1024 else { throw ValidationError(message: "Artifact metadata exceeds the allowed size.") }
+        return try fromPlist(Data(contentsOf: info), platform: platform)
+    }
+
+    static func readArchive(at archiveURL: URL, platform: ProjectPlatform) throws -> Self {
+        let apps = try FileManager.default.contentsOfDirectory(at: archiveURL.appendingPathComponent("Products/Applications"), includingPropertiesForKeys: nil).filter { $0.pathExtension == "app" }
+        guard apps.count == 1, let app = apps.first else {
+            throw ValidationError(message: "The archive must contain exactly one application.")
+        }
+        return try readApp(app, root: archiveURL, platform: platform)
+    }
+}
+
 
 /// Thread-safe collector that keeps enough process output to surface the
 /// meaningful failure context instead of only the last stderr lines.
@@ -627,7 +827,7 @@ actor BuildPipelineService {
         // because xcodebuild build settings apply globally to ALL targets including SPM
         // dependencies, which don't support provisioning profiles or manual signing.
         // The exportArchive step below re-signs with distribution cert + profile.
-        let archivePath = NSTemporaryDirectory() + "BlitzArchive-\(Int(Date().timeIntervalSince1970)).xcarchive"
+        let archivePath = NSTemporaryDirectory() + "BlitzArchive-\(UUID().uuidString).xcarchive"
         let archiveArgs = [
             useWorkspace ? "-workspace" : "-project",
             buildTarget,
@@ -675,13 +875,14 @@ actor BuildPipelineService {
 
         // Generate ExportOptions.plist
         // app-store-connect produces a .pkg for macOS; app-store produces an .ipa for iOS
-        let exportOptionsPath = NSTemporaryDirectory() + "ExportOptions-\(Int(Date().timeIntervalSince1970)).plist"
+        let exportOptionsPath = NSTemporaryDirectory() + "ExportOptions-\(UUID().uuidString).plist"
         var exportOptions: [String: Any] = [
             "method": isMac ? "app-store-connect" : "app-store",
             "teamID": teamId,
             "signingStyle": "manual",
             "signingCertificate": "Apple Distribution",
-            "uploadSymbols": true
+            "uploadSymbols": true,
+            "manageAppVersionAndBuildNumber": false
         ]
         if !profileRef.isEmpty {
             exportOptions["provisioningProfiles"] = [bundleId: profileRef]
@@ -699,7 +900,7 @@ actor BuildPipelineService {
         emit("Generated ExportOptions.plist")
 
         // Export IPA
-        let exportPath = NSTemporaryDirectory() + "BlitzExport-\(Int(Date().timeIntervalSince1970))"
+        let exportPath = NSTemporaryDirectory() + "BlitzExport-\(UUID().uuidString)"
         let exportOutput = ProcessOutputCollector()
         let exportManaged = ProcessRunner.stream(
             "xcodebuild",
@@ -769,7 +970,8 @@ actor BuildPipelineService {
         let exportedFiles = try fm.contentsOfDirectory(at: URL(fileURLWithPath: exportPath),
                                                         includingPropertiesForKeys: nil)
         let expectedExt = isMac ? "pkg" : "ipa"
-        guard let artifactURL = exportedFiles.first(where: { $0.pathExtension == expectedExt }) else {
+        let artifacts = exportedFiles.filter { $0.pathExtension == expectedExt }
+        guard artifacts.count == 1, let artifactURL = artifacts.first else {
             throw ProcessRunner.ProcessError(
                 command: "xcodebuild -exportArchive",
                 exitCode: -1,
@@ -777,6 +979,11 @@ actor BuildPipelineService {
             )
         }
 
+        let archiveMetadata = try BuildArtifactMetadata.readArchive(at: URL(fileURLWithPath: archivePath), platform: platform)
+        try archiveMetadata.validate(bundleID: bundleId, platform: platform)
+        let artifactMetadata = try await BuildArtifactMetadata.read(artifactURL: artifactURL, platform: platform)
+        try artifactMetadata.validateExportMatchesArchive(archiveMetadata)
+        emit("Verified \(artifactMetadata.shortVersion) (\(artifactMetadata.buildNumber)) in archive and exported artifact.")
         emit("\(expectedExt.uppercased()) exported: \(artifactURL.path)")
 
         return BuildResult(
@@ -809,15 +1016,27 @@ actor BuildPipelineService {
         appId: String,
         artifactPath: String,
         platform: ProjectPlatform,
-        skipPolling: Bool
-    ) -> [String] {
+        skipPolling: Bool,
+        metadata: BuildArtifactMetadata? = nil
+    ) throws -> [String] {
         let isMacArtifact = platform == .macOS
-            || URL(fileURLWithPath: artifactPath).pathExtension.lowercased() == "pkg"
+        guard URL(fileURLWithPath: artifactPath).pathExtension.lowercased() == (isMacArtifact ? "pkg" : "ipa") else {
+            throw BuildArtifactMetadata.ValidationError(message: "Artifact extension does not match the upload platform.")
+        }
+        if isMacArtifact && metadata == nil {
+            throw BuildArtifactMetadata.ValidationError(message: "PKG upload requires its verified version and build number.")
+        }
         var args = ["builds", "upload", "--app", appId]
         if isMacArtifact {
             args += ["--pkg", artifactPath, "--platform", "MAC_OS"]
         } else {
             args += ["--ipa", artifactPath, "--platform", "IOS"]
+        }
+        if let metadata {
+            guard metadata.platform == platform else {
+                throw BuildArtifactMetadata.ValidationError(message: "Artifact metadata does not match the upload platform.")
+            }
+            args += ["--version", metadata.shortVersion, "--build-number", metadata.buildNumber]
         }
         if skipPolling {
             args += ["--verify-timeout", helperUploadVerifyTimeout]
@@ -876,6 +1095,7 @@ actor BuildPipelineService {
         ascService: AppStoreConnectService?,
         skipPolling: Bool,
         platform: ProjectPlatform = .iOS,
+        metadata: BuildArtifactMetadata,
         onProgress: @escaping @Sendable (String) -> Void
     ) async throws -> UploadResult {
         var log: [String] = []
@@ -887,11 +1107,12 @@ actor BuildPipelineService {
 
         if let appId, let ascService {
             emit("Uploading \(platform == .macOS ? "PKG" : "IPA") to App Store Connect...")
-            let cliArgs = Self.buildsUploadCommandArguments(
+            let cliArgs = try Self.buildsUploadCommandArguments(
                 appId: appId,
                 artifactPath: ipaPath,
                 platform: platform,
-                skipPolling: skipPolling
+                skipPolling: skipPolling,
+                metadata: metadata
             )
             let cliResult = try await ascService.cliExec(
                 args: cliArgs,
@@ -932,100 +1153,6 @@ actor BuildPipelineService {
             )
         }
 
-        // Place .p8 key for altool/notarytool
-        let keyDir = fm.homeDirectoryForCurrentUser
-            .appendingPathComponent(".appstoreconnect/private_keys")
-        try fm.createDirectory(at: keyDir, withIntermediateDirectories: true)
-        let keyPath = keyDir.appendingPathComponent("AuthKey_\(keyId).p8")
-        try privateKeyPEM.write(to: keyPath, atomically: true, encoding: .utf8)
-        emit("API key placed at \(keyPath.path)")
-
-        // Upload using xcrun altool
-        let platformType = platform == .macOS ? "osx" : "ios"
-        emit("Uploading \(platform == .macOS ? "PKG" : "IPA") to App Store Connect...")
-        let uploadOutput = ProcessOutputCollector()
-        let uploadManaged = ProcessRunner.stream(
-            "xcrun",
-            arguments: [
-                "altool", "--upload-app",
-                "-f", ipaPath,
-                "-t", platformType,
-                "--apiKey", keyId,
-                "--apiIssuer", issuerId
-            ],
-            onStdout: { line in
-                onProgress(line)
-                uploadOutput.appendStdout(line)
-            },
-            onStderr: { line in
-                onProgress(line)
-                uploadOutput.appendStderr(line)
-            }
-        )
-
-        if let launchErr = uploadManaged.launchError {
-            throw ProcessRunner.ProcessError(
-                command: "xcrun altool --upload-app",
-                exitCode: -1,
-                stderr: "Failed to launch xcrun: \(launchErr.localizedDescription)"
-            )
-        }
-
-        await uploadManaged.waitUntilExit()
-
-        guard uploadManaged.process.terminationStatus == 0 else {
-            let stderrSummary = uploadOutput.summary
-            throw ProcessRunner.ProcessError(
-                command: "xcrun altool --upload-app",
-                exitCode: uploadManaged.process.terminationStatus,
-                stderr: stderrSummary.isEmpty ? "Upload failed with exit code \(uploadManaged.process.terminationStatus)" : stderrSummary
-            )
-        }
-        emit("Upload complete. Build is processing on App Store Connect.")
-
-        // Poll for build processing
-        if !skipPolling, let appId, let ascService {
-            emit("Polling for build processing status...")
-            let pollInterval: TimeInterval = 30
-            let maxAttempts = 60 // 30 minutes
-            for attempt in 1...maxAttempts {
-                try await Task.sleep(for: .seconds(pollInterval))
-                if let build = try await ascService.fetchLatestBuild(appId: appId) {
-                    let state = build.attributes.processingState ?? "UNKNOWN"
-                    emit("Poll \(attempt): build \(build.attributes.version) — \(state)")
-                    if state == "VALID" {
-                        emit("Build processing complete!")
-                        return UploadResult(
-                            buildVersion: build.attributes.version,
-                            processingState: state,
-                            uploadId: nil,
-                            fileId: nil,
-                            uploadCommitted: true,
-                            log: log
-                        )
-                    } else if state == "INVALID" {
-                        emit("Build processing failed with INVALID state")
-                        return UploadResult(
-                            buildVersion: build.attributes.version,
-                            processingState: state,
-                            uploadId: nil,
-                            fileId: nil,
-                            uploadCommitted: true,
-                            log: log
-                        )
-                    }
-                }
-            }
-            emit("Polling timed out after 30 minutes")
-        }
-
-        return UploadResult(
-            buildVersion: nil,
-            processingState: skipPolling ? "SKIPPED_POLLING" : "TIMEOUT",
-            uploadId: nil,
-            fileId: nil,
-            uploadCommitted: true,
-            log: log
-        )
+        throw BuildArtifactMetadata.ValidationError(message: "Upload requires a captured App Store app and authenticated ASC service. Reopen the app before retrying.")
     }
 }

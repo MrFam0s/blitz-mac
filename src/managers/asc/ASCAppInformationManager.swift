@@ -65,12 +65,21 @@ extension ASCManager {
         return primaryAppInfoLocalization()
     }
 
-    /// Release notes are only mandatory when the selected version is an update
-    /// on top of an already-live App Store version.
+    /// A subsequent release still requires notes after its predecessor was
+    /// removed from sale or replaced. A live version on another platform does
+    /// not turn this platform's first release into an update.
     var selectedVersionRequiresWhatsNew: Bool {
-        guard let selectedVersion, let liveVersion else { return false }
-        guard selectedVersion.id != liveVersion.id else { return false }
-        return ASCReleaseStatus.isCurrentUpdateCandidate(selectedVersion.attributes.appStoreState)
+        guard let selectedVersion,
+              ASCReleaseStatus.isCurrentUpdateCandidate(selectedVersion.attributes.appStoreState) else { return false }
+        let selectedPlatform = selectedVersion.attributes.platform?.uppercased()
+        return releaseVersions.contains { previous in
+            previous.id != selectedVersion.id
+                && previous.attributes.platform?.uppercased() == selectedPlatform
+                && ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize(previous.attributes.appStoreState))
+                && ReleaseAutomationService.compareVersions(
+                    previous.attributes.versionString, selectedVersion.attributes.versionString
+                ) == .orderedAscending
+        }
     }
 
     /// App Store Connect validates `What's New` per version localization, so the

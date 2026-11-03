@@ -16,7 +16,9 @@ struct ReleaseAutomationContext: Codable, Equatable, Sendable {
     let displayedLiveVersion: String?
     var preparedVersion: PreparedReleaseVersion? = nil
 
-    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath):\(preparedVersion?.id ?? "new")" }
+    // Keep a single release conversation for this target, including when a
+    // newly created draft becomes the prepared version on a subsequent click.
+    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath)" }
 
     func matches(project: Project?, app: ASCApp?) -> Bool {
         guard let project, let app else { return false }
@@ -40,8 +42,9 @@ struct ReleasePreflight: Codable, Sendable {
 
 enum ReleaseAutomationService {
     /// An explicit editable draft may be released later; a submitted version is never adopted.
-    static func preparedVersion(in versions: [ASCAppStoreVersion]) throws -> PreparedReleaseVersion? {
-        guard let current = ASCReleaseStatus.currentUpdateVersion(for: versions) else { return nil }
+    static func preparedVersion(in versions: [ASCAppStoreVersion], platform: ProjectPlatform? = nil) throws -> PreparedReleaseVersion? {
+        let targetVersions = platform.map { ASCReleaseStatus.versions(versions, for: $0) } ?? versions
+        guard let current = ASCReleaseStatus.currentUpdateVersion(for: targetVersions) else { return nil }
         guard ASCReleaseStatus.isEditable(current.attributes.appStoreState) else {
             throw ASCError.notFound("Version \(current.attributes.versionString) ist bereits eingereicht oder gesperrt. Bitte ihren Status prüfen.")
         }
@@ -49,7 +52,7 @@ enum ReleaseAutomationService {
     }
 
     static func matchesPreparedVersion(_ context: ReleaseAutomationContext, versions: [ASCAppStoreVersion]) -> Bool {
-        do { return try preparedVersion(in: versions) == context.preparedVersion }
+        do { return try preparedVersion(in: versions, platform: context.platform) == context.preparedVersion }
         catch { return false }
     }
 
@@ -181,6 +184,21 @@ struct AgentSessionRegistry {
         if let preferredID, available.contains(preferredID) { return preferredID }
         return available.last
     }
+    /// An explicit task is different from opening an existing terminal. Deliver
+    /// it even when the previous agent is still interactive after completion.
+    /// Keep the new request in the same conversation. The release workflow must
+    /// still reconcile its exclusive lock and actual server state before writes.
+    mutating func reuse(
+        for key: String,
+        activeIDs: Set<UUID>,
+        prompt: String?,
+        deliverPrompt: (UUID, String) -> Void
+    ) -> UUID? {
+        guard let id = existing(for: key, activeIDs: activeIDs) else { return nil }
+        if let prompt, !prompt.isEmpty { deliverPrompt(id, prompt) }
+        return id
+    }
+
     mutating func register(_ id: UUID, for key: String) {
         var registered = sessions[key] ?? []
         registered.removeAll { $0 == id }

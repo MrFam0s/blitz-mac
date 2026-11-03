@@ -2,6 +2,60 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.59 — consistent existing-app updates
+
+Release operations capture the project, app, account, platform and selected
+version before asynchronous work or MCP approval. Late reads cannot replace the
+current version's build; mutations recheck the original target. Version and build
+histories follow pagination, platform-specific versions stay separate, and new
+version numbers must be numeric and greater than the existing platform history.
+Opening the submission preview is read-only. Its build choices must match the
+app, platform and marketing version; submission revalidates the selected build
+and fresh readiness before attaching it.
+
+Draft creation respects an explicit no-copy choice and rejects a missing source.
+Review-data read failures remain errors. Existing-localization conflicts are
+resolved against the exact locale; incomplete copying preserves the created draft
+and reports partial completion instead of inviting another version creation.
+Changelog requirements include previously published versions removed from sale
+or replaced. Existing authored release notes remain protected, and missing notes
+are checked for each loaded locale.
+
+Build uploads require an explicit IPA/PKG path and inspect a private snapshot of
+that artifact with process arguments rather than interpolated shell commands.
+Binary plists and macOS component/distribution packages are supported. Metadata
+must match the captured app/platform/version, numeric build ordering uses the
+correct platform/version scope, and encryption declarations retain their actual
+Boolean value. PKG uploads pass verified version and build flags to ASC. Archive
+and export metadata must agree; Xcode automatic renumbering is disabled. Pipeline
+operation ownership prevents concurrent starts and clears progress after selection
+changes. Unknown upload outcomes require reconciliation before retrying; a failed
+follow-up does not claim that build attachment succeeded.
+
+Each explicit automatic-release request reaches the existing target's terminal as
+one safe multiline paste. Opening a terminal without a new task still only focuses
+it. The release workflow reconciles the private release state and exclusive lock,
+uses the exact prepared draft/build, preserves authored content, and distinguishes
+an already completed release from a genuinely newer update. These agent-driven
+release steps remain workflow instructions, not a deterministic Swift transaction
+or a guarantee of Apple's eventual review acceptance.
+
+Build 64 retains ASC 5.17.0 and the existing Developer ID and bundle identifier.
+
+Validation (2026-11-03): all 313 Swift tests and 11 offline Python creation
+tests pass. The complete ASC `internal/asc` and `internal/helper` suites pass,
+including CLI compatibility. Independent reviews covered version/platform
+selection, approval-time target identity, artifact metadata, build association,
+changelog preservation and repeated terminal requests. Synthetic binary-plist
+IPAs and component/distribution PKGs exercise artifact handling without uploads.
+The release bundle passes strict deep Developer ID verification; protocol ping,
+direct CLI and cli.exec pass with ASC 5.17.0. The signing identity and designated
+requirement match the previous installed release. No Apple uploads, build
+attachments, draft creation or review submissions are used as tests, and no
+cloud workflow is dispatched. Automatic publication has not been exercised
+end-to-end against Apple. Installation and native UI verification are pending
+an unlocked desktop.
+
 ## 1.0.58 — consistent app creation identities
 
 New project creation reserves its directory exclusively before metadata or

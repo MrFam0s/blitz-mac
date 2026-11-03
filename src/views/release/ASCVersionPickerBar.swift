@@ -14,6 +14,20 @@ struct ASCVersionPickerBar<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+                    if asc.loadedProjectId?.hasPrefix("asc:") == true {
+                        Picker("Plattform", selection: Binding<ProjectPlatform?>(
+                            get: { asc.releasePlatform },
+                            set: { value in
+                                asc.selectReleasePlatform(value)
+                                Task { await asc.refreshTabData(refreshTab ?? .app) }
+                            }
+                        )) {
+                            Text("Plattform wählen").tag(Optional<ProjectPlatform>.none)
+                            ForEach(ProjectPlatform.allCases, id: \.self) { platform in
+                                Text(platform.rawValue).tag(Optional(platform))
+                            }
+                        }.fixedSize()
+                    }
                     versionSelection
                     content
                 }
@@ -56,9 +70,9 @@ struct ASCVersionPickerBar<Content: View>: View {
     }
 
     @ViewBuilder private var versionSelection: some View {
-        if !asc.appStoreVersions.isEmpty {
+        if !asc.releaseVersions.isEmpty {
             Picker("Version", selection: selection) {
-                ForEach(asc.appStoreVersions) { version in
+                ForEach(asc.releaseVersions) { version in
                     Text("Version \(version.attributes.versionString)").tag(version.id)
                 }
             }

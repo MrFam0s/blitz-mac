@@ -10,30 +10,21 @@ struct SubmitPreviewSheet: View {
     @State private var selectedBuildId: String = ""
     @State private var appIcon: NSImage?
 
+    @State private var releaseTarget: ASCReleaseOperationTarget?
+
+    private var targetMatches: Bool { releaseTarget?.matches(asc) == true }
     private var validBuilds: [ASCBuild] {
-        asc.builds.filter { $0.attributes.processingState == "VALID" && $0.attributes.expired != true }
+        guard targetMatches, let target = releaseTarget, let platform = target.platform,
+              let version = targetVersion else { return [] }
+        return asc.builds.filter { $0.matchesRelease(appId: target.appId, versionString: version.attributes.versionString, platform: platform) }
     }
-
-    /// States where the version is locked and cannot be (re-)submitted.
-    private static let nonSubmittableStates: Set<String> = [
-        "WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE", "READY_FOR_SALE"
-    ]
-
     private var targetVersion: ASCAppStoreVersion? {
-        asc.selectedVersion ?? asc.currentUpdateVersion ?? asc.appStoreVersions.first
+        guard targetMatches else { return nil }
+        return asc.selectedVersion
     }
-
-    private var hasActiveUpdate: Bool {
-        asc.currentUpdateVersion != nil
-    }
-
-    private var versionState: String {
-        asc.currentUpdateVersion?.attributes.appStoreState ?? targetVersion?.attributes.appStoreState ?? ""
-    }
-
-    private var isSubmittable: Bool {
-        hasActiveUpdate && !Self.nonSubmittableStates.contains(versionState)
-    }
+    private var versionState: String { targetVersion?.attributes.appStoreState ?? "" }
+    private var isSubmittable: Bool { targetMatches && ASCReleaseStatus.isEditable(versionState) }
+    private var selectedBuild: ASCBuild? { validBuilds.first { $0.id == selectedBuildId } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -81,6 +72,10 @@ struct SubmitPreviewSheet: View {
 
             Divider()
 
+            if releaseTarget != nil && !targetMatches {
+                Text("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen.")
+                    .font(.callout).foregroundStyle(.orange)
+            }
             if isCheckingReadiness {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -114,14 +109,14 @@ struct SubmitPreviewSheet: View {
                     Button("Submit for Review") {
                         Task {
                             let buildId = selectedBuildId.isEmpty ? nil : selectedBuildId
-                            await asc.submitForReview(attachBuildId: buildId)
-                            if asc.submissionError == nil {
+                            guard let releaseTarget, releaseTarget.matches(asc) else { return }
+                            if await asc.submitForReview(attachBuildId: buildId, expectedTarget: releaseTarget) {
                                 dismiss()
                             }
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete || selectedBuildId.isEmpty)
+                    .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete(selectingBuild: selectedBuild) || selectedBuild == nil)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -129,17 +124,21 @@ struct SubmitPreviewSheet: View {
         .padding(24)
         .frame(width: 480)
         .task {
-            // Cached metadata is for display, never an authorization to submit.
+            defer { isCheckingReadiness = false }
+            releaseTarget = asc.releaseOperationTarget()
+            guard let initialTarget = releaseTarget else { isCheckingReadiness = false; return }
+            // Read-only preview: opening it never attaches a build or saves fields.
             await asc.syncOverviewSubmissionReadiness(forceRefresh: true)
-            guard !Task.isCancelled else { return }
-            isCheckingReadiness = false
-            if asc.builds.isEmpty {
-                await asc.refreshTabData(.builds)
-            }
-            if selectedBuildId.isEmpty {
-                selectedBuildId = asc.selectedVersionBuild?.id ?? validBuilds.first?.id ?? ""
+            guard !Task.isCancelled, initialTarget.matches(asc) else { return }
+            releaseTarget = asc.releaseOperationTarget()
+            guard let releaseTarget else { return }
+            // The overview fetch also reloads the fully paginated build inventory.
+            if let attached = asc.selectedVersionBuild, validBuilds.contains(where: { $0.id == attached.id }) {
+                selectedBuildId = attached.id
             }
             appIcon = await loadAppIcon()
+            guard !Task.isCancelled, releaseTarget.matches(asc) else { return }
+            isCheckingReadiness = false
         }
     }
 
@@ -216,7 +215,9 @@ struct SubmitPreviewSheet: View {
 
     @ViewBuilder
     private var submittableContent: some View {
-        let readiness = asc.submissionReadiness
+        let readiness = SubmissionReadiness(fields: asc.submissionReadiness.fields.filter {
+            selectedBuild == nil || $0.label != "Build"
+        })
         if readiness.fields.contains(where: { $0.required && $0.loadFailed }) {
             Label("Some required data could not be checked. Refresh the overview before submitting.",
                   systemImage: "exclamationmark.triangle")

@@ -470,7 +470,7 @@ struct ASCOverview: View {
     @ViewBuilder
     private var versionStatsSection: some View {
         let rejectionCardVersion = asc.rejectionCardVersionForSelectedVersion(
-            from: asc.appStoreVersions
+            from: asc.releaseVersions
         )
 
         ViewThatFits(in: .horizontal) {
@@ -510,7 +510,7 @@ struct ASCOverview: View {
             color: pending != nil ? .orange : .secondary, icon: "clock.fill"
         )
         versionMetric(
-            title: "Versions", value: "\(asc.appStoreVersions.count)",
+            title: "Versions", value: "\(asc.releaseVersions.count)",
             subtitle: nil, color: .secondary, icon: "list.number"
         )
         .help("Total versions · All time")

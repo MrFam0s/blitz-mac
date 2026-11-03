@@ -56,6 +56,15 @@ release state proves it belongs to this same update.
 
 ## 1. Recover state and prevent duplicate releases
 
+A later copy of this workflow in the same terminal is a newly confirmed button
+request, not merely navigation. Acknowledge it briefly in German and revalidate
+its latest Target JSON. Complete/reconcile an already running release first;
+never launch a parallel release or repeat its mutations for queued requests.
+Do not treat this as approval of an unrelated question, a previous plan, or a
+changed app/version/build. Only the target and scope in the current request are
+authorized. Reuse conversation evidence only after checking it against the
+current project, saved state and fresh ASC resources.
+
 Use a private, app/platform-specific state directory inside the project's
 `.blitz/release-automation/`. Validate the directory stays within the canonical
 project (no escaping symlinks). Keep a small atomic JSON state and a German
@@ -68,8 +77,11 @@ only your own lock when done. Recover a stale lock only after verifying that its
 owner no longer runs; never infer this just from elapsed time.
 
 Read saved state and query ASC fresh, including all relevant versions/builds
-(paginate). If the same update is already submitted, in review, approved or live,
-report its current state and stop; do not submit it again. If a different update
+(paginate). If the same update is already submitted, in review or approved, report its
+current state and stop; do not submit it again. If it is already live, use its
+verified source/build as the baseline in step 2: stop for an unchanged request,
+but allow a provably newer update rather than treating the previous release's
+completed state as a permanent blocker. If a different update
 is pending, report the conflict without cancelling or replacing it. For an
 incomplete matching release, resume only the missing steps after checking actual
 server state. A timed-out mutation has an UNKNOWN outcome: reconcile with Apple
@@ -126,7 +138,11 @@ For a prepared version, fill only missing notes; preserve every existing nonempt
 locale's notes. For a new automatic update, write a fresh changelog in each existing
 Store locale. Preserve supported locales, descriptions, screenshots and preview
 videos. Never invent app features for a media-only update or translate product
-names. Save the generated changelog with the release report for inspection.
+names. Save the generated changelog with the release report for inspection, together
+with its source range/fingerprint, exact version ID and locale. Notes are required
+for every subsequent published version even when its predecessor was removed
+from sale or replaced; only the first release is exempt. Do not reuse generated
+notes from another version or build on a retry without rechecking their source.
 
 ## 4. Upload and complete the App Store version
 

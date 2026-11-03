@@ -83,11 +83,11 @@ struct ReviewView: View {
         .task(id: "\(appState.activeProjectId ?? ""):\(asc.credentialActivationRevision)") {
             await asc.ensureTabData(.review)
         }
-        .onChange(of: asc.appStoreVersions.map(\.id)) { _, _ in
+        .onChange(of: asc.releaseVersions.map(\.id)) { _, _ in
             guard let appId = asc.app?.id else { return }
             let targetVersion = asc.selectedVersion
                 ?? asc.currentUpdateVersion
-                ?? asc.feedbackDisplayVersion(from: asc.appStoreVersions)
+                ?? asc.feedbackDisplayVersion(from: asc.releaseVersions)
             asc.loadCachedFeedback(appId: appId, versionString: targetVersion?.attributes.versionString)
         }
     }
@@ -96,7 +96,7 @@ struct ReviewView: View {
     private var reviewContent: some View {
         let selectedVersion = asc.selectedVersion
         let rejectionCardVersion = asc.rejectionCardVersionForSelectedVersion(
-            from: asc.appStoreVersions
+            from: asc.releaseVersions
         )
         let isLoading = asc.isTabLoading(.review)
 
@@ -285,12 +285,12 @@ struct ReviewView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
 
                 // All versions
-                if asc.appStoreVersions.count > 1 {
+                if asc.releaseVersions.count > 1 {
                     Text("All Versions")
                         .font(BlitzLayout.sectionTitle)
 
                     VStack(spacing: 0) {
-                        ForEach(Array(asc.appStoreVersions.enumerated()), id: \.element.id) { idx, version in
+                        ForEach(Array(asc.releaseVersions.enumerated()), id: \.element.id) { idx, version in
                             BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 6) {
                                 Text(version.attributes.versionString)
                                     .font(.body.weight(.medium))
@@ -313,7 +313,7 @@ struct ReviewView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            if idx < asc.appStoreVersions.count - 1 {
+                            if idx < asc.releaseVersions.count - 1 {
                                 Divider().padding(.leading, 16)
                             }
                         }

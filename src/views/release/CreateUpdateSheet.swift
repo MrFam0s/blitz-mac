@@ -7,6 +7,7 @@ struct ReleaseAutomationSheet: View {
     @State private var context: ReleaseAutomationContext?
     @State private var preflight: ReleasePreflight?
     @State private var error: String?
+    @State private var releaseTarget: ASCReleaseOperationTarget?
 
     private var agent: AIAgent { AIAgent(rawValue: appState.settingsStore.defaultAgentCLI) ?? .claudeCode }
 
@@ -84,6 +85,7 @@ struct ReleaseAutomationSheet: View {
                 error = "Für den automatischen Ablauf muss die App mit ihrem lokalen Projekt verknüpft sein. Ein Entwurf kann über „Versionsentwurf anlegen“ erstellt werden."
                 return
             }
+            releaseTarget = appState.ascManager.releaseOperationTarget()
             let revision = appState.ascManager.projectRevision
             let versions: [ASCAppStoreVersion]
             let prepared: PreparedReleaseVersion?
@@ -92,14 +94,14 @@ struct ReleaseAutomationSheet: View {
                 versions = try await service.fetchAppStoreVersions(appId: app.id)
                 guard !Task.isCancelled, appState.ascManager.projectRevision == revision,
                       appState.ascManager.app?.id == app.id else { return }
-                prepared = try ReleaseAutomationService.preparedVersion(in: versions)
+                prepared = try ReleaseAutomationService.preparedVersion(in: versions, platform: project.platform)
                 appState.ascManager.appStoreVersions = versions
             } catch { self.error = error.localizedDescription; return }
             let target = ReleaseAutomationContext(
                 projectID: project.id,
                 projectPath: URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path,
                 appID: app.id, appName: app.name, bundleID: app.bundleId, platform: project.platform,
-                displayedLiveVersion: ASCReleaseStatus.currentLiveVersion(for: versions)?.attributes.versionString,
+                displayedLiveVersion: ASCReleaseStatus.currentLiveVersion(for: ASCReleaseStatus.versions(versions, for: project.platform))?.attributes.versionString,
                 preparedVersion: prepared
             )
             var isDirectory: ObjCBool = false
@@ -123,7 +125,7 @@ struct ReleaseAutomationSheet: View {
 
     private func start() {
         guard let context, let preflight else { return }
-        guard context.matches(project: appState.activeProject, app: appState.ascManager.app),
+        guard releaseTarget?.matches(appState.ascManager) == true, context.matches(project: appState.activeProject, app: appState.ascManager.app),
               ReleaseAutomationService.matchesPreparedVersion(context, versions: appState.ascManager.appStoreVersions) else {
             error = "Die ausgewählte App oder ihr Entwurf hat sich geändert. Bitte schließe den Dialog und starte erneut."
             return
@@ -153,9 +155,10 @@ struct VersionDraftSheet: View {
     @State private var isChecking = true
     @State private var targetRevision: UUID?
     @State private var targetAppID: String?
+    @State private var draftTarget: ASCReleaseOperationTarget?
 
     private var sourceVersions: [ASCAppStoreVersion] {
-        asc.appStoreVersions
+        asc.releaseVersions
     }
 
     private var blockerMessage: String? {
@@ -196,7 +199,15 @@ struct VersionDraftSheet: View {
             Label("Build und Einreichung folgen erst, wenn ihr später die Veröffentlichung startet.", systemImage: "pause.circle")
                 .font(.callout).foregroundStyle(.secondary)
             if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
+            if !isChecking && draftTarget?.platform == nil {
+                Text("Bitte zuerst die Plattform in der Versionsleiste auswählen und den Dialog erneut öffnen.")
+                    .font(.callout).foregroundStyle(.orange)
+            }
 
+            if !isChecking, !versionString.isEmpty,
+               let validation = ASCReleaseStatus.newVersionError(versionString, history: sourceVersions) {
+                Text(validation).font(.callout).foregroundStyle(.orange)
+            }
             if let blockerMessage {
                 Text(blockerMessage)
                     .font(.callout)
@@ -228,24 +239,23 @@ struct VersionDraftSheet: View {
                 Button("Versionsentwurf anlegen") {
                     Task {
                         guard targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
-                        let resolvedSourceVersionId = (copyMetadata || copyReviewDetail) && !copyFromVersionId.isEmpty
-                            ? copyFromVersionId
-                            : nil
+                        guard let draftTarget, draftTarget.matches(asc), let platform = draftTarget.platform else { return }
                         await asc.createUpdateVersion(
                             versionString: versionString,
-                            platform: appState.activeProject?.platform ?? .iOS,
-                            copyFromVersionId: resolvedSourceVersionId,
+                            platform: platform,
+                            copyFromVersionId: copyFromVersionId,
                             copyMetadata: copyMetadata,
                             copyReviewDetail: copyReviewDetail,
-                            attachBuildId: nil
+                            attachBuildId: nil,
+                            expectedTarget: draftTarget
                         )
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(
-                    isChecking || targetAppID == nil || asc.isCreatingVersion
+                    isChecking || targetAppID == nil || draftTarget?.platform == nil || asc.isCreatingVersion
                         || blockerMessage != nil
-                        || versionString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || ASCReleaseStatus.newVersionError(versionString, history: sourceVersions) != nil
                 )
                 .keyboardShortcut(.defaultAction)
             }
@@ -255,6 +265,7 @@ struct VersionDraftSheet: View {
         .disabled(asc.isCreatingVersion)
         .interactiveDismissDisabled(asc.isCreatingVersion)
         .task {
+            draftTarget = asc.releaseOperationTarget()
             targetRevision = asc.projectRevision
             targetAppID = asc.app?.id
             asc.versionCreationError = nil
@@ -263,13 +274,20 @@ struct VersionDraftSheet: View {
                 guard let appID = targetAppID, let service = asc.service else { throw ASCError.notFound("Keine App oder ASC-Verbindung ausgewählt.") }
                 let versions = try await service.fetchAppStoreVersions(appId: appID)
                 guard !Task.isCancelled, targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
+                guard draftTarget?.matches(asc) == true else { return }
                 asc.appStoreVersions = versions
+                // The first read can resolve an unlinked app's only platform.
+                draftTarget = asc.releaseOperationTarget()
             } catch { asc.versionCreationError = error.localizedDescription; targetAppID = nil; return }
             if versionString.isEmpty {
-                versionString = suggestedNextVersion(from: asc.liveVersion?.attributes.versionString)
+                versionString = suggestedNextVersion(from: sourceVersions.max {
+                    ReleaseAutomationService.compareVersions($0.attributes.versionString, $1.attributes.versionString) == .orderedAscending
+                }?.attributes.versionString)
             }
             if copyFromVersionId.isEmpty {
-                copyFromVersionId = asc.liveVersion?.id ?? asc.appStoreVersions.first?.id ?? ""
+                copyFromVersionId = asc.liveVersion?.id ?? asc.releaseVersions.first {
+                    ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.appStoreState))
+                }?.id ?? ""
             }
         }
     }
@@ -281,7 +299,7 @@ struct VersionDraftSheet: View {
         }
 
         var components = source.split(separator: ".").map(String.init)
-        guard let last = components.last, let lastValue = Int(last) else {
+        guard let last = components.last, let lastValue = Int(last), lastValue < Int.max else {
             return ""
         }
         components[components.count - 1] = String(lastValue + 1)

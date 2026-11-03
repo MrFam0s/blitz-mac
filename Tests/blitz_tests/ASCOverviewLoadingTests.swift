@@ -7,7 +7,7 @@ private func decoded<T: Decodable>(_ text: String, as: T.Type = T.self) -> T {
 }
 
 private let listingApp: ASCApp = decoded(#"{"id":"app-a","attributes":{"name":"Example","bundleId":"org.example.a","primaryLocale":"de-DE"}}"#)
-private let listingVersion: ASCAppStoreVersion = decoded(#"{"id":"version-a","attributes":{"versionString":"1.2","appStoreState":"READY_FOR_SALE"}}"#)
+private let listingVersion: ASCAppStoreVersion = decoded(#"{"id":"version-a","attributes":{"versionString":"1.2","appStoreState":"READY_FOR_SALE","platform":"IOS"}}"#)
 private let listingText: ASCVersionLocalization = decoded(#"{"id":"locale-a","attributes":{"locale":"de-DE","description":"Saved description","keywords":"words","supportUrl":"https://example.org"}}"#)
 
 private actor OverviewGate {

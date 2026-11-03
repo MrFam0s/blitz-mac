@@ -7,6 +7,24 @@ struct TerminalStartupProcess {
     let execName: String?
 }
 
+/// A multiline request must reach the interactive agent as one paste, followed
+/// by one Enter. Never type it line-by-line or route it through a shell command.
+enum TerminalAgentPromptInput {
+    static func bytes(for prompt: String) -> [UInt8] {
+        let normalized = prompt.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let text = normalized.unicodeScalars.map { scalar -> String in
+            if (scalar.value < 0x20 && scalar != "\n" && scalar != "\t") || scalar.value == 0x7f {
+                // Untrusted names/paths may contain control characters. Keep
+                // them visible without allowing an embedded paste terminator.
+                return String(format: "\\u%04X", scalar.value)
+            }
+            return String(scalar)
+        }.joined()
+        return Array(("\u{1b}[200~" + text + "\u{1b}[201~\r").utf8)
+    }
+}
+
 /// Opening the panel is navigation, not a new task. Codex owns history lookup
 /// and its no-history fallback; Blitz only supplies the real project directory.
 struct TerminalOpeningOptions {
@@ -138,6 +156,12 @@ final class TerminalSession: Identifiable {
 
     func markTerminated() {
         isTerminated = true
+    }
+
+    func sendAgentPrompt(_ prompt: String) {
+        guard !isTerminated else { return }
+        let data = TerminalAgentPromptInput.bytes(for: prompt)
+        terminalView.send(source: terminalView, data: data[...])
     }
 
     /// Send a command string to the shell (types it and presses Enter).
@@ -294,7 +318,14 @@ final class TerminalManager {
         resumeLastSession: Bool = false
     ) -> TerminalSession {
         if let reuseKey,
-           let id = agentSessionRegistry.existing(for: reuseKey, activeIDs: Set(sessions.filter { !$0.isTerminated }.map(\.id))),
+           let id = agentSessionRegistry.reuse(
+                for: reuseKey,
+                activeIDs: Set(sessions.filter { !$0.isTerminated }.map(\.id)),
+                prompt: prompt,
+                deliverPrompt: { [sessions] id, request in
+                    sessions.first(where: { $0.id == id })?.sendAgentPrompt(request)
+                }
+           ),
            let existing = sessions.first(where: { $0.id == id }) {
             activeSessionId = id
             return existing

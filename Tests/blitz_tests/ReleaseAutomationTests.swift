@@ -122,7 +122,7 @@ private func writeReleaseApp(_ path: URL, bundle: String = "org.example.test", p
 
 private func workflowVersion(_ id: String, _ number: String, _ state: String, date: String) -> ASCAppStoreVersion {
     ASCAppStoreVersion(id: id, attributes: .init(versionString: number, appStoreState: state,
-        releaseType: "AFTER_APPROVAL", createdDate: date, copyright: "Example"))
+        releaseType: "AFTER_APPROVAL", createdDate: date, copyright: "Example", platform: "IOS"))
 }
 private let workflowLive = workflowVersion("live", "1.9", "READY_FOR_SALE", date: "2026-10-01T00:00:00Z")
 private let workflowDraft = workflowVersion("draft", "1.10", "PREPARE_FOR_SUBMISSION", date: "2026-10-19T00:00:00Z")
@@ -135,7 +135,7 @@ private let workflowDraft = workflowVersion("draft", "1.10", "PREPARE_FOR_SUBMIS
     let automaticSession = context.sessionKey
     context.preparedVersion = try ReleaseAutomationService.preparedVersion(in: [workflowLive, workflowDraft])
     #expect(context.preparedVersion == PreparedReleaseVersion(id: "draft", version: "1.10"))
-    #expect(context.sessionKey != automaticSession)
+    #expect(context.sessionKey == automaticSession)
     #expect(ReleaseAutomationService.matchesPreparedVersion(context, versions: [workflowDraft, workflowLive]))
     #expect(!ReleaseAutomationService.matchesPreparedVersion(context, versions: [workflowLive]))
     for state in ["IN_REVIEW", "WAITING_FOR_REVIEW", "PENDING_DEVELOPER_RELEASE", "UNKNOWN"] {

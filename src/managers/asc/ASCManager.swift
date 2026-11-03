@@ -150,6 +150,12 @@ final class ASCManager {
     @ObservationIgnored var iconCheckedAt: Date?
     @ObservationIgnored var restoringCache = false
     var loadingFeedbackBuildIds: Set<String> = []
+    var releaseSubmissionOperation: UUID?
+    var configuredReleasePlatform: ProjectPlatform?
+    var releasePlatform: ProjectPlatform? {
+        get { configuredReleasePlatform ?? ASCReleaseStatus.inferredPlatform(from: appStoreVersions) }
+        set { configuredReleasePlatform = newValue }
+    }
     var loadedProjectId: String?
     var pendingBundleIDSetup: PendingBundleIDSetupContext?
 

@@ -22,9 +22,54 @@ func withThrowingTimeout<T: Sendable>(
     }
 }
 
+/// Target visible when a release tool is requested, before navigation or approval waits.
+/// No credentials are stored; accountKey is the existing non-secret account fingerprint.
+struct MCPReleaseRequestTarget: Equatable, Sendable {
+    let projectID: String?
+    let projectPath: String?
+    let bundleID: String?
+    let platform: String?
+    let appID: String?
+    let projectRevision: UUID
+    let credentialRevision: Int
+    let accountKey: String?
+    let selectedVersionID: String?
+
+    func matches(_ current: Self) -> Bool {
+        projectID == current.projectID && projectPath == current.projectPath
+            && bundleID == current.bundleID && platform == current.platform
+            && projectRevision == current.projectRevision
+            && credentialRevision == current.credentialRevision && accountKey == current.accountKey
+            && (appID == nil || appID == current.appID)
+            && (selectedVersionID == nil || selectedVersionID == current.selectedVersionID)
+    }
+
+    @MainActor static func capture(_ appState: AppState) -> Self {
+        let project = appState.activeProject
+        let manager = appState.ascManager
+        return Self(
+            projectID: project?.id,
+            projectPath: project.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path },
+            bundleID: project?.metadata.bundleIdentifier,
+            platform: project?.platform.rawValue,
+            appID: manager.app?.id,
+            projectRevision: manager.projectRevision,
+            credentialRevision: manager.credentialActivationRevision,
+            accountKey: DashboardSummaryStore.accountKey(for: manager.credentials),
+            selectedVersionID: manager.selectedVersionId
+        )
+    }
+}
+
 /// Executes MCP tool calls against AppState.
 /// Holds pending approval continuations for destructive operations.
 actor MCPExecutor {
+    @TaskLocal static var approvedReleaseTarget: MCPReleaseRequestTarget?
+
+    @MainActor static func releaseApprovalTargetMatches(_ appState: AppState) -> Bool {
+        approvedReleaseTarget.map { $0.matches(.capture(appState)) } ?? true
+    }
+
     private struct NavigationState: Sendable {
         let tab: AppTab
         let appSubTab: AppSubTab
@@ -68,6 +113,11 @@ actor MCPExecutor {
     /// Execute a tool call, requesting approval if needed.
     func execute(name: String, arguments: [String: Any]) async throws -> [String: Any] {
         let category = MCPRegistry.category(for: name)
+        let releaseTools: Set<String> = [
+            "asc_create_version", "asc_open_submit_preview", "app_store_build", "app_store_upload",
+        ]
+        let releaseTarget: MCPReleaseRequestTarget? = releaseTools.contains(name)
+            ? await MainActor.run { MCPReleaseRequestTarget.capture(appState) } : nil
 
         // Pre-navigate for ASC form tools so the user sees the target tab before approving.
         var previousNavigation: NavigationState?
@@ -104,7 +154,15 @@ actor MCPExecutor {
             }
         }
 
-        return try await executeTool(name: name, arguments: arguments)
+        if let releaseTarget {
+            let stillMatches = await MainActor.run { releaseTarget.matches(.capture(appState)) }
+            guard stillMatches else {
+                return mcpText("Error: the app, account or version changed while preparing this release request. Select the intended target and start the tool again.")
+            }
+        }
+        return try await Self.$approvedReleaseTarget.withValue(releaseTarget) {
+            try await executeTool(name: name, arguments: arguments)
+        }
     }
 
     /// Navigate to the appropriate tab before approval, and set pending form values.

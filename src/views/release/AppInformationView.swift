@@ -390,7 +390,7 @@ struct AppInformationView: View {
                     advancedSectionHeader("Version Information")
                         .padding(.top, 16)
 
-                    if asc.appStoreVersions.isEmpty {
+                    if asc.releaseVersions.isEmpty {
                         if isLoading {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
@@ -406,7 +406,7 @@ struct AppInformationView: View {
                                 .padding(.vertical, 8)
                         }
                     } else {
-                        ForEach(Array(asc.appStoreVersions.prefix(5).enumerated()), id: \.element.id) { idx, version in
+                        ForEach(Array(asc.releaseVersions.prefix(5).enumerated()), id: \.element.id) { idx, version in
                             BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
                                 Text(version.attributes.versionString)
                                     .font(.callout.weight(.medium))
@@ -426,7 +426,7 @@ struct AppInformationView: View {
                                 }
                             }
                             .padding(.vertical, 8)
-                            if idx < min(4, asc.appStoreVersions.count - 1) {
+                            if idx < min(4, asc.releaseVersions.count - 1) {
                                 Divider().opacity(0.5)
                             }
                         }
