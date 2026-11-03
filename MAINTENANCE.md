@@ -2,7 +2,7 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
-## Unreleased — app-name-based SKUs
+## 1.0.56 — app-name-based SKUs
 
 The App Store Connect creation prompt now resolves the confirmed public app name
 before assigning `<AppName>-iOS` (or `-macOS` for a macOS project). It preserves
@@ -13,8 +13,18 @@ automatically generated suffix. Existing App Store Connect records are unchanged
 
 Validation (2026-11-03): all 229 Swift tests pass after rebuilding the changed
 view with `swift test --build-system native --jobs 4`; independent source review
-found no blocker. This is an unreleased source change. No installed app, Store
-record or version/build number was changed, and no live creation was used as a test.
+found no blocker. Build 61 packages this change with the unchanged ASC 5.17.0
+helper. The bundled app-creation skill follows the same confirmed-name and SKU
+rules, maps iOS/macOS to the selected API platform, and asks before changing a
+conflicting SKU. No live app creation is used as a test.
+
+The release bundle and installed app pass strict deep Developer ID verification
+with the same designated requirement as build 60. Bundled and installed ASC
+protocol ping, direct CLI and cli.exec checks pass without account access.
+The new creation prompt and matching skill are present in the bundle. Native
+startup verification shows version 1.0.56, build 61 and the existing dashboard.
+The previous installed bundle is retained locally for rollback. No Store
+records or global configuration were changed; no cloud CI was triggered.
 
 ## 1.0.55 — prefer the Xcode icon source
 

@@ -9,7 +9,9 @@ Create an App Store Connect app using Apple's iris API. Authentication is handle
 
 Extract from the conversation context:
 - `bundleId` — the bundle identifier (e.g. `com.blitz.myapp`)
-- `sku` — the SKU string (may be provided; if missing, generate one from the app name)
+- `appName` — the confirmed public app name, which may differ from the project folder or bundle-ID suffix
+- `platform` — the selected project platform (`iOS` or `macOS`); ask if it is unresolved
+- `sku` — an explicitly selected SKU, or `<ConfirmedAppName>-<platform>` as resolved below
 
 ## Workflow
 
@@ -26,13 +28,21 @@ test -f ~/.blitz/asc-agent/web-session.json && echo "SESSION_EXISTS" || echo "NO
 
 Ask what primary language/locale the app should use. Common choices: `en-US` (English US), `en-GB` (English UK), `ja` (Japanese), `zh-Hans` (Simplified Chinese), `ko` (Korean), `fr-FR` (French), `de-DE` (German).
 
-### 3. Derive the app name
+### 3. Confirm the public name, platform and SKU
 
-Take the last component of the bundle ID after the final `.`, capitalize the first letter. Confirm with the user.
+Use the project context and the user's confirmed public app name. Do not infer a
+replacement name from the project folder or bundle-ID suffix, which may retain
+an old name. If the public name has not been confirmed, confirm it with the user.
+
+Unless the user has explicitly selected an alternative, use the confirmed name
+followed by `-iOS` or `-macOS` as the SKU (for example, `ClubBundle-iOS`). Preserve
+capitalization and do not add random digits. If Apple rejects its characters or
+reports a SKU conflict, ask the user for an alternative before trying again.
+Use `IOS` for an iOS app or `MAC_OS` for a macOS app in the API payload.
 
 ### 4. Create the app via iris API
 
-Use the following self-contained script. Replace `BUNDLE_ID`, `SKU`, `APP_NAME`, and `LOCALE` with the resolved values. **Do not print or log cookies.**
+Use the following self-contained script. Replace `BUNDLE_ID`, `SKU`, `APP_NAME`, `LOCALE`, and `PLATFORM` with the resolved values. **Do not print or log cookies.**
 
 Key differences from the public REST API:
 - Uses `appstoreconnect.apple.com/iris/v1/` (not `api.appstoreconnect.apple.com`)
@@ -54,6 +64,10 @@ BUNDLE_ID = 'BUNDLE_ID_HERE'
 SKU = 'SKU_HERE'
 APP_NAME = 'APP_NAME_HERE'
 LOCALE = 'LOCALE_HERE'
+PLATFORM = 'PLATFORM_HERE'  # IOS or MAC_OS, matching the selected project
+if PLATFORM not in ('IOS', 'MAC_OS'):
+    print('ERROR: Resolve the selected project platform before app creation.')
+    sys.exit(1)
 
 session_path = os.path.expanduser('~/.blitz/asc-agent/web-session.json')
 if not os.path.isfile(session_path):
@@ -100,7 +114,7 @@ create_body = json.dumps({
         {
             'type': 'appStoreVersions',
             'id': '\${new-appStoreVersion-1}',
-            'attributes': {'platform': 'IOS', 'versionString': '1.0'},
+            'attributes': {'platform': PLATFORM, 'versionString': '1.0'},
             'relationships': {
                 'appStoreVersionLocalizations': {
                     'data': [{'type': 'appStoreVersionLocalizations', 'id': '\${new-appStoreVersionLocalization-1}'}]
@@ -169,7 +183,10 @@ After success, report the App ID, bundle ID, name, and SKU to the user.
 Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz Neo. Then retry.
 
 ### 409 Conflict
-An app with the same bundle ID or SKU may already exist. Try a different SKU.
+Inspect the conflict first: an app with the same bundle ID or SKU may already
+exist. If the intended app already exists, confirm that record instead of
+creating a duplicate. If the SKU must change, ask the user for an alternative;
+do not silently append a suffix or retry with a generated SKU.
 
 ## Agent Behavior
 
