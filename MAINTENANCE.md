@@ -2,6 +2,20 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## Unreleased — app-name-based SKUs
+
+The App Store Connect creation prompt now resolves the confirmed public app name
+before assigning `<AppName>-iOS` (or `-macOS` for a macOS project). It preserves
+capitalization and no longer appends four random digits to the bundle-ID suffix.
+This keeps renamed apps independent of old project-folder and bundle-ID names.
+Invalid or already-used SKUs require an explicit alternative instead of an
+automatically generated suffix. Existing App Store Connect records are unchanged.
+
+Validation (2026-11-03): all 229 Swift tests pass after rebuilding the changed
+view with `swift test --build-system native --jobs 4`; independent source review
+found no blocker. This is an unreleased source change. No installed app, Store
+record or version/build number was changed, and no live creation was used as a test.
+
 ## 1.0.55 — prefer the Xcode icon source
 
 Dashboard refresh previously rescanned icons but could still select an obsolete

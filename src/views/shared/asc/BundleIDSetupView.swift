@@ -600,9 +600,9 @@ struct BundleIDSetupView: View {
     // MARK: - Auto-create via AI agent
 
     private func launchClaudeCodeForAppCreate(bundleId: String) {
-        let appSuffix = bundleId.split(separator: ".").last.map(String.init) ?? bundleId
-        let sku = appSuffix.uppercased() + String(format: "%04d", Int.random(in: 1000...9999))
-        let prompt = "Create a new App Store Connect app for \(bundleId) with SKU \(sku). Ask the user what primary language they want (e.g. en-US for English), then use the /asc-app-create-ui skill."
+        // Resolve the public name before choosing the permanent SKU: project folders
+        // and bundle-ID suffixes can retain an old name after an app is renamed.
+        let prompt = "Create a new \(platform.rawValue) App Store Connect app for \(bundleId). Confirm the public app name using the project context and ask the user what primary language they want (e.g. en-US for English). Use the confirmed app name followed by '-\(platform.rawValue)' as the SKU, preserving capitalization and without adding random digits (for example, ClubBundle-iOS). If Apple requires changes to the SKU's characters or the SKU is already taken, ask the user for an alternative. Then use the /asc-app-create-ui skill with the selected platform."
 
         var projectPath: String? = nil
         if let projectId = asc.loadedProjectId {
