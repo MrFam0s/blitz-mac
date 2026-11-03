@@ -53,8 +53,14 @@ direct CLI and cli.exec pass with ASC 5.17.0. The signing identity and designate
 requirement match the previous installed release. No Apple uploads, build
 attachments, draft creation or review submissions are used as tests, and no
 cloud workflow is dispatched. Automatic publication has not been exercised
-end-to-end against Apple. Installation and native UI verification are pending
-an unlocked desktop.
+end-to-end against Apple. The installed 1.0.59 / 64 bundle also passes strict
+deep signature verification and its helper passes protocol ping, direct CLI and
+cli.exec; app and shared CLI helpers are byte-identical. Native startup shows
+the correct version/build. The draft dialog visibly rejects malformed and
+already-existing version numbers, and supports the explicit no-copy selection.
+The dialog was cancelled without creating a draft. Existing build data refreshes
+successfully from Apple. The previous installed bundle is retained for rollback;
+existing user data and credentials remain in place.
 
 ## 1.0.58 — consistent app creation identities
 
