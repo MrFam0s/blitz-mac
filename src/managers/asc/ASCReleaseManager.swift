@@ -195,6 +195,7 @@ extension ASCManager {
         // version-scoped ASC resource, so the next tab refresh starts cleanly.
         let previousVersionId = selectedVersionId
         projectRevision = UUID()
+        cancelIrisFeedbackLoads()
         resetTabCacheTasks()
         for task in tabLoadTasks.values { task.cancel() }
         tabLoadTasks.removeAll()

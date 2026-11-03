@@ -45,7 +45,7 @@ struct FeedbackView: View {
                 if !builds.isEmpty {
                     Picker("Build", selection: $localSelectedBuildId) {
                         ForEach(builds) { build in
-                            Text("v\(build.attributes.version)")
+                            Text(TestFlightPresentation.buildLabel(build))
                                 .tag(build.id)
                         }
                     }
@@ -83,6 +83,16 @@ struct FeedbackView: View {
                         title: "Loading Feedback",
                         message: "Fetching tester comments and screenshots for this build."
                     )
+                } else if let error = asc.tabError[.feedback] {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Feedback could not be loaded", systemImage: "exclamationmark.triangle")
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                        Button("Retry") {
+                            Task { await asc.refreshBetaFeedback(buildId: effectiveBuildId) }
+                        }.buttonStyle(.bordered)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity).blitzPagePadding()
+                } else if asc.betaFeedback[effectiveBuildId] == nil {
+                    ASCTabLoadingPlaceholder(title: "Loading Feedback", message: "Fetching tester comments and screenshots for this build.")
                 } else {
                     ContentUnavailableView(
                         "No Feedback",
@@ -127,14 +137,14 @@ struct FeedbackView: View {
 
             if let device = item.attributes.deviceModel {
                 BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
-                    Image(systemName: "iphone")
+                    Image(systemName: "cpu")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Text(device)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if let os = item.attributes.osVersion {
-                        Text("iOS \(os)")
+                        Text("OS \(os)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

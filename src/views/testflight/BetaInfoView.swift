@@ -211,32 +211,27 @@ struct BetaInfoView: View {
     private func save(locId: String) {
         guard !locId.isEmpty, locId == selectedLocId, formRevision == asc.projectRevision,
               asc.betaLocalizations.contains(where: { $0.id == locId }), let service = asc.service else { return }
-        let revision = asc.projectRevision
+        let target = ASCTabReadTarget(asc)
         let values = editValues
+        let fields = ASCBetaInfoChanges.fields(original: populatedValues, edited: values)
+        guard !fields.isEmpty else { return }
         isSaving = true
         saveError = nil
         saveSuccess = false
         Task {
-            guard revision == asc.projectRevision else { return }
+            guard target.matches(asc) else { return }
             do {
-                try await service.patchBetaLocalization(
-                    id: locId,
-                    locale: "",
-                    description: values[0].isEmpty ? nil : values[0],
-                    feedbackEmail: values[1].isEmpty ? nil : values[1],
-                    marketingUrl: values[2].isEmpty ? nil : values[2],
-                    privacyPolicyUrl: values[3].isEmpty ? nil : values[3]
-                )
-                guard revision == asc.projectRevision else { return }
+                try await service.patchBetaLocalization(id: locId, fields: fields)
+                guard target.matches(asc) else { return }
                 saveSuccess = true
                 populatedValues = values
                 // Refresh tab data
                 await asc.refreshTabData(.betaInfo)
             } catch {
-                guard revision == asc.projectRevision else { return }
+                guard target.matches(asc) else { return }
                 saveError = error.localizedDescription
             }
-            guard revision == asc.projectRevision else { return }
+            guard target.matches(asc) else { return }
             isSaving = false
             syncLocalization()
         }

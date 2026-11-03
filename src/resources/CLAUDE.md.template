@@ -30,9 +30,9 @@ Two MCP servers are configured in `.mcp.json`:
 | Check submission readiness | `get_tab_state` tab="ascOverview" | `asc versions list` + manual checks |
 | Create subscription | `asc_create_subscription` (one call) | `asc subscriptions create` + localization + pricing (3 steps) |
 | Cancel stuck submission | N/A | `asc submit cancel --id "..."` |
-| List all builds | N/A | `asc builds list` |
-| Add beta testers | N/A | `asc testflight add-tester --email ...` |
-| Upload IPA | `app_store_upload` (with polling) | `asc builds upload --path ./app.ipa` |
+| List all builds | `get_tab_state` tab="builds" | `asc builds list --app APP_ID --paginate` |
+| Add beta testers | N/A | `asc testflight testers add --app APP_ID --email EMAIL --group GROUP_ID` |
+| Upload IPA | `app_store_upload` with explicit `ipaPath` | `asc builds upload --app APP_ID --ipa ./app.ipa` |
 | Financial reports | N/A | `asc finance download --period 2026-01` |
 
 Both tools share the same API key via Blitz Neo's auth bridge (`~/.blitz/asc-agent/config.json`). If `asc` is not on PATH: `export PATH="$HOME/.blitz/bin:$PATH"`
@@ -137,11 +137,11 @@ Build an IPA for App Store submission. Archives the Xcode project and exports a 
 
 ### app_store_upload
 
-Upload an IPA to App Store Connect / TestFlight. Optionally polls until build processing completes.
+Upload the exact IPA or macOS PKG to App Store Connect / TestFlight. Pass the artifact path returned by the build; no latest-export fallback is used. Optionally polls until build processing completes.
 
 | param | type | required | notes |
 |---|---|---|---|
-| ipaPath | string | no | Path to IPA (uses latest app_store_build output if omitted) |
+| ipaPath | string | yes | Exact IPA or macOS PKG path returned by the build |
 | skipPolling | boolean | no | Skip waiting for build processing (default: false) |
 
 ### asc_set_app_price
@@ -196,3 +196,22 @@ Create an auto-renewable subscription. Creates or reuses a subscription group.
 5. `app_store_build`
 6. `app_store_upload`
 7. `asc_open_submit_preview` — fix any flagged missing fields, then submit
+
+### TestFlight identity and distribution
+
+Use `get_tab_state` with `tab="builds"` or `tab="groups"` to read the complete list.
+Pass `buildId` or `groupId` to load that resource's read-only relationships.
+A build is identified by app ID, platform, marketing version, build number and
+build ID together. `processingState=VALID` alone does not establish internal or
+external testing availability; inspect beta status and expiry. Group membership
+and individual build assignments are separate relationships. An error or unloaded
+relationship is not an empty tester list.
+
+For changes, check the installed `asc testflight --help` and relevant subcommand
+help. Resolve the intended app, build, group and tester IDs before mutation and
+read back the relationships afterward. Existing tester membership uses
+`asc testflight testers add-groups --id TESTER_ID --group GROUP_ID`. Distinguish
+removing a tester from one group from deleting the tester; do not substitute one
+for the other. Preserve unrelated memberships, public-link settings and automatic
+distribution settings. Do not invite testers or distribute builds as a test of
+Blitz Neo itself.

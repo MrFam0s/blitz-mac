@@ -3,6 +3,31 @@ import Security
 
 private let irisFetchCooldown: TimeInterval = 30
 
+protocol IrisFeedbackService {
+    func fetchResolutionCenterThreadPages(appId: String) async throws -> [IrisRawPage]
+    func fetchMessagesAndRejectionsPages(threadId: String) async throws -> [IrisRawPage]
+}
+extension IrisService: IrisFeedbackService {}
+
+private struct ASCIrisFeedbackTarget {
+    let context: ASCTabReadTarget
+    let selectedVersionID: String?
+    let resolvedVersionID: String?
+    let focusVersionString: String?
+
+    @MainActor init(_ manager: ASCManager, focusVersionString: String?) {
+        context = ASCTabReadTarget(manager)
+        selectedVersionID = manager.selectedVersionId
+        resolvedVersionID = manager.selectedVersion?.id
+        self.focusVersionString = focusVersionString
+    }
+
+    @MainActor func matches(_ manager: ASCManager) -> Bool {
+        context.matches(manager) && manager.selectedVersionId == selectedVersionID
+            && manager.selectedVersion?.id == resolvedVersionID
+    }
+}
+
 // MARK: - Iris Session (Apple ID cookie-based auth for internal APIs)
 
 extension ASCManager {
@@ -24,7 +49,15 @@ extension ASCManager {
         rebuildSubmissionHistory(appId: appId)
     }
 
-    func fetchRejectionFeedback(force: Bool = false) async {
+    func cancelIrisFeedbackLoads() {
+        for task in irisFetchTasksByAppId.values { task.cancel() }
+        irisFetchTasksByAppId.removeAll()
+        irisFetchRequestIDsByAppId.removeAll()
+        irisLastFetchedAtByAppId.removeAll()
+        isLoadingIrisFeedback = false
+    }
+
+    func fetchRejectionFeedback(force: Bool = false, using serviceOverride: (any IrisFeedbackService)? = nil) async {
         let currentAppId = app?.id ?? "nil"
         irisLog("ASCManager.fetchRejectionFeedback: irisService=\(irisService != nil), appId=\(currentAppId), force=\(force)")
         guard app?.id != nil else {
@@ -32,7 +65,9 @@ extension ASCManager {
             return
         }
 
-        guard let appId = app?.id else { return }
+        guard let appId = app?.id, let service = serviceOverride ?? irisService else { return }
+        let target = ASCIrisFeedbackTarget(self, focusVersionString: feedbackFocusVersion()?.attributes.versionString)
+        guard target.matches(self) else { return }
         if let existingTask = irisFetchTasksByAppId[appId] {
             irisLog("ASCManager.fetchRejectionFeedback: joining in-flight fetch for appId=\(appId)")
             await existingTask.value
@@ -46,35 +81,41 @@ extension ASCManager {
             return
         }
 
+        let requestID = UUID()
         let task: Task<Void, Never> = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.performRejectionFeedbackFetch(appId: appId)
+            await self.performRejectionFeedbackFetch(appId: appId, service: service, target: target)
         }
+        irisFetchRequestIDsByAppId[appId] = requestID
         irisFetchTasksByAppId[appId] = task
         await task.value
+        guard irisFetchRequestIDsByAppId[appId] == requestID else { return }
         irisFetchTasksByAppId[appId] = nil
+        irisFetchRequestIDsByAppId[appId] = nil
     }
 
-    private func performRejectionFeedbackFetch(appId: String) async {
-        guard let irisService else {
-            irisLog("ASCManager.performRejectionFeedbackFetch: missing irisService for appId=\(appId)")
-            return
-        }
-
-        let focusVersionString = feedbackFocusVersion()?.attributes.versionString
+    private func performRejectionFeedbackFetch(
+        appId: String,
+        service: any IrisFeedbackService,
+        target: ASCIrisFeedbackTarget
+    ) async {
+        guard target.matches(self) else { return }
 
         isLoadingIrisFeedback = true
         irisFeedbackError = nil
 
         defer {
-            irisLastFetchedAtByAppId[appId] = Date()
-            isLoadingIrisFeedback = false
-            rebuildSubmissionHistory(appId: appId)
-            irisLog("ASCManager.fetchRejectionFeedback: done")
+            if target.matches(self) {
+                irisLastFetchedAtByAppId[appId] = Date()
+                isLoadingIrisFeedback = false
+                rebuildSubmissionHistory(appId: appId)
+                irisLog("ASCManager.fetchRejectionFeedback: done")
+            }
         }
 
         do {
-            let threadPages = try await irisService.fetchResolutionCenterThreadPages(appId: appId)
+            let threadPages = try await service.fetchResolutionCenterThreadPages(appId: appId)
+            guard target.matches(self) else { return }
             var threadsById: [String: IrisResolutionCenterThread] = [:]
             for page in threadPages {
                 try IrisArchiveStore.recordRawResponse(appId: appId, scopeKey: page.url, data: page.data)
@@ -87,25 +128,30 @@ extension ASCManager {
                 feedbackDate($0.attributes.createdDate) > feedbackDate($1.attributes.createdDate)
             }
             irisLog("ASCManager.fetchRejectionFeedback: got \(threads.count) threads")
-            resolutionCenterThreads = threads
-
             try await withThrowingTaskGroup(of: [IrisRawPage].self) { group in
                 for thread in threads {
                     group.addTask {
-                        try await irisService.fetchMessagesAndRejectionsPages(threadId: thread.id)
+                        try await service.fetchMessagesAndRejectionsPages(threadId: thread.id)
                     }
                 }
 
                 for try await pages in group {
+                    guard target.matches(self) else {
+                        group.cancelAll()
+                        throw CancellationError()
+                    }
                     for page in pages {
                         try IrisArchiveStore.recordRawResponse(appId: appId, scopeKey: page.url, data: page.data)
                     }
                 }
             }
 
+            guard target.matches(self) else { return }
             let projection = try IrisArchiveStore.rebuildProjection(appId: appId)
-            applyIrisProjection(projection, focusVersionString: focusVersionString)
+            resolutionCenterThreads = threads
+            applyIrisProjection(projection, focusVersionString: target.focusVersionString)
         } catch let error as IrisError {
+            guard target.matches(self) else { return }
             irisLog("ASCManager.fetchRejectionFeedback: IrisError: \(error)")
             if case .sessionExpired = error {
                 irisSessionState = .expired
@@ -115,6 +161,7 @@ extension ASCManager {
                 irisFeedbackError = error.localizedDescription
             }
         } catch {
+            guard target.matches(self) else { return }
             irisLog("ASCManager.fetchRejectionFeedback: error: \(error)")
             irisFeedbackError = error.localizedDescription
         }

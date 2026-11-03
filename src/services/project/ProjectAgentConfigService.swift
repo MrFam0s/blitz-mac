@@ -504,6 +504,10 @@ struct ProjectAgentConfigService {
         if !fm.fileExists(atPath: claudeMdFile.path) {
             try? Self.claudeMdContent(projectType: projectType)
                 .write(to: claudeMdFile, atomically: true, encoding: .utf8)
+        } else if let existing = try? String(contentsOf: claudeMdFile, encoding: .utf8) {
+            // Migrate only exact obsolete examples from our own template, never replace the document.
+            let updated = Self.updatedLegacyTestFlightExamples(in: existing)
+            if updated != existing { try? updated.write(to: claudeMdFile, atomically: true, encoding: .utf8) }
         }
 
         let rulesDir = claudeDir.appendingPathComponent("rules")
@@ -752,6 +756,15 @@ struct ProjectAgentConfigService {
     private static func ensureAllowPermission(_ permission: String, in allowList: inout [String]) {
         guard !allowList.contains(permission) else { return }
         allowList.append(permission)
+    }
+
+    static func updatedLegacyTestFlightExamples(in content: String) -> String {
+        guard content.contains("## blitz-macos"), content.contains("### app_store_upload") else { return content }
+        return content
+            .replacingOccurrences(of: "`asc testflight add-tester --email ...`", with: "`asc testflight testers add --app APP_ID --email EMAIL --group GROUP_ID`")
+            .replacingOccurrences(of: "`asc testflight add-tester --email user@example.com`", with: "`asc testflight testers add --app APP_ID --email user@example.com --group GROUP_ID`")
+            .replacingOccurrences(of: "| ipaPath | string | no | Path to IPA (uses latest app_store_build output if omitted) |", with: "| ipaPath | string | yes | Exact IPA or macOS PKG path returned by the build |")
+            .replacingOccurrences(of: "`asc builds upload --path ./app.ipa`", with: "`asc builds upload --app APP_ID --ipa ./app.ipa`")
     }
 
     private static func claudeMdContent(projectType: ProjectType) -> String {

@@ -2,82 +2,62 @@ import SwiftUI
 
 struct BuildsView: View {
     var appState: AppState
-
     private var asc: ASCManager { appState.ascManager }
-    @State private var selectedBuildId: String?
+    private var selection: Binding<String?> {
+        Binding(get: { asc.selectedTestFlightBuildId }, set: { asc.selectedTestFlightBuildId = $0 })
+    }
 
     var body: some View {
-        ASCCredentialGate(
-            appState: appState,
-            ascManager: asc,
-            projectId: appState.activeProjectId ?? "",
-            bundleId: appState.activeProject?.metadata.bundleIdentifier
-        ) {
-            ASCTabContent(appState: appState, asc: asc, tab: .builds, platform: appState.activeProject?.platform ?? .iOS, allowWithoutLocalProject: true) {
+        ASCCredentialGate(appState: appState, ascManager: asc,
+                          projectId: appState.activeProjectId ?? "",
+                          bundleId: appState.activeProject?.metadata.bundleIdentifier) {
+            ASCTabContent(appState: appState, asc: asc, tab: .builds,
+                          platform: appState.activeProject?.platform ?? .iOS, allowWithoutLocalProject: true) {
                 buildsContent
             }
         }
         .task(id: "\(appState.activeProjectId ?? ""):\(asc.credentialActivationRevision)") {
             await asc.ensureTabData(.builds)
         }
-        .onAppear { syncSelectedBuild() }
-        .onChange(of: asc.builds.map(\.id)) { _, _ in syncSelectedBuild() }
+        .onAppear { syncSelection() }
+        .onChange(of: asc.builds.map(\.id)) { _, _ in syncSelection() }
     }
 
-    @ViewBuilder
     private var buildsContent: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Builds")
-                    .font(BlitzLayout.pageTitle)
+                Text("Builds").font(BlitzLayout.pageTitle)
                 Spacer()
-                ASCTabRefreshButton(asc: asc, tab: .builds, helpText: "Refresh builds")
-            }
-            .blitzToolbar()
-
+                TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
+                    .help("Refresh builds and selected distribution details")
+            }.blitzToolbar()
             Divider()
-
             if asc.builds.isEmpty {
                 if asc.isTabLoading(.builds) {
-                    ASCTabLoadingPlaceholder(
-                        title: "Loading Builds",
-                        message: "Fetching TestFlight build metadata."
-                    )
+                    ASCTabLoadingPlaceholder(title: "Loading Builds", message: "Fetching TestFlight build metadata.")
                 } else {
-                    ContentUnavailableView(
-                        "No Builds",
-                        systemImage: "hammer",
-                        description: Text("No TestFlight builds found. Upload a build from Xcode.")
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ContentUnavailableView("No Builds", systemImage: "hammer",
+                                           description: Text("No TestFlight builds found for this app."))
                 }
             } else {
                 GeometryReader { geometry in
-                    if geometry.size.width < 720 {
+                    if geometry.size.width < 760 {
                         VStack(spacing: 0) {
-                            Picker("Build", selection: $selectedBuildId) {
+                            Picker("Build", selection: selection) {
                                 ForEach(asc.builds) { build in
-                                    Text("Build \(build.attributes.version) · \(build.attributes.processingState?.capitalized ?? "Unknown")")
-                                        .tag(Optional(build.id))
+                                    Text(TestFlightPresentation.buildLabel(build)).tag(Optional(build.id))
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .font(BlitzLayout.toolbarFont)
-                            .controlSize(.small)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .blitzPagePadding()
+                            .pickerStyle(.menu).controlSize(.small)
+                            .frame(maxWidth: .infinity, alignment: .leading).blitzPagePadding()
                             Divider()
                             selectedBuildDetail
                         }
                     } else {
                         HStack(spacing: 0) {
-                            List(selection: $selectedBuildId) {
-                                ForEach(asc.builds) { build in
-                                    buildRow(build).tag(build.id)
-                                }
-                            }
-                            .listStyle(.inset)
-                            .frame(width: 280)
+                            List(selection: selection) {
+                                ForEach(asc.builds) { build in buildRow(build).tag(build.id) }
+                            }.listStyle(.inset).frame(width: 280)
                             Divider()
                             selectedBuildDetail
                         }
@@ -87,12 +67,14 @@ struct BuildsView: View {
         }
     }
 
-    @ViewBuilder
-    private var selectedBuildDetail: some View {
-        if let bid = selectedBuildId,
-           let build = asc.builds.first(where: { $0.id == bid }) {
+    @ViewBuilder private var selectedBuildDetail: some View {
+        if let id = asc.selectedTestFlightBuildId,
+           let build = asc.builds.first(where: { $0.id == id }) {
             buildDetail(build)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task(id: "\(asc.app?.id ?? ""):\(asc.projectRevision):\(id)") {
+                    await asc.refreshTestFlightBuildDetail(buildId: id, force: false)
+                }
         } else {
             ContentUnavailableView("Select a Build", systemImage: "hammer")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -100,87 +82,116 @@ struct BuildsView: View {
     }
 
     private func buildRow(_ build: ASCBuild) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Version \(build.attributes.version)")
-                    .font(.callout.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                stateBadge(build.attributes.processingState ?? "Unknown")
-                    .fixedSize()
+        VStack(alignment: .leading, spacing: 5) {
+            Text(TestFlightPresentation.buildLabel(build))
+                .font(.callout.weight(.medium)).fixedSize(horizontal: false, vertical: true)
+            Text("Processing: \(TestFlightPresentation.status(build.attributes.processingState))")
+                .font(.caption).foregroundStyle(.secondary)
+            if let date = build.attributes.uploadedDate {
+                Text(ascShortDate(date)).font(.caption).foregroundStyle(.secondary)
             }
-            HStack {
-                if let date = build.attributes.uploadedDate {
-                    Text(ascShortDate(date))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if build.attributes.expired == true {
-                    Text("• Expired")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
+            if TestFlightPresentation.expiration(build) == "Expired" {
+                Text("Expired").font(.caption).foregroundStyle(.red)
             }
-        }
-        .padding(.vertical, 4)
+        }.padding(.vertical, 4)
     }
 
-    private func buildDetail(_ build: ASCBuild) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Build \(build.attributes.version)")
-                    .font(BlitzLayout.pageTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, BlitzLayout.sectionSpacing)
-
-                InfoRow(label: "Build Number", value: build.attributes.version)
-                Divider()
-                InfoRow(label: "Processing State", value: build.attributes.processingState ?? "—")
-                Divider()
-
-                if let date = build.attributes.uploadedDate {
-                    InfoRow(label: "Uploaded", value: ascLongDate(date))
+    private func buildDetail(_ listedBuild: ASCBuild) -> some View {
+        let detail = asc.testFlightBuildDetails[listedBuild.id]
+        let build = listedBuild
+        let loading = asc.loadingTestFlightBuildIds.contains(build.id)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                Text(TestFlightPresentation.buildLabel(build))
+                    .font(BlitzLayout.pageTitle).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 0) {
+                    InfoRow(label: "Marketing Version", value: build.preReleaseVersion?.attributes.version ?? "Not available")
                     Divider()
-                }
-                if let expiry = build.attributes.expirationDate {
-                    InfoRow(label: "Expires", value: ascShortDate(expiry))
+                    InfoRow(label: "Build Number", value: build.attributes.version)
                     Divider()
-                }
-                if let minOS = build.attributes.minOsVersion {
-                    InfoRow(label: "Min OS Version", value: minOS)
+                    InfoRow(label: "Platform", value: TestFlightPresentation.platform(build.preReleaseVersion?.attributes.platform))
                     Divider()
+                    InfoRow(label: "Processing", value: TestFlightPresentation.status(build.attributes.processingState))
+                    Divider()
+                    InfoRow(label: "Internal Testing", value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.internalBuildState))
+                    Divider()
+                    InfoRow(label: "External Testing", value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.externalBuildState))
+                    Divider()
+                    InfoRow(label: "Expiry", value: TestFlightPresentation.expiration(build))
+                    if let expiry = build.attributes.expirationDate {
+                        Divider()
+                        InfoRow(label: "Expires", value: ascLongDate(expiry))
+                    }
+                    if let date = build.attributes.uploadedDate {
+                        Divider()
+                        InfoRow(label: "Uploaded", value: ascLongDate(date))
+                    }
+                    if let minOS = build.attributes.minOsVersion {
+                        Divider()
+                        InfoRow(label: "Minimum OS", value: minOS)
+                    }
+                    Divider()
+                    InfoRow(label: "Build ID", value: build.id)
                 }
-                InfoRow(label: "Expired", value: build.attributes.expired == true ? "Yes" : "No")
-                Divider()
-                InfoRow(label: "Build ID", value: build.id)
+                HStack {
+                    Text("Distribution").font(BlitzLayout.sectionTitle)
+                    Spacer()
+                    TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
+                        .help("Refresh build details and distribution")
+                }
+                TestFlightDetailStatus(isLoading: loading, error: asc.testFlightBuildErrors[build.id], hasData: detail != nil) {
+                    refresh()
+                }
+                if let detail {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Assigned Groups (\(detail.betaGroups.count))").font(.headline)
+                        if detail.betaGroups.isEmpty {
+                            Text("No groups are assigned to this build.").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(detail.betaGroups) { group in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(group.attributes.name).font(.callout.weight(.medium))
+                                    Text(TestFlightPresentation.groupType(group)).font(.caption).foregroundStyle(.secondary)
+                                }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 4)
+                            }
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Individual Testers (\(detail.individualTesters.count))").font(.headline)
+                        Text("Direct assignments only. Testers who receive the build through a group are listed in that group's details.")
+                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        if detail.individualTesters.isEmpty {
+                            Text("No individual testers are assigned.").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(detail.individualTesters) { TestFlightTesterRow(tester: $0) }
+                        }
+                    }
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .blitzPagePadding()
+            .frame(maxWidth: .infinity, alignment: .leading).blitzPagePadding()
         }
     }
 
-    private func stateBadge(_ state: String) -> some View {
-        let color: Color = switch state {
-        case "PROCESSING": .orange
-        case "FAILED": .red
-        case "INVALID": .red
-        case "VALID": .green
-        default: .secondary
+    private func syncSelection() {
+        if !asc.builds.contains(where: { $0.id == asc.selectedTestFlightBuildId }) {
+            asc.selectedTestFlightBuildId = asc.builds.first?.id
         }
-        return Text(state.capitalized)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
     }
 
-    private func syncSelectedBuild() {
-        if let selectedBuildId,
-           asc.builds.contains(where: { $0.id == selectedBuildId }) {
-            return
+    private var isRefreshing: Bool {
+        asc.isTabLoading(.builds) || asc.selectedTestFlightBuildId.map { asc.loadingTestFlightBuildIds.contains($0) } == true
+    }
+
+    private func refresh() {
+        let revision = asc.projectRevision
+        let appId = asc.app?.id
+        let buildId = asc.selectedTestFlightBuildId
+        Task {
+            await asc.refreshTabData(.builds)
+            guard asc.projectRevision == revision, asc.app?.id == appId, !Task.isCancelled,
+                  asc.tabError[.builds] == nil, asc.selectedTestFlightBuildId == buildId,
+                  let buildId, asc.builds.contains(where: { $0.id == buildId }) else { return }
+            await asc.refreshTestFlightBuildDetail(buildId: buildId)
         }
-        selectedBuildId = asc.builds.first?.id
     }
 }

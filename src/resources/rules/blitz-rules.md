@@ -57,8 +57,8 @@ The `asc` CLI covers 60+ command groups — it almost certainly has what you nee
 | Set app title & description | `asc_fill_form` tab="appInformation" | `asc metadata update --locale en-US --name "..." --description "..."` |
 | Check if ready to submit | `get_tab_state` tab="ascOverview" | `asc versions list` + manual field checks |
 | Create a subscription | `asc_create_subscription` (one call) | `asc subscriptions create` + `asc subscriptions add-localization` + `asc pricing set` (three steps) |
-| List all builds | Not available via MCP | `asc builds list` |
-| Add beta testers | Not available via MCP | `asc testflight add-tester --email user@example.com` |
+| List all builds | `get_tab_state` tab="builds" | `asc builds list --app APP_ID --paginate` |
+| Add beta testers | Not available via MCP | `asc testflight testers add --app APP_ID --email user@example.com --group GROUP_ID` |
 | Upload IPA | `app_store_upload` with explicit `ipaPath` | `asc builds upload --app APP_ID --ipa ./app.ipa` |
 | Upload macOS PKG | `app_store_upload` with explicit `ipaPath` | `asc builds upload --app APP_ID --pkg ./app.pkg --platform MAC_OS --version VERSION --build-number BUILD` |
 | Get financial reports | Not available via MCP | `asc finance download --period 2026-01` |
@@ -77,3 +77,22 @@ After making code changes:
 2. `blitz-iphone` `describe_screen` — verify the UI updated as expected
 3. `blitz-iphone` `device_action` — interact (tap buttons, type text, swipe)
 4. `blitz-iphone` `describe_screen` — confirm the result
+
+### TestFlight identity and distribution
+
+Use `get_tab_state` with `tab="builds"` or `tab="groups"` to read the complete list.
+Pass `buildId` or `groupId` to load that resource's read-only relationships.
+A build is identified by app ID, platform, marketing version, build number and
+build ID together. `processingState=VALID` alone does not establish internal or
+external testing availability; inspect beta status and expiry. Group membership
+and individual build assignments are separate relationships. An error or unloaded
+relationship is not an empty tester list.
+
+For changes, check the installed `asc testflight --help` and relevant subcommand
+help. Resolve the intended app, build, group and tester IDs before mutation and
+read back the relationships afterward. Existing tester membership uses
+`asc testflight testers add-groups --id TESTER_ID --group GROUP_ID`. Distinguish
+removing a tester from one group from deleting the tester; do not substitute one
+for the other. Preserve unrelated memberships, public-link settings and automatic
+distribution settings. Do not invite testers or distribute builds as a test of
+Blitz Neo itself.

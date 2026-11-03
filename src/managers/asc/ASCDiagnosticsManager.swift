@@ -6,8 +6,12 @@ extension ASCManager {
         error: Error,
         metadata: [String: String] = [:]
     ) async {
+        // Feedback failures can echo tester identities or submitted comments.
+        // Keep the original error for the UI, but never persist it in diagnostics.
+        let loggedError: Error = metadata["tab"] == AppTab.feedback.rawValue
+            ? ASCError.notFound(ASCTestFlightPrivacy.omittedErrorDescription) : error
         var payload = metadata
-        payload["error"] = error.localizedDescription
+        payload["error"] = loggedError.localizedDescription
         if case let ASCError.httpError(statusCode, _) = error {
             payload["statusCode"] = String(statusCode)
         }
@@ -15,7 +19,7 @@ extension ASCManager {
         await ASCUpdateLogger.shared.event(event, metadata: payload)
         await ASCUpdateLogger.shared.snapshot(
             label: "\(event)_app_state",
-            body: diagnosticSnapshot(reason: event, error: error)
+            body: diagnosticSnapshot(reason: event, error: loggedError)
         )
     }
 
@@ -96,7 +100,9 @@ extension ASCManager {
         lines.append("  loadingFields: \(overviewReadinessLoadingFields.sorted().joined(separator: ","))")
         lines.append("  tabErrors:")
         for key in tabError.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
-            lines.append("    - \(key.rawValue): \(tabError[key] ?? "nil")")
+            let message = key == .feedback
+                ? ASCTestFlightPrivacy.omittedErrorDescription : (tabError[key] ?? "nil")
+            lines.append("    - \(key.rawValue): \(message)")
         }
         lines.append("  pendingFormTabs: \(pendingFormValues.keys.sorted().joined(separator: ","))")
         lines.append("  reviewSubmissions:")
@@ -131,7 +137,7 @@ extension ASCManager {
     }
 
     func fetchReviewDetailLogged(
-        service: AppStoreConnectService,
+        service: any ASCReviewMetadataService,
         versionId: String,
         context: String
     ) async -> ASCReviewDetail? {
@@ -158,7 +164,7 @@ extension ASCManager {
     }
 
     func fetchAgeRatingLogged(
-        service: AppStoreConnectService,
+        service: any ASCReviewMetadataService,
         appInfoId: String,
         context: String
     ) async -> ASCAgeRatingDeclaration? {

@@ -37,6 +37,11 @@ final class ASCManager {
     var betaLocalizations: [ASCBetaLocalization] = []
     var betaFeedback: [String: [ASCBetaFeedback]] = [:]  // keyed by build.id
     var selectedBuildId: String?
+    var feedbackErrorBuildId: String?
+    var selectedTestFlightBuildId: String?
+    var selectedTestFlightGroupId: String?
+    var testFlightBuildDetailCache = ASCTestFlightDetailCache<ASCTestFlightBuildDetail>()
+    var testFlightGroupDetailCache = ASCTestFlightDetailCache<ASCTestFlightGroupDetail>()
 
     // Monetization data
     var inAppPurchases: [ASCInAppPurchase] = []
@@ -90,6 +95,7 @@ final class ASCManager {
     var showAppleIDLogin = false
     var pendingWebAuthContinuation: CheckedContinuation<IrisSession?, Never>?
     var irisFetchTasksByAppId: [String: Task<Void, Never>] = [:]
+    var irisFetchRequestIDsByAppId: [String: UUID] = [:]
     var irisLastFetchedAtByAppId: [String: Date] = [:]
     var attachedSubmissionItemIDs: Set<String> = []  // IAP/subscription IDs attached via iris API
     var resolutionCenterThreads: [IrisResolutionCenterThread] = []

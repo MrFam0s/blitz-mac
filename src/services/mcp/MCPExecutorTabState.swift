@@ -236,47 +236,55 @@ extension MCPExecutor {
     }
 
     func executeGetTabState(_ args: [String: Any]) async throws -> [String: Any] {
-        let tabStr = args["tab"] as? String
         let tab: AppTab
-        if let tabStr {
-            if tabStr == "ascOverview" || tabStr == "overview" {
-                tab = .app
-            } else if let parsed = MCPAppInformationCompatibility.resolveAppTab(tabStr) {
-                tab = parsed
-            } else {
-                tab = await MainActor.run { appState.activeTab }
-            }
-        } else {
-            tab = await MainActor.run { appState.activeTab }
+        if let requested = args["tab"] as? String {
+            if requested == "ascOverview" || requested == "overview" { tab = .app }
+            else if let parsed = MCPAppInformationCompatibility.resolveAppTab(requested) { tab = parsed }
+            else { return mcpText("Error: unknown tab \(requested).") }
+        } else { tab = await MainActor.run { appState.activeTab } }
+        let buildID = (args["buildId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let groupID = (args["groupId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard buildID == nil || (tab == .builds && buildID?.isEmpty == false),
+              groupID == nil || (tab == .groups && groupID?.isEmpty == false) else {
+            return mcpText("Error: buildId requires the builds tab; groupId requires the groups tab. IDs must not be empty.")
         }
+        return mcpJSON(await readTabState(tab, buildID: buildID, groupID: groupID))
+    }
 
-        if tab == .app {
-            await appState.ascManager.syncOverviewSubmissionReadiness(forceRefresh: true)
+    @MainActor
+    private func readTabState(_ tab: AppTab, buildID: String?, groupID: String?) async -> [String: Any] {
+        let asc = appState.ascManager
+        let target = ASCTabReadTarget(asc)
+        let projectID = appState.activeProjectId
+        if tab == .app { await asc.syncOverviewSubmissionReadiness(forceRefresh: true) }
+        else if [.builds, .groups, .betaInfo, .feedback].contains(tab) { await asc.ensureTabData(tab) }
+        guard target.matches(asc), projectID == appState.activeProjectId else {
+            return ["success": false, "error": "The app or account changed while loading tab data. Read the intended app again."]
         }
-
-        var result = await MainActor.run { () -> [String: Any] in
-            let asc = appState.ascManager
-            var value: [String: Any] = [
-                "tab": tab.rawValue,
-                "isLoading": asc.isLoadingTab[tab] ?? false,
-            ]
-            if let error = asc.tabError[tab] { value["error"] = error }
-            if let writeErr = asc.writeError { value["writeError"] = writeErr }
-            if tab.isASCTab, let app = asc.app {
-                value["app"] = ["id": app.id, "name": app.name, "bundleId": app.bundleId]
-            }
-            return value
+        let detailBuildID = tab == .builds ? (buildID ?? asc.selectedTestFlightBuildId) : nil
+        let detailGroupID = tab == .groups ? (groupID ?? asc.selectedTestFlightGroupId) : nil
+        if let detailBuildID { _ = await asc.refreshTestFlightBuildDetail(buildId: detailBuildID, force: false) }
+        if let detailGroupID { _ = await asc.refreshTestFlightGroupDetail(groupId: detailGroupID, force: false) }
+        guard target.matches(asc), projectID == appState.activeProjectId else {
+            return ["success": false, "error": "The app or account changed while loading TestFlight relationships. Read the intended app again."]
         }
-
-        let tabData = await MainActor.run { () -> [String: Any] in
-            let projectId = appState.activeProjectId
-            return tabStateData(for: tab, asc: appState.ascManager, projectId: projectId)
+        // Header and payload are captured in one actor turn, so IDs cannot refer to different apps.
+        var result: [String: Any] = [
+            "tab": tab.rawValue,
+            "isLoading": asc.isTabLoading(tab),
+            "dataLoaded": asc.loadedTabs.contains(tab),
+            "needsRefresh": asc.tabsNeedingRevalidation.contains(tab) || asc.tabError[tab] != nil,
+        ]
+        if let date = asc.tabLoadedAt[tab] { result["loadedAt"] = ISO8601DateFormatter().string(from: date) }
+        if let error = asc.tabError[tab] { result["error"] = error }
+        if let error = asc.writeError { result["writeError"] = error }
+        if tab.isASCTab, let app = asc.app {
+            result["app"] = ["id": app.id, "name": app.name, "bundleId": app.bundleId]
         }
-        for (key, value) in tabData {
-            result[key] = value
-        }
-
-        return mcpJSON(result)
+        result.merge(tabStateData(for: tab, asc: asc, projectId: projectID)) { _, new in new }
+        if let detailBuildID { result.merge(testFlightBuildDetailState(asc, id: detailBuildID)) { _, new in new } }
+        if let detailGroupID { result.merge(testFlightGroupDetailState(asc, id: detailGroupID)) { _, new in new } }
+        return result
     }
 
     /// Extract tab-specific state data. Must be called on MainActor.
@@ -534,27 +542,13 @@ extension MCPExecutor {
 
     @MainActor
     func tabStateBuilds(_ asc: ASCManager) -> [String: Any] {
-        let builds = asc.builds.prefix(20).map { build -> [String: Any] in
-            [
-                "id": build.id,
-                "version": build.attributes.version,
-                "processingState": build.attributes.processingState ?? "unknown",
-                "uploadedDate": build.attributes.uploadedDate ?? ""
-            ]
-        }
-        return ["builds": builds]
+        Self.testFlightBuildListPayload(asc.builds)
     }
 
     @MainActor
     func tabStateGroups(_ asc: ASCManager) -> [String: Any] {
-        let groups = asc.betaGroups.map { group -> [String: Any] in
-            [
-                "id": group.id,
-                "name": group.attributes.name,
-                "isInternalGroup": group.attributes.isInternalGroup ?? false
-            ]
-        }
-        return ["betaGroups": groups]
+        ["betaGroups": asc.betaGroups.map(Self.testFlightGroupPayload),
+         "totalGroups": asc.betaGroups.count, "truncated": false]
     }
 
     @MainActor
@@ -563,7 +557,10 @@ extension MCPExecutor {
             [
                 "id": localization.id,
                 "locale": localization.attributes.locale,
-                "description": localization.attributes.description ?? ""
+                "description": localization.attributes.description ?? "",
+                "feedbackEmail": localization.attributes.feedbackEmail ?? "",
+                "marketingUrl": localization.attributes.marketingUrl ?? "",
+                "privacyPolicyUrl": localization.attributes.privacyPolicyUrl ?? ""
             ]
         }
         return ["betaLocalizations": localizations]

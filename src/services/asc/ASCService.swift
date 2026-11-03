@@ -1,19 +1,29 @@
 import Foundation
 
 final class AppStoreConnectService {
-    private let client: ASCDaemonClient
+    typealias RequestTransport = (String, String, [String: String], Data?) async throws -> ASCDaemonClient.HTTPResponse
+    private let client: ASCDaemonClient?
+    private let requestTransport: RequestTransport?
     private let session = URLSession.shared
     private let updateLogger = ASCUpdateLogger.shared
 
     init(credentials: ASCCredentials) {
         self.client = ASCDaemonClient(credentials: credentials)
+        self.requestTransport = nil
+    }
+
+    /// Offline request injection keeps API contract tests independent of credentials and the helper.
+    init(requestTransport: @escaping RequestTransport) {
+        self.client = nil
+        self.requestTransport = requestTransport
     }
 
     func cliExec(
         args: [String],
         responseTimeoutSeconds: TimeInterval? = nil
     ) async throws -> (exitCode: Int, stdout: String, stderr: String) {
-        try await client.cliExec(args: args, responseTimeoutSeconds: responseTimeoutSeconds)
+        guard let client else { throw ASCError.notFound("CLI is unavailable for this request transport.") }
+        return try await client.cliExec(args: args, responseTimeoutSeconds: responseTimeoutSeconds)
     }
 
     // MARK: - HTTP
@@ -27,8 +37,11 @@ final class AppStoreConnectService {
         body: Data? = nil
     ) async throws -> ASCDaemonClient.HTTPResponse {
         let resolvedPath = try resolvedPath(path, queryItems: queryItems)
+        if let requestTransport { return try await requestTransport(method, resolvedPath, headers, body) }
+        guard let client else { throw ASCError.notFound("App Store Connect transport is unavailable.") }
         let requestId = UUID().uuidString
-        await updateLogger.request(id: requestId, method: method, path: resolvedPath, body: body)
+        await updateLogger.request(id: requestId, method: method, path: resolvedPath,
+                                   body: body.map { ASCTestFlightPrivacy.bodyForLogging($0, path: resolvedPath) })
 
         do {
             let response = try await client.request(
@@ -42,11 +55,13 @@ final class AppStoreConnectService {
                 method: method,
                 path: resolvedPath,
                 statusCode: response.statusCode,
-                body: response.body
+                body: ASCTestFlightPrivacy.bodyForLogging(response.body, path: resolvedPath)
             )
             return response
         } catch {
-            await updateLogger.failure(id: requestId, method: method, path: resolvedPath, error: error)
+            let loggedError = ASCTestFlightPrivacy.shouldRedact(path: resolvedPath)
+                ? ASCError.notFound(ASCTestFlightPrivacy.omittedErrorDescription) : error
+            await updateLogger.failure(id: requestId, method: method, path: resolvedPath, error: loggedError)
             throw error
         }
     }
@@ -87,6 +102,63 @@ final class AppStoreConnectService {
             throw ASCError.httpError(response.statusCode, body)
         }
         return try JSONDecoder().decode(T.self, from: response.body)
+    }
+
+    /// Only follow pagination on the original official API endpoint. This also normalizes
+    /// links before cycle detection, so absolute/relative spellings cannot hide a repeated page.
+    private func paginationPath(_ path: String, queryItems: [URLQueryItem], endpoint: String) throws -> String {
+        let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved: String
+        if raw.hasPrefix("?") {
+            resolved = endpoint + raw
+        } else if raw.hasPrefix("/") || raw.hasPrefix("https://") || raw.hasPrefix("http://") {
+            resolved = raw
+        } else {
+            resolved = "/v1/" + raw
+        }
+        let base = URL(string: "https://api.appstoreconnect.apple.com")!
+        guard let url = URL(string: resolved, relativeTo: base)?.absoluteURL,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+              components.scheme == "https", components.host == base.host,
+              components.user == nil, components.password == nil, components.port == nil,
+              components.fragment == nil, components.path == endpoint else { throw ASCError.invalidURL }
+        var items = components.queryItems ?? []
+        for item in queryItems {
+            let existing = items.filter { $0.name == item.name }
+            if item.name.hasPrefix("filter["), existing.contains(where: { $0.value != item.value }) {
+                throw ASCError.notFound("Pagination changed the selected TestFlight scope.")
+            }
+            if existing.isEmpty { items.append(item) }
+        }
+        components.queryItems = items.sorted {
+            $0.name == $1.name ? ($0.value ?? "") < ($1.value ?? "") : $0.name < $1.name
+        }
+        guard let result = components.string else { throw ASCError.invalidURL }
+        return result
+    }
+
+    private func getAllPages<T: Decodable & Identifiable>(_ path: String, queryItems: [URLQueryItem] = [], as: T.Type) async throws -> [T] {
+        let endpoint = URLComponents(string: try resolvedPath(path))!.path
+        var next: String? = path
+        var visited: Set<String> = []
+        var result: [T] = []
+        var seenIDs: Set<T.ID> = []
+        while let page = next {
+            try Task.checkCancellation()
+            let checked = try paginationPath(page, queryItems: queryItems, endpoint: endpoint)
+            guard visited.insert(checked).inserted else { throw ASCError.notFound("Repeated App Store Connect page.") }
+            let response = try await get(checked, as: ASCPaginatedResponse<T>.self)
+            result.append(contentsOf: response.data.filter { seenIDs.insert($0.id).inserted })
+            next = response.links?.next
+        }
+        return result
+    }
+
+    private func testFlightResourceID(_ value: String) throws -> String {
+        guard !value.isEmpty, value.utf8.allSatisfy({
+            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
+        }) else { throw ASCError.invalidURL }
+        return value
     }
 
     private func patch(path: String, body: [String: Any]) async throws {
@@ -346,31 +418,43 @@ final class AppStoreConnectService {
     // MARK: - Builds
 
     func fetchBuilds(appId: String) async throws -> [ASCBuild] {
+        try await fetchTestFlightBuilds(appId: appId, groupId: nil)
+    }
+
+    private func fetchTestFlightBuilds(appId: String, groupId: String?) async throws -> [ASCBuild] {
+        var query = [
+            URLQueryItem(name: "filter[app]", value: appId),
+            URLQueryItem(name: "sort", value: "-uploadedDate"),
+            URLQueryItem(name: "limit", value: "200"),
+            URLQueryItem(name: "include", value: "preReleaseVersion,app,buildBetaDetail"),
+            URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion,buildBetaDetail")
+        ]
+        if let groupId { query.append(URLQueryItem(name: "filter[betaGroups]", value: groupId)) }
         var builds: [ASCBuild] = []
+        var seenIDs: Set<String> = []
         var next: String? = "builds"
         var visited: Set<String> = []
         while let path = next {
-            guard visited.insert(path).inserted else { throw ASCError.notFound("Repeated build-history page.") }
-            let query = visited.count == 1 ? [
-                URLQueryItem(name: "filter[app]", value: appId),
-                URLQueryItem(name: "sort", value: "-uploadedDate"),
-                URLQueryItem(name: "limit", value: "200"),
-                URLQueryItem(name: "include", value: "preReleaseVersion,app"),
-                URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion")
-            ] : []
-            let response = try await get(path, queryItems: query, as: ASCBuildListResponse.self)
-            builds.append(contentsOf: response.builds)
+            try Task.checkCancellation()
+            let checked = try paginationPath(path, queryItems: query, endpoint: "/v1/builds")
+            guard visited.insert(checked).inserted else { throw ASCError.notFound("Repeated build-history page.") }
+            let response = try await get(checked, as: ASCBuildListResponse.self)
+            guard response.builds.allSatisfy({ $0.appId == appId }) else {
+                throw ASCError.notFound("Build response does not match the selected app.")
+            }
+            builds.append(contentsOf: response.builds.filter { seenIDs.insert($0.id).inserted })
             next = response.links?.next
         }
         return builds
     }
 
     func fetchBuild(id: String) async throws -> ASCBuild {
+        let id = try testFlightResourceID(id)
         let response = try await get("builds/\(id)", queryItems: [
-            URLQueryItem(name: "include", value: "preReleaseVersion,app"),
-            URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion")
+            URLQueryItem(name: "include", value: "preReleaseVersion,app,buildBetaDetail"),
+            URLQueryItem(name: "fields[builds]", value: "version,uploadedDate,processingState,expirationDate,expired,minOsVersion,iconAssetToken,app,preReleaseVersion,buildBetaDetail")
         ], as: ASCBuildResponse.self)
-        guard let build = response.build else { throw ASCError.notFound("Build \(id) was not found.") }
+        guard let build = response.build, build.id == id else { throw ASCError.notFound("Build \(id) was not found.") }
         return build
     }
 
@@ -445,51 +529,89 @@ final class AppStoreConnectService {
     // MARK: - Beta Groups
 
     func fetchBetaGroups(appId: String) async throws -> [ASCBetaGroup] {
-        let resp = try await get(
-            "apps/\(appId)/betaGroups",
-            as: ASCListResponse<ASCBetaGroup>.self
-        )
-        return resp.data
+        let appId = try testFlightResourceID(appId)
+        return try await getAllPages("apps/\(appId)/betaGroups", queryItems: [
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaGroup.self)
+    }
+
+    func fetchTestFlightBuildDetail(appId: String, buildId: String) async throws -> ASCTestFlightBuildDetail {
+        let build = try await fetchBuild(id: buildId)
+        guard build.appId == appId else { throw ASCError.notFound("Build does not belong to the selected app.") }
+        // Apple exposes this association through the filtered collection, not /builds/{id}/betaGroups.
+        // This endpoint accepts only one relationship filter. Validate the parent above
+        // and every returned group's app below instead of combining app and build filters.
+        let groups = try await getAllPages("betaGroups", queryItems: [
+            URLQueryItem(name: "filter[builds]", value: buildId),
+            URLQueryItem(name: "include", value: "app"),
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaGroup.self)
+        guard groups.allSatisfy({ $0.appId == appId }) else {
+            throw ASCError.notFound("Build groups do not match the selected app.")
+        }
+        let testers = try await getAllPages("builds/\(buildId)/individualTesters", queryItems: [
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaTester.self)
+        return ASCTestFlightBuildDetail(build: build, betaGroups: groups, individualTesters: testers)
+    }
+
+    func fetchTestFlightGroupDetail(appId: String, groupId: String) async throws -> ASCTestFlightGroupDetail {
+        let groupId = try testFlightResourceID(groupId)
+        let response = try await get("betaGroups/\(groupId)", queryItems: [
+            URLQueryItem(name: "include", value: "app")
+        ], as: ASCSingleResponse<ASCBetaGroup>.self)
+        let group = response.data
+        guard group.id == groupId, group.appId == appId else {
+            throw ASCError.notFound("Group does not belong to the selected app.")
+        }
+        let builds = try await fetchTestFlightBuilds(appId: appId, groupId: groupId)
+        let testers = try await getAllPages("betaGroups/\(groupId)/betaTesters", queryItems: [
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaTester.self)
+        return ASCTestFlightGroupDetail(group: group, builds: builds, testers: testers)
     }
 
     // MARK: - Beta Localizations
 
     func fetchBetaLocalizations(appId: String) async throws -> [ASCBetaLocalization] {
-        let resp = try await get(
-            "apps/\(appId)/betaAppLocalizations",
-            as: ASCListResponse<ASCBetaLocalization>.self
-        )
-        return resp.data
+        let appId = try testFlightResourceID(appId)
+        return try await getAllPages("apps/\(appId)/betaAppLocalizations", queryItems: [
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaLocalization.self)
     }
 
     func patchBetaLocalization(id: String, locale: String, description: String?,
                                feedbackEmail: String?, marketingUrl: String?,
                                privacyPolicyUrl: String?) async throws {
-        var attrs: [String: Any] = [:]
-        if let v = description { attrs["description"] = v }
-        if let v = feedbackEmail { attrs["feedbackEmail"] = v }
-        if let v = marketingUrl { attrs["marketingUrl"] = v }
-        if let v = privacyPolicyUrl { attrs["privacyPolicyUrl"] = v }
+        var fields: [String: String] = [:]
+        if let description { fields["description"] = description }
+        if let feedbackEmail { fields["feedbackEmail"] = feedbackEmail }
+        if let marketingUrl { fields["marketingUrl"] = marketingUrl }
+        if let privacyPolicyUrl { fields["privacyPolicyUrl"] = privacyPolicyUrl }
+        try await patchBetaLocalization(id: id, fields: fields)
+    }
 
-        let body: [String: Any] = [
-            "data": [
-                "type": "betaAppLocalizations",
-                "id": id,
-                "attributes": attrs
-            ]
-        ]
+    /// Missing keys are unchanged. An explicitly edited empty field is cleared with JSON null,
+    /// as specified by BetaAppLocalizationUpdateRequest's nullable attributes.
+    func patchBetaLocalization(id: String, fields: [String: String]) async throws {
+        let id = try testFlightResourceID(id)
+        let allowed: Set<String> = ["description", "feedbackEmail", "marketingUrl", "privacyPolicyUrl", "tvOsPrivacyPolicy"]
+        guard Set(fields.keys).isSubset(of: allowed) else { throw ASCError.notFound("Unsupported beta localization field.") }
+        guard !fields.isEmpty else { return }
+        let attrs: [String: Any] = fields.mapValues { $0.isEmpty ? NSNull() : $0 as Any }
+        let body: [String: Any] = ["data": ["type": "betaAppLocalizations", "id": id, "attributes": attrs]]
         try await patch(path: "betaAppLocalizations/\(id)", body: body)
     }
 
     // MARK: - Beta Feedback
 
     func fetchBetaFeedback(appId: String, buildId: String) async throws -> [ASCBetaFeedback] {
-        let resp = try await get("apps/\(appId)/betaFeedbackScreenshotSubmissions", queryItems: [
+        let appId = try testFlightResourceID(appId)
+        return try await getAllPages("apps/\(appId)/betaFeedbackScreenshotSubmissions", queryItems: [
             URLQueryItem(name: "filter[build]", value: buildId),
             URLQueryItem(name: "sort", value: "-createdDate"),
-            URLQueryItem(name: "limit", value: "50")
-        ], as: ASCListResponse<ASCBetaFeedback>.self)
-        return resp.data
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCBetaFeedback.self)
     }
 
     // MARK: - Write: Localization
@@ -1531,6 +1653,7 @@ final class AppStoreConnectService {
     // MARK: - Write: Build Encryption
 
     func patchBuildEncryption(buildId: String, usesNonExemptEncryption: Bool) async throws {
+        guard let client else { throw ASCError.notFound("Build encryption requires the ASC daemon transport.") }
         let requestBody: [String: Any] = [
             "data": [
                 "type": "builds",

@@ -162,7 +162,9 @@ enum MCPRegistry {
                     "app", "ascOverview", "overview",
                     "appInformation", "screenshots", "monetization", "review",
                     "analytics", "reviews", "builds", "groups", "betaInfo", "feedback"
-                ]]
+                ]],
+                "buildId": ["type": "string", "description": "With tab=builds, load read-only beta status, group assignments and individually assigned testers for this exact build in the current app."],
+                "groupId": ["type": "string", "description": "With tab=groups, load read-only build and tester memberships for this exact group in the current app."]
             ],
             required: []
         ))

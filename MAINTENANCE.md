@@ -2,6 +2,56 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.60 — consistent TestFlight data and relationships
+
+Builds display marketing version, build number and platform together, with
+processing, internal/external beta status and expiry kept distinct. Read-only
+build details show assigned groups and individual testers; group details show
+assigned builds and group members. These are separate relationships, not proof
+of installation or permission to invite/distribute. Narrow views use compact
+selectors with vertically flowing details. Unknown, unloaded and failed states
+are distinct from confirmed empty lists.
+
+Group, beta-localization, feedback and relationship reads follow all API pages.
+Pagination retains the original endpoint/filters and rejects cycles or changed
+scope. Relationship reads validate their exact app and parent resource. The
+bounded detail cache stays in memory, rejects late replies after context changes,
+and retains confirmed values with an explicit warning on refresh failure. Tester
+and feedback bodies are omitted from API/daemon logs and feedback diagnostics.
+
+Review loads stage their data before a guarded commit, so delayed review replies
+cannot overwrite another app's TestFlight builds. The same captured context is
+checked throughout review secondary loading. Iris feedback also captures its
+project/account/version and request ownership, so late results and cleanup cannot
+replace a newer request. MCP tab reads capture header and
+data atomically after loading, expose complete build identities/history and can
+read selected relationships through explicit buildId/groupId parameters.
+
+Beta Info sends only changed fields; clearing an optional field sends explicit
+JSON null instead of silently retaining its previous value. Tester and artifact
+instructions match ASC 5.17.0. Exact obsolete examples in previously generated
+project guides are migrated without replacing the rest of the user's document.
+
+Build 65 retains ASC 5.17.0, the bundle identifier and Developer ID identity.
+Validation (2026-11-03): all 344 Swift tests pass, including delayed account,
+project and version switches, pagination scope/cycles, anonymous testers, explicit
+field clearing and privacy-safe diagnostics. Independent reviews covered service,
+manager, UI and MCP changes. The signed release and installed bundle pass strict
+deep Developer ID verification. Signing identity and designated requirement match
+the previous release. Protocol ping, direct CLI and cli.exec pass with ASC 5.17.0;
+the installed app and shared CLI helpers are byte-identical.
+
+Read-only live verification checks both directions of build/group relationships
+and group members. It caught Apple's rejection of combined app/build relationship
+filters on betaGroups; the corrected request uses the build filter and validates
+every returned group's app, with a regression fixture for the HTTP 400 restriction.
+Installed UI checks confirm build identities, beta/expiry statuses, group and
+individual assignments, and compact selectors/details beside the terminal. Beta
+Info loads successfully. No tester invitations, distribution changes, uploads or
+Store mutations are used as tests; no cloud workflow is dispatched. Mutation
+behavior is validated offline. The previous 1.0.59 / 64 bundle is retained for
+rollback; user data and credentials remain in place.
+
 ## 1.0.59 — consistent existing-app updates
 
 Release operations capture the project, app, account, platform and selected

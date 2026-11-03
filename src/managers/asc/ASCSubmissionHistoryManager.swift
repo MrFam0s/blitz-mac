@@ -99,11 +99,17 @@ extension ASCManager {
         return nil
     }
 
-    func refreshReviewSubmissionData(appId: String, service: AppStoreConnectService) async {
+    func refreshReviewSubmissionData(
+        appId: String,
+        service: any ASCReviewSubmissionDataService,
+        isCurrent: (() -> Bool)? = nil
+    ) async {
         let revision = projectRevision
+        guard !Task.isCancelled, isCurrent?() != false else { return }
         await ASCUpdateLogger.shared.event("review_submission_refresh_started", metadata: [
             "appId": appId,
         ])
+        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
 
         let submissions: [ASCReviewSubmission]
         do {
@@ -111,7 +117,7 @@ extension ASCManager {
                 !trimmed($0.attributes.submittedDate).isEmpty
             }
         } catch {
-            guard projectRevision == revision, !Task.isCancelled else { return }
+            guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
             reviewSubmissions = []
             reviewSubmissionItemsBySubmissionId = [:]
             latestSubmissionItems = []
@@ -120,10 +126,10 @@ extension ASCManager {
             ])
             return
         }
-        guard projectRevision == revision, !Task.isCancelled else { return }
-        reviewSubmissions = submissions
+        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
 
         guard !submissions.isEmpty else {
+            reviewSubmissions = []
             reviewSubmissionItemsBySubmissionId = [:]
             latestSubmissionItems = []
             await ASCUpdateLogger.shared.event("review_submission_refresh_succeeded", metadata: [
@@ -155,7 +161,8 @@ extension ASCManager {
             }
         }
 
-        guard projectRevision == revision, !Task.isCancelled else { return }
+        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
+        reviewSubmissions = submissions
         reviewSubmissionItemsBySubmissionId = itemsBySubmissionId
         latestSubmissionItems = itemsBySubmissionId[submissions.first?.id ?? ""] ?? []
         await ASCUpdateLogger.shared.event("review_submission_refresh_succeeded", metadata: [

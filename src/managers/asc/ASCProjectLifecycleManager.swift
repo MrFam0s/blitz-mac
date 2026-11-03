@@ -360,6 +360,7 @@ extension ASCManager {
 
     func resetProjectData(preserveCredentials: Bool) {
         projectRevision = UUID()
+        cancelIrisFeedbackLoads()
         resetTabCacheTasks()
         for task in tabLoadTasks.values { task.cancel() }
         tabLoadTasks.removeAll()
@@ -394,6 +395,7 @@ extension ASCManager {
         selectedScreenshotsLocale = nil
         customerReviews = []
         builds = []
+        resetTestFlightDetailState()
         betaGroups = []
         betaLocalizations = []
         betaFeedback = [:]

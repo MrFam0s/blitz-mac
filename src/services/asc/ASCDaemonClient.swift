@@ -203,7 +203,7 @@ actor ASCDaemonClient {
         if (200..<300).contains(response.statusCode) || expectedStatusCodes.contains(response.statusCode) {
             await logger.debug("session.request \(method.uppercased()) \(Self.truncate(path)) -> \(response.statusCode) bytes=\(response.body.count)")
         } else {
-            let bodySnippet = Self.truncate(String(decoding: response.body, as: UTF8.self), limit: 1200)
+            let bodySnippet = Self.truncate(String(decoding: ASCTestFlightPrivacy.bodyForLogging(response.body, path: path), as: UTF8.self), limit: 1200)
             await logger.error("session.request \(method.uppercased()) \(Self.truncate(path)) -> \(response.statusCode) contentType=\(response.contentType) body=\(bodySnippet)")
         }
         return response
@@ -417,14 +417,14 @@ actor ASCDaemonClient {
             return
         }
 
-        let metadata = extractResponseMetadata(from: data)
+        let metadata = Self.responseMetadata(from: data)
         guard let id = metadata.id else {
-            await logger.error("Received stdout line without response id: \(Self.truncate(line, limit: 1200))")
+            await logger.error("Received stdout line without response id: bytes=\(data.count)")
             return
         }
 
         guard let pending = pendingResponses.removeValue(forKey: id) else {
-            await logger.error("Received unmatched response id=\(id) summary=\(metadata.summary) raw=\(Self.truncate(line, limit: 1200))")
+            await logger.error("Received unmatched response id=\(id) summary=\(metadata.summary) bytes=\(data.count)")
             return
         }
 
@@ -518,11 +518,13 @@ actor ASCDaemonClient {
         do {
             response = try decoder.decode(DaemonResponse<Result>.self, from: rawResponse)
         } catch {
-            await logger.error("Failed to decode response for [\(id)] \(summary): \(error.localizedDescription) raw=\(Self.truncate(String(decoding: rawResponse, as: UTF8.self), limit: 1200))")
+            await logger.error("Failed to decode response for [\(id)] \(summary): type=\(Swift.type(of: error)) bytes=\(rawResponse.count)")
             throw error
         }
         if let error = response.error {
-            await logger.error("Helper returned error for [\(id)] \(summary): code=\(error.code) message=\(error.message) data=\(error.data ?? "")")
+            let privateResponse = ASCTestFlightPrivacy.shouldRedact(path: params?["path"] as? String ?? "")
+            let detail = privateResponse ? "<private TestFlight error omitted>" : "message=\(error.message) data=\(error.data ?? "")"
+            await logger.error("Helper returned error for [\(id)] \(summary): code=\(error.code) \(detail)")
             throw Error.helperError(error.message, error.data)
         }
         guard let result = response.result else {
@@ -556,7 +558,7 @@ actor ASCDaemonClient {
         try stdinHandle.write(contentsOf: line)
     }
 
-    private func extractResponseMetadata(from data: Data) -> (id: String?, summary: String) {
+    nonisolated static func responseMetadata(from data: Data) -> (id: String?, summary: String) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return (nil, "invalid-json")
         }
@@ -565,8 +567,7 @@ actor ASCDaemonClient {
 
         if let error = json["error"] as? [String: Any] {
             let code = error["code"] as? Int ?? 0
-            let message = error["message"] as? String ?? "unknown"
-            return (id, "error code=\(code) message=\(Self.truncate(message, limit: 200))")
+            return (id, "error code=\(code)")
         }
 
         if let result = json["result"] as? [String: Any] {

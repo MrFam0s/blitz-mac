@@ -155,31 +155,6 @@ extension ASCManager {
         }
     }
 
-    private func hydrateReviewSecondaryData(
-        projectId: String?,
-        appId: String,
-        appInfoId: String?,
-        service: AppStoreConnectService
-    ) async {
-        if let appInfoId {
-            let fetchedAgeRating = await fetchAgeRatingLogged(
-                service: service,
-                appInfoId: appInfoId,
-                context: "review_secondary"
-            )
-            guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-            ageRatingDeclaration = fetchedAgeRating
-        } else {
-            ageRatingDeclaration = nil
-        }
-
-        guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-        await refreshReviewSubmissionData(appId: appId, service: service)
-        guard !Task.isCancelled, isCurrentProject(projectId) else { return }
-        rebuildSubmissionHistory(appId: appId)
-        refreshSubmissionFeedbackIfNeeded()
-    }
-
     private func hydrateMonetizationSecondaryData(
         projectId: String?,
         appId: String,
@@ -276,36 +251,7 @@ extension ASCManager {
             }
 
         case .review:
-            async let versionsTask = service.fetchAppStoreVersions(appId: appId)
-            async let appInfoTask: ASCAppInfo? = try? await service.fetchAppInfo(appId: appId)
-            async let buildsTask = service.fetchBuilds(appId: appId)
-
-            let versions = try await versionsTask
-            appStoreVersions = versions
-            syncSelectedVersion()
-            if let selectedVersionId = selectedVersion?.id {
-                reviewDetail = await fetchReviewDetailLogged(
-                    service: service,
-                    versionId: selectedVersionId,
-                    context: "review_tab_load"
-                )
-                selectedVersionBuild = try? await service.fetchBuildAttachedToVersion(versionId: selectedVersionId)
-            } else {
-                reviewDetail = nil
-                selectedVersionBuild = nil
-            }
-            appInfo = await appInfoTask
-            builds = try await buildsTask
-            let projectId = loadedProjectId
-            let currentAppInfoId = appInfo?.id
-            startBackgroundHydration(for: .review) {
-                await self.hydrateReviewSecondaryData(
-                    projectId: projectId,
-                    appId: appId,
-                    appInfoId: currentAppInfoId,
-                    service: service
-                )
-            }
+            try await loadReviewTab(using: service)
 
         case .monetization:
             async let pricePointsTask = service.fetchAppPricePoints(appId: appId)

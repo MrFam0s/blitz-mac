@@ -397,10 +397,12 @@ struct ASCBuild: Codable, Identifiable {
 
     var relationships: Relationships? = nil
     var preReleaseVersion: ASCPreReleaseVersion? = nil
+    var buildBetaDetail: ASCBuildBetaDetail? = nil
 
     struct Relationships: Codable {
         var app: Relationship?
         var preReleaseVersion: Relationship?
+        var buildBetaDetail: Relationship? = nil
     }
     struct Relationship: Codable {
         var data: Identifier?
@@ -486,6 +488,19 @@ struct ASCBuildUpload: Decodable, Identifiable {
 struct ASCBetaGroup: Codable, Equatable, Identifiable {
     let id: String
     let attributes: Attributes
+
+    var relationships: Relationships? = nil
+    var appId: String? { relationships?.app?.data?.id }
+
+    struct Relationships: Codable, Equatable {
+        var app: Relationship?
+    }
+    struct Relationship: Codable, Equatable {
+        var data: Identifier?
+    }
+    struct Identifier: Codable, Equatable {
+        var id: String
+    }
 
     struct Attributes: Codable, Equatable {
         let name: String
@@ -856,12 +871,13 @@ struct ASCPreReleaseVersion: Codable {
 /// so including the app guarantees relationship linkage without treating it as a train.
 struct ASCBuildIncludedResource: Decodable {
     let preReleaseVersion: ASCPreReleaseVersion?
+    let buildBetaDetail: ASCBuildBetaDetail?
     private enum CodingKeys: String, CodingKey { case type }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        if try values.decode(String.self, forKey: .type) == "preReleaseVersions" {
-            preReleaseVersion = try ASCPreReleaseVersion(from: decoder)
-        } else { preReleaseVersion = nil }
+        let type = try values.decode(String.self, forKey: .type)
+        preReleaseVersion = type == "preReleaseVersions" ? try ASCPreReleaseVersion(from: decoder) : nil
+        buildBetaDetail = type == "buildBetaDetails" ? try ASCBuildBetaDetail(from: decoder) : nil
     }
 }
 struct ASCBuildListResponse: Decodable {
@@ -873,6 +889,7 @@ struct ASCBuildListResponse: Decodable {
         data.map { build in
             var result = build
             result.preReleaseVersion = included?.compactMap(\.preReleaseVersion).first { $0.id == build.relationships?.preReleaseVersion?.data?.id }
+            result.buildBetaDetail = included?.compactMap(\.buildBetaDetail).first { $0.id == build.relationships?.buildBetaDetail?.data?.id }
             return result
         }
     }
@@ -889,6 +906,7 @@ struct ASCBuildResponse: Decodable {
     var build: ASCBuild? {
         guard var result = data else { return nil }
         result.preReleaseVersion = included?.compactMap(\.preReleaseVersion).first { $0.id == result.relationships?.preReleaseVersion?.data?.id }
+        result.buildBetaDetail = included?.compactMap(\.buildBetaDetail).first { $0.id == result.relationships?.buildBetaDetail?.data?.id }
         return result
     }
 }
