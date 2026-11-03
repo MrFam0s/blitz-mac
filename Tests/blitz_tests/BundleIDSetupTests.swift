@@ -25,11 +25,13 @@ import Testing
 }
 
 @MainActor
-@Test func bundleIDSetupStillFiltersUnsupportedComponentCharacters() {
+@Test func bundleIDSetupPreservesDottedAndInvalidInputForExplicitValidation() {
     #expect(BundleIDSetupView.bundleIdentifier(
+        prefix: "org", organization: "amosystems", appName: "Alpha.Widget"
+    ) == "org.amosystems.Alpha.Widget")
+    let invalid = BundleIDSetupView.bundleIdentifier(
         prefix: " org ", organization: "amo_systems", appName: "Club Bundle!"
-    ) == "org.amosystems.ClubBundle")
-    #expect(BundleIDSetupView.bundleIdentifier(
-        prefix: "org", organization: "", appName: "ClubBundle"
-    ) == "org....")
+    )
+    #expect(invalid == " org .amo_systems.Club Bundle!")
+    #expect(!AppCreationIdentity.validBundleID(invalid))
 }

@@ -60,6 +60,43 @@ struct ProjectRepository {
         )
     }
 
+    /// Reserves the destination exclusively before the first metadata write.
+    func createProject(metadata: BlitzProjectMetadata) throws -> String {
+        let reserved = try ProjectCreationReservation.reserve(name: metadata.name, in: baseDirectory)
+        try writeMetadataToDirectory(reserved.directory, metadata: metadata)
+        return reserved.id
+    }
+
+    func readMetadataFromDirectory(_ directory: URL) throws -> BlitzProjectMetadata? {
+        let file = directory.appendingPathComponent(".blitz/project.json")
+        do {
+            _ = try FileManager.default.attributesOfItem(atPath: file.path)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(BlitzProjectMetadata.self, from: Data(contentsOf: file))
+    }
+
+    /// Re-import only changes choices visible in the import form, never the saved name or unrelated settings.
+    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?) throws -> BlitzProjectMetadata {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw ProjectSetupService.SetupError(message: "Select an existing project folder to import.")
+        }
+        var metadata = try readMetadataFromDirectory(directory) ?? BlitzProjectMetadata(
+            name: directory.lastPathComponent, type: type, platform: platform, createdAt: Date()
+        )
+        metadata.type = type
+        metadata.platform = platform
+        if let selected = selectedBundleID?.trimmingCharacters(in: .whitespacesAndNewlines), !selected.isEmpty {
+            metadata.bundleIdentifier = selected
+        }
+        metadata.lastOpenedAt = Date()
+        return metadataHydrator.hydrate(metadata, projectDirectory: directory).metadata
+    }
+
     func writeMetadata(projectId: String, metadata: BlitzProjectMetadata) throws {
         try writeMetadataToDirectory(baseDirectory.appendingPathComponent(projectId), metadata: metadata)
     }

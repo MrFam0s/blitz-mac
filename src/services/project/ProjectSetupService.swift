@@ -15,7 +15,10 @@ struct ProjectSetupService {
         var errorDescription: String? { message }
     }
 
-    private static let projectNamePlaceholder = "__PROJECT_NAME__"
+    static func packageName(for projectName: String) -> String {
+        // A distinct safe package identifier; user-visible names remain unchanged.
+        SwiftProjectSetupService.toSwiftAppName(projectName).lowercased()
+    }
 
     /// Set up a new project from the bundled RN template.
     /// Calls `onStep` on the main actor as each phase begins.
@@ -28,9 +31,13 @@ struct ProjectSetupService {
         let spec = ProjectTemplateSpec(
             templateName: "rn-notes-template",
             missingTemplateMessage: "Bundled RN template not found",
-            replacements: [projectNamePlaceholder: projectName],
+            replacements: [:],
             cleanupPaths: [],
-            logPrefix: "setup"
+            logPrefix: "setup",
+            jsonFields: [
+                "package.json": ["name": packageName(for: projectName)],
+                "app.json": ["name": SwiftProjectSetupService.toSwiftAppName(projectName), "displayName": projectName]
+            ]
         )
         try await ProjectTemplateScaffolder.scaffold(
             spec: spec,

@@ -34,7 +34,9 @@ final class ProjectSetupManager {
     var pendingSetupProjectId: String?
 
     /// Scaffold a project using the appropriate template for its type.
-    func setup(projectId: String, projectName: String, projectPath: String, projectType: ProjectType = .reactNative, platform: ProjectPlatform = .iOS) async {
+    @discardableResult
+    func setup(projectId: String, projectName: String, projectPath: String, projectType: ProjectType = .reactNative, platform: ProjectPlatform = .iOS) async -> String? {
+        guard !isSettingUp else { return "Another project is being created. Wait for it to finish." }
         isSettingUp = true
         setupProjectId = projectId
         currentStep = nil
@@ -67,7 +69,7 @@ final class ProjectSetupManager {
                 throw ProjectSetupService.SetupError(message: "Flutter projects are not yet supported")
             }
             // Ensure .mcp.json, CLAUDE.md, .claude/settings.local.json exist
-            // (setup recreates the project dir, so these must be written after)
+            // Keep agent configuration separate from the generated template.
             let storage = ProjectStorage()
             storage.ensureMCPConfig(
                 projectId: projectId,
@@ -81,9 +83,11 @@ final class ProjectSetupManager {
                 allowASCCLICalls: SettingsService.shared.allowASCCLICalls
             )
             isSettingUp = false
+            return nil
         } catch {
             errorMessage = error.localizedDescription
             isSettingUp = false
+            return error.localizedDescription
         }
     }
 

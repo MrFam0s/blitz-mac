@@ -42,24 +42,23 @@ extension MCPExecutor {
         }
 
         let storage = ProjectStorage()
-        let projectId = name.lowercased()
-            .replacingOccurrences(of: " ", with: "-")
-            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
-        let projectDir = storage.baseDirectory.appendingPathComponent(projectId)
-
-        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
-
-        let projectType = ProjectType(rawValue: typeStr) ?? .reactNative
-        let platformStr = args["platform"] as? String
-        let platform = ProjectPlatform(rawValue: platformStr ?? "iOS") ?? .iOS
+        guard let projectType = ProjectType(rawValue: typeStr), projectType != .flutter,
+              let platform = ProjectPlatform(rawValue: (args["platform"] as? String) ?? "iOS"),
+              platform == .iOS || projectType == .swift else {
+            throw MCPServerService.MCPError.invalidToolArgs
+        }
         let metadata = BlitzProjectMetadata(
-            name: name,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             type: projectType,
             platform: platform,
             createdAt: Date(),
             lastOpenedAt: Date()
         )
-        try storage.writeMetadata(projectId: projectId, metadata: metadata)
+        guard await MainActor.run(body: { !appState.projectSetup.isSettingUp }) else {
+            return mcpText("Another project is being created. Wait for it to finish before creating a new project.")
+        }
+        let projectId = try storage.createProject(metadata: metadata)
+        let projectDir = storage.baseDirectory.appendingPathComponent(projectId)
         let (whitelistBlitzMCP, allowASCCLICalls) = await MainActor.run {
             (
                 SettingsService.shared.whitelistBlitzMCPTools,
@@ -73,36 +72,19 @@ extension MCPExecutor {
         )
         await appState.projectManager.loadProjects()
 
-        await MainActor.run {
-            appState.projectSetup.pendingSetupProjectId = projectId
-            appState.activeProjectId = projectId
-        }
-
-        try? await Task.sleep(for: .seconds(2))
-        let setupStarted = await MainActor.run { appState.projectSetup.isSettingUp }
-        if !setupStarted {
-            guard let project = await MainActor.run(body: { appState.activeProject }) else {
-                return mcpText("Created project '\(name)' but could not start setup (project not found)")
-            }
-            await appState.projectSetup.setup(
-                projectId: project.id,
-                projectName: project.name,
-                projectPath: project.path,
-                projectType: project.type,
-                platform: project.platform
-            )
-        } else {
-            for _ in 0..<180 {
-                let done = await MainActor.run { !appState.projectSetup.isSettingUp }
-                if done { break }
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-
-        let errorMsg = await MainActor.run { appState.projectSetup.errorMessage }
+        await MainActor.run { appState.activeProjectId = projectId }
+        // Scaffold the project reserved by this call, never the current selection after a delay.
+        let errorMsg = await appState.projectSetup.setup(
+            projectId: projectId,
+            projectName: metadata.name,
+            projectPath: projectDir.path,
+            projectType: projectType,
+            platform: platform
+        )
         if let errorMsg {
             return mcpText("Created project '\(name)' but setup failed: \(errorMsg)")
         }
+        await appState.projectManager.loadProjects()
         return mcpText("Created project '\(name)' (type: \(typeStr), id: \(projectId)) — setup complete")
     }
 

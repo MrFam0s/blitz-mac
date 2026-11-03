@@ -16,9 +16,14 @@ struct BundleIDSetupView: View {
     }
 
     @State private var phase: Phase = .form
-    @State private var bundlePrefix = "com"
-    @State private var organization = ""
-    @State private var appName = ""
+    @State private var bundleIdentifier = ""
+    @State private var publicAppName = ""
+    @State private var sku = ""
+    @State private var primaryLocale = "en-US"
+    @State private var creationContext: ASCManager.PendingBundleIDSetupContext?
+    @State private var canonicalIdentifierNotice: String?
+    @State private var viewOperationId = UUID()
+    @State private var hasPrefilled = false
     @State private var selectedCapabilities: Set<String> = []
     @State private var progressMessage = ""
     @State private var error: String?
@@ -94,31 +99,29 @@ struct BundleIDSetupView: View {
         "WeatherKit",
     ]
 
-    // Keep the spelling supplied by the project or user; bundle-ID components
-    // must not be silently lowercased before registration.
-    static func sanitizeComponent(_ input: String) -> String {
-        input.filter { $0.isLetter || $0.isNumber || $0 == "-" }
-    }
+    // Preserve every entered character. Validation explains invalid identifiers;
+    // it never silently transforms a different identifier into a valid one.
+    static func sanitizeComponent(_ input: String) -> String { input }
 
     static func bundleIdentifier(prefix: String, organization: String, appName: String) -> String {
-        let prefix = sanitizeComponent(prefix)
-        let org = sanitizeComponent(organization)
-        let app = sanitizeComponent(appName)
-        guard !prefix.isEmpty, !org.isEmpty, !app.isEmpty else {
-            return "\(prefix.isEmpty ? "com" : prefix)...."
-        }
-        return "\(prefix).\(org).\(app)"
+        "\(prefix).\(organization).\(appName)"
     }
 
     private var bundleIdPreview: String {
-        Self.bundleIdentifier(prefix: bundlePrefix, organization: organization, appName: appName)
+        bundleIdentifier
     }
 
-    private var isFormValid: Bool {
-        !Self.sanitizeComponent(bundlePrefix).isEmpty
-            && !Self.sanitizeComponent(organization).isEmpty
-            && !Self.sanitizeComponent(appName).isEmpty
+    private var formIdentity: AppCreationIdentity {
+        AppCreationIdentity(appName: publicAppName, bundleId: bundleIdPreview, sku: sku,
+            platform: platform, primaryLocale: primaryLocale)
     }
+
+    private var validationMessage: String? {
+        do { try formIdentity.validate(); return nil }
+        catch { return error.localizedDescription }
+    }
+
+    private var isFormValid: Bool { validationMessage == nil }
 
     var body: some View {
         Group {
@@ -143,6 +146,8 @@ struct BundleIDSetupView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onAppear(perform: prefill)
+                .onChange(of: asc.loadedProjectId) { _, _ in resetForProjectChange() }
+                .onChange(of: DashboardSummaryStore.accountKey(for: asc.credentials)) { _, _ in resetForProjectChange() }
             }
         }
         .alert("Action Required in Apple Developer", isPresented: $showProgramLicenseAlert) {
@@ -184,20 +189,8 @@ struct BundleIDSetupView: View {
 
         // Fields
         VStack(alignment: .leading, spacing: 16) {
-            labeledField("Prefix", hint: "Usually com, io, org, net") {
-                TextField("com", text: $bundlePrefix)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-            }
-
-            labeledField("Organization", hint: "Your company or personal identifier") {
-                TextField("mycompany", text: $organization)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-            }
-
-            labeledField("App Name", hint: "Your app's name") {
-                TextField("myapp", text: $appName)
+            labeledField("Bundle ID", hint: "The complete technical identifier, preserving capitalization and every dot") {
+                TextField("org.example.MyApp", text: $bundleIdentifier)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
             }
@@ -208,6 +201,33 @@ struct BundleIDSetupView: View {
                 Text(bundleIdPreview)
                     .font(.system(.callout, design: .monospaced))
                     .foregroundStyle(isFormValid ? .primary : .secondary)
+            }
+        }
+
+        Divider()
+
+        VStack(alignment: .leading, spacing: 16) {
+            labeledField("Public app name", hint: "The App Store name, 2–30 characters; independent of the technical identifier") {
+                TextField("App Store name", text: $publicAppName)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: publicAppName) { oldValue, newValue in
+                        if sku.isEmpty || sku == "\(oldValue)-\(platform.rawValue)" {
+                            sku = "\(newValue)-\(platform.rawValue)"
+                        }
+                    }
+            }
+            labeledField("SKU", hint: "Permanent identifier: letters, numbers, periods, hyphens and underscores; no spaces") {
+                TextField("AppName-\(platform.rawValue)", text: $sku)
+                    .textFieldStyle(.roundedBorder)
+            }
+            labeledField("Primary language", hint: "Use the exact language code, for example de-DE or en-US") {
+                TextField("en-US", text: $primaryLocale)
+                    .textFieldStyle(.roundedBorder)
+            }
+            Text("Platform: \(platform.rawValue)")
+                .font(.callout).foregroundStyle(.secondary)
+            if let validationMessage {
+                Text(validationMessage).font(.caption).foregroundStyle(.secondary)
             }
         }
 
@@ -338,6 +358,19 @@ struct BundleIDSetupView: View {
             }
         }
 
+        if let canonicalIdentifierNotice {
+            Label(canonicalIdentifierNotice, systemImage: "info.circle")
+                .font(.callout).foregroundStyle(.orange)
+        }
+        if let identity = creationContext?.identity {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("App Store name: \(identity.appName)")
+                Text("SKU: \(identity.sku)")
+                Text("\(identity.platform.rawValue) · \(identity.primaryLocale)")
+            }
+            .font(.callout).textSelection(.enabled)
+        }
+
         Divider()
 
         VStack(alignment: .leading, spacing: 12) {
@@ -400,9 +433,9 @@ struct BundleIDSetupView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             createInstructionStep(1, "Go to **[App Store Connect](https://appstoreconnect.apple.com/apps)** and click the **+** button")
                             createInstructionStep(2, "Select **New App**")
-                            createInstructionStep(3, "Choose your platform (**iOS** or **macOS**)")
+                            createInstructionStep(3, "Choose **\(creationContext?.identity.platform.rawValue ?? "")** and primary language **\(creationContext?.identity.primaryLocale ?? "")**")
                             createInstructionStep(4, "Enter the app name **\(createdAppName)** and select the **Bundle ID** you just registered: **\(createdBundleId)**")
-                            createInstructionStep(5, "Set a **SKU** (any unique string, e.g. your app name)")
+                            createInstructionStep(5, "Use the confirmed **SKU**: **\(creationContext?.identity.sku ?? "")**")
                             createInstructionStep(6, "Click **Create**")
                         }
                         .padding(.top, 8)
@@ -455,98 +488,67 @@ struct BundleIDSetupView: View {
 
     // MARK: - Actions
 
+    private func resetForProjectChange() {
+        viewOperationId = UUID()
+        phase = .form
+        error = nil
+        creationContext = nil
+        createdBundleId = ""
+        createdAppName = ""
+        canonicalIdentifierNotice = nil
+        selectedCapabilities = []
+        bundleIdentifier = ""
+        publicAppName = ""
+        sku = ""
+        primaryLocale = "en-US"
+        hasPrefilled = false
+        prefill()
+    }
+
     private func prefill() {
-        guard let projectId = asc.loadedProjectId else { return }
-        let storage = ProjectStorage()
-        guard let metadata = storage.readMetadata(projectId: projectId) else { return }
-
-        // Pre-fill from existing bundle ID if it looks like prefix.org.app
-        if let existingBundleId = metadata.bundleIdentifier,
-           !existingBundleId.isEmpty {
-            let parts = existingBundleId.split(separator: ".")
-            if parts.count >= 3 {
-                bundlePrefix = String(parts[0])
-                organization = String(parts[1])
-                appName = parts.dropFirst(2).joined(separator: ".")
-                return
-            }
+        guard !hasPrefilled else { return }
+        guard let projectId = asc.loadedProjectId,
+              let metadata = ProjectStorage().readMetadata(projectId: projectId) else { return }
+        hasPrefilled = true
+        publicAppName = metadata.name
+        sku = "\(metadata.name)-\(platform.rawValue)"
+        if let existingBundleId = metadata.bundleIdentifier, !existingBundleId.isEmpty {
+            applyBundleIdToForm(existingBundleId)
+        } else {
+            bundleIdentifier = "com.example.\(metadata.name)"
         }
-
-        // Otherwise, pre-fill app name from project name
-        appName = Self.sanitizeComponent(metadata.name)
     }
 
     private func registerBundleId() {
-        guard let service = asc.service else {
-            error = "ASC service not configured"
-            return
-        }
-
+        let identity = formIdentity
+        let originalProjectId = asc.loadedProjectId
+        let originalRevision = asc.projectRevision
+        let originalAccount = DashboardSummaryStore.accountKey(for: asc.credentials)
+        let operation = UUID()
+        viewOperationId = operation
+        let caps = Array(selectedCapabilities).sorted()
         error = nil
         phase = .creating
-        let bundleId = bundleIdPreview
-        let bundleName = appName
-        let caps = Array(selectedCapabilities)
-
+        progressMessage = "Registering bundle ID and selected capabilities…"
         Task {
             do {
-                progressMessage = "Registering bundle ID\u{2026}"
-
-                // Check if bundle ID already exists; register if not
-                var resourceId: String
-                if let existing = try await service.fetchBundleId(identifier: bundleId) {
-                    resourceId = existing.id
-                } else {
-                    let bundleIdPlatform = platform == .macOS ? "MAC_OS" : "IOS"
-                    let created = try await service.registerBundleId(identifier: bundleId, name: bundleName, platform: bundleIdPlatform)
-                    resourceId = created.id
-                }
-
-                // Enable selected capabilities
-                var enabled = 0
-                for cap in caps {
-                    let capName = Self.capabilities.first(where: { $0.type == cap })?.name ?? cap
-                    progressMessage = "Enabling \(capName)\u{2026}"
-                    do {
-                        try await service.enableCapability(bundleIdResourceId: resourceId, capabilityType: cap)
-                        enabled += 1
-                    } catch let err as ASCError {
-                        if case .httpError(409, _) = err {
-                            enabled += 1  // Already enabled, counts as success
-                        } else if err.isProgramLicenseAgreementRequired {
-                            presentProgramLicenseAgreementAlert(err)
-                            self.error = err.programLicenseAgreementMessage
-                            phase = .form
-                            return
-                        }
-                        // Other capability errors: skip silently, don't block the flow
-                    }
-                }
-
-                // Save bundle ID to project metadata
-                if let projectId = asc.loadedProjectId {
-                    let storage = ProjectStorage()
-                    if var metadata = storage.readMetadata(projectId: projectId) {
-                        metadata.bundleIdentifier = bundleId
-                        try storage.writeMetadata(projectId: projectId, metadata: metadata)
-                    }
-                }
-
-                createdBundleId = bundleId
-                createdAppName = bundleName.trimmingCharacters(in: .whitespacesAndNewlines)
-                capabilitiesEnabled = enabled
-                asc.beginPendingBundleIDSetup(bundleId: bundleId, tab: tab)
+                guard viewOperationId == operation, asc.loadedProjectId == originalProjectId,
+                      asc.projectRevision == originalRevision,
+                      DashboardSummaryStore.accountKey(for: asc.credentials) == originalAccount else { return }
+                let result = try await asc.registerBundleIDForCreation(identity: identity, tab: tab, capabilities: caps)
+                guard viewOperationId == operation else { return }
+                try asc.validateBundleIDSetupContext(result.context)
+                creationContext = result.context
+                createdBundleId = result.context.identity.bundleId
+                createdAppName = result.context.identity.appName
+                canonicalIdentifierNotice = result.canonicalIdentifierNotice
+                capabilitiesEnabled = result.capabilitiesEnabled
                 phase = .manual
-
-            } catch let ascError as ASCError {
-                if ascError.isProgramLicenseAgreementRequired {
-                    presentProgramLicenseAgreementAlert(ascError)
-                    self.error = ascError.programLicenseAgreementMessage
-                } else {
-                    self.error = ascError.localizedDescription
-                }
-                phase = .form
             } catch {
+                guard viewOperationId == operation else { return }
+                if let ascError = error as? ASCError, ascError.isProgramLicenseAgreementRequired {
+                    presentProgramLicenseAgreementAlert(ascError)
+                }
                 self.error = error.localizedDescription
                 phase = .form
             }
@@ -554,29 +556,21 @@ struct BundleIDSetupView: View {
     }
 
     private func confirmAppCreated() {
+        guard let context = creationContext else { return }
+        let operation = viewOperationId
         error = nil
-        let expectedBundleId = createdBundleId.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !expectedBundleId.isEmpty else {
-            error = ASCManager.BundleIDSetupConfirmationError.missingBundleId.localizedDescription
-            phase = .manual
-            return
-        }
-
         phase = .confirming
-
         Task {
             do {
-                _ = try await asc.confirmBundleIDSetupAppCreated(bundleId: expectedBundleId)
-            } catch let ascError as ASCError {
-                if ascError.isProgramLicenseAgreementRequired {
-                    presentProgramLicenseAgreementAlert(ascError)
-                    error = ascError.programLicenseAgreementMessage
-                } else {
-                    error = "App not found in App Store Connect. Make sure you created the app with bundle ID \"\(expectedBundleId)\", then try again."
-                }
-                phase = .manual
+                _ = try await asc.confirmBundleIDSetupAppCreated(bundleId: context.identity.bundleId,
+                    expectedName: context.identity.appName, expectedSKU: context.identity.sku,
+                    expectedPlatform: context.identity.platform.rawValue, expectedLocale: context.identity.primaryLocale,
+                    projectId: context.projectId, operationId: context.operationId.uuidString)
             } catch {
+                guard viewOperationId == operation else { return }
+                if let ascError = error as? ASCError, ascError.isProgramLicenseAgreementRequired {
+                    presentProgramLicenseAgreementAlert(ascError)
+                }
                 self.error = error.localizedDescription
                 phase = .manual
             }
@@ -585,7 +579,11 @@ struct BundleIDSetupView: View {
 
     private func goBackToBundleRegistrationForm() {
         error = nil
-        asc.clearPendingBundleIDSetup()
+        if asc.pendingBundleIDSetup?.operationId == creationContext?.operationId {
+            asc.clearPendingBundleIDSetup()
+        }
+        creationContext = nil
+        viewOperationId = UUID()
         let bundleId = createdBundleId.trimmingCharacters(in: .whitespacesAndNewlines)
         if !bundleId.isEmpty {
             applyBundleIdToForm(bundleId)
@@ -594,40 +592,45 @@ struct BundleIDSetupView: View {
     }
 
     private func applyBundleIdToForm(_ bundleId: String) {
-        let parts = bundleId.split(separator: ".")
-        guard parts.count >= 3 else { return }
-        bundlePrefix = String(parts[0])
-        organization = String(parts[1])
-        appName = parts.dropFirst(2).joined(separator: ".")
+        bundleIdentifier = bundleId
     }
 
     // MARK: - Auto-create via AI agent
 
     private func launchClaudeCodeForAppCreate(bundleId: String) {
-        // Resolve the public name before choosing the permanent SKU: project folders
-        // and bundle-ID suffixes can retain an old name after an app is renamed.
-        let prompt = "Create a new \(platform.rawValue) App Store Connect app for \(bundleId). Preserve this bundle ID exactly, including capitalization; do not derive or lowercase it from the app name or project folder. Confirm the public app name using the project context and ask the user what primary language they want (e.g. en-US for English). Use the confirmed app name followed by '-\(platform.rawValue)' as the SKU, preserving capitalization and without adding random digits (for example, ClubBundle-iOS). If Apple requires changes to the SKU's characters or the SKU is already taken, ask the user for an alternative. Then use the /asc-app-create-ui skill with the selected platform."
-
-        var projectPath: String? = nil
-        if let projectId = asc.loadedProjectId {
-            projectPath = ProjectStorage().baseDirectory.appendingPathComponent(projectId).path
-        }
-
-        let settings = SettingsService.shared
-        let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
-        let terminal = settings.resolveDefaultTerminal().terminal
-
-        if terminal.isBuiltIn {
-            appState.showTerminal = true
-            appState.terminalManager.createAgentSession(
-                projectPath: projectPath,
-                agent: agent,
-                prompt: prompt,
-                skipPermissions: settings.skipAgentPermissions
-            )
-        } else {
-            TerminalLauncher.launch(projectPath: projectPath, agent: agent, terminal: terminal, prompt: prompt, skipPermissions: settings.skipAgentPermissions)
-        }
+        do {
+            guard let context = creationContext, context.identity.bundleId == bundleId else {
+                throw ASCManager.BundleIDSetupConfirmationError.missingBundleId
+            }
+            try asc.validateBundleIDSetupContext(context)
+            let storage = ProjectStorage()
+            let projectDir = storage.baseDirectory.appendingPathComponent(context.projectId)
+            try ProjectAgentConfigService(baseDirectory: storage.baseDirectory)
+                .prepareBundledCreationSkill(projectDir: projectDir)
+            try asc.validateBundleIDSetupContext(context)
+            let identityDirectory = projectDir.appendingPathComponent(".blitz", isDirectory: true)
+            try FileManager.default.createDirectory(at: identityDirectory, withIntermediateDirectories: true)
+            let identityFile = identityDirectory.appendingPathComponent("app-creation-\(context.operationId.uuidString).json")
+            let identity = context.identity
+            let values: [String: String] = ["appName": identity.appName, "bundleId": identity.bundleId,
+                "sku": identity.sku, "platform": identity.platform.rawValue, "primaryLocale": identity.primaryLocale,
+                "projectId": context.projectId, "operationId": context.operationId.uuidString,
+                "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId]
+            try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
+                .write(to: identityFile, options: .atomic)
+            let prompt = "Use /asc-app-create-ui to create the app from the confirmed identity JSON at \(identityFile.path). Use every value exactly as stored; do not derive or rename any identifier. Run the skill's static create_app.py with --identity-file and first --dry-run, then --create. If the identity cannot be used, stop and return to the form for a corrected confirmation. Finally call asc_confirm_created_app with bundleId, expectedName=appName, expectedSKU=sku, expectedPlatform=platform, expectedLocale=primaryLocale, projectId and operationId from this file."
+            let settings = SettingsService.shared
+            let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
+            let terminal = settings.resolveDefaultTerminal().terminal
+            if terminal.isBuiltIn {
+                appState.showTerminal = true
+                appState.terminalManager.createAgentSession(projectPath: projectDir.path, agent: agent,
+                    prompt: prompt, skipPermissions: settings.skipAgentPermissions)
+            } else {
+                TerminalLauncher.launch(projectPath: projectDir.path, agent: agent, terminal: terminal,
+                    prompt: prompt, skipPermissions: settings.skipAgentPermissions)
+            }
+        } catch { self.error = error.localizedDescription }
     }
 
     // MARK: - Helpers

@@ -304,18 +304,26 @@ extension MCPExecutor {
     }
 
     func executeASCConfirmCreatedApp(_ args: [String: Any]) async -> [String: Any] {
-        let rawBundleId = (args["bundleId"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let bundleId = rawBundleId?.isEmpty == false ? rawBundleId : nil
+        let required = ["bundleId", "expectedName", "expectedSKU", "expectedPlatform", "expectedLocale", "projectId", "operationId"]
+        guard required.allSatisfy({ (args[$0] as? String)?.isEmpty == false }) else {
+            return mcpText("Error: pass the complete confirmed identity and projectId/operationId from the app-creation identity file. Unscoped confirmations are not accepted.")
+        }
+        let bundleId = args["bundleId"] as! String
 
         for attempt in 1...10 {
             do {
-                let app = try await appState.ascManager.confirmBundleIDSetupAppCreated(bundleId: bundleId)
+                let app = try await appState.ascManager.confirmBundleIDSetupAppCreated(bundleId: bundleId,
+                    expectedName: args["expectedName"] as? String, expectedSKU: args["expectedSKU"] as? String,
+                    expectedPlatform: args["expectedPlatform"] as? String, expectedLocale: args["expectedLocale"] as? String,
+                    projectId: args["projectId"] as? String, operationId: args["operationId"] as? String)
                 return mcpJSON([
                     "success": true,
                     "attempts": attempt,
                     "appId": app.id,
                     "bundleId": app.bundleId,
                     "name": app.attributes.name,
+                    "sku": app.attributes.sku ?? "",
+                    "primaryLocale": app.primaryLocale ?? "",
                 ])
             } catch let ascError as ASCError {
                 if case .notFound = ascError {
@@ -324,16 +332,7 @@ extension MCPExecutor {
                         continue
                     }
 
-                    let pendingBundleId = await MainActor.run {
-                        appState.ascManager.pendingBundleIDSetup?.bundleId ?? ""
-                    }
-                    let missingBundleId = bundleId ?? pendingBundleId
-                    if missingBundleId.isEmpty {
-                        return mcpText("Error: app was not found in App Store Connect after 10 checks.")
-                    }
-                    return mcpText(
-                        "Error: app with bundle ID '\(missingBundleId)' was not found in App Store Connect after 10 checks."
-                    )
+                    return mcpText("Error: app with bundle ID '\(bundleId)' was not found in App Store Connect after 10 checks.")
                 }
 
                 return mcpText("Error: \(ascError.localizedDescription)")
@@ -526,23 +525,34 @@ extension MCPExecutor {
 
         case "settings.bundleId":
             if let bundleId = fieldMap["bundleId"] {
-                let projectPath = await MainActor.run { appState.activeProject?.path }
-                await MainActor.run {
-                    guard let projectId = appState.activeProjectId else { return }
-                    let storage = ProjectStorage()
-                    guard var metadata = storage.readMetadata(projectId: projectId) else { return }
-                    metadata.bundleIdentifier = bundleId
-                    try? storage.writeMetadata(projectId: projectId, metadata: metadata)
+                guard AppCreationIdentity.validBundleID(bundleId) else {
+                    return mcpText("Error: invalid bundle ID. Preserve the original spelling and use nonempty ASCII components separated by dots.")
                 }
-                if let projectPath {
-                    let pipeline = BuildPipelineService()
-                    await pipeline.updateBundleIdInPbxproj(projectPath: projectPath, bundleId: bundleId)
+                // Both local files are updated in one MainActor turn. A project
+                // switch cannot interleave between the Xcode and metadata writes.
+                let context = try await MainActor.run {
+                    let storage = ProjectStorage()
+                    guard let project = appState.activeProject,
+                          var metadata = storage.readMetadata(projectId: project.id) else {
+                        throw ASCManager.BundleIDSetupConfirmationError.projectUnavailable
+                    }
+                    let asc = appState.ascManager
+                    let originalRevision = asc.projectRevision
+                    let originalAccount = DashboardSummaryStore.accountKey(for: asc.credentials)
+                    try ProjectBundleIDTransaction.update(projectPath: project.path, bundleID: bundleId,
+                        scheme: metadata.buildSettings?.scheme, configuration: metadata.buildSettings?.configuration) {
+                        metadata.bundleIdentifier = bundleId
+                        try storage.writeMetadata(projectId: project.id, metadata: metadata)
+                    }
+                    return (projectId: project.id, revision: originalRevision, account: originalAccount)
                 }
                 await appState.projectManager.loadProjects()
-                let hasCreds = await MainActor.run { appState.ascManager.credentials != nil }
-                if hasCreds {
-                    await appState.ascManager.fetchApp(bundleId: bundleId)
+                let mayRefresh = await MainActor.run {
+                    appState.activeProjectId == context.projectId && appState.ascManager.projectRevision == context.revision
+                        && DashboardSummaryStore.accountKey(for: appState.ascManager.credentials) == context.account
                 }
+                guard mayRefresh else { throw ASCManager.BundleIDSetupConfirmationError.staleOperation }
+                _ = await appState.ascManager.fetchApp(bundleId: bundleId)
             }
 
         default:

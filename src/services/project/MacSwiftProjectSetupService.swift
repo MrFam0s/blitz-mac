@@ -11,7 +11,7 @@ struct MacSwiftProjectSetupService {
         projectPath: String,
         onStep: @MainActor (ProjectSetupService.SetupStep) -> Void
     ) async throws {
-        let appName = SwiftProjectSetupService.toSwiftAppName(projectId)
+        let appName = SwiftProjectSetupService.toSwiftAppName(projectName)
         let bundleId = SwiftProjectSetupService.toBundleId(appName)
         let spec = ProjectTemplateSpec(
             templateName: "swift-mac-template",
@@ -21,7 +21,8 @@ struct MacSwiftProjectSetupService {
                 "__BUNDLE_ID__": bundleId
             ],
             cleanupPaths: [],
-            logPrefix: "mac-swift-setup"
+            logPrefix: "mac-swift-setup",
+            propertyListFields: ["\(appName)/Info.plist": ["CFBundleDisplayName": projectName]]
         )
         try await ProjectTemplateScaffolder.scaffold(
             spec: spec,

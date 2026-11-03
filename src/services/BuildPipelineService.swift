@@ -158,8 +158,15 @@ actor BuildPipelineService {
         teamId: String?,
         ascService: AppStoreConnectService,
         platform: ProjectPlatform = .iOS,
+        scheme: String? = nil,
+        configuration: String? = nil,
         onProgress: @escaping @Sendable (String) -> Void
     ) async throws -> SigningResult {
+        // Resolve an unambiguous target before creating certificates or profiles.
+        try XcodeProjectIdentityEditor().update(
+            projectPath: projectPath, bundleID: bundleId, scheme: scheme,
+            configuration: configuration ?? "Release", teamID: teamId ?? "PREFLIGHT", dryRun: true
+        )
         var state = loadSigningState(bundleId: bundleId)
         var log: [String] = []
 
@@ -359,10 +366,12 @@ actor BuildPipelineService {
         let resolvedTeamId = teamId ?? state.teamId ?? ""
         if !resolvedTeamId.isEmpty {
             emit("Configuring pbxproj with team \(resolvedTeamId)...")
-            try await configurePbxproj(
+            try configurePbxproj(
                 projectPath: projectPath,
                 teamId: resolvedTeamId,
-                bundleId: bundleId
+                bundleId: bundleId,
+                scheme: scheme,
+                configuration: configuration ?? "Release"
             )
             state.teamId = resolvedTeamId
             try saveSigningState(state, bundleId: bundleId)
@@ -478,114 +487,22 @@ actor BuildPipelineService {
         return teamId
     }
 
-    /// Update only PRODUCT_BUNDLE_IDENTIFIER in the project's pbxproj.
-    /// Public so it can be called from MCPExecutor when the user changes bundle ID.
-    func updateBundleIdInPbxproj(projectPath: String, bundleId: String) {
-        let projectURL = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
-        var searchDirs = [projectURL]
-        for name in ["ios", "macos", "apple"] {
-            let sub = projectURL.appendingPathComponent(name)
-            if fm.fileExists(atPath: sub.path) { searchDirs.append(sub) }
-        }
-        for dir in searchDirs {
-            guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
-            for entry in entries where entry.pathExtension == "xcodeproj" {
-                let pbxprojURL = entry.appendingPathComponent("project.pbxproj")
-                guard fm.fileExists(atPath: pbxprojURL.path),
-                      var content = try? String(contentsOf: pbxprojURL, encoding: .utf8) else { continue }
-                let pattern = try! NSRegularExpression(pattern: "PRODUCT_BUNDLE_IDENTIFIER = [^;]*;")
-                let replacement = "PRODUCT_BUNDLE_IDENTIFIER = \(bundleId);"
-                let range = NSRange(content.startIndex..., in: content)
-                if pattern.firstMatch(in: content, range: range) != nil {
-                    content = pattern.stringByReplacingMatches(in: content, range: range, withTemplate: replacement)
-                } else {
-                    content = content.replacingOccurrences(
-                        of: "buildSettings = {",
-                        with: "buildSettings = {\n\t\t\t\t\(replacement)"
-                    )
-                }
-                try? content.write(to: pbxprojURL, atomically: true, encoding: .utf8)
-            }
-        }
+    /// Update only the selected application's configurations, never its extensions.
+    func updateBundleIdInPbxproj(
+        projectPath: String, bundleId: String, scheme: String? = nil, configuration: String? = nil
+    ) throws {
+        try XcodeProjectIdentityEditor().update(
+            projectPath: projectPath, bundleID: bundleId, scheme: scheme, configuration: configuration
+        )
     }
 
-    private func configurePbxproj(projectPath: String, teamId: String, bundleId: String) async throws {
-        // Find .xcodeproj in root or common subdirectories
-        let projectURL = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
-        var searchDirs = [projectURL]
-        for name in ["ios", "macos", "apple"] {
-            let sub = projectURL.appendingPathComponent(name)
-            if fm.fileExists(atPath: sub.path) { searchDirs.append(sub) }
-        }
-        var xcodeprojURL: URL?
-        for dir in searchDirs {
-            if let match = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil))?
-                .first(where: { $0.pathExtension == "xcodeproj" }) {
-                xcodeprojURL = match
-                break
-            }
-        }
-        guard let xcodeprojURL else { return }
-
-        let pbxprojURL = xcodeprojURL.appendingPathComponent("project.pbxproj")
-        guard fm.fileExists(atPath: pbxprojURL.path) else { return }
-
-        var content = try String(contentsOf: pbxprojURL, encoding: .utf8)
-
-        // Helper: replace existing build setting or insert after "buildSettings = {"
-        func ensureBuildSetting(_ key: String, _ value: String) {
-            let pattern = try! NSRegularExpression(pattern: "\(key) = [^;]*;")
-            let replacement = "\(key) = \(value);"
-            let range = NSRange(content.startIndex..., in: content)
-            if pattern.firstMatch(in: content, range: range) != nil {
-                content = pattern.stringByReplacingMatches(
-                    in: content, range: range, withTemplate: replacement
-                )
-            } else {
-                // Insert after each "buildSettings = {" line
-                content = content.replacingOccurrences(
-                    of: "buildSettings = {",
-                    with: "buildSettings = {\n\t\t\t\t\(replacement)"
-                )
-            }
-        }
-
-        // 1. TargetAttributes: inject DevelopmentTeam + ProvisioningStyle = Automatic
-        //    Pattern: 24-hex-char target ID = { ... }; inside TargetAttributes
-        let targetAttrPattern = try NSRegularExpression(
-            pattern: #"(TargetAttributes\s*=\s*\{[^}]*?[A-F0-9]{24}\s*=\s*\{)"#,
-            options: [.dotMatchesLineSeparators]
+    private func configurePbxproj(
+        projectPath: String, teamId: String, bundleId: String, scheme: String?, configuration: String?
+    ) throws {
+        try XcodeProjectIdentityEditor().update(
+            projectPath: projectPath, bundleID: bundleId, scheme: scheme,
+            configuration: configuration, teamID: teamId
         )
-        let attrRange = NSRange(content.startIndex..., in: content)
-        // Check if ProvisioningStyle already exists
-        if !content.contains("ProvisioningStyle") {
-            let matches = targetAttrPattern.matches(in: content, range: attrRange)
-            // Process in reverse to preserve indices
-            for match in matches.reversed() {
-                if let range = Range(match.range(at: 1), in: content) {
-                    let insertion = """
-                    \(content[range])
-                    \t\t\t\t\tDevelopmentTeam = \(teamId);
-                    \t\t\t\t\tProvisioningStyle = Automatic;
-                    """
-                    content.replaceSubrange(range, with: insertion)
-                }
-            }
-        }
-
-        // 2. Build settings: replace or insert
-        ensureBuildSetting("CODE_SIGN_STYLE", "Automatic")
-        ensureBuildSetting("DEVELOPMENT_TEAM", teamId)
-        ensureBuildSetting("PRODUCT_BUNDLE_IDENTIFIER", bundleId)
-
-        // 3. Replace existing DevelopmentTeam everywhere (catches TargetAttributes too)
-        let teamPattern = try NSRegularExpression(pattern: #"DevelopmentTeam = [^;]*;"#)
-        content = teamPattern.stringByReplacingMatches(
-            in: content, range: NSRange(content.startIndex..., in: content),
-            withTemplate: "DevelopmentTeam = \(teamId);"
-        )
-
-        try content.write(to: pbxprojURL, atomically: true, encoding: .utf8)
     }
 
     // MARK: - Build IPA
@@ -612,7 +529,11 @@ actor BuildPipelineService {
             onProgress(msg)
         }
 
-        let projectURL = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath().resolvingSymlinksInPath()
+        let projectURL = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
+        let config = configuration ?? "Release"
+        let selection = try XcodeProjectIdentityEditor().select(
+            projectPath: projectPath, scheme: scheme, configuration: config
+        )
 
         // Search for workspace/project in root and common subdirectories (ios/, macos/, etc.)
         let searchDirs: [URL] = {
@@ -635,7 +556,7 @@ actor BuildPipelineService {
         }
 
         var workspaces = findXcodeFiles(ext: "xcworkspace")
-        let xcodeprojs = findXcodeFiles(ext: "xcodeproj")
+        let xcodeprojs = [selection.projectURL]
 
         // Determine the directory containing the Xcode project (for pod install / build cwd)
         let xcodeDir: String = workspaces.first?.deletingLastPathComponent().path
@@ -654,6 +575,9 @@ actor BuildPipelineService {
                 .filter { $0.pathExtension == "xcworkspace" } ?? []
         }
 
+        guard workspaces.count <= 1 else {
+            throw XcodeProjectIdentityEditor.IdentityError(message: "Multiple workspaces were found. Open the intended workspace directory before archiving.")
+        }
         let useWorkspace = !workspaces.isEmpty
         let buildTarget = useWorkspace
             ? workspaces[0].path
@@ -669,35 +593,19 @@ actor BuildPipelineService {
 
         emit("Found Xcode project: \(buildTarget)")
 
-        // Resolve scheme
-        let resolvedScheme: String
-        if let scheme {
-            resolvedScheme = scheme
-        } else {
-            // Try to detect scheme from xcodebuild -list
-            let listOutput = try await ProcessRunner.run("xcodebuild", arguments: [
-                "-list",
-                useWorkspace ? "-workspace" : "-project",
-                buildTarget
-            ], currentDirectory: xcodeDir, timeout: 30)
-            // Parse first scheme from output
-            let lines = listOutput.components(separatedBy: "\n")
-            var inSchemes = false
-            var detectedScheme: String?
-            for line in lines {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed == "Schemes:" {
-                    inSchemes = true
-                    continue
-                }
-                if inSchemes && !trimmed.isEmpty {
-                    detectedScheme = trimmed
-                    break
-                }
-            }
-            resolvedScheme = detectedScheme ?? URL(fileURLWithPath: buildTarget).deletingPathExtension().lastPathComponent
-        }
-        let config = configuration ?? "Release"
+        // An explicit scheme (or the sole application target's autogenerated
+        // scheme) is safer than taking the first item returned by xcodebuild.
+        let resolvedScheme = scheme ?? selection.targetName
+        let destination = platform == .macOS ? "generic/platform=macOS" : "generic/platform=iOS"
+        let resolvedSettings = try await ProcessRunner.run("xcodebuild", arguments: [
+            useWorkspace ? "-workspace" : "-project", buildTarget,
+            "-scheme", resolvedScheme, "-configuration", config,
+            "-destination", destination, "-showBuildSettings", "-json"
+        ], currentDirectory: xcodeDir, timeout: 60)
+        try XcodeProjectIdentityEditor.validateResolvedBuildSettings(
+            Data(resolvedSettings.utf8), targetName: selection.targetName, expectedBundleID: bundleId,
+            projectURL: selection.projectURL
+        )
 
         emit("Building scheme '\(resolvedScheme)' (\(config))...")
 
@@ -720,7 +628,6 @@ actor BuildPipelineService {
         // dependencies, which don't support provisioning profiles or manual signing.
         // The exportArchive step below re-signs with distribution cert + profile.
         let archivePath = NSTemporaryDirectory() + "BlitzArchive-\(Int(Date().timeIntervalSince1970)).xcarchive"
-        let destination = isMac ? "generic/platform=macOS" : "generic/platform=iOS"
         let archiveArgs = [
             useWorkspace ? "-workspace" : "-project",
             buildTarget,
@@ -728,9 +635,7 @@ actor BuildPipelineService {
             "-configuration", config,
             "-destination", destination,
             "-archivePath", archivePath,
-            "archive",
-            "DEVELOPMENT_TEAM=\(teamId)",
-            "PRODUCT_BUNDLE_IDENTIFIER=\(bundleId)"
+            "archive"
         ]
 
         let archiveOutput = ProcessOutputCollector()

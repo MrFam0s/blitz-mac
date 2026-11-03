@@ -10,6 +10,7 @@ struct ImportProjectSheet: View {
     @State private var projectType: ProjectType = .reactNative
     @State private var discoveredBundleIds: [String] = []
     @State private var selectedBundleId = ""
+    @State private var hasSavedMetadata = false
     @State private var isImporting = false
     @State private var errorMessage: String?
 
@@ -91,7 +92,7 @@ struct ImportProjectSheet: View {
                         .font(.callout.weight(.medium))
                     Text(bundleId)
                         .font(.system(.callout, design: .monospaced))
-                    Text("Blitz Neo will use the discovered bundle ID above. You can switch it later from the ASC overview.")
+                    Text(hasSavedMetadata ? "Blitz Neo keeps the saved bundle ID. You can switch it later from the ASC overview." : "Blitz Neo will use the discovered bundle ID above. You can switch it later from the ASC overview.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -182,18 +183,30 @@ struct ImportProjectSheet: View {
     }
 
     private func refreshDetectedProjectState(for url: URL) {
-        if let detected = detectProject(at: url) {
-            platform = detected.platform
-            projectType = detected.type
-        }
+        errorMessage = nil
+        do {
+            let saved = try ProjectStorage().readMetadataFromDirectory(url)
+            hasSavedMetadata = saved != nil
+            if let saved {
+                platform = saved.resolvedPlatform
+                projectType = saved.type
+            } else if let detected = detectProject(at: url) {
+                platform = detected.platform
+                projectType = detected.type
+            }
 
-        let candidates = ProjectMetadataHydrator().discoverBundleIdentifiers(projectDirectory: url)
-        discoveredBundleIds = candidates
-
-        if candidates.count == 1 {
-            selectedBundleId = candidates[0]
-        } else if !candidates.contains(selectedBundleId) {
+            var candidates = ProjectMetadataHydrator().discoverBundleIdentifiers(projectDirectory: url)
+            let savedID = saved?.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !savedID.isEmpty && !candidates.contains(savedID) {
+                candidates.insert(savedID, at: 0)
+            }
+            discoveredBundleIds = candidates
+            selectedBundleId = !savedID.isEmpty ? savedID : (candidates.count == 1 ? candidates[0] : "")
+        } catch {
+            discoveredBundleIds = []
             selectedBundleId = ""
+            hasSavedMetadata = false
+            errorMessage = "The existing project metadata could not be read. It will not be overwritten: \(error.localizedDescription)"
         }
     }
 
@@ -202,7 +215,7 @@ struct ImportProjectSheet: View {
         errorMessage = nil
         defer { isImporting = false }
 
-        let url = URL(fileURLWithPath: projectPath)
+        let url = URL(fileURLWithPath: projectPath.trimmingCharacters(in: .whitespacesAndNewlines))
 
         // Validate selected type matches detected type
         if let detected = detectProject(at: url) {
@@ -224,17 +237,13 @@ struct ImportProjectSheet: View {
         }
 
         let storage = ProjectStorage()
-        let metadata = BlitzProjectMetadata(
-            name: url.lastPathComponent,
-            type: projectType,
-            platform: platform,
-            bundleIdentifier: selectedBundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : selectedBundleId,
-            createdAt: Date(),
-            lastOpenedAt: Date()
-        )
-        let hydratedMetadata = ProjectMetadataHydrator().hydrate(metadata, projectDirectory: url).metadata
-
         do {
+            let hydratedMetadata = try storage.metadataForImport(
+                directory: url,
+                type: projectType,
+                platform: platform,
+                selectedBundleID: selectedBundleId
+            )
             // Write metadata into the original project directory first,
             // then register it as a symlink in ~/.blitz/projects/.
             // This ensures all Blitz files land in the actual project, not a detached directory.

@@ -1,77 +1,160 @@
 import Foundation
 
+@MainActor
+protocol ASCAppCreationService {
+    func fetchBundleId(identifier: String) async throws -> ASCBundleId?
+    func registerBundleId(identifier: String, name: String, platform: String) async throws -> ASCBundleId
+    func enableCapability(bundleIdResourceId: String, capabilityType: String) async throws
+    func fetchApp(bundleId: String, exactName: String?) async throws -> ASCApp
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
+}
+
+extension AppStoreConnectService: ASCAppCreationService {}
+
 extension ASCManager {
     struct PendingBundleIDSetupContext {
-        let bundleId: String
+        let operationId: UUID
+        let projectId: String
+        let accountKey: String
+        let expectedIssuerId: String
+        let expectedKeyId: String
+        let revision: UUID
+        var identity: AppCreationIdentity
         let tab: AppTab
+        var registrationComplete = false
+        var bundleId: String { identity.bundleId }
+    }
+
+    struct BundleIDRegistrationResult {
+        let context: PendingBundleIDSetupContext
+        let capabilitiesEnabled: Int
+        let canonicalIdentifierNotice: String?
     }
 
     enum BundleIDSetupConfirmationError: LocalizedError {
         case ascServiceNotConfigured
         case missingBundleId
+        case staleOperation
+        case identityMismatch
+        case projectUnavailable
 
         var errorDescription: String? {
             switch self {
-            case .ascServiceNotConfigured:
-                return "ASC service not configured"
-            case .missingBundleId:
-                return "The registered bundle ID is missing. Register the bundle ID again before confirming."
+            case .ascServiceNotConfigured: return "ASC service not configured"
+            case .missingBundleId: return "No confirmed app-creation operation is open. Return to bundle-ID setup first."
+            case .staleOperation: return "The project, account or app-creation operation changed. Return to the original project and restart setup."
+            case .identityMismatch: return "The supplied app identity does not match the confirmed creation operation. No app was assigned."
+            case .projectUnavailable: return "The original project is no longer available. No project metadata was updated."
             }
         }
     }
 
-    func beginPendingBundleIDSetup(bundleId: String, tab: AppTab) {
-        let trimmedBundleId = bundleId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedBundleId.isEmpty else {
-            pendingBundleIDSetup = nil
-            return
+    @discardableResult
+    func beginPendingBundleIDSetup(identity: AppCreationIdentity, tab: AppTab) throws -> PendingBundleIDSetupContext {
+        try identity.validate()
+        guard let projectId = loadedProjectId, let credentials,
+              let accountKey = DashboardSummaryStore.accountKey(for: credentials) else {
+            throw BundleIDSetupConfirmationError.projectUnavailable
         }
-        pendingBundleIDSetup = PendingBundleIDSetupContext(bundleId: trimmedBundleId, tab: tab)
+        let context = PendingBundleIDSetupContext(operationId: UUID(), projectId: projectId, accountKey: accountKey,
+            expectedIssuerId: credentials.issuerId, expectedKeyId: credentials.keyId, revision: projectRevision, identity: identity, tab: tab)
+        pendingBundleIDSetup = context
+        return context
     }
 
-    func clearPendingBundleIDSetup() {
-        pendingBundleIDSetup = nil
+    func clearPendingBundleIDSetup() { pendingBundleIDSetup = nil }
+
+    func validateBundleIDSetupContext(_ context: PendingBundleIDSetupContext) throws {
+        guard !Task.isCancelled, loadedProjectId == context.projectId,
+              projectRevision == context.revision,
+              DashboardSummaryStore.accountKey(for: credentials) == context.accountKey,
+              pendingBundleIDSetup?.operationId == context.operationId else {
+            throw BundleIDSetupConfirmationError.staleOperation
+        }
     }
 
-    func confirmBundleIDSetupAppCreated(bundleId overrideBundleId: String? = nil) async throws -> ASCApp {
-        guard let service else {
-            throw BundleIDSetupConfirmationError.ascServiceNotConfigured
+    func registerBundleIDForCreation(
+        identity: AppCreationIdentity, tab: AppTab, capabilities: [String],
+        using overrideService: (any ASCAppCreationService)? = nil,
+        persist: ((String, String) throws -> Void)? = nil
+    ) async throws -> BundleIDRegistrationResult {
+        guard let creationService = overrideService ?? service else { throw BundleIDSetupConfirmationError.ascServiceNotConfigured }
+        var context = try beginPendingBundleIDSetup(identity: identity, tab: tab)
+        var completed = false
+        defer {
+            if !completed, pendingBundleIDSetup?.operationId == context.operationId { pendingBundleIDSetup = nil }
         }
+        let existing = try await creationService.fetchBundleId(identifier: identity.bundleId)
+        try validateBundleIDSetupContext(context)
+        let registered: ASCBundleId
+        if let existing { registered = existing }
+        else {
+            registered = try await creationService.registerBundleId(identifier: identity.bundleId, name: identity.appName,
+                platform: identity.platform == .macOS ? "MAC_OS" : "IOS")
+            try validateBundleIDSetupContext(context)
+        }
+        let canonical = registered.attributes.identifier
+        guard AppCreationIdentity.validBundleID(canonical), canonical.caseInsensitiveCompare(identity.bundleId) == .orderedSame else {
+            throw BundleIDSetupConfirmationError.identityMismatch
+        }
+        // Apple IDs are case-insensitive. Keep the actual registered spelling visible
+        // instead of claiming that a case-only variation created a new identifier.
+        context.identity.bundleId = canonical
+        pendingBundleIDSetup = context
+        var enabled = 0
+        for capability in capabilities {
+            try validateBundleIDSetupContext(context)
+            // A conflict can describe a real configuration problem, not just an
+            // already-enabled capability. Never report an unverified 409 as success.
+            try await creationService.enableCapability(bundleIdResourceId: registered.id, capabilityType: capability)
+            try validateBundleIDSetupContext(context)
+            enabled += 1
+        }
+        try validateBundleIDSetupContext(context)
+        if let persist { try persist(context.projectId, canonical) }
+        else {
+            let storage = ProjectStorage()
+            guard var metadata = storage.readMetadata(projectId: context.projectId) else { throw BundleIDSetupConfirmationError.projectUnavailable }
+            metadata.bundleIdentifier = canonical
+            try storage.writeMetadata(projectId: context.projectId, metadata: metadata)
+        }
+        context.registrationComplete = true
+        pendingBundleIDSetup = context
+        completed = true
+        return BundleIDRegistrationResult(context: context, capabilitiesEnabled: enabled,
+            canonicalIdentifierNotice: canonical == identity.bundleId ? nil : "Apple already registered this identifier as ‘\(canonical)’. This exact spelling will be used below.")
+    }
 
-        let bundleId = try resolvePendingBundleIDSetupBundleId(overrideBundleId)
-        let refreshTab = resolvedPendingBundleIDSetupRefreshTab()
-        let app = try await service.fetchApp(bundleId: bundleId)
-
-        self.app = app
+    func confirmBundleIDSetupAppCreated(
+        bundleId: String? = nil, expectedName: String? = nil, expectedSKU: String? = nil,
+        expectedPlatform: String? = nil, expectedLocale: String? = nil,
+        projectId: String? = nil, operationId: String? = nil,
+        using overrideService: (any ASCAppCreationService)? = nil, refreshData: Bool = true
+    ) async throws -> ASCApp {
+        guard let context = pendingBundleIDSetup, context.registrationComplete else { throw BundleIDSetupConfirmationError.missingBundleId }
+        try validateBundleIDSetupContext(context)
+        for (provided, expected) in [(bundleId, context.identity.bundleId), (expectedName, context.identity.appName),
+            (expectedSKU, context.identity.sku), (expectedPlatform, context.identity.platform.rawValue),
+            (expectedLocale, context.identity.primaryLocale), (projectId, context.projectId),
+            (operationId, context.operationId.uuidString)] {
+            if let provided, provided != expected { throw BundleIDSetupConfirmationError.identityMismatch }
+        }
+        guard let creationService = overrideService ?? service else { throw BundleIDSetupConfirmationError.ascServiceNotConfigured }
+        let fetched = try await creationService.fetchApp(bundleId: context.identity.bundleId, exactName: nil)
+        try validateBundleIDSetupContext(context)
+        let versions = try await creationService.fetchAppStoreVersions(appId: fetched.id)
+        try validateBundleIDSetupContext(context)
+        try context.identity.verify(app: fetched, versions: versions)
+        self.app = fetched
         credentialsError = nil
-        resetTabState()
-        await fetchTabData(refreshTab)
         pendingBundleIDSetup = nil
-        return app
-    }
-
-    private func resolvePendingBundleIDSetupBundleId(_ overrideBundleId: String?) throws -> String {
-        let trimmedOverride = overrideBundleId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmedOverride.isEmpty {
-            return trimmedOverride
+        resetTabState()
+        let confirmedRevision = projectRevision
+        if refreshData { await fetchTabData(context.tab) }
+        guard loadedProjectId == context.projectId, projectRevision == confirmedRevision,
+              DashboardSummaryStore.accountKey(for: credentials) == context.accountKey else {
+            throw BundleIDSetupConfirmationError.staleOperation
         }
-
-        if let pendingBundleIDSetup {
-            return pendingBundleIDSetup.bundleId
-        }
-
-        throw BundleIDSetupConfirmationError.missingBundleId
-    }
-
-    private func resolvedPendingBundleIDSetupRefreshTab() -> AppTab {
-        if let pendingBundleIDSetup {
-            return pendingBundleIDSetup.tab
-        }
-
-        if let activeTab = appState?.activeTab, activeTab.isASCTab {
-            return activeTab
-        }
-
-        return .app
+        return fetched
     }
 }

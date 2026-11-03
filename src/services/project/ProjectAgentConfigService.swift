@@ -1,4 +1,5 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+import Darwin
 import Foundation
 
 /// Writes Blitz-owned agent config and installs Blitz-managed helper content.
@@ -564,6 +565,49 @@ struct ProjectAgentConfigService {
         }
     }
 
+    // Serialize managed skill updates with agent launch, including the script files.
+    private static let skillInstallLock = NSLock()
+
+    func prepareBundledCreationSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil) throws {
+        guard let source = sourceSkillsDirectory ?? Self.bundledProjectSkillsDirectory() else {
+            throw NSError(domain: "BlitzProjectSkills", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "The bundled app-creation instructions are unavailable. Restart Blitz Neo before continuing."])
+        }
+        let skill = source.appendingPathComponent("asc-app-create-ui")
+        let fm = FileManager.default
+        for file in ["SKILL.md", "scripts/create_app.py"] {
+            guard fm.fileExists(atPath: skill.appendingPathComponent(file).path) else {
+                throw NSError(domain: "BlitzProjectSkills", code: 2,
+                              userInfo: [NSLocalizedDescriptionKey: "The bundled app-creation instructions are incomplete. Reinstall Blitz Neo before continuing."])
+            }
+        }
+        Self.skillInstallLock.lock()
+        defer { Self.skillInstallLock.unlock() }
+        for destination in projectSkillDirectories(projectDir: projectDir) {
+            try Self.installManagedSkill(skill, in: destination, using: fm)
+        }
+    }
+
+    private static func installManagedSkill(_ source: URL, in destination: URL, using fm: FileManager) throws {
+        try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+        let target = destination.appendingPathComponent(source.lastPathComponent)
+        let stage = destination.appendingPathComponent(".blitz-skill-stage-\(UUID().uuidString)")
+        // Skip unchanged bundled copies: an external agent may already be using them.
+        let existingAttributes = try? fm.attributesOfItem(atPath: target.path)
+        if existingAttributes?[.type] as? FileAttributeType == .typeDirectory,
+           fm.contentsEqual(atPath: source.path, andPath: target.path) { return }
+        try fm.copyItem(at: source, to: stage)
+        defer { try? fm.removeItem(at: stage) }
+        // Exchange atomically: readers always see a complete directory. A symlink
+        // is exchanged itself; its external target is never removed or overwritten.
+        let flags = existingAttributes == nil ? UInt32(RENAME_EXCL) : UInt32(RENAME_SWAP)
+        let result = stage.path.withCString { staged in
+            target.path.withCString { installed in Darwin.renamex_np(staged, installed, flags) }
+        }
+        guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+
+    }
+
     func ensureProjectSkills(projectDir: URL) {
         let fm = FileManager.default
         let claudeDir = projectDir.appendingPathComponent(".claude")
@@ -604,7 +648,7 @@ struct ProjectAgentConfigService {
             }
 
             let repoSkillsDir = repoDir.appendingPathComponent("skills")
-            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm)
+            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui"])
 
             if let bundledSkillsDir = Self.bundledProjectSkillsDirectory() {
                 Self.syncSkillDirectories(from: bundledSkillsDir, into: skillDirectories, using: fm)
@@ -685,7 +729,9 @@ struct ProjectAgentConfigService {
         return nil
     }
 
-    private static func syncSkillDirectories(from sourceSkillsDir: URL, into destinations: [URL], using fm: FileManager) {
+    private static func syncSkillDirectories(from sourceSkillsDir: URL, into destinations: [URL], using fm: FileManager, excluding: Set<String> = []) {
+        skillInstallLock.lock()
+        defer { skillInstallLock.unlock() }
         guard let skillDirs = try? fm.contentsOfDirectory(
             at: sourceSkillsDir,
             includingPropertiesForKeys: [.isDirectoryKey]
@@ -693,15 +739,12 @@ struct ProjectAgentConfigService {
 
         for destination in destinations {
             for srcSkillDir in skillDirs {
+                guard !excluding.contains(srcSkillDir.lastPathComponent) else { continue }
                 var isDir: ObjCBool = false
                 guard fm.fileExists(atPath: srcSkillDir.path, isDirectory: &isDir),
                       isDir.boolValue else { continue }
 
-                let destSkillDir = destination.appendingPathComponent(srcSkillDir.lastPathComponent)
-                if fm.fileExists(atPath: destSkillDir.path) {
-                    try? fm.removeItem(at: destSkillDir)
-                }
-                try? fm.copyItem(at: srcSkillDir, to: destSkillDir)
+                try? installManagedSkill(srcSkillDir, in: destination, using: fm)
             }
         }
     }

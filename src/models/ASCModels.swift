@@ -156,6 +156,7 @@ struct ASCApp: Codable, Identifiable {
         let primaryLocale: String?
         let vendorNumber: String?
         let contentRightsDeclaration: String?
+        var sku: String? = nil
     }
 
     struct Relationships: Codable {
@@ -194,6 +195,7 @@ struct ASCAppStoreVersion: Codable, Identifiable {
         let releaseType: String?
         let createdDate: String?
         let copyright: String?
+        var platform: String? = nil
     }
 }
 

@@ -352,11 +352,17 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_confirm_created_app",
-            description: "Poll App Store Connect for the app record created from the current bundle-ID setup flow, then programmatically run the same confirmation path as the Confirm button in BundleIDSetupView. Retries up to 10 times before giving up.",
+            description: "Confirm the app created from a specific registered setup operation. Requires the exact confirmed public name, bundle ID, SKU, platform and primary locale, plus the project and operation IDs from its identity JSON. Refuses stale operations, mismatched Apple records or another active project. Retries not-found responses up to 10 times.",
             properties: [
-                "bundleId": ["type": "string", "description": "Optional bundle ID override. If omitted, uses the pending bundle-ID setup flow in Blitz Neo."]
+                "bundleId": ["type": "string", "description": "Exact registered bundle ID from the confirmed identity JSON."],
+                "expectedName": ["type": "string", "description": "Confirmed public App Store name (appName)."],
+                "expectedSKU": ["type": "string", "description": "Confirmed permanent SKU (sku)."],
+                "expectedPlatform": ["type": "string", "enum": ["iOS", "macOS"]],
+                "expectedLocale": ["type": "string", "description": "Confirmed primaryLocale, e.g. de-DE."],
+                "projectId": ["type": "string", "description": "Original projectId from the identity JSON."],
+                "operationId": ["type": "string", "description": "Original operationId from the identity JSON."]
             ],
-            required: []
+            required: ["bundleId", "expectedName", "expectedSKU", "expectedPlatform", "expectedLocale", "projectId", "operationId"]
         ))
 
         tools.append(tool(

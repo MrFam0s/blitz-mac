@@ -26,6 +26,18 @@ struct ProjectStorage {
         repository.readMetadata(projectId: projectId)
     }
 
+    func createProject(metadata: BlitzProjectMetadata) throws -> String {
+        try repository.createProject(metadata: metadata)
+    }
+
+    func readMetadataFromDirectory(_ directory: URL) throws -> BlitzProjectMetadata? {
+        try repository.readMetadataFromDirectory(directory)
+    }
+
+    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?) throws -> BlitzProjectMetadata {
+        try repository.metadataForImport(directory: directory, type: type, platform: platform, selectedBundleID: selectedBundleID)
+    }
+
     func writeMetadata(projectId: String, metadata: BlitzProjectMetadata) throws {
         try repository.writeMetadata(projectId: projectId, metadata: metadata)
     }

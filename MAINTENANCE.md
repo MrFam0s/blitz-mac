@@ -2,6 +2,50 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.58 — consistent app creation identities
+
+New project creation reserves its directory exclusively before metadata or
+scaffolding starts. Existing paths and imported source links are never replaced.
+Templates preserve the original public name and capitalization, use separate
+technical identifiers, and serialize React Native display names as JSON.
+Re-import keeps existing names, explicit identifiers and unrelated build settings.
+
+Bundle registration and app confirmation capture the project, account and an
+operation ID. Results from an older operation or changed project cannot update
+another project. The complete dotted ASCII bundle ID, public app name, SKU,
+platform and language are confirmed together; Apple’s canonical bundle-ID spelling
+is displayed and used. Confirmation reads back every identity field from Apple.
+The agent uses a bundled static Python script with a validated JSON data file.
+Before creation, the same web session must return the confirmed API key and
+issuer/provider identity; missing or conflicting account metadata stops the POST.
+Creation instructions and script are installed synchronously and atomically before
+launch. Capability conflicts remain errors rather than unverified successes.
+
+Xcode changes target only the selected application's build configurations.
+Extensions, tests and other apps retain their IDs and signing settings. Ambiguous
+schemes and conditional overrides stop before edits; archiving verifies resolved
+settings and no longer overrides bundle IDs globally. Explicit bundle-ID edits
+update Xcode and project metadata in the same actor turn, reverting the local
+Xcode edit if metadata persistence fails and the file is still unchanged.
+Build 63 retains ASC 5.17.0.
+
+Validation (2026-11-03): all 273 Swift tests and 11 offline Python creation tests
+pass. Independent reviews covered project reservation/import, captured account
+and operation identity, safe JSON payloads, atomic skill refresh, target-scoped
+Xcode edits and rollback. Both real Swift templates also build in temporary
+iOS Simulator/macOS projects with correct mixed-case bundle IDs and quoted public
+display names. The native release bundle and installed app pass strict deep
+Developer ID verification with the same designated requirement as build 62.
+Protocol ping, direct CLI and cli.exec pass with ASC 5.17.0; app and shared CLI
+helpers are byte-identical. The exact creation script and skill are in the bundle.
+Native startup shows 1.0.58 / 63; the creation dialog retains ClubBundle spelling,
+the full dotted mixed-case ID stays intact, and an invalid spaced SKU disables
+registration with a specific explanation. Test fields were restored without
+registering an identifier or app. The old installed bundle is retained for rollback.
+No live Apple registration or app creation is used as a test; no cloud workflow
+is dispatched. Provider verification is exercised with mocked responses, not
+with a real creation request.
+
 ## 1.0.57 — preserve bundle-ID capitalization
 
 The bundle-ID setup form keeps the original capitalization when prefilling the

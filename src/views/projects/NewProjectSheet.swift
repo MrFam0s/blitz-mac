@@ -8,6 +8,7 @@ struct NewProjectSheet: View {
     @State private var platform: ProjectPlatform = .iOS
     @State private var projectType: ProjectType = .swift
     @State private var errorMessage: String?
+    @State private var isCreating = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -58,7 +59,7 @@ struct NewProjectSheet: View {
                     Task { await createProject() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(projectName.isEmpty)
+                .disabled(isCreating || (try? ProjectCreationReservation.projectID(for: projectName)) == nil)
             }
         }
         .padding()
@@ -66,25 +67,27 @@ struct NewProjectSheet: View {
     }
 
     private func createProject() async {
+        guard !isCreating else { return }
+        guard !appState.projectSetup.isSettingUp else {
+            errorMessage = "Another project is being created. Wait for it to finish."
+            return
+        }
+        isCreating = true
+        defer { isCreating = false }
         errorMessage = nil
 
         let storage = ProjectStorage()
         let metadata = BlitzProjectMetadata(
-            name: projectName,
+            name: projectName.trimmingCharacters(in: .whitespacesAndNewlines),
             type: projectType,
             platform: platform,
             createdAt: Date(),
             lastOpenedAt: Date()
         )
 
-        let projectId = projectName
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
-            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
-
-        // Write metadata first
+        let projectId: String
         do {
-            try storage.writeMetadata(projectId: projectId, metadata: metadata)
+            projectId = try storage.createProject(metadata: metadata)
         } catch {
             errorMessage = error.localizedDescription
             return

@@ -240,6 +240,8 @@ extension MCPExecutor {
                     teamId: teamId,
                     ascService: service,
                     platform: projectPlatform,
+                    scheme: project.metadata.buildSettings?.scheme,
+                    configuration: project.metadata.buildSettings?.configuration,
                     onProgress: { msg in
                         Task { @MainActor in
                             appStateRef.ascManager.buildPipelineMessage = msg
@@ -290,8 +292,8 @@ extension MCPExecutor {
         let bundleId = ctx.bundleId
         let teamId = ctx.teamId
 
-        let scheme = args["scheme"] as? String
-        let configuration = args["configuration"] as? String
+        let scheme = (args["scheme"] as? String) ?? project.metadata.buildSettings?.scheme
+        let configuration = (args["configuration"] as? String) ?? project.metadata.buildSettings?.configuration
 
         await MainActor.run {
             appState.ascManager.buildPipelinePhase = .archiving

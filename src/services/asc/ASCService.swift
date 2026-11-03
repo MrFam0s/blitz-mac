@@ -242,7 +242,7 @@ final class AppStoreConnectService {
             queryItems: [
                 URLQueryItem(
                     name: "fields[apps]",
-                    value: "bundleId,name,primaryLocale,contentRightsDeclaration"
+                    value: "bundleId,name,primaryLocale,contentRightsDeclaration,sku"
                 )
             ],
             as: ASCSingleResponse<ASCApp>.self
