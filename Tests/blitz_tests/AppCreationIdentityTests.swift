@@ -258,3 +258,94 @@ func appCreationConfirmationRejectsDelayedResultAfterProjectChange(_ stage: Stri
     #expect(manager.app?.id == "app-a")
     #expect(manager.pendingBundleIDSetup == nil)
 }
+
+
+@MainActor
+@Test func appCreationRecoveryPreservesIdentityAndInvalidatesOldOperation() async throws {
+    let manager = creationManager()
+    let service = CreationServiceMock()
+    let result = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: service, persist: { _, _ in })
+    service.calls = []
+    let request = try manager.reopenAppCreationForm(projectId: "project-a",
+        operationId: result.context.operationId.uuidString, message: "  Apple rejected the app name.  ")
+    #expect(request.context.identity == creationIdentity)
+    #expect(request.message == "Apple rejected the app name.")
+    #expect(manager.activeAppCreationFormRequest?.id == request.id)
+    #expect(manager.pendingBundleIDSetup == nil)
+    #expect(manager.app == nil)
+    let state = try #require(MCPExecutor.appCreationSetupState(manager))
+    #expect(state["phase"] as? String == "identityForm")
+    #expect(state["requiresNewConfirmation"] as? Bool == true)
+    #expect(state["canReopenForm"] as? Bool == false)
+    #expect(state["operationId"] == nil)
+    #expect((state["identity"] as? [String: String])?["bundleId"] == creationIdentity.bundleId)
+    do {
+        _ = try await manager.confirmBundleIDSetupAppCreated(using: service, refreshData: false)
+        Issue.record("Recovered operation was reused")
+    } catch {}
+    do {
+        _ = try manager.reopenAppCreationForm(projectId: "project-a", operationId: result.context.operationId.uuidString)
+        Issue.record("Repeated recovery could overwrite edits")
+    } catch {}
+    #expect(service.calls.isEmpty)
+    #expect(manager.activeAppCreationFormRequest?.id == request.id)
+    let next = try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app)
+    #expect(next.operationId != result.context.operationId)
+    #expect(manager.activeAppCreationFormRequest == nil)
+}
+
+@MainActor
+@Test(arguments: ["project", "account", "revision", "operation", "argumentProject", "assignedApp"])
+func appCreationRecoveryRejectsChangedContext(_ change: String) async throws {
+    let manager = creationManager()
+    let result = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: CreationServiceMock(), persist: { _, _ in })
+    if change == "project" { manager.loadedProjectId = "project-b" }
+    if change == "account" { manager.credentials?.keyId = "other" }
+    if change == "revision" { manager.projectRevision = UUID() }
+    if change == "assignedApp" { manager.app = creationApp() }
+    #expect(throws: ASCManager.BundleIDSetupConfirmationError.self) {
+        try manager.reopenAppCreationForm(projectId: change == "argumentProject" ? "project-b" : "project-a",
+            operationId: change == "operation" ? UUID().uuidString : result.context.operationId.uuidString)
+    }
+    #expect(manager.appCreationFormRequest == nil)
+    #expect(manager.pendingBundleIDSetup?.operationId == result.context.operationId)
+}
+
+@MainActor
+@Test func appCreationRecoveryDoesNotLeakIntoAnotherProjectOrAccount() async throws {
+    let manager = creationManager()
+    let result = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: CreationServiceMock(), persist: { _, _ in })
+    let request = try manager.reopenAppCreationForm(projectId: "project-a", operationId: result.context.operationId.uuidString,
+        message: String(repeating: "x", count: 5000))
+    #expect(request.message?.count == 2000)
+    manager.loadedProjectId = "project-b"
+    #expect(manager.activeAppCreationFormRequest == nil)
+    #expect(MCPExecutor.appCreationSetupState(manager) == nil)
+    manager.loadedProjectId = "project-a"
+    manager.credentials?.keyId = "other"
+    #expect(manager.activeAppCreationFormRequest == nil)
+    manager.credentials?.keyId = "test-key"
+    manager.projectRevision = UUID()
+    #expect(manager.activeAppCreationFormRequest == nil)
+}
+
+@MainActor
+@Test func appCreationRecoveryBlocksLateConfirmation() async throws {
+    let manager = creationManager()
+    let service = CreationServiceMock()
+    let result = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: service, persist: { _, _ in })
+    let gate = CreationGate()
+    service.event = { if $0 == "app" { await gate.pause() } }
+    let task = Task { try await manager.confirmBundleIDSetupAppCreated(using: service, refreshData: false) }
+    await gate.waitForEntry()
+    _ = try manager.reopenAppCreationForm(projectId: "project-a", operationId: result.context.operationId.uuidString)
+    gate.resume()
+    do { _ = try await task.value; Issue.record("Late confirmation overwrote reopened form") } catch {}
+    #expect(manager.app == nil)
+    #expect(manager.activeAppCreationFormRequest != nil)
+    #expect(!service.calls.contains("versions"))
+}

@@ -164,6 +164,7 @@ final class ASCManager {
     }
     var loadedProjectId: String?
     var pendingBundleIDSetup: PendingBundleIDSetupContext?
+    var appCreationFormRequest: AppCreationFormRequest?
 
     // Submission readiness labels used by both the view model and background hydration.
     static var overviewAllFields: Set<String> {

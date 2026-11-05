@@ -2,6 +2,38 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.61 — app-creation conflict diagnosis and recovery
+
+App creation preserves bounded, sanitized Apple error codes, titles, details and
+identity field pointers. Failures in account verification are distinguished from
+failures in the creation POST; cookie values, authorization data and arbitrary
+response bodies are excluded. Dry runs explicitly validate local syntax/payload
+only and do not claim that a name, SKU or bundle ID is available at Apple. The
+creation script does not retry POSTs or change the confirmed identity.
+
+The new `asc_reopen_app_setup` MCP tool returns the current registered operation
+to its identity form, preserving exact name, bundle ID, SKU, platform and primary
+locale. It performs no Apple mutation, invalidates the previous confirmation and
+rejects stale project/account/operation IDs. `get_tab_state` exposes the setup
+phase. Delayed confirmations and bundle-candidate discovery cannot replace the
+reopened form. Restoring an identity does not regenerate its SKU.
+
+Build 66 retains ASC 5.17.0, the existing bundle identifier and Developer ID.
+Validation (2026-11-05): all 349 Swift tests and 23 offline Python tests pass,
+including stage-specific HTTP 409, single-POST behavior, safe error output,
+identity preservation, stale context rejection and delayed confirmation. An
+independent review caught and verified guards for delayed candidate selection,
+including the project reload await. The release and installed bundles pass
+strict deep signature verification with the previous designated requirement.
+Protocol ping, CLI version and cli.exec pass with ASC 5.17.0; installed app and
+shared CLI helpers are byte-identical. Installed UI inspection confirms build 66
+and unchanged ContactHelper identity fields; bundled and project-managed creation
+scripts match source. Recovery/creation errors are tested offline: no app-creation
+POST, Store upload or cloud workflow was used. The previous 1.0.60 / 65 bundle is
+retained for rollback. The historical Apple 409 detail was discarded by the old
+script and cannot be reconstructed; successful bundle registration alone does
+not establish why Apple rejected the separate app record.
+
 ## 1.0.60 — consistent TestFlight data and relationships
 
 Builds display marketing version, build number and platform together, with

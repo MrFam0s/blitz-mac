@@ -25,6 +25,39 @@ extension ASCManager {
         var bundleId: String { identity.bundleId }
     }
 
+    struct AppCreationFormRequest {
+        let id = UUID()
+        let context: PendingBundleIDSetupContext
+        let message: String?
+    }
+
+    /// A recovery request is local UI state, never permission to create another app.
+    var activeAppCreationFormRequest: AppCreationFormRequest? {
+        guard let request = appCreationFormRequest, app == nil,
+              loadedProjectId == request.context.projectId,
+              projectRevision == request.context.revision,
+              DashboardSummaryStore.accountKey(for: credentials) == request.context.accountKey else { return nil }
+        return request
+    }
+
+    @discardableResult
+    func reopenAppCreationForm(projectId: String, operationId: String, message: String? = nil) throws -> AppCreationFormRequest {
+        guard let context = pendingBundleIDSetup, context.registrationComplete, app == nil else {
+            throw BundleIDSetupConfirmationError.missingBundleId
+        }
+        try validateBundleIDSetupContext(context)
+        guard context.projectId == projectId, context.operationId.uuidString == operationId else {
+            throw BundleIDSetupConfirmationError.staleOperation
+        }
+        let notice = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = AppCreationFormRequest(context: context,
+            message: notice.flatMap { $0.isEmpty ? nil : String($0.prefix(2000)) })
+        // Invalidate the old confirmation before exposing the form for correction.
+        pendingBundleIDSetup = nil
+        appCreationFormRequest = request
+        return request
+    }
+
     struct BundleIDRegistrationResult {
         let context: PendingBundleIDSetupContext
         let capabilitiesEnabled: Int
@@ -59,6 +92,7 @@ extension ASCManager {
         let context = PendingBundleIDSetupContext(operationId: UUID(), projectId: projectId, accountKey: accountKey,
             expectedIssuerId: credentials.issuerId, expectedKeyId: credentials.keyId, revision: projectRevision, identity: identity, tab: tab)
         pendingBundleIDSetup = context
+        appCreationFormRequest = nil
         return context
     }
 

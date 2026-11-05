@@ -15,6 +15,7 @@ struct ProjectBundleIDSelectorView: View {
     @State private var manualBundleId = ""
     @State private var isSaving = false
     @State private var isResolvingCandidates = false
+    @State private var candidateResolutionID: UUID?
     @State private var isASCFilteredSelection = false
     @State private var error: String?
     @State private var showRegistrationFlow = false
@@ -125,6 +126,8 @@ struct ProjectBundleIDSelectorView: View {
         Group {
             if currentProject == nil {
                 ASCNoProjectSelectedView()
+            } else if showRegistrationFlow || asc.activeAppCreationFormRequest != nil {
+                BundleIDSetupView(appState: appState, asc: asc, tab: tab, platform: platform)
             } else if isResolvingCandidates {
                 VStack(spacing: 12) {
                     ProgressView()
@@ -133,8 +136,6 @@ struct ProjectBundleIDSelectorView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if showRegistrationFlow {
-                BundleIDSetupView(appState: appState, asc: asc, tab: tab, platform: platform)
             } else if standalone {
                 ScrollView {
                     content
@@ -145,6 +146,9 @@ struct ProjectBundleIDSelectorView: View {
             } else {
                 content
             }
+        }
+        .onChange(of: asc.activeAppCreationFormRequest?.id) { _, requestID in
+            if requestID != nil { showRegistrationFlow = true }
         }
         .task(id: discoveryTaskKey) {
             await reloadDiscoveredBundleIds()
@@ -258,6 +262,10 @@ struct ProjectBundleIDSelectorView: View {
             return
         }
 
+        if asc.activeAppCreationFormRequest != nil {
+            showRegistrationFlow = true
+            return
+        }
         let projectURL = URL(fileURLWithPath: project.path)
         let candidates = ProjectMetadataHydrator().discoverBundleIdentifiers(projectDirectory: projectURL)
         error = nil
@@ -286,7 +294,8 @@ struct ProjectBundleIDSelectorView: View {
     }
 
     @MainActor
-    private func applySelectedBundleId() async {
+    private func applySelectedBundleId(ifCurrent: (() -> Bool)? = nil) async {
+        guard ifCurrent?() != false else { return }
         guard let projectId = appState.activeProjectId else {
             error = "No active project is selected."
             return
@@ -298,6 +307,7 @@ struct ProjectBundleIDSelectorView: View {
         }
 
         isSaving = true
+        defer { isSaving = false }
         error = nil
 
         do {
@@ -312,6 +322,7 @@ struct ProjectBundleIDSelectorView: View {
             }
 
             await appState.projectManager.loadProjects()
+            guard ifCurrent?() != false, appState.activeProjectId == projectId else { return }
 
             asc.prepareForProjectSwitch(to: projectId, bundleId: bundleId)
             await asc.loadCredentials(for: projectId, bundleId: bundleId)
@@ -323,7 +334,6 @@ struct ProjectBundleIDSelectorView: View {
             self.error = error.localizedDescription
         }
 
-        isSaving = false
     }
 
     private func normalized(_ value: String?) -> String? {
@@ -355,11 +365,28 @@ struct ProjectBundleIDSelectorView: View {
             return
         }
 
+        let requestID = UUID()
+        candidateResolutionID = requestID
+        let projectID = appState.activeProjectId
+        let revision = asc.projectRevision
+        let account = DashboardSummaryStore.accountKey(for: asc.credentials)
+        let setupOperationID = asc.pendingBundleIDSetup?.operationId
+        let formRequestID = asc.activeAppCreationFormRequest?.id
+        func isCurrentDiscovery() -> Bool {
+            !Task.isCancelled && candidateResolutionID == requestID
+                && appState.activeProjectId == projectID && asc.projectRevision == revision
+                && DashboardSummaryStore.accountKey(for: asc.credentials) == account
+                && asc.pendingBundleIDSetup?.operationId == setupOperationID
+                && asc.activeAppCreationFormRequest?.id == formRequestID
+        }
         isResolvingCandidates = true
-        defer { isResolvingCandidates = false }
+        defer {
+            if candidateResolutionID == requestID { isResolvingCandidates = false }
+        }
 
         do {
             let candidatesWithApps = try await filterCandidatesWithApps(candidates, service: service)
+            guard isCurrentDiscovery() else { return }
             switch candidatesWithApps.count {
             case 0:
                 discoveredBundleIds = []
@@ -370,13 +397,14 @@ struct ProjectBundleIDSelectorView: View {
                 discoveredBundleIds = candidatesWithApps
                 isASCFilteredSelection = true
                 selectedBundleId = candidatesWithApps[0]
-                await applySelectedBundleId()
+                await applySelectedBundleId(ifCurrent: isCurrentDiscovery)
             default:
                 discoveredBundleIds = candidatesWithApps
                 isASCFilteredSelection = true
                 applyDefaultSelection(candidatesWithApps, restrictToCandidates: true)
             }
         } catch {
+            guard isCurrentDiscovery() else { return }
             discoveredBundleIds = candidates
             applyDefaultSelection(candidates)
             isASCFilteredSelection = false

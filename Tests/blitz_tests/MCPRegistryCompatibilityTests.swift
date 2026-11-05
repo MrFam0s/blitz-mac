@@ -32,6 +32,13 @@ struct MCPRegistryCompatibilityTests {
         #expect(properties["bundleId"] != nil)
     }
 
+    @Test func appCreationRecoveryRequiresScopedOperation() throws {
+        let tool = try #require(tool(named: "asc_reopen_app_setup", in: MCPRegistry.allTools()))
+        let schema = try #require(tool["inputSchema"] as? [String: Any])
+        #expect(schema["required"] as? [String] == ["projectId", "operationId"])
+        #expect(MCPRegistry.category(for: "asc_reopen_app_setup") == .query)
+    }
+
     @Test func screenshotRegistryUsesDirectTrackTools() {
         let tools = MCPRegistry.allTools()
         #expect(tool(named: "screenshots_add_asset", in: tools) == nil)

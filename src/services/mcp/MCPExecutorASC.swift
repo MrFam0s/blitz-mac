@@ -303,6 +303,28 @@ extension MCPExecutor {
         return mcpText("Credentials pre-filled. The user can verify and confirm in the UI.")
     }
 
+    func executeASCReopenAppSetup(_ args: [String: Any]) async -> [String: Any] {
+        guard let projectID = args["projectId"] as? String, !projectID.isEmpty,
+              let operationID = args["operationId"] as? String, !operationID.isEmpty,
+              args["message"] == nil || args["message"] is String else {
+            return mcpText("Error: projectId and operationId from the confirmed identity JSON are required; message must be plain text.")
+        }
+        let result: [String: Any] = await MainActor.run {
+            do {
+                guard appState.activeProjectId == projectID else {
+                    throw ASCManager.BundleIDSetupConfirmationError.staleOperation
+                }
+                let request = try appState.ascManager.reopenAppCreationForm(projectId: projectID,
+                    operationId: operationID, message: args["message"] as? String)
+                appState.activeTab = request.context.tab
+                if request.context.tab == .app { appState.activeAppSubTab = .overview }
+                return ["success": true, "projectId": projectID, "phase": "identityForm",
+                    "requiresNewConfirmation": true, "appleMutationPerformed": false]
+            } catch { return ["success": false, "error": error.localizedDescription] }
+        }
+        return mcpJSON(result)
+    }
+
     func executeASCConfirmCreatedApp(_ args: [String: Any]) async -> [String: Any] {
         let required = ["bundleId", "expectedName", "expectedSKU", "expectedPlatform", "expectedLocale", "projectId", "operationId"]
         guard required.allSatisfy({ (args[$0] as? String)?.isEmpty == false }) else {
@@ -332,7 +354,7 @@ extension MCPExecutor {
                         continue
                     }
 
-                    return mcpText("Error: app with bundle ID '\(bundleId)' was not found in App Store Connect after 10 checks.")
+                    return mcpText("Error: app with bundle ID '\(bundleId)' was not found in App Store Connect after 10 read-only checks. Creation remains unconfirmed; this does not prove the bundle ID is invalid. Do not retry creation automatically. Use asc_reopen_app_setup with the original projectId/operationId to return to the identity form.")
                 }
 
                 return mcpText("Error: \(ascError.localizedDescription)")

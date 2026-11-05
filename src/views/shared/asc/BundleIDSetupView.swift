@@ -20,6 +20,9 @@ struct BundleIDSetupView: View {
     @State private var publicAppName = ""
     @State private var sku = ""
     @State private var primaryLocale = "en-US"
+    @State private var restoredPlatform: ProjectPlatform?
+    @State private var appliedFormRequestID: UUID?
+    private var effectivePlatform: ProjectPlatform { restoredPlatform ?? platform }
     @State private var creationContext: ASCManager.PendingBundleIDSetupContext?
     @State private var canonicalIdentifierNotice: String?
     @State private var viewOperationId = UUID()
@@ -113,7 +116,7 @@ struct BundleIDSetupView: View {
 
     private var formIdentity: AppCreationIdentity {
         AppCreationIdentity(appName: publicAppName, bundleId: bundleIdPreview, sku: sku,
-            platform: platform, primaryLocale: primaryLocale)
+            platform: effectivePlatform, primaryLocale: primaryLocale)
     }
 
     private var validationMessage: String? {
@@ -145,7 +148,8 @@ struct BundleIDSetupView: View {
                     .frame(maxWidth: 540, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .onAppear(perform: prefill)
+                .onAppear { prefill(); applyFormRequest() }
+                .onChange(of: asc.activeAppCreationFormRequest?.id) { _, _ in applyFormRequest() }
                 .onChange(of: asc.loadedProjectId) { _, _ in resetForProjectChange() }
                 .onChange(of: DashboardSummaryStore.accountKey(for: asc.credentials)) { _, _ in resetForProjectChange() }
             }
@@ -187,6 +191,13 @@ struct BundleIDSetupView: View {
 
         Divider()
 
+        if let error {
+            Text(error)
+                .font(.callout)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
         // Fields
         VStack(alignment: .leading, spacing: 16) {
             labeledField("Bundle ID", hint: "The complete technical identifier, preserving capitalization and every dot") {
@@ -208,23 +219,27 @@ struct BundleIDSetupView: View {
 
         VStack(alignment: .leading, spacing: 16) {
             labeledField("Public app name", hint: "The App Store name, 2–30 characters; independent of the technical identifier") {
-                TextField("App Store name", text: $publicAppName)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: publicAppName) { oldValue, newValue in
-                        if sku.isEmpty || sku == "\(oldValue)-\(platform.rawValue)" {
-                            sku = "\(newValue)-\(platform.rawValue)"
+                TextField("App Store name", text: Binding(
+                    get: { publicAppName },
+                    set: { newValue in
+                        let oldValue = publicAppName
+                        publicAppName = newValue
+                        if sku.isEmpty || sku == "\(oldValue)-\(effectivePlatform.rawValue)" {
+                            sku = "\(newValue)-\(effectivePlatform.rawValue)"
                         }
                     }
+                ))
+                .textFieldStyle(.roundedBorder)
             }
             labeledField("SKU", hint: "Permanent identifier: letters, numbers, periods, hyphens and underscores; no spaces") {
-                TextField("AppName-\(platform.rawValue)", text: $sku)
+                TextField("AppName-\(effectivePlatform.rawValue)", text: $sku)
                     .textFieldStyle(.roundedBorder)
             }
             labeledField("Primary language", hint: "Use the exact language code, for example de-DE or en-US") {
                 TextField("en-US", text: $primaryLocale)
                     .textFieldStyle(.roundedBorder)
             }
-            Text("Platform: \(platform.rawValue)")
+            Text("Platform: \(effectivePlatform.rawValue)")
                 .font(.callout).foregroundStyle(.secondary)
             if let validationMessage {
                 Text(validationMessage).font(.caption).foregroundStyle(.secondary)
@@ -300,13 +315,6 @@ struct BundleIDSetupView: View {
                 .background(.background.secondary)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
-        }
-
-        if let error {
-            Text(error)
-                .font(.callout)
-                .foregroundStyle(.red)
-                .fixedSize(horizontal: false, vertical: true)
         }
 
         Divider()
@@ -501,8 +509,31 @@ struct BundleIDSetupView: View {
         publicAppName = ""
         sku = ""
         primaryLocale = "en-US"
+        restoredPlatform = nil
+        appliedFormRequestID = nil
         hasPrefilled = false
         prefill()
+        applyFormRequest()
+    }
+
+    private func applyFormRequest() {
+        guard let request = asc.activeAppCreationFormRequest,
+              request.id != appliedFormRequestID else { return }
+        appliedFormRequestID = request.id
+        let identity = request.context.identity
+        viewOperationId = UUID()
+        creationContext = nil
+        bundleIdentifier = identity.bundleId
+        publicAppName = identity.appName
+        sku = identity.sku
+        primaryLocale = identity.primaryLocale
+        restoredPlatform = identity.platform
+        canonicalIdentifierNotice = nil
+        createdBundleId = identity.bundleId
+        createdAppName = identity.appName
+        hasPrefilled = true
+        error = request.message
+        phase = .form
     }
 
     private func prefill() {
@@ -511,7 +542,7 @@ struct BundleIDSetupView: View {
               let metadata = ProjectStorage().readMetadata(projectId: projectId) else { return }
         hasPrefilled = true
         publicAppName = metadata.name
-        sku = "\(metadata.name)-\(platform.rawValue)"
+        sku = "\(metadata.name)-\(effectivePlatform.rawValue)"
         if let existingBundleId = metadata.bundleIdentifier, !existingBundleId.isEmpty {
             applyBundleIdToForm(existingBundleId)
         } else {
@@ -578,17 +609,11 @@ struct BundleIDSetupView: View {
     }
 
     private func goBackToBundleRegistrationForm() {
-        error = nil
-        if asc.pendingBundleIDSetup?.operationId == creationContext?.operationId {
-            asc.clearPendingBundleIDSetup()
-        }
-        creationContext = nil
-        viewOperationId = UUID()
-        let bundleId = createdBundleId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !bundleId.isEmpty {
-            applyBundleIdToForm(bundleId)
-        }
-        phase = .form
+        guard let context = creationContext else { return }
+        do {
+            try asc.reopenAppCreationForm(projectId: context.projectId, operationId: context.operationId.uuidString)
+            applyFormRequest()
+        } catch { self.error = error.localizedDescription }
     }
 
     private func applyBundleIdToForm(_ bundleId: String) {
@@ -618,7 +643,7 @@ struct BundleIDSetupView: View {
                 "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId]
             try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
                 .write(to: identityFile, options: .atomic)
-            let prompt = "Use /asc-app-create-ui to create the app from the confirmed identity JSON at \(identityFile.path). Use every value exactly as stored; do not derive or rename any identifier. Run the skill's static create_app.py with --identity-file and first --dry-run, then --create. If the identity cannot be used, stop and return to the form for a corrected confirmation. Finally call asc_confirm_created_app with bundleId, expectedName=appName, expectedSKU=sku, expectedPlatform=platform, expectedLocale=primaryLocale, projectId and operationId from this file."
+            let prompt = "Use /asc-app-create-ui to create the app from the confirmed identity JSON at \(identityFile.path). Use every value exactly as stored; do not derive or rename any identifier. Run the skill's static create_app.py with --identity-file and first --dry-run, then --create. The dry run checks syntax only, not availability at Apple. On an HTTP failure, report the sanitized Apple error and its stage. Do not retry creation or rename the identity automatically. After a successful POST or a possibly completed creation request, verify through asc_confirm_created_app with bundleId, expectedName=appName, expectedSKU=sku, expectedPlatform=platform, expectedLocale=primaryLocale, projectId and operationId from this file. If creation remains unconfirmed after read-only verification, call asc_reopen_app_setup with projectId, operationId and a brief non-secret error message to return to the original identity form for a new user confirmation. Then stop: the old operation is invalid and must not be confirmed or retried."
             let settings = SettingsService.shared
             let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
             let terminal = settings.resolveDefaultTerminal().terminal

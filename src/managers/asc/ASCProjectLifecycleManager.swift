@@ -439,6 +439,7 @@ extension ASCManager {
         loadedTabs = []
         tabLoadedAt = [:]
         pendingBundleIDSetup = nil
+        appCreationFormRequest = nil
         if !preserveCredentials {
             loadedProjectId = nil
         }

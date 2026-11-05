@@ -386,6 +386,8 @@ actor MCPExecutor {
             return await executeASCWebAuth()
         case "asc_confirm_created_app":
             return await executeASCConfirmCreatedApp(arguments)
+        case "asc_reopen_app_setup":
+            return await executeASCReopenAppSetup(arguments)
 
         case "app_store_setup_signing":
             return try await executeSetupSigning(arguments)

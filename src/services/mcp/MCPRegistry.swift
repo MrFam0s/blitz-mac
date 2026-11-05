@@ -368,6 +368,17 @@ enum MCPRegistry {
         ))
 
         tools.append(tool(
+            name: "asc_reopen_app_setup",
+            description: "Return an unconfirmed app-creation operation to its original identity form without any Apple mutation. Preserves the exact name, bundle ID, SKU, platform and locale. Invalidates the old operation; another creation requires a new user confirmation. Rejects stale or foreign project/account/operation IDs.",
+            properties: [
+                "projectId": ["type": "string", "description": "Original projectId from the confirmed identity JSON."],
+                "operationId": ["type": "string", "description": "Original operationId from the confirmed identity JSON."],
+                "message": ["type": "string", "description": "Optional plain-text diagnosis for the form, without credentials or raw response bodies; maximum 2000 characters."]
+            ],
+            required: ["projectId", "operationId"]
+        ))
+
+        tools.append(tool(
             name: "asc_set_app_price",
             description: "Set the app's price on the App Store. Use \"0\" for free. Optionally schedule a future price change with effectiveDate.",
             properties: [
@@ -451,8 +462,8 @@ enum MCPRegistry {
             return .ascSubmitMutation
         case "asc_web_auth":
             return .query  // user-interactive (Apple ID login) — no approval needed
-        case "asc_confirm_created_app":
-            return .query
+        case "asc_confirm_created_app", "asc_reopen_app_setup":
+            return .query // Local setup navigation/readback; no Apple mutation.
         case "asc_create_iap", "asc_create_subscription", "asc_set_app_price":
             return .ascFormMutation
 

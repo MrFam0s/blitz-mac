@@ -1,6 +1,32 @@
 import Foundation
 
 extension MCPExecutor {
+    @MainActor
+    static func appCreationSetupState(_ asc: ASCManager) -> [String: Any]? {
+        guard asc.app == nil else { return nil }
+        let context: ASCManager.PendingBundleIDSetupContext
+        let phase: String
+        let canReopen: Bool
+        if let request = asc.activeAppCreationFormRequest {
+            context = request.context
+            phase = "identityForm"
+            canReopen = false
+        } else if let pending = asc.pendingBundleIDSetup,
+                  (try? asc.validateBundleIDSetupContext(pending)) != nil {
+            context = pending
+            phase = pending.registrationComplete ? "awaitingAppCreation" : "registeringBundleID"
+            canReopen = pending.registrationComplete
+        } else { return nil }
+        var state: [String: Any] = ["projectId": context.projectId, "phase": phase,
+            "canReopenForm": canReopen, "requiresNewConfirmation": phase == "identityForm",
+            "identity": ["appName": context.identity.appName, "bundleId": context.identity.bundleId,
+                "sku": context.identity.sku, "platform": context.identity.platform.rawValue,
+                "primaryLocale": context.identity.primaryLocale]]
+        // Reopened forms must not advertise their invalidated operation as usable.
+        if phase != "identityForm" { state["operationId"] = context.operationId.uuidString }
+        return state
+    }
+
     // MARK: - Tab State Tool
 
     private static let ageRatingBooleanFieldReaders: [(String, (ASCAgeRatingDeclaration.Attributes) -> Bool?)] = [
@@ -275,6 +301,9 @@ extension MCPExecutor {
             "dataLoaded": asc.loadedTabs.contains(tab),
             "needsRefresh": asc.tabsNeedingRevalidation.contains(tab) || asc.tabError[tab] != nil,
         ]
+        if tab.isASCTab || tab == .app, let setup = Self.appCreationSetupState(asc) {
+            result["appCreationSetup"] = setup
+        }
         if let date = asc.tabLoadedAt[tab] { result["loadedAt"] = ISO8601DateFormatter().string(from: date) }
         if let error = asc.tabError[tab] { result["error"] = error }
         if let error = asc.writeError { result["writeError"] = error }
