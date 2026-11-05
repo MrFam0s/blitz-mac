@@ -7,6 +7,9 @@ struct AssetsView: View {
 
     @State private var sourceIcon: NSImage?
     @State private var sourceIconName: String?
+    @State private var composerPackagePath: String?
+    @State private var isLoadingSource = true
+    @State private var isPreviewUnavailable = false
     @State private var generatedIcons: [Int: NSImage] = [:]
     @State private var isDropTargeted = false
     @State private var importError: String?
@@ -16,6 +19,14 @@ struct AssetsView: View {
     @State private var iconColor: Color = .blue
 
     private var projectId: String? { appState.activeProjectId }
+
+    private var projectIdentity: String? {
+        appState.activeProject.map { "\($0.id)\n\($0.path)" }
+    }
+
+    private var canImportIcon: Bool {
+        !isLoadingSource && !isGenerating && composerPackagePath == nil
+    }
 
     private var iconBasePath: String? {
         guard let projectId else { return nil }
@@ -54,8 +65,19 @@ struct AssetsView: View {
                 }
             }
         }
-        .task(id: projectId) { await loadExistingIcons() }
-        .alert("Import Error", isPresented: Binding(
+        .task(id: projectIdentity) { await loadExistingIcons() }
+        .onReceive(NotificationCenter.default.publisher(for: ProjectAppIconLoader.didInvalidateNotification)) { notification in
+            guard let invalidatedProjectId = notification.object as? String,
+                  invalidatedProjectId == projectId else { return }
+            Task { await loadExistingIcons() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard let projectId, composerPackagePath != nil,
+                  !isLoadingSource, !isGenerating else { return }
+            // Changes made in Icon Composer must be reflected when returning to Blitz.
+            ProjectAppIconLoader.invalidate(for: projectId)
+        }
+        .alert("App Icon", isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
         )) {
@@ -105,26 +127,43 @@ struct AssetsView: View {
 
     private var sourceActions: some View {
         VStack(spacing: 8) {
-            Button {
-                openIconPicker()
-            } label: {
-                Label("Choose File", systemImage: "plus.circle")
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
+            if composerPackagePath != nil {
+                Button {
+                    openIconComposer()
+                } label: {
+                    Label("Open in Icon Composer", systemImage: "arrow.up.forward.app")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
 
-            Button {
-                showColorGenerator = true
-            } label: {
-                Label("Generate from Color", systemImage: "wand.and.stars")
+                Text("This project uses an Icon Composer document. Edit it in Icon Composer to preserve its layers and appearances.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
+            } else {
+                Button {
+                    openIconPicker()
+                } label: {
+                    Label("Choose File", systemImage: "plus.circle")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    showColorGenerator = true
+                } label: {
+                    Label("Generate from Color", systemImage: "wand.and.stars")
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .font(BlitzLayout.toolbarFont)
         .controlSize(.small)
+        .disabled(isLoadingSource || isGenerating)
     }
 
     private var sourceCaption: some View {
@@ -133,14 +172,14 @@ struct AssetsView: View {
                 Text("1024 \u{00d7} 1024")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let name = sourceIconName {
-                    Text(name)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(name)
-                }
+            }
+            if let name = sourceIconName {
+                Text(name)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(name)
             }
         }
     }
@@ -153,12 +192,15 @@ struct AssetsView: View {
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
                     .padding(8)
+            } else if isLoadingSource {
+                ProgressView("Loading preview\u{2026}")
+                    .font(.caption)
             } else {
                 VStack(spacing: 8) {
-                    Image(systemName: "arrow.down.doc")
+                    Image(systemName: composerPackagePath == nil ? "arrow.down.doc" : "app.dashed")
                         .font(.system(size: 28))
                         .foregroundStyle(.secondary)
-                    Text("Drop 1024\u{00d7}1024\nicon here")
+                    Text(composerPackagePath == nil ? "Drop 1024\u{00d7}1024\nicon here" : "Preview unavailable")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -169,16 +211,17 @@ struct AssetsView: View {
         .frame(height: height)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(isDropTargeted ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
+                .fill(isDropTargeted && canImportIcon ? Color.accentColor.opacity(0.1) : Color(.controlBackgroundColor))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(
-                    isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
-                    style: StrokeStyle(lineWidth: 2, dash: sourceIcon == nil ? [6, 4] : [])
+                    isDropTargeted && canImportIcon ? Color.accentColor : Color.secondary.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 2, dash: composerPackagePath == nil && sourceIcon == nil ? [6, 4] : [])
                 )
         )
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+            guard canImportIcon else { return false }
             handleDrop(providers)
             return true
         }
@@ -191,28 +234,35 @@ struct AssetsView: View {
             Text("App Icon")
                 .font(BlitzLayout.pageTitle)
 
-            if isGenerating {
+            if isLoadingSource || isGenerating {
                 HStack {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Generating icons\u{2026}")
+                    Text(isLoadingSource ? "Loading preview\u{2026}" : "Generating previews\u{2026}")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 16)],
-                spacing: 16
-            ) {
-                ForEach(iconSizes, id: \.1) { label, size in
-                    VStack(spacing: 6) {
-                        iconImage(size: size)
-                            .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                        Text(label)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            if isPreviewUnavailable {
+                Label("This project uses an Icon Composer document, but its preview could not be loaded. Open it in Icon Composer to check the document and its layers.", systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 100, maximum: 140), spacing: 16)],
+                    spacing: 16
+                ) {
+                    ForEach(iconSizes, id: \.1) { label, size in
+                        VStack(spacing: 6) {
+                            iconImage(size: size)
+                                .frame(width: 80, height: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 18))
+                            Text(label)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -248,20 +298,57 @@ struct AssetsView: View {
         iconRevision = revision
         sourceIcon = nil
         sourceIconName = nil
+        composerPackagePath = nil
+        isLoadingSource = true
+        isPreviewUnavailable = false
         generatedIcons = [:]
         isGenerating = false
-        guard let path = await ProjectAppIconLoader.loadPath(for: project.id, projectPath: project.path),
-              let image = await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path),
-              !Task.isCancelled, appState.activeProjectId == project.id,
-              iconRevision == revision else { return }
+        showColorGenerator = false
+        let composerPath = await ProjectAppIconLoader.composerPackagePath(for: project.id, projectPath: project.path)
+        guard !Task.isCancelled, appState.activeProjectId == project.id,
+              appState.activeProject?.path == project.path, iconRevision == revision else { return }
+        composerPackagePath = composerPath
+        sourceIconName = composerPath.map { URL(fileURLWithPath: $0).lastPathComponent }
+        let path = await ProjectAppIconLoader.loadPath(for: project.id, projectPath: project.path)
+        let image: NSImage?
+        if path != nil {
+            image = await ProjectAppIconLoader.loadImage(for: project.id, projectPath: project.path)
+        } else {
+            image = nil
+        }
+        guard !Task.isCancelled, appState.activeProjectId == project.id,
+              appState.activeProject?.path == project.path, iconRevision == revision else { return }
+        isLoadingSource = false
+        guard let path, let image else {
+            isPreviewUnavailable = composerPath != nil
+            return
+        }
         sourceIcon = image
-        sourceIconName = URL(fileURLWithPath: path).lastPathComponent
+        if composerPath == nil { sourceIconName = URL(fileURLWithPath: path).lastPathComponent }
         generateAllSizes(from: image, saveToDisk: false)
     }
 
     // MARK: - Actions
 
+    private func openIconComposer() {
+        guard let composerPackagePath else { return }
+        let bundledComposer = URL(fileURLWithPath: "/Applications/Xcode.app/Contents/Applications/Icon Composer.app")
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.IconComposer")
+                ?? (FileManager.default.fileExists(atPath: bundledComposer.path) ? bundledComposer : nil) else {
+            importError = "Icon Composer could not be found. Open this document with Icon Composer from your Xcode installation."
+            return
+        }
+        NSWorkspace.shared.open([URL(fileURLWithPath: composerPackagePath)], withApplicationAt: applicationURL,
+                                configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            guard let error else { return }
+            DispatchQueue.main.async {
+                importError = "Could not open Icon Composer: \(error.localizedDescription)"
+            }
+        }
+    }
+
     private func openIconPicker() {
+        guard canImportIcon else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg]
         panel.allowsMultipleSelection = false
@@ -273,17 +360,20 @@ struct AssetsView: View {
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
-        guard let provider = providers.first else { return }
+        guard canImportIcon, let provider = providers.first else { return }
+        let identity = projectIdentity
         provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
             guard let data = data as? Data,
                   let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
             DispatchQueue.main.async {
+                guard projectIdentity == identity else { return }
                 loadSourceIcon(from: url)
             }
         }
     }
 
     private func loadSourceIcon(from url: URL) {
+        guard canImportIcon else { return }
         guard let image = NSImage(contentsOf: url) else {
             importError = "Could not load image."
             return
@@ -314,6 +404,7 @@ struct AssetsView: View {
     // MARK: - Resize & Save
 
     private func generateAllSizes(from source: NSImage, saveToDisk: Bool) {
+        guard !saveToDisk || canImportIcon else { return }
         guard let cgSource = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
         let revision = UUID()
         iconRevision = revision
@@ -386,7 +477,7 @@ struct AssetsView: View {
                 generatedIcons = finalIcons
                 isGenerating = false
                 if let finalError { importError = "Could not save app icons: \(finalError)" }
-                if let pid {
+                if saveToDisk, let pid {
                     appState.ascManager.checkAppIcon(projectId: pid)
                 }
             }
@@ -436,6 +527,7 @@ struct AssetsView: View {
     }
 
     private func generateColorIcon() {
+        guard canImportIcon else { return }
         let size = NSSize(width: 1024, height: 1024)
         let image = NSImage(size: size)
         image.lockFocus()

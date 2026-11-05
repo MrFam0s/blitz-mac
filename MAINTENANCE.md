@@ -2,6 +2,34 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.62 — Icon Composer project icons
+
+Local icon discovery understands Icon Composer `.icon` documents, including
+ContactHelper's macOS icon, alongside asset catalogs. Readiness validates the
+configured source independently of preview rendering. The complete 1024-pixel
+preview is exported by Apple's signed Icon Composer tool; individual transparent
+layers are never presented as the finished icon. Preview caching incorporates
+source content, platform and renderer revision, with atomic writes and bounded
+renderer execution. Dashboard refresh invalidates the local source/image cache.
+
+The Icon tab identifies Composer sources, opens them in Icon Composer and explains
+when their preview is unavailable. PNG/color imports are disabled for these
+sources because those actions would not update the active layered document.
+ContactHelper's source, bundle ID, SKU and Store records are not changed.
+Build 67 retains ASC 5.17.0 and the existing Developer ID signing identity.
+
+Validation (2026-11-05): all 368 Swift tests pass, including 19 new tests for
+Composer source selection, native preview caching, failed/late rendering,
+invalid source files and target membership. Independent review identified and
+closed stale catalog fallback and render/source race cases. ContactHelper's real
+Xcode resource and complete native 1024x1024 export were checked without changing
+its project. The signed release and installed bundle pass strict deep codesign
+verification; designated requirement and signing team match build 66. ASC 5.17.0
+protocol ping, CLI version and cli.exec pass without account access. Installed UI
+inspection confirms the dashboard/sidebar icon, full Icon-tab preview and
+readiness “App Icon: Configured”. No Store mutations or cloud workflow runs were
+used. The previous 1.0.61 / 66 bundle is retained for rollback.
+
 ## 1.0.61 — app-creation conflict diagnosis and recovery
 
 App creation preserves bounded, sanitized Apple error codes, titles, details and

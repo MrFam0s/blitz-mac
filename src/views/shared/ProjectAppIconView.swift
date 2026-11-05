@@ -4,8 +4,14 @@ import SwiftUI
 
 private enum ProjectAppIconLookupState {
     case unresolved
-    case resolved(String)
+    case resolved(ProjectIconSource)
     case missing
+}
+
+private enum ProjectIconSource {
+    case raster(String)
+    case composer(ProjectIconComposerSource)
+    case unavailableComposer(String)
 }
 
 enum ProjectAppIconLoader {
@@ -43,8 +49,11 @@ enum ProjectAppIconLoader {
     }
 
     static func loadStatus(for projectId: String, projectPath: String) async -> String? {
-        guard let path = await loadPath(for: projectId, projectPath: projectPath) else { return nil }
-        return path.hasSuffix("assets/AppIcon/icon_1024.png") ? "1024px" : "Configured"
+        guard let source = await loadSource(for: projectId, projectPath: projectPath) else { return nil }
+        if case .unavailableComposer = source { return nil }
+        // Configuration is independent of preview-tool availability or rendering.
+        if case .raster(let path) = source, path.hasSuffix("assets/AppIcon/icon_1024.png") { return "1024px" }
+        return "Configured"
     }
 
     static func refreshImage(for projectId: String, projectPath: String) async -> NSImage? {
@@ -57,22 +66,43 @@ enum ProjectAppIconLoader {
         NotificationCenter.default.post(name: didInvalidateNotification, object: projectId)
     }
 
-    static func loadPath(for projectId: String, projectPath: String) async -> String? {
-        let state = cacheState(for: projectId)
-        switch state.path {
-        case .resolved(let path):
-            return path
-        case .missing:
-            break
-        case .unresolved:
-            break
+    static func composerPackagePath(for projectId: String, projectPath: String) async -> String? {
+        switch await loadSource(for: projectId, projectPath: projectPath) {
+        case .composer(let source): return source.packageURL.path
+        case .unavailableComposer(let path): return path
+        default: return nil
         }
+    }
 
-        let path = await Task.detached(priority: .utility) {
-            findIconPath(projectPath: projectPath)
+    static func loadPath(for projectId: String, projectPath: String,
+                         renderComposer: @escaping @Sendable (URL, String, String) -> URL? = { package, platform, key in
+                             IconComposerPreviewRenderer.render(packageURL: package, platform: platform, cacheKey: key,
+                                 isSourceCurrent: {
+                                     ProjectIconComposerSource(packageURL: package, projectRoot: package.deletingLastPathComponent())?.cacheKey == key
+                                 })
+                         }) async -> String? {
+        let revision = cacheState(for: projectId).revision
+        guard let source = await loadSource(for: projectId, projectPath: projectPath) else { return nil }
+        let path: String?
+        switch source {
+        case .raster(let raster): path = raster
+        case .unavailableComposer: path = nil
+        case .composer(let composer):
+            path = await Task.detached(priority: .utility) {
+                renderComposer(composer.packageURL, composer.platform, composer.cacheKey)?.path
+            }.value
+        }
+        // A render completing after Refresh must not return the previous icon.
+        return cacheState(for: projectId).revision == revision ? path : nil
+    }
+
+    private static func loadSource(for projectId: String, projectPath: String) async -> ProjectIconSource? {
+        let state = cacheState(for: projectId)
+        if case .resolved(let source) = state.path { return source }
+        let source = await Task.detached(priority: .utility) {
+            findIconSource(projectPath: projectPath)
         }.value
-
-        return cachePath(path, for: projectId, revision: state.revision) ? path : nil
+        return cachePath(source, for: projectId, revision: state.revision) ? source : nil
     }
 
     private static func cacheState(for projectId: String) -> (path: ProjectAppIconLookupState, revision: Int) {
@@ -81,7 +111,7 @@ enum ProjectAppIconLoader {
         return (pathCache[projectId] ?? .unresolved, cacheRevisions[projectId] ?? 0)
     }
 
-    private static func cachePath(_ path: String?, for projectId: String, revision: Int) -> Bool {
+    private static func cachePath(_ path: ProjectIconSource?, for projectId: String, revision: Int) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         guard revision == cacheRevisions[projectId, default: 0] else { return false }
@@ -106,10 +136,13 @@ enum ProjectAppIconLoader {
         imageCache.removeObject(forKey: projectId as NSString)
     }
 
-    private static func findIconPath(projectPath: String) -> String? {
+    private static func findIconSource(projectPath: String) -> ProjectIconSource? {
         let fm = FileManager.default
         let projectDir = URL(fileURLWithPath: projectPath).resolvingSymlinksInPath()
         var candidates: [IconCandidate] = []
+        var composers: [ProjectIconComposerSource] = []
+        var composerPackages: [URL] = []
+        var projectFiles: [URL] = []
         let generatedIcon = projectDir.appendingPathComponent("assets/AppIcon/icon_1024.png")
         // The Xcode catalog is the app's icon source. Generated working copies can
         // outlive a redesign and are only a fallback when no usable catalog exists.
@@ -118,7 +151,7 @@ enum ProjectAppIconLoader {
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return IconCandidate(url: generatedIcon, priority: 0)?.url.path
+            return IconCandidate(url: generatedIcon, priority: 0).map { .raster($0.url.path) }
         }
 
         while let entry = enumerator.nextObject() as? URL {
@@ -127,6 +160,22 @@ enum ProjectAppIconLoader {
             if skippedDirectories.contains(name) {
                 enumerator.skipDescendants()
                 continue
+            }
+
+            if entry.pathExtension == "icon" {
+                enumerator.skipDescendants()
+                let package = entry.resolvingSymlinksInPath().standardizedFileURL
+                if package.path.hasPrefix(projectDir.path + "/"),
+                   (try? package.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    composerPackages.append(package)
+                }
+                if let source = ProjectIconComposerSource(packageURL: entry, projectRoot: projectDir) {
+                    composers.append(source)
+                }
+                continue
+            }
+            if name == "project.pbxproj", entry.deletingLastPathComponent().pathExtension == "xcodeproj" {
+                projectFiles.append(entry)
             }
 
             guard name == "Contents.json",
@@ -148,11 +197,34 @@ enum ProjectAppIconLoader {
                 }
             }
         }
+        let eligible: [ProjectIconComposerSource]
+        if projectFiles.isEmpty {
+            // Without target membership, a loose document must not displace an
+            // existing catalog. Still support a sole document in a new project.
+            eligible = candidates.isEmpty ? composers : []
+        } else {
+            let configured = projectFiles.reduce(into: Set<URL>()) {
+                $0.formUnion(ProjectIconComposerSelection.configuredPackages(in: $1, candidates: composerPackages))
+            }
+            // A broken or missing configured document must not be masked by an
+            // obsolete catalog, or exposed to PNG import in the icon editor.
+            if configured.count > 1 { return nil }
+            if let package = configured.first {
+                guard let source = composers.first(where: { $0.packageURL.path == package.path }) else {
+                    return .unavailableComposer(package.path)
+                }
+                return .composer(source)
+            }
+            eligible = []
+        }
+        // Never choose an arbitrary target when several Composer documents match.
+        if eligible.count == 1 { return .composer(eligible[0]) }
+        if eligible.count > 1 { return nil }
         return candidates.sorted {
             if $0.pixels != $1.pixels { return $0.pixels > $1.pixels }
             if $0.priority != $1.priority { return $0.priority > $1.priority }
             return $0.url.path < $1.url.path
-        }.first?.url.path ?? IconCandidate(url: generatedIcon, priority: 0)?.url.path
+        }.first.map { .raster($0.url.path) } ?? IconCandidate(url: generatedIcon, priority: 0).map { .raster($0.url.path) }
     }
 
     private struct IconCandidate {
