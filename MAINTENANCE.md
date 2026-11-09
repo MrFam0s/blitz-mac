@@ -2,6 +2,50 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## ASC 6.5.3 update candidate — pending human review
+
+Prepared on an isolated branch from the maintenance fork. The ASC pin advances
+from 5.17.0 (`ecad9f122524248749b6c44bb01e951734131889`) to stable 6.5.3
+(`130e7508e6319845eba98b7a997deaef4393dd22`). GitHub release metadata excludes
+drafts/prereleases; annotated tag `2761500e9a84e923598631cb607c379646be1f7a`
+resolves to the same commit through both GitHub's API and git. Go 1.27.3 is
+required; the existing project-local 1.27.3 toolchain is reused.
+
+The Blitz JSON-lines adapter and shared app/CLI implementation remain in place.
+ASC 6.0's removed `web apps create --password`, macOS IPA publishing,
+`migrate metadata` aliases and Ads v5 commands are not used by Blitz. Its version
+reads already use the API resource envelope, and its macOS uploads use `--pkg`.
+The expected upload and `web auth import` response fields remain compatible.
+
+One integration fix removes inherited `ASC_BEARER_TOKEN` and `ASC_KEY_TYPE` from
+the app daemon's environment, preventing new ASC auth modes from overriding the
+selected Blitz account or API host for `cli.exec` uploads. The direct terminal
+CLI is unchanged. An offline regression exercises the actual subprocess
+environment with fictional credentials.
+
+Limitation: the optional native FIDO2 backend newly bundled in upstream macOS
+releases is not compiled here. Fresh CLI security-key logins remain unsupported;
+existing Blitz WebKit sign-in/session import is unchanged. No global native
+libraries are installed as part of this update.
+
+Validation (2026-11-09): the helper builds with project-local Go 1.27.3.
+`go test -json -count=1 -p 2 ./internal/asc ./internal/helper` passes with
+`ASC_BYPASS_KEYCHAIN=1`, telemetry disabled and an isolated temporary config;
+the full command-tree comparison covers all 1,998 CLI cases. The existing raw
+transport tests verify HTTP status, response headers, non-2xx error bodies,
+redirect rejection and mutation-query rejection. All 369 Swift tests pass with
+`--build-system native --jobs 4`, including the new inherited-auth isolation test.
+
+The release bundle builds with four jobs and the newly built helper. Strict/deep
+Developer ID signature verification passes; its designated requirement matches
+the installed app. Protocol ping, direct CLI version and `cli.exec version` pass
+for both the standalone and bundled helper. Independent compatibility and final
+diff reviews found no remaining code blockers. Optional native FIDO2 remains the
+explicit limitation above. No Store writes, device actions or cloud workflows
+were used. Installed app/helper bytes and the main checkout remain unchanged.
+
+This candidate is not merged, released or installed by the update monitor.
+
 ## 1.0.62 — Icon Composer project icons
 
 Local icon discovery understands Icon Composer `.icon` documents, including
