@@ -2,6 +2,12 @@ import Foundation
 
 extension ASCManager {
     func ensureTabData(_ tab: AppTab) async {
+        async let availability: Void = refreshStoreAvailabilityIfNeeded()
+        await ensureCachedTabData(tab)
+        _ = await availability
+    }
+
+    private func ensureCachedTabData(_ tab: AppTab) async {
         guard credentials != nil, !restoringCache else { return }
 
         await restoreTabCacheIfNeeded(tab)
@@ -9,7 +15,7 @@ extension ASCManager {
 
         if loadedTabs.contains(tab) {
             if shouldRefreshTabCache(tab) {
-                await refreshTabData(tab)
+                await refreshTabData(tab, forceAvailability: false)
             }
             return
         }
@@ -57,12 +63,13 @@ extension ASCManager {
     func fetchTabData(_ tab: AppTab) async {
         if let task = tabLoadTasks[tab] { await task.value; return }
         guard !loadedTabs.contains(tab) else { return }
-        await refreshTabData(tab)
+        await refreshTabData(tab, forceAvailability: false)
     }
 
     /// Called after bundle ID setup completes and the app is confirmed in ASC.
     func resetTabState() {
         projectRevision = UUID()
+        resetStoreAvailability()
         resetTabCacheTasks()
         cancelBackgroundHydrationTasks()
         for task in tabLoadTasks.values { task.cancel() }
@@ -74,7 +81,7 @@ extension ASCManager {
         loadingFeedbackBuildIds = []
     }
 
-    func refreshTabData(_ tab: AppTab) async {
+    func refreshTabData(_ tab: AppTab, forceAvailability: Bool = true) async {
         if let task = tabLoadTasks[tab] { await task.value; return }
         guard let service, credentials != nil, app != nil, !restoringCache else { return }
         let revision = projectRevision
@@ -89,6 +96,7 @@ extension ASCManager {
                     tabLoadTasks.removeValue(forKey: tab)
                 }
             }
+            async let availability: Void = refreshStoreAvailability(using: service, force: forceAvailability)
             do {
                 try await loadData(for: tab, service: service)
                 guard projectRevision == revision, !Task.isCancelled else { return }
@@ -105,6 +113,7 @@ extension ASCManager {
                 tabError[tab] = error.localizedDescription
                 await logDataFetchFailure("asc_tab_refresh_failed", error: error, metadata: ["tab": tab.rawValue])
             }
+            _ = await availability
         }
         tabLoadTasks[tab] = task
         await task.value

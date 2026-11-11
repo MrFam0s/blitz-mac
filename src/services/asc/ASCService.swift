@@ -335,7 +335,7 @@ final class AppStoreConnectService {
     }
 
     /// Fetches all apps for the account, optionally filtering by app store version state.
-    /// Pass `appStoreStateFilter: "READY_FOR_SALE"` to get only live apps.
+    /// The version-state filter selects distribution readiness, not storefront availability.
     func fetchAllApps(appStoreStateFilter: String? = nil) async throws -> [ASCApp] {
         var allApps: [ASCApp] = []
         var nextPath: String? = nil

@@ -60,7 +60,18 @@ extension ASCManager {
         lines.append("  selectedBuildId: \(selectedBuildId ?? "nil")")
         lines.append("  app: \(renderApp())")
         lines.append("  selectedVersion: \(renderVersion(selectedVersion))")
-        lines.append("  liveVersion: \(renderVersion(liveVersion))")
+        lines.append("  liveVersion: \(renderVersion(storeLiveVersion))")
+        lines.append("  distributionReadyVersion: \(renderVersion(distributionReadyVersion))")
+        let availability = confirmedStoreAvailability
+        let availabilityState = isStoreAvailabilityLoading ? "checking"
+            : (storeAvailabilityFailed ? "unknown" : availability?.rawValue ?? "unknown")
+        lines.append("  storeAvailability:")
+        lines.append("    state: \(availabilityState)")
+        lines.append("    error: \(storeAvailabilityFailed)")
+        if availability != nil, let date = storeAvailabilityUpdatedAt,
+           date.timeIntervalSinceReferenceDate.isFinite {
+            lines.append("    checkedAt: \(ISO8601DateFormatter().string(from: date))")
+        }
         lines.append("  editableVersion: \(renderVersion(editableVersion))")
         lines.append("  currentUpdateVersion: \(renderVersion(currentUpdateVersion))")
         lines.append("  appStoreVersions:")
@@ -128,7 +139,7 @@ extension ASCManager {
 
     private func renderVersion(_ version: ASCAppStoreVersion?) -> String {
         guard let version else { return "nil" }
-        return "id=\(version.id) version=\(version.attributes.versionString) state=\(version.attributes.appStoreState ?? "nil") createdDate=\(version.attributes.createdDate ?? "nil")"
+        return "id=\(version.id) version=\(version.attributes.versionString) appleState=\(version.attributes.effectiveState ?? "nil") appVersionState=\(version.attributes.appVersionState ?? "nil") appStoreState=\(version.attributes.appStoreState ?? "nil") createdDate=\(version.attributes.createdDate ?? "nil")"
     }
 
     private func renderReviewDetail() -> String {

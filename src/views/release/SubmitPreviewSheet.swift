@@ -149,7 +149,7 @@ struct SubmitPreviewSheet: View {
                     .font(.title3)
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("This app is already live.")
+                    Text("A new App Store version is required.")
                         .font(.callout.weight(.medium))
                     Text("Create a new App Store version before attaching a build and submitting an update.")
                         .font(.caption)
@@ -199,16 +199,12 @@ struct SubmitPreviewSheet: View {
 
     // MARK: - Version Status Badge (non-submittable)
 
+    @ViewBuilder
     private var versionStatusBadge: some View {
-        let (label, color) = stateDisplay(versionState)
-        return HStack(spacing: 6) {
-            Image(systemName: stateIcon(versionState))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(color)
+        if let version = targetVersion {
+            ASCVersionStatusBadges(asc: asc, version: version)
+                .padding(.top, 4)
         }
-        .padding(.top, 4)
     }
 
     // MARK: - Submittable Content
@@ -267,14 +263,17 @@ struct SubmitPreviewSheet: View {
     // MARK: - Non-Submittable Content
 
     private var nonSubmittableContent: some View {
-        let (label, color) = stateDisplay(versionState)
+        let presentation = ASCReleaseStatusPresentation.version(
+            targetVersion, distributionReadyVersionID: asc.distributionReadyVersion?.id
+        )
+        let color = presentation.tone.color
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: stateIcon(versionState))
+                Image(systemName: presentation.symbol)
                     .font(.title3)
                     .foregroundStyle(color)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Version is \(label)")
+                    Text("Version status: \(presentation.label)")
                         .font(.callout.weight(.medium))
                     Text("You cannot modify the build or re-submit while in this state.")
                         .font(.caption)
@@ -306,33 +305,6 @@ struct SubmitPreviewSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func stateDisplay(_ state: String) -> (String, Color) {
-        switch state {
-        case "WAITING_FOR_REVIEW": return ("Waiting for Review", .blue)
-        case "IN_REVIEW": return ("In Review", .blue)
-        case "PENDING_DEVELOPER_RELEASE": return ("Pending Release", .green)
-        case "READY_FOR_SALE": return ("Ready for Sale", .green)
-        case "PREPARE_FOR_SUBMISSION": return ("Preparing", .orange)
-        case "INVALID_BINARY": return ("Submission Error", .red)
-        case "REJECTED": return ("Rejected", .red)
-        case "DEVELOPER_REJECTED": return ("Developer Rejected", .orange)
-        default: return (state.replacingOccurrences(of: "_", with: " ").capitalized, .secondary)
-        }
-    }
-
-    private func stateIcon(_ state: String) -> String {
-        switch state {
-        case "WAITING_FOR_REVIEW": return "clock.badge.checkmark"
-        case "IN_REVIEW": return "eye.fill"
-        case "PENDING_DEVELOPER_RELEASE": return "checkmark.seal.fill"
-        case "READY_FOR_SALE": return "checkmark.circle.fill"
-        case "INVALID_BINARY", "REJECTED", "DEVELOPER_REJECTED": return "xmark.circle.fill"
-        default: return "info.circle.fill"
         }
     }
 

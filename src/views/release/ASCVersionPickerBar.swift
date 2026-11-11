@@ -82,7 +82,7 @@ struct ASCVersionPickerBar<Content: View>: View {
             .fixedSize(horizontal: true, vertical: true)
             .frame(height: 24, alignment: .leading)
         }
-        if let version = asc.selectedVersion { stateBadge(version.attributes.appStoreState ?? "") }
+        if let version = asc.selectedVersion { ASCVersionStatusBadges(asc: asc, version: version) }
     }
 
     @ViewBuilder private var releaseActions: some View {
@@ -115,32 +115,6 @@ struct ASCVersionPickerBar<Content: View>: View {
             .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
     }
 
-    private func stateBadge(_ state: String) -> some View {
-        let normalizedState = ASCReleaseStatus.normalize(state)
-        let color: Color
-        if ASCReleaseStatus.isLive(normalizedState) {
-            color = .green
-        } else if ASCReleaseStatus.isEditable(normalizedState) {
-            color = .orange
-        } else if ASCReleaseStatus.pendingReviewStates.contains(normalizedState) {
-            color = .blue
-        } else if ASCReleaseStatus.rejectedStates.contains(normalizedState) {
-            color = .red
-        } else {
-            color = .secondary
-        }
-
-        return Text(normalizedState.replacingOccurrences(of: "_", with: " ").capitalized)
-            .font(.caption.weight(.medium))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.12))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
-            .frame(height: 24)
-    }
 }
 
 extension ASCVersionPickerBar where Content == EmptyView {

@@ -360,6 +360,7 @@ extension ASCManager {
 
     func resetProjectData(preserveCredentials: Bool) {
         projectRevision = UUID()
+        resetStoreAvailability()
         cancelIrisFeedbackLoads()
         resetTabCacheTasks()
         for task in tabLoadTasks.values { task.cancel() }

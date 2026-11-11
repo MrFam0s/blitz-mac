@@ -122,7 +122,7 @@ struct ReviewView: View {
                         BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 8) {
                             Text("Version \(version.attributes.versionString)")
                                 .font(BlitzLayout.pageTitle)
-                            stateBadge(version.attributes.appStoreState ?? "Unknown")
+                            ASCVersionStatusBadges(asc: asc, version: version)
                         }
                         if let date = version.attributes.createdDate {
                             Text("Created \(ascShortDate(date))")
@@ -294,8 +294,8 @@ struct ReviewView: View {
                             BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 6) {
                                 Text(version.attributes.versionString)
                                     .font(.body.weight(.medium))
-                                stateBadge(version.attributes.appStoreState ?? "Unknown")
-                                if version.attributes.appStoreState != "REJECTED",
+                                ASCVersionStatusBadges(asc: asc, version: version)
+                                if ASCReleaseStatus.normalize(version.attributes.effectiveState) != "REJECTED",
                                    wasVersionPreviouslyRejected(version) {
                                     Text("Previously Rejected")
                                         .font(.caption2.weight(.medium))
@@ -666,33 +666,6 @@ struct ReviewView: View {
     }
 
     // MARK: - UI Helpers
-
-    private func stateBadge(_ state: String) -> some View {
-        let (label, color) = stateColor(state)
-        return Text(label)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
-    }
-
-    private func stateColor(_ state: String) -> (String, Color) {
-        switch state {
-        case "READY_FOR_SALE": return ("Live", .green)
-        case "PROCESSING": return ("Processing", .orange)
-        case "PENDING_DEVELOPER_RELEASE": return ("Pending Release", .yellow)
-        case "IN_REVIEW": return ("In Review", .blue)
-        case "WAITING_FOR_REVIEW": return ("Waiting", .blue)
-        case "INVALID_BINARY": return ("Submission Error", .red)
-        case "REJECTED": return ("Rejected", .red)
-        case "DEVELOPER_REJECTED": return ("Dev Rejected", .orange)
-        case "PREPARE_FOR_SUBMISSION": return ("Draft", .secondary)
-        default:
-            return (state.replacingOccurrences(of: "_", with: " ").capitalized, .secondary)
-        }
-    }
 
     /// Check if a version was previously rejected (has rejected submission items or cached feedback)
     private func wasVersionPreviouslyRejected(_ version: ASCAppStoreVersion) -> Bool {

@@ -2,6 +2,41 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.65 — consistent storefront status across tabs
+
+App overview, the shared version header, Review, submission preview and version
+history now distinguish Apple's approval from actual Store availability. Current
+approved versions are labeled "Approved for distribution"; only a confirmed
+available release receives "Live on the App Store". Removed apps show "Not on the
+App Store", and historical releases are described as previously released.
+
+The app manager shares a short-lived availability read across tabs, bound to the
+project, app and account/credential revision. A normal tab visit reuses fresh
+results for up to 120 seconds; explicit refresh checks again. Missing, expired or
+failed evidence never produces a green live badge. Delayed replies cannot update
+another context, and canceling one waiting view does not cancel another tab's
+shared read. Listing caches cannot establish storefront availability.
+
+MCP tab responses expose `storeAvailability` separately from Apple's version
+workflow state. Overview `liveVersion` and diagnostics require the same confirmed
+evidence as the UI; `distributionReadyVersion` preserves the separate approval
+fact. Version creation, metadata copying and submission/editability rules are
+unchanged. No availability settings are written.
+
+Validation (2026-11-11): all 414 Swift tests pass, including 23 new manager, UI
+presentation and MCP cases. Independent review found and verified corrections
+for shared-request cancellation and unnecessary forced reads on tab entry, with
+no remaining blockers. Build 70 retains ASC 6.6.1 and the existing Developer ID.
+The native release build, strict/deep signature check and helper ping/direct CLI/
+`cli.exec` checks pass. The designated signing requirement is unchanged.
+
+Installed 1.0.65/build 70 under Applications and verified ClubBundle's overview,
+Review, App Information and Screenshots headers as unavailable. MCP reads across
+all eleven release/insight/TestFlight tabs confirm unavailable with no status
+read failures; the overview omits `liveVersion` and retains the approved version.
+Muehlenstein is still correctly shown live in the UI and MCP. Build 69 is retained
+for rollback. No Store mutations, device actions or cloud workflows were used.
+
 ## 1.0.64 — dashboard storefront availability
 
 The dashboard no longer treats an approved/distributable version as proof that

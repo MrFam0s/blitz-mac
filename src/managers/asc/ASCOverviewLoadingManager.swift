@@ -1,6 +1,6 @@
 import Foundation
 
-protocol ASCOverviewService {
+protocol ASCOverviewService: ASCStoreAvailabilityFetching {
     func fetchApp(id: String) async throws -> ASCApp
     func fetchBuilds(appId: String) async throws -> [ASCBuild]
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
@@ -13,6 +13,12 @@ protocol ASCOverviewService {
     func fetchScreenshotSets(localizationId: String) async throws -> [ASCScreenshotSet]
     func fetchScreenshots(setId: String) async throws -> [ASCScreenshot]
     func fetchPricingConfiguredDetailed(appId: String) async throws -> Bool
+}
+
+extension ASCOverviewService {
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability {
+        throw ASCError.notFound("Store availability has not been checked.")
+    }
 }
 
 extension AppStoreConnectService: ASCOverviewService {}
@@ -42,6 +48,7 @@ extension ASCManager {
     func loadOverview(using service: any ASCOverviewService) async {
         guard let appId = app?.id else { return }
         let revision = projectRevision
+        async let availability: Void = refreshStoreAvailability(using: service)
         overviewFailedFields = []
         startOverviewReadinessLoading(Self.overviewAllFields.subtracting(["App Icon"]))
         refreshAppIconStatusIfNeeded(for: loadedProjectId)
@@ -54,7 +61,7 @@ extension ASCManager {
             apply: { monetizationStatus = $0 ? "Configured" : nil })
         async let buildInventory: Bool = overviewRequest(fields: [], revision: revision,
             operation: { try await service.fetchBuilds(appId: appId) }, apply: { builds = $0 })
-        let (_, _, _, _, buildsLoaded) = await (identity, version, info, pricing, buildInventory)
+        let (_, _, _, _, buildsLoaded, _) = await (identity, version, info, pricing, buildInventory, availability)
         guard projectRevision == revision, !Task.isCancelled else { return }
         if overviewFailedFields.isEmpty {
             overviewCacheDate = Date()

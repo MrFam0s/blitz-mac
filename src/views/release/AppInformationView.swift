@@ -416,9 +416,7 @@ struct AppInformationView: View {
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                                     .fixedSize()
-                                Text(version.attributes.appStoreState ?? "—")
-                                    .font(.callout)
-                                    .foregroundStyle(.tertiary)
+                                ASCVersionStatusBadges(asc: asc, version: version)
                                 if let date = version.attributes.createdDate {
                                     Text(ascShortDate(date))
                                         .font(.caption)

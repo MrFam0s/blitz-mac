@@ -244,14 +244,21 @@ extension MCPExecutor {
         ]
     }
 
-    @MainActor
-    func versionStatePayload(_ version: ASCAppStoreVersion?) -> [String: Any]? {
+    /// Apple version workflow states do not establish availability on the storefront.
+    static func versionStatePayload(_ version: ASCAppStoreVersion?) -> [String: Any]? {
         guard let version else { return nil }
         var payload: [String: Any] = [
             "id": version.id,
             "versionString": version.attributes.versionString,
-            "state": version.attributes.appStoreState ?? "unknown",
+            "state": version.attributes.effectiveState ?? "unknown",
+            "stateKind": "appleVersionWorkflow",
         ]
+        if let state = version.attributes.appVersionState {
+            payload["appVersionState"] = state
+        }
+        if let state = version.attributes.appStoreState {
+            payload["appStoreState"] = state
+        }
         if let createdDate = version.attributes.createdDate {
             payload["createdDate"] = createdDate
         }
@@ -259,6 +266,38 @@ extension MCPExecutor {
             payload["releaseType"] = releaseType
         }
         return payload
+    }
+
+    /// Only current, successful evidence may carry a checked-at timestamp.
+    static func storeAvailabilityStatePayload(
+        confirmed: ASCStoreAvailability?,
+        isLoading: Bool,
+        failed: Bool,
+        checkedAt: Date?
+    ) -> [String: Any] {
+        let state = isLoading ? "checking" : (failed ? "unknown" : confirmed?.rawValue ?? "unknown")
+        var payload: [String: Any] = ["state": state, "error": failed]
+        if !isLoading, !failed, confirmed != nil,
+           let checkedAt, checkedAt.timeIntervalSinceReferenceDate.isFinite {
+            payload["checkedAt"] = ISO8601DateFormatter().string(from: checkedAt)
+        }
+        return payload
+    }
+
+    @MainActor
+    static func tabStateHeader(for tab: AppTab, asc: ASCManager) -> [String: Any] {
+        [
+            "tab": tab.rawValue,
+            "isLoading": asc.isTabLoading(tab),
+            "dataLoaded": asc.loadedTabs.contains(tab),
+            "needsRefresh": asc.tabsNeedingRevalidation.contains(tab) || asc.tabError[tab] != nil,
+            "storeAvailability": storeAvailabilityStatePayload(
+                confirmed: asc.confirmedStoreAvailability,
+                isLoading: asc.isStoreAvailabilityLoading,
+                failed: asc.storeAvailabilityFailed,
+                checkedAt: asc.storeAvailabilityUpdatedAt
+            ),
+        ]
     }
 
     func executeGetTabState(_ args: [String: Any]) async throws -> [String: Any] {
@@ -295,12 +334,7 @@ extension MCPExecutor {
             return ["success": false, "error": "The app or account changed while loading TestFlight relationships. Read the intended app again."]
         }
         // Header and payload are captured in one actor turn, so IDs cannot refer to different apps.
-        var result: [String: Any] = [
-            "tab": tab.rawValue,
-            "isLoading": asc.isTabLoading(tab),
-            "dataLoaded": asc.loadedTabs.contains(tab),
-            "needsRefresh": asc.tabsNeedingRevalidation.contains(tab) || asc.tabError[tab] != nil,
-        ]
+        var result = Self.tabStateHeader(for: tab, asc: asc)
         if tab.isASCTab || tab == .app, let setup = Self.appCreationSetupState(asc) {
             result["appCreationSetup"] = setup
         }
@@ -324,7 +358,7 @@ extension MCPExecutor {
             if let projectId {
                 asc.refreshAppIconStatusIfNeeded(for: projectId)
             }
-            return tabStateASCOverview(asc)
+            return Self.tabStateASCOverview(asc)
         case .appInformation:
             return tabStateAppInformation(asc, projectId: projectId)
         case .review:
@@ -347,7 +381,7 @@ extension MCPExecutor {
     }
 
     @MainActor
-    func tabStateASCOverview(_ asc: ASCManager) -> [String: Any] {
+    static func tabStateASCOverview(_ asc: ASCManager) -> [String: Any] {
         let readiness = asc.submissionReadiness
         var result: [String: Any] = [
             "submissionReadiness": Self.overviewSubmissionReadinessPayload(
@@ -360,23 +394,22 @@ extension MCPExecutor {
             "canCreateUpdate": asc.canCreateUpdate,
             "selectedVersionIsEditable": asc.selectedVersionIsEditable,
         ]
-        if let version = asc.appStoreVersions.first {
-            result["latestVersion"] = [
-                "id": version.id,
-                "versionString": version.attributes.versionString,
-                "state": version.attributes.appStoreState ?? "unknown"
-            ]
+        if let latestVersion = Self.versionStatePayload(asc.appStoreVersions.first) {
+            result["latestVersion"] = latestVersion
         }
-        if let selectedVersion = versionStatePayload(asc.selectedVersion) {
+        if let selectedVersion = Self.versionStatePayload(asc.selectedVersion) {
             result["selectedVersion"] = selectedVersion
         }
-        if let liveVersion = versionStatePayload(asc.liveVersion) {
+        if let liveVersion = Self.versionStatePayload(asc.storeLiveVersion) {
             result["liveVersion"] = liveVersion
         }
-        if let currentUpdateVersion = versionStatePayload(asc.currentUpdateVersion) {
+        if let distributionReadyVersion = Self.versionStatePayload(asc.distributionReadyVersion) {
+            result["distributionReadyVersion"] = distributionReadyVersion
+        }
+        if let currentUpdateVersion = Self.versionStatePayload(asc.currentUpdateVersion) {
             result["currentUpdateVersion"] = currentUpdateVersion
         }
-        if let editableVersion = versionStatePayload(asc.editableVersion) {
+        if let editableVersion = Self.versionStatePayload(asc.editableVersion) {
             result["editableVersion"] = editableVersion
         }
         if let selectedBuild = asc.selectedVersionBuild {
@@ -444,13 +477,10 @@ extension MCPExecutor {
             let metadata = ProjectStorage().readMetadata(projectId: projectId)
             result["teamId"] = metadata?.teamId ?? ""
         }
-        if let latestVersion = asc.appStoreVersions.first {
-            result["latestVersion"] = [
-                "versionString": latestVersion.attributes.versionString,
-                "state": latestVersion.attributes.appStoreState ?? "unknown"
-            ]
+        if let latestVersion = Self.versionStatePayload(asc.appStoreVersions.first) {
+            result["latestVersion"] = latestVersion
         }
-        if let selectedVersion = versionStatePayload(asc.selectedVersion) {
+        if let selectedVersion = Self.versionStatePayload(asc.selectedVersion) {
             result["selectedVersion"] = selectedVersion
         }
         return result
@@ -484,7 +514,7 @@ extension MCPExecutor {
             ]
         }
         result["canCreateUpdate"] = asc.canCreateUpdate
-        if let selectedVersion = versionStatePayload(asc.selectedVersion) {
+        if let selectedVersion = Self.versionStatePayload(asc.selectedVersion) {
             result["selectedVersion"] = selectedVersion
         }
         if let selectedBuild = asc.selectedVersionBuild {
@@ -549,7 +579,7 @@ extension MCPExecutor {
             "localeCount": asc.localizations.count,
             "canCreateUpdate": asc.canCreateUpdate,
         ]
-        if let selectedVersion = versionStatePayload(asc.selectedVersion) {
+        if let selectedVersion = Self.versionStatePayload(asc.selectedVersion) {
             result["selectedVersion"] = selectedVersion
         }
         return result

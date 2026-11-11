@@ -140,6 +140,13 @@ final class ASCManager {
     var overviewResolvedFields: Set<String> = []
     var overviewFailedFields: Set<String> = []
     var overviewCacheDate: Date?
+    var storeAvailability: ASCStoreAvailability?
+    var storeAvailabilityUpdatedAt: Date?
+    var isStoreAvailabilityLoading = false
+    var storeAvailabilityFailed = false
+    @ObservationIgnored var storeAvailabilityContext: ASCStoreAvailabilityContext?
+    @ObservationIgnored var storeAvailabilityTask: Task<Void, Never>?
+    @ObservationIgnored var storeAvailabilityRequestID: UUID?
     @ObservationIgnored var projectRevision = UUID()
     @ObservationIgnored var overviewCache = ASCOverviewCache.shared
     @ObservationIgnored var tabCache = ASCTabCache.shared

@@ -496,17 +496,24 @@ struct ASCOverview: View {
 
     @ViewBuilder
     private var versionMetrics: some View {
-        let live = asc.liveVersion
+        let live = asc.storeLiveVersion
+        let store = ASCReleaseStatusPresentation.store(
+            distributionReadyVersionID: asc.distributionReadyVersion?.id,
+            liveVersionID: live?.id,
+            availability: asc.confirmedStoreAvailability,
+            isLoading: asc.isStoreAvailabilityLoading,
+            failed: asc.storeAvailabilityFailed
+        )
         let pending = asc.currentUpdateVersion
         versionMetric(
-            title: "Live", value: live?.attributes.versionString ?? "—",
-            subtitle: nil, color: live != nil ? .green : .secondary,
-            icon: "checkmark.seal.fill"
+            title: "App Store", value: store.label,
+            subtitle: live?.attributes.versionString, color: store.tone.color,
+            icon: store.symbol
         )
-        .help(live != nil ? "Live Version · Ready for Sale" : "No live version")
+        .help(store.help)
         versionMetric(
             title: "Pending", value: pending?.attributes.versionString ?? "—",
-            subtitle: pending.map { stateLabel($0.attributes.appStoreState ?? "") },
+            subtitle: pending.map { stateLabel($0.attributes.effectiveState ?? "") },
             color: pending != nil ? .orange : .secondary, icon: "clock.fill"
         )
         versionMetric(
@@ -817,7 +824,7 @@ struct ASCOverview: View {
     }
 
     private func versionMetric(title: String, value: String, subtitle: String?, color: Color, icon: String) -> some View {
-        HStack(spacing: 6) {
+        BlitzFlowLayout(horizontalSpacing: 6, verticalSpacing: 4) {
             Image(systemName: icon).foregroundStyle(color)
             Text(title).foregroundStyle(.secondary)
             Text(value).fontWeight(.semibold)
@@ -870,7 +877,7 @@ struct ASCOverview: View {
         case .accepted:
             return ("Accepted", .green)
         case .live:
-            return ("Live", .green)
+            return ("Released", .green)
         case .rejected:
             return ("Rejected", .red)
         case .withdrawn:

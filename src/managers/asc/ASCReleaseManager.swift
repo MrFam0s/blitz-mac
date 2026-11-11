@@ -62,6 +62,8 @@ extension ASCManager {
 
     // MARK: - Version Selection
 
+    /// Legacy version-metadata lookup for selection/copying. UI/MCP must use
+    /// storeLiveVersion, which additionally requires current storefront evidence.
     var liveVersion: ASCAppStoreVersion? {
         ASCReleaseStatus.currentLiveVersion(for: releaseVersions)
     }
@@ -195,6 +197,7 @@ extension ASCManager {
         // version-scoped ASC resource, so the next tab refresh starts cleanly.
         let previousVersionId = selectedVersionId
         projectRevision = UUID()
+        resetStoreAvailability()
         cancelIrisFeedbackLoads()
         resetTabCacheTasks()
         for task in tabLoadTasks.values { task.cancel() }

@@ -21,7 +21,7 @@ struct ReleaseAutomationSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(context.appName).font(.headline)
                     Text(context.projectPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    Text("Store-Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
+                    Text("Zuletzt freigegebene Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let draft = context.preparedVersion {
@@ -120,7 +120,7 @@ struct ReleaseAutomationSheet: View {
     private func artifactDescription(_ artifact: LocalReleaseArtifact, live: String?) -> String {
         guard let version = artifact.version, let build = artifact.build else { return "App-Zuordnung und Inhalt werden beim Start geprüft" }
         let newer = live.flatMap { ReleaseAutomationService.compareVersions(version, $0) } == .orderedDescending
-        return "Version \(version) · Build \(build)" + (newer ? " · neuer als die angezeigte Store-Version" : " · noch kein Nachweis für ein neues Release")
+        return "Version \(version) · Build \(build)" + (newer ? " · neuer als die angezeigte freigegebene Version" : " · noch kein Nachweis für ein neues Release")
     }
 
     private func start() {
