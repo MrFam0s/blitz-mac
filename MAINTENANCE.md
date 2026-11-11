@@ -2,6 +2,49 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.66 — resume app creation after expired authentication
+
+The creation workflow no longer treats a failed account-verification GET as a
+possibly completed app-creation POST. An initial `401/account_verification` with
+`creationAttempted=false` and an explicit recovery allowance can continue once
+after successful web authentication. The agent rechecks the still-active Blitz
+operation, all identity values and the original API account before continuation.
+No redundant ten-check app lookup or identity-form reset is requested for this
+known pre-creation authentication failure.
+
+The static script adds `--resume-after-auth` and a private, nonsecret operation
+journal keyed by operation ID, independent of the identity-file path. An exclusive
+process lock and atomic durable state writes consume the initial attempt/resume
+before network access and mark the POST boundary before sending. Only the exact
+recorded initial pre-POST 401 permits one continuation; changed identities/accounts,
+concurrent invocations, copied identity files, repeated resumes, POST errors,
+unknown outcomes and crashes remain blocked. The renewed session is read afresh
+and its account checked again; each attempt freezes one session for GET and POST.
+Journals contain only an identity digest and state, never cookies or Apple bodies.
+
+The shared creation prompt and bundled skill describe the same stage-dependent
+recovery. MCP setup state provides nonsecret expected API-account IDs only for an
+active operation; reopened/invalidated forms remain unusable. Existing skill sync
+updates both agent directories atomically before launching a newly confirmed
+operation. Previously invalidated operations are deliberately not revived.
+
+Validation (2026-11-11): all 419 Swift tests and 41 offline Python tests pass,
+including 18 new recovery tests. They cover fresh-session GET/GET/POST ordering,
+one POST, exact identity, process concurrency, request-boundary crashes, failed
+and repeated authentication, account mismatch and private journal output. An
+independent review found no remaining blockers. The existing manually triggered
+maintenance check includes both Python suites; no cloud check was started.
+
+The signed native release and strict/deep Developer ID checks pass with the
+previous designated requirement. ASC 6.6.1 is unchanged; its protocol ping, CLI
+version and cli.exec checks pass without account access. Installed build 71 under
+Applications, retaining build 70 for rollback. Installed app/local CLI helpers
+are identical, and bundled plus both project skill copies match the reviewed
+source. EntryCheckMobile's name, bundle ID, SKU, locale and platform remain
+unchanged in the reopened identity form. No fresh login, app-creation POST,
+Store mutation or device action was performed for validation; the already
+invalidated prior operation requires a new user confirmation.
+
 ## 1.0.65 — consistent storefront status across tabs
 
 App overview, the shared version header, Review, submission preview and version

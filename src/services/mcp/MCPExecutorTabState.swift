@@ -23,7 +23,13 @@ extension MCPExecutor {
                 "sku": context.identity.sku, "platform": context.identity.platform.rawValue,
                 "primaryLocale": context.identity.primaryLocale]]
         // Reopened forms must not advertise their invalidated operation as usable.
-        if phase != "identityForm" { state["operationId"] = context.operationId.uuidString }
+        if phase != "identityForm" {
+            state["operationId"] = context.operationId.uuidString
+            // Non-secret API account identifiers bind a renewed web login to
+            // the same confirmed operation; they are not session credentials.
+            state["expectedIssuerId"] = context.expectedIssuerId
+            state["expectedKeyId"] = context.expectedKeyId
+        }
         return state
     }
 

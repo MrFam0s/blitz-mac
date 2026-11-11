@@ -286,6 +286,7 @@ class CreationFailureTests(unittest.TestCase):
             path.write_text(json.dumps(identity()))
             error = apple_http_error({'errors': [{'code': 'ACCOUNT_CONFLICT', 'detail': 'Account is unavailable.'}]}, stage='account_verification')
             with mock.patch.object(create_app, 'create_app', side_effect=error), \
+                    mock.patch.object(create_app, 'operation_state_directory', return_value=Path(folder) / 'operations'), \
                     contextlib.redirect_stdout(io.StringIO()) as output, \
                     contextlib.redirect_stderr(io.StringIO()) as failures:
                 self.assertEqual(create_app.main(['--identity-file', str(path), '--create']), 1)

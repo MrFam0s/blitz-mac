@@ -56,10 +56,16 @@ by embedding user values in it.
 
 Blitz Neo manages the Apple web session. If no session exists, use `asc_web_auth`
 and wait until it completes. Do not ask for an Apple ID email or read/copy/print
-cookies yourself. Only the static script reads the session during `--create`.
+cookies yourself. Only the static script reads the session during `--create` or
+the guarded `--resume-after-auth` continuation.
 
-After the identity is confirmed and app creation is authorized, run the same
-command with `--create` instead of `--dry-run`. This performs a real Apple write.
+After the identity is confirmed and app creation is authorized, read
+`get_tab_state` for `tab: app` before the initial request. `appCreationSetup` must
+have `phase: awaitingAppCreation`, `requiresNewConfirmation: false`, and match
+the JSON's project ID, operation ID, complete identity, expected issuer and key
+ID exactly. Stop on missing or changed context; never revive an invalidated
+operation. Then run the same command with `--create` instead of `--dry-run`.
+This performs a real Apple write.
 The script rejects redirects and never logs session cookies. A successful POST
 returns `created_pending_verification`, the app ID and `confirmationArguments`;
 this is not final confirmation that all values match.
@@ -70,6 +76,9 @@ an HTTP failure:
 - `account_verification` / `false`: the account lookup failed **before any app
   creation request**. Report that stage, including available `appleErrors`; do
   not describe even an HTTP 409 here as an app-name, Bundle-ID or SKU conflict.
+  For HTTP 401, follow the one-time authentication continuation below. Do not
+  call `asc_confirm_created_app` for an app that was never requested, and do not
+  invalidate the unchanged operation merely because its web session expired.
 - `app_creation` / `true`: one creation request was sent. On HTTP 409, report the
   bounded `appleErrors` (`code`, `title`, `detail`, `source.pointer`) and any
   `conflictFields`. Only name a conflicting field when Apple identifies it;
@@ -77,11 +86,43 @@ an HTTP failure:
 - Unknown stage, timeout or incomplete response: the outcome is unconfirmed.
   Check Apple's state before any further creation attempt.
 
-On 401, renew the existing web session with `asc_web_auth`. For an app-creation
-conflict or uncertain outcome, verify the intended existing record as described
-below. Do not automatically repeat the POST or change the name, Bundle ID or SKU.
+For an app-creation conflict or uncertain outcome, verify the intended existing
+record as described below. If authentication is required for that verification,
+renew it with `asc_web_auth`; this never permits another POST. Do not automatically
+repeat a POST or change the name, Bundle ID or SKU.
 Do not inspect or print raw HTTP bodies, headers, cookies or session files to
 recover diagnostics; use only the script's sanitized output.
+
+### Continue once after authentication failed before creation
+
+Continue the **same authorized operation** only when the script's last structured
+result has all four values: `httpStatus: 401`, `stage: account_verification`,
+`creationAttempted: false`, and `recovery.resumeAllowed: true`.
+
+1. Call `asc_web_auth` and wait for `success: true`. A cancelled, failed or still
+   pending login is not permission to continue. Do not loop through logins.
+2. Call `get_tab_state` for `tab: app`. Its `appCreationSetup` must still have
+   `phase: awaitingAppCreation`, `requiresNewConfirmation: false`, and the exact
+   original `projectId`, `operationId`, `expectedIssuerId`, `expectedKeyId` and
+   every `identity` value from the confirmed JSON. If any value is missing or
+   differs, stop. Do not switch projects/accounts or invent a replacement ID to
+   make the comparison pass. An `identityForm` operation has already been
+   invalidated and needs a new user confirmation.
+3. Run the same static script and unchanged identity file with
+   `--resume-after-auth` **instead of** `--create`. Do this at most once. This is
+   the first creation request, not a replay: the script reloads the newly saved
+   web session, verifies the frozen API account again, then sends one POST.
+4. On success, verify the actual record below. If authentication still fails,
+   stop and report it; preserve the pending identity for diagnosis. Do not run
+   ten "not found" checks when no POST was sent. If a POST was attempted or the
+   outcome is uncertain, use read-only verification below, never another resume.
+
+The script keeps a small private operation journal keyed by `operationId` (not by
+the identity file's name). It consumes the one-time continuation before network
+work and records the POST boundary before sending. Concurrent invocations,
+copied identity files, changed values, repeated resumes and interrupted/unknown
+attempts cannot replay the operation. Do not delete, edit or bypass this journal.
+Missing recovery fields from an older script do not authorize continuation.
 
 ## Verify the actual Apple record
 

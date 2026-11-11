@@ -279,6 +279,8 @@ func appCreationConfirmationRejectsDelayedResultAfterProjectChange(_ stage: Stri
     #expect(state["requiresNewConfirmation"] as? Bool == true)
     #expect(state["canReopenForm"] as? Bool == false)
     #expect(state["operationId"] == nil)
+    #expect(state["expectedIssuerId"] == nil)
+    #expect(state["expectedKeyId"] == nil)
     #expect((state["identity"] as? [String: String])?["bundleId"] == creationIdentity.bundleId)
     do {
         _ = try await manager.confirmBundleIDSetupAppCreated(using: service, refreshData: false)
@@ -348,4 +350,50 @@ func appCreationRecoveryRejectsChangedContext(_ change: String) async throws {
     #expect(manager.app == nil)
     #expect(manager.activeAppCreationFormRequest != nil)
     #expect(!service.calls.contains("versions"))
+}
+
+@MainActor
+@Test func appCreationStateRetainsConfirmedAccountAndOperationAcrossWebSessionRenewal() async throws {
+    let manager = creationManager()
+    let service = CreationServiceMock()
+    let registration = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: service, persist: { _, _ in })
+    service.calls = []
+    manager.irisSessionState = .expired
+    let before = try #require(MCPExecutor.appCreationSetupState(manager))
+
+    // A replacement web session is separate from the selected API account.
+    // No real login, keychain persistence or Apple call is involved here.
+    manager.irisSession = IrisSession(cookies: [.init(name: "test-cookie", value: "not-a-real-secret",
+        domain: ".apple.com", path: "/")], email: "renewed@example.invalid", capturedAt: Date())
+    manager.irisSessionState = .valid
+    let after = try #require(MCPExecutor.appCreationSetupState(manager))
+    #expect(after["phase"] as? String == "awaitingAppCreation")
+    #expect(after["projectId"] as? String == "project-a")
+    #expect(after["operationId"] as? String == registration.context.operationId.uuidString)
+    #expect(after["operationId"] as? String == before["operationId"] as? String)
+    #expect(after["identity"] as? [String: String] == before["identity"] as? [String: String])
+    #expect(after["expectedIssuerId"] as? String == registration.context.expectedIssuerId)
+    #expect(after["expectedKeyId"] as? String == registration.context.expectedKeyId)
+    let serialized = String(decoding: try JSONSerialization.data(withJSONObject: after), as: UTF8.self)
+    #expect(!serialized.contains("not-a-real-secret"))
+    #expect(!serialized.contains("renewed@example.invalid"))
+    #expect(service.calls.isEmpty)
+    #expect(manager.activeAppCreationFormRequest == nil)
+}
+
+@MainActor
+@Test(arguments: ["issuer", "key", "project", "revision", "operationInvalidated"])
+func appCreationStateCannotAuthorizeAuthResumeAfterContextChanged(_ change: String) async throws {
+    let manager = creationManager()
+    _ = try await manager.registerBundleIDForCreation(identity: creationIdentity, tab: .app,
+        capabilities: [], using: CreationServiceMock(), persist: { _, _ in })
+    #expect(MCPExecutor.appCreationSetupState(manager) != nil)
+    if change == "issuer" { manager.credentials?.issuerId = "different-issuer" }
+    if change == "key" { manager.credentials?.keyId = "different-key" }
+    if change == "project" { manager.loadedProjectId = "different-project" }
+    if change == "revision" { manager.projectRevision = UUID() }
+    if change == "operationInvalidated" { manager.clearPendingBundleIDSetup() }
+    manager.irisSessionState = .valid
+    #expect(MCPExecutor.appCreationSetupState(manager) == nil)
 }

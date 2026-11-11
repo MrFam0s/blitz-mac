@@ -347,14 +347,14 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_web_auth",
-            description: "Open the Apple ID login window in Blitz Neo to authenticate a web session for App Store Connect. Use when the iris API returns 401 (session expired). The login captures cookies and syncs them to ~/.blitz/asc-agent/web-session.json for CLI skills. Requires user interaction (Apple ID + 2FA).",
+            description: "Open the Apple ID login window in Blitz Neo to authenticate a web session for App Store Connect. Use when the iris API returns 401 (session expired). The login captures cookies and syncs them to ~/.blitz/asc-agent/web-session.json for CLI skills. Requires user interaction (Apple ID + 2FA). Success renews the web session only; it does not confirm an app was created or authorize repeating a POST. For app-creation account_verification/401 with creationAttempted=false, keep the original operation, compare its complete appCreationSetup state after login, and follow the skill's guarded --resume-after-auth continuation.",
             properties: [:],
             required: []
         ))
 
         tools.append(tool(
             name: "asc_confirm_created_app",
-            description: "Confirm the app created from a specific registered setup operation. Requires the exact confirmed public name, bundle ID, SKU, platform and primary locale, plus the project and operation IDs from its identity JSON. Refuses stale operations, mismatched Apple records or another active project. Retries not-found responses up to 10 times.",
+            description: "Confirm an app after a successful or possibly completed creation request from a specific registered setup operation. Requires the exact confirmed public name, bundle ID, SKU, platform and primary locale, plus the project and operation IDs from its identity JSON. Refuses stale operations, mismatched Apple records or another active project. Retries not-found responses up to 10 times. Do not use after account_verification failed with creationAttempted=false: no creation POST was sent. For its 401, renew authentication and follow the skill's guarded continuation of the original operation instead.",
             properties: [
                 "bundleId": ["type": "string", "description": "Exact registered bundle ID from the confirmed identity JSON."],
                 "expectedName": ["type": "string", "description": "Confirmed public App Store name (appName)."],
@@ -369,7 +369,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_reopen_app_setup",
-            description: "Return an unconfirmed app-creation operation to its original identity form without any Apple mutation. Preserves the exact name, bundle ID, SKU, platform and locale. Invalidates the old operation; another creation requires a new user confirmation. Rejects stale or foreign project/account/operation IDs.",
+            description: "Return an unconfirmed app-creation operation to its original identity form without any Apple mutation. Preserves the exact name, bundle ID, SKU, platform and locale. Invalidates the old operation; another creation requires a new user confirmation. Rejects stale or foreign project/account/operation IDs. Do not reset an otherwise unchanged operation solely because account_verification returned 401 with creationAttempted=false; follow the skill's guarded authentication continuation first.",
             properties: [
                 "projectId": ["type": "string", "description": "Original projectId from the confirmed identity JSON."],
                 "operationId": ["type": "string", "description": "Original operationId from the confirmed identity JSON."],

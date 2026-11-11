@@ -1160,7 +1160,7 @@ extension MCPExecutor {
         return mcpJSON([
             "success": true,
             "email": email,
-            "message": "Web session authenticated and synced to ~/.blitz/asc-agent/web-session.json. The asc-iap-attach skill can now use the iris API."
+            "message": "Web session authenticated and synced to ~/.blitz/asc-agent/web-session.json. This renews authentication only, not the app-creation operation. Before continuing an app creation, compare get_tab_state appCreationSetup with the original confirmed identity and account. Only a proven account_verification/401 with creationAttempted=false permits the skill's one guarded --resume-after-auth continuation."
         ])
     }
 

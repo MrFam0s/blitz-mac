@@ -643,7 +643,7 @@ struct BundleIDSetupView: View {
                 "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId]
             try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
                 .write(to: identityFile, options: .atomic)
-            let prompt = "Use /asc-app-create-ui to create the app from the confirmed identity JSON at \(identityFile.path). Use every value exactly as stored; do not derive or rename any identifier. Run the skill's static create_app.py with --identity-file and first --dry-run, then --create. The dry run checks syntax only, not availability at Apple. On an HTTP failure, report the sanitized Apple error and its stage. Do not retry creation or rename the identity automatically. After a successful POST or a possibly completed creation request, verify through asc_confirm_created_app with bundleId, expectedName=appName, expectedSKU=sku, expectedPlatform=platform, expectedLocale=primaryLocale, projectId and operationId from this file. If creation remains unconfirmed after read-only verification, call asc_reopen_app_setup with projectId, operationId and a brief non-secret error message to return to the original identity form for a new user confirmation. Then stop: the old operation is invalid and must not be confirmed or retried."
+            let prompt = try AppCreationAgentPrompt.make(identityFile: identityFile)
             let settings = SettingsService.shared
             let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
             let terminal = settings.resolveDefaultTerminal().terminal

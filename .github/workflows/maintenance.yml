@@ -40,7 +40,9 @@ jobs:
       - name: Swift regression tests
         run: swift test --build-system native
       - name: App creation identity and payload checks (offline)
-        run: python3 scripts/test-app-creation.py
+        run: |
+          python3 scripts/test-app-creation.py
+          python3 scripts/test-app-creation-recovery.py
       - name: App identity migration checks (offline)
         run: python3 scripts/test-app-migration.py
       - name: IDB installer safety checks (offline)
