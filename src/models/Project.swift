@@ -8,6 +8,8 @@ struct Project: Identifiable, Hashable {
     var name: String { metadata.name }
     var type: ProjectType { metadata.type }
     var platform: ProjectPlatform { metadata.resolvedPlatform }
+    var releaseTargets: [ProjectReleaseTarget] { metadata.resolvedReleaseTargets }
+    var selectedReleaseTarget: ProjectReleaseTarget? { metadata.selectedReleaseTarget }
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)

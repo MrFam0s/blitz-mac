@@ -10,6 +10,7 @@ struct MCPExpectedTarget: Equatable, Sendable {
     let platform: String
     let accountKey: String
     let versionId: String?
+    let releaseTargetId: String?
 
     static let boundTools: Set<String> = [
         "asc_fill_form", "asc_select_version", "asc_create_version", "asc_open_submit_preview",
@@ -29,6 +30,7 @@ struct MCPExpectedTarget: Equatable, Sendable {
         let strings = ["projectId", "projectPath", "appId", "bundleId", "platform", "accountKey"]
         var properties = Dictionary(uniqueKeysWithValues: strings.map { ($0, ["type": "string", "minLength": 1] as [String: Any]) })
         properties["versionId"] = ["type": ["string", "null"], "description": "Exact selected version ID, or explicit null when none is selected."]
+        properties["releaseTargetId"] = ["type": "string", "description": "Exact configured release target. Required for projects with multiple targets; copy from get_release_context."]
         return ["type": "object", "additionalProperties": false, "properties": properties,
                 "required": strings + ["versionId"],
                 "description": "Copy expectedTarget from get_release_context for the intended project/app. Re-read after changing version; never substitute the current selection implicitly."]
@@ -48,6 +50,7 @@ struct MCPExpectedTarget: Equatable, Sendable {
         bundleId = try string("bundleId")
         platform = try string("platform")
         accountKey = try string("accountKey")
+        releaseTargetId = try json.keys.contains("releaseTargetId") ? string("releaseTargetId") : nil
         guard projectPath.hasPrefix("/"), ProjectPlatform(rawValue: platform) != nil,
               json.keys.contains("versionId") else { throw MCPBoundRequestError.invalidTarget }
         if json["versionId"] is NSNull { versionId = nil }
@@ -60,21 +63,27 @@ struct MCPExpectedTarget: Equatable, Sendable {
               let platform = captured.platform, let accountKey = captured.accountKey else {
             throw MCPBoundRequestError.invalidTarget
         }
-        try self.init(json: ["projectId": projectId, "projectPath": projectPath,
+        var json: [String: Any] = ["projectId": projectId, "projectPath": projectPath,
             "appId": appId, "bundleId": bundleId,
             "platform": platform, "accountKey": accountKey,
-            "versionId": captured.selectedVersionID.map { $0 as Any } ?? NSNull()])
+            "versionId": captured.selectedVersionID.map { $0 as Any } ?? NSNull()]
+        if let releaseTargetID = captured.releaseTargetID { json["releaseTargetId"] = releaseTargetID }
+        try self.init(json: json)
     }
 
     var json: [String: Any] {
-        ["projectId": projectId, "projectPath": projectPath, "appId": appId, "bundleId": bundleId,
+        var value: [String: Any] = ["projectId": projectId, "projectPath": projectPath, "appId": appId, "bundleId": bundleId,
          "platform": platform, "accountKey": accountKey, "versionId": versionId.map { $0 as Any } ?? NSNull()]
+        if let releaseTargetId { value["releaseTargetId"] = releaseTargetId }
+        return value
     }
 
     func matches(_ current: MCPReleaseRequestTarget) -> Bool {
         projectId == current.projectID && projectPath == current.projectPath && appId == current.appID
             && bundleId == current.bundleID && platform == current.platform && accountKey == current.accountKey
             && versionId == current.selectedVersionID
+            && (releaseTargetId == current.releaseTargetID
+                || (releaseTargetId == nil && current.releaseTargetCount == 1 && current.releaseTargetID == "legacy"))
     }
 }
 

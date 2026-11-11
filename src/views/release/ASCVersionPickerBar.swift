@@ -14,20 +14,7 @@ struct ASCVersionPickerBar<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
-                    if asc.loadedProjectId?.hasPrefix("asc:") == true {
-                        Picker("Plattform", selection: Binding<ProjectPlatform?>(
-                            get: { asc.releasePlatform },
-                            set: { value in
-                                asc.selectReleasePlatform(value)
-                                Task { await asc.refreshTabData(refreshTab ?? .app) }
-                            }
-                        )) {
-                            Text("Plattform wählen").tag(Optional<ProjectPlatform>.none)
-                            ForEach(ProjectPlatform.allCases, id: \.self) { platform in
-                                Text(platform.rawValue).tag(Optional(platform))
-                            }
-                        }.fixedSize()
-                    }
+                    ASCReleaseTargetPicker(asc: asc, tab: refreshTab ?? .app)
                     versionSelection
                     content
                 }

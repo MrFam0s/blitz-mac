@@ -40,14 +40,18 @@ struct ASCTabContent<Content: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if asc.app == nil && asc.credentials != nil && !isLoading {
-            ProjectBundleIDSelectorView(
+            VStack(spacing: 0) {
+                HStack { ASCReleaseTargetPicker(asc: asc, tab: tab); Spacer() }.blitzToolbar()
+                Divider()
+                ProjectBundleIDSelectorView(
                 appState: appState,
                 asc: asc,
                 tab: tab,
                 platform: platform,
                 title: "Select Project Bundle ID",
                 standalone: true
-            )
+                )
+            }
         } else if let error = asc.tabError[tab], !asc.hasLoadedTabData(tab) {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle")
@@ -67,7 +71,13 @@ struct ASCTabContent<Content: View>: View {
             .padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            content()
+            VStack(spacing: 0) {
+                if [.builds, .groups, .betaInfo, .feedback, .monetization].contains(tab) {
+                    HStack { ASCReleaseTargetPicker(asc: asc, tab: tab); Spacer() }.blitzToolbar()
+                    Divider()
+                }
+                content()
+            }
                 .overlay(alignment: .topLeading) {
                     if let error = asc.tabError[tab], asc.hasLoadedTabData(tab) {
                         HStack(spacing: 8) {

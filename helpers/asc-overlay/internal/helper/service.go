@@ -106,6 +106,16 @@ func (s *Service) Handle(ctx context.Context, request Request) Response {
 			return newErrorResponse(request.ID, CodeInternalError, "cli exec failed", err)
 		}
 		return Response{ID: request.ID, Result: result}
+	case "release.readiness":
+		var params ReleaseReadinessParams
+		if err := decodeParams(request.Params, &params); err != nil || !validReleaseReadinessParams(params) {
+			return newErrorResponse(request.ID, CodeInvalidRequest, "invalid release.readiness target", nil)
+		}
+		result, err := releaseReadiness(ctx, params)
+		if err != nil {
+			return newErrorResponse(request.ID, CodeInternalError, "release readiness unavailable", nil)
+		}
+		return Response{ID: request.ID, Result: result}
 	default:
 		return Response{
 			ID:    request.ID,

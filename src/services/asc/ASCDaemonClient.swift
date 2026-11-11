@@ -228,6 +228,20 @@ actor ASCDaemonClient {
         return (result.exitCode, result.stdout ?? "", result.stderr ?? "")
     }
 
+    /// Fixed read-only operation using the selected API key and one web client
+    /// whose app/provider membership is verified before any deep checks.
+    func releaseReadiness(appID: String, bundleID: String, versionID: String, platform: String) async throws -> ReleaseReadinessPayload {
+        struct Result: Decodable {
+            let report: [String: AnyCodable]
+            let web: ReleaseWebEvidence
+            let exitCode: Int
+        }
+        let result: Result = try await send(method: "release.readiness", params: [
+            "appId": appID, "bundleId": bundleID, "versionId": versionID, "platform": platform
+        ], responseTimeoutSeconds: 240)
+        return ReleaseReadinessPayload(report: try JSONEncoder().encode(result.report), web: result.web, exitCode: result.exitCode)
+    }
+
     private func ensureSessionOpen() async throws {
         try await ensureProcessRunning()
         guard !sessionOpen else { return }

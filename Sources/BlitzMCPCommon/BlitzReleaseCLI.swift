@@ -10,6 +10,7 @@ public enum BlitzReleaseCLI {
            blitz-macos-mcp release --help
 
     Commands:
+      targets   List this explicitly named project's configured release targets.
       context   Read the explicitly requested project's current MCP target.
       prepare   Record an exact app/version/already-attached build; no Apple writes.
       validate  Refresh readiness and the prepared content fingerprint.
@@ -25,6 +26,10 @@ public enum BlitzReleaseCLI {
     Preparation and validation do not authorize submission. Submission requires
     the user's instruction for the exact app, version, build and release mode.
     The underlying ASC CLI remains available for builds, uploads and metadata.
+    Use targets with projectId first when a project supports several platforms.
+    Prepare accepts releaseTargetId; it is required for multiple configured targets.
+    Select exactly one target. An omitted ID never adopts the UI selection, and no
+    command submits all platforms. Later commands use the saved operation's target.
     """
 
     public struct Invocation {
@@ -45,7 +50,7 @@ public enum BlitzReleaseCLI {
     }
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
-        let commands = ["context": "get_release_context", "prepare": "release_prepare",
+        let commands = ["targets": "get_release_targets", "context": "get_release_context", "prepare": "release_prepare",
                         "validate": "release_validate", "status": "release_status", "submit": "release_submit"]
         guard arguments.count == 4, arguments[0] == "release",
               let tool = commands[arguments[1]], arguments[2] == "--request",

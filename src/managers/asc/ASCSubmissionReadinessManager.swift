@@ -65,7 +65,7 @@ extension ASCManager {
         let readinessScreenshots = readinessLocale.map(screenshotsForLocale) ?? [:]
 
         let macScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_DESKTOP" }
-        let isMacApp = macScreenshots != nil
+        let isMacApp = releasePlatform == .macOS
         let iphoneScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_IPHONE_67" }
         let ipadScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_IPAD_PRO_3GEN_129" }
 
@@ -143,15 +143,8 @@ extension ASCManager {
             readinessField(label: "Build", value: selectedVersionBuild?.attributes.version),
         ])
 
-        let approvedStates: Set<String> = [
-            "READY_FOR_SALE",
-            "REMOVED_FROM_SALE",
-            "DEVELOPER_REMOVED_FROM_SALE",
-            "REPLACED_WITH_NEW_VERSION",
-            "PROCESSING_FOR_APP_STORE"
-        ]
-        let hasApprovedVersion = appStoreVersions.contains {
-            approvedStates.contains($0.attributes.appStoreState ?? "")
+        let hasApprovedVersion = releaseVersions.contains {
+            ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.effectiveState))
         }
         let isFirstVersion = !hasApprovedVersion
         if isFirstVersion {
@@ -172,7 +165,7 @@ extension ASCManager {
                     + readySubscriptions.map { $0.attributes.name ?? $0.attributes.productId ?? $0.id })
                     .joined(separator: ", ")
                 let iapUrl: String? = app.map {
-                    "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/ios/version/inflight"
+                    "https://appstoreconnect.apple.com/apps/\($0.id)/appstore"
                 }
                 fields.append(readinessField(
                     label: "In-App Purchases & Subscriptions",

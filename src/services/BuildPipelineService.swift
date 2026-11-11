@@ -1,5 +1,6 @@
 import Foundation
 import CoreFoundation
+import CryptoKit
 
 /// Identity read from the actual upload payload, never inferred from a filename or UI selection.
 struct BuildArtifactMetadata: Equatable, Sendable {
@@ -321,12 +322,21 @@ actor BuildPipelineService {
 
     private let fm = FileManager.default
 
-    private func signingStateURL(bundleId: String) -> URL {
-        return BlitzPaths.signing(bundleId: bundleId).appendingPathComponent("signing-state.json")
+    static func signingCacheDirectory(bundleId: String, platform: ProjectPlatform, accountKey: String,
+                                      root: URL = BlitzPaths.signing) throws -> URL {
+        guard AppCreationIdentity.validBundleID(bundleId), !accountKey.isEmpty,
+              accountKey == accountKey.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            throw BuildArtifactMetadata.ValidationError(message: "An exact Bundle ID and account are required for signing.")
+        }
+        let identity = try JSONEncoder().encode([bundleId, platform.ascPlatformValue, accountKey])
+        let scope = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
+        return root.appendingPathComponent(bundleId).appendingPathComponent("scopes").appendingPathComponent(scope)
     }
 
-    private func loadSigningState(bundleId: String) -> SigningState {
-        let url = signingStateURL(bundleId: bundleId)
+    private func loadSigningState(directory: URL) -> SigningState {
+        // Unscoped legacy state remains on disk, but cannot establish platform
+        // or account membership and is intentionally never trusted here.
+        let url = directory.appendingPathComponent("signing-state.json")
         guard let data = try? Data(contentsOf: url),
               let state = try? JSONDecoder().decode(SigningState.self, from: data) else {
             return SigningState()
@@ -334,8 +344,8 @@ actor BuildPipelineService {
         return state
     }
 
-    private func saveSigningState(_ state: SigningState, bundleId: String) throws {
-        let url = signingStateURL(bundleId: bundleId)
+    private func saveSigningState(_ state: SigningState, directory: URL) throws {
+        let url = directory.appendingPathComponent("signing-state.json")
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(state)
         try data.write(to: url, options: .atomic)
@@ -355,6 +365,7 @@ actor BuildPipelineService {
     func setupSigning(
         projectPath: String,
         bundleId: String,
+        accountKey: String,
         teamId: String?,
         ascService: AppStoreConnectService,
         platform: ProjectPlatform = .iOS,
@@ -362,12 +373,17 @@ actor BuildPipelineService {
         configuration: String? = nil,
         onProgress: @escaping @Sendable (String) -> Void
     ) async throws -> SigningResult {
+        try await MCPMutationScope.checkBeforeWrite()
         // Resolve an unambiguous target before creating certificates or profiles.
         try XcodeProjectIdentityEditor().update(
             projectPath: projectPath, bundleID: bundleId, scheme: scheme,
             configuration: configuration ?? "Release", teamID: teamId ?? "PREFLIGHT", dryRun: true
         )
-        var state = loadSigningState(bundleId: bundleId)
+        let signingDirectory = try Self.signingCacheDirectory(bundleId: bundleId, platform: platform, accountKey: accountKey)
+        var state = loadSigningState(directory: signingDirectory)
+        if let teamId, let cachedTeam = state.teamId, teamId != cachedTeam {
+            throw BuildArtifactMetadata.ValidationError(message: "The selected team differs from this target's cached signing team. Verify the account/team before signing.")
+        }
         var log: [String] = []
 
         let isMacOS = platform == .macOS
@@ -402,7 +418,7 @@ actor BuildPipelineService {
                 bundleIdResourceId = created.id
             }
             state.bundleIdResourceId = bundleIdResourceId
-            try saveSigningState(state, bundleId: bundleId)
+            try saveSigningState(state, directory: signingDirectory)
         }
 
         // 2. Distribution certificate
@@ -441,6 +457,7 @@ actor BuildPipelineService {
                 emit("No distribution certificate found. Creating \(certType)...")
                 certificateId = try await createAndImportCertificate(
                     bundleId: bundleId,
+                    signingDirectory: signingDirectory,
                     certType: certType,
                     filePrefix: "dist",
                     csrCN: isMacOS ? "Mac App Distribution" : "Blitz Distribution",
@@ -449,7 +466,7 @@ actor BuildPipelineService {
                 )
             }
             state.certificateId = certificateId
-            try saveSigningState(state, bundleId: bundleId)
+            try saveSigningState(state, directory: signingDirectory)
         }
 
         // 2b. macOS Installer certificate (for signing .pkg)
@@ -466,6 +483,7 @@ actor BuildPipelineService {
                     emit("No MAC_INSTALLER_DISTRIBUTION certificate found. Creating one...")
                     let installerCertId = try await createAndImportCertificate(
                         bundleId: bundleId,
+                        signingDirectory: signingDirectory,
                         certType: "MAC_INSTALLER_DISTRIBUTION",
                         filePrefix: "installer",
                         csrCN: "Mac Installer Distribution",
@@ -474,7 +492,7 @@ actor BuildPipelineService {
                     )
                     state.installerCertificateId = installerCertId
                 }
-                try saveSigningState(state, bundleId: bundleId)
+                try saveSigningState(state, directory: signingDirectory)
             }
         }
 
@@ -494,7 +512,7 @@ actor BuildPipelineService {
                 let profilePath = profilesDir.appendingPathComponent("\(existing).\(profileExt)").path
                 if let extractedTeamId = Self.extractTeamId(from: profilePath) {
                     state.teamId = extractedTeamId
-                    try saveSigningState(state, bundleId: bundleId)
+                    try saveSigningState(state, directory: signingDirectory)
                     emit("Extracted team ID from installed profile: \(extractedTeamId)")
                 }
             }
@@ -503,10 +521,10 @@ actor BuildPipelineService {
                 emit("Provisioning profile missing from disk, re-downloading...")
                 state.profileUUID = nil
                 state.profileName = nil
-                try saveSigningState(state, bundleId: bundleId)
+                try saveSigningState(state, directory: signingDirectory)
             }
             emit("Creating provisioning profile (type: \(profileType))...")
-            let profileName = "\(bundleId) \(isMacOS ? "Mac " : "")App Store"
+            let profileName = "Blitz \(bundleId.prefix(60)) \(platform.rawValue) \(signingDirectory.lastPathComponent.prefix(10))"
             let profile: ASCProfile
             do {
                 profile = try await ascService.createProfile(
@@ -516,19 +534,7 @@ actor BuildPipelineService {
                     profileType: profileType
                 )
             } catch let ascErr as ASCError where ascErr.isConflict {
-                // Duplicate profile name — delete existing and retry
-                emit("Profile name conflict. Deleting existing duplicates...")
-                let existing = try await ascService.fetchProfiles(name: profileName)
-                for old in existing {
-                    try? await ascService.deleteProfile(id: old.id)
-                    emit("Deleted duplicate profile: \(old.id)")
-                }
-                profile = try await ascService.createProfile(
-                    name: profileName,
-                    bundleIdResourceId: bundleIdResourceId,
-                    certificateId: certificateId,
-                    profileType: profileType
-                )
+                throw BuildArtifactMetadata.ValidationError(message: "A provisioning profile already exists for this exact signing target. Verify and reconcile '\(profileName)' before retrying; no existing profiles were deleted.")
             }
             emit("Created profile: \(profile.attributes.name)")
 
@@ -559,12 +565,13 @@ actor BuildPipelineService {
 
             state.profileUUID = profileUUID
             state.profileName = profile.attributes.name
-            try saveSigningState(state, bundleId: bundleId)
+            try saveSigningState(state, directory: signingDirectory)
         }
 
         // 4. Configure Xcode project
         let resolvedTeamId = teamId ?? state.teamId ?? ""
         if !resolvedTeamId.isEmpty {
+            try await MCPMutationScope.checkBeforeWrite()
             emit("Configuring pbxproj with team \(resolvedTeamId)...")
             try configurePbxproj(
                 projectPath: projectPath,
@@ -574,7 +581,7 @@ actor BuildPipelineService {
                 configuration: configuration ?? "Release"
             )
             state.teamId = resolvedTeamId
-            try saveSigningState(state, bundleId: bundleId)
+            try saveSigningState(state, directory: signingDirectory)
             emit("Xcode project configured")
         } else {
             emit("Warning: no teamId provided — skipping pbxproj configuration")
@@ -593,13 +600,14 @@ actor BuildPipelineService {
     /// Generate a CSR, create a certificate via ASC API, and import to keychain.
     private func createAndImportCertificate(
         bundleId: String,
+        signingDirectory: URL,
         certType: String,
         filePrefix: String,
         csrCN: String,
         ascService: AppStoreConnectService,
         emit: (String) -> Void
     ) async throws -> String {
-        let signingDir = BlitzPaths.signing(bundleId: bundleId)
+        let signingDir = signingDirectory
         try fm.createDirectory(at: signingDir, withIntermediateDirectories: true)
 
         let keyPath = signingDir.appendingPathComponent("\(filePrefix).key").path
@@ -713,15 +721,30 @@ actor BuildPipelineService {
         let log: [String]
     }
 
+    static func archiveDestination(platform: ProjectPlatform, configured: String?) throws -> String {
+        let allowed: Set<String> = platform == .iOS
+            ? ["generic/platform=iOS"]
+            : ["generic/platform=macOS", "generic/platform=macOS,variant=Mac Catalyst"]
+        let destination = configured ?? (platform == .iOS ? "generic/platform=iOS" : "generic/platform=macOS")
+        guard allowed.contains(destination) else {
+            throw BuildArtifactMetadata.ValidationError(message: "The configured archive destination does not match \(platform.rawValue). Select its generic device, native Mac or Mac Catalyst destination; simulator/device IDs are not release destinations.")
+        }
+        return destination
+    }
+
     func buildIPA(
         projectPath: String,
         bundleId: String,
+        accountKey: String,
         teamId: String,
         scheme: String?,
         configuration: String?,
         platform: ProjectPlatform = .iOS,
+        destination configuredDestination: String? = nil,
         onProgress: @escaping @Sendable (String) -> Void
     ) async throws -> BuildResult {
+        let destination = try Self.archiveDestination(platform: platform, configured: configuredDestination)
+        let signingDirectory = try Self.signingCacheDirectory(bundleId: bundleId, platform: platform, accountKey: accountKey)
         var log: [String] = []
 
         func emit(_ msg: String) {
@@ -796,7 +819,6 @@ actor BuildPipelineService {
         // An explicit scheme (or the sole application target's autogenerated
         // scheme) is safer than taking the first item returned by xcodebuild.
         let resolvedScheme = scheme ?? selection.targetName
-        let destination = platform == .macOS ? "generic/platform=macOS" : "generic/platform=iOS"
         let resolvedSettings = try await ProcessRunner.run("xcodebuild", arguments: [
             useWorkspace ? "-workspace" : "-project", buildTarget,
             "-scheme", resolvedScheme, "-configuration", config,
@@ -810,7 +832,10 @@ actor BuildPipelineService {
         emit("Building scheme '\(resolvedScheme)' (\(config))...")
 
         // Load signing state so we can use manual distribution signing in both archive + export
-        let signingState = loadSigningState(bundleId: bundleId)
+        let signingState = loadSigningState(directory: signingDirectory)
+        guard signingState.teamId == teamId else {
+            throw BuildArtifactMetadata.ValidationError(message: "No verified signing state exists for this exact account, platform, Bundle ID and team. Run app_store_setup_signing for this target first.")
+        }
         let profileRef = signingState.profileName ?? signingState.profileUUID ?? ""
 
         guard !profileRef.isEmpty else {

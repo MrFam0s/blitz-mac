@@ -22,6 +22,7 @@ extension MCPExecutor {
             "identity": ["appName": context.identity.appName, "bundleId": context.identity.bundleId,
                 "sku": context.identity.sku, "platform": context.identity.platform.rawValue,
                 "primaryLocale": context.identity.primaryLocale]]
+        if let releaseTargetID = context.releaseTargetId { state["releaseTargetId"] = releaseTargetID }
         // Reopened forms must not advertise their invalidated operation as usable.
         if phase != "identityForm" {
             state["operationId"] = context.operationId.uuidString
@@ -41,13 +42,30 @@ extension MCPExecutor {
             return mcpText("Error: projectId and appId are required; use project_list and the intended app's documented Store ID.")
         }
         do {
+            let releaseTargetID: String?
+            if args.keys.contains("releaseTargetId") {
+                guard let value = args["releaseTargetId"] as? String, ReleaseWorkflowTarget.validID(value) else {
+                    throw MCPBoundRequestError.invalidTarget
+                }
+                releaseTargetID = value
+            } else { releaseTargetID = nil }
             let expected = try await MainActor.run { () throws -> MCPExpectedTarget in
                 let captured = MCPReleaseRequestTarget.capture(appState)
                 guard captured.projectID == projectId, captured.appID == appId,
+                      let project = appState.activeProject,
                       appState.ascManager.loadedProjectId == projectId,
                       appState.ascManager.app?.bundleId == captured.bundleID else {
                     throw MCPBoundRequestError.targetChanged
                 }
+                let configured = try project.metadata.resolveReleaseTarget(id: releaseTargetID)
+                guard configured.id == project.metadata.selectedReleaseTarget?.id,
+                      (appState.ascManager.loadedReleaseTargetId == configured.id
+                        || (appState.ascManager.loadedReleaseTargetId == nil && configured.id == "legacy" && project.metadata.resolvedReleaseTargets.count == 1)),
+                      let bundle = captured.bundleID, let account = captured.accountKey else {
+                    throw MCPBoundRequestError.targetChanged
+                }
+                _ = try RegisteredReleaseTarget.resolve(project: project, releaseTargetID: configured.id,
+                    appID: appId, bundleID: bundle, platform: configured.platform.ascPlatformValue, accountKey: account)
                 if args.keys.contains("versionId") {
                     let version = args["versionId"] as? String
                     guard (args["versionId"] is NSNull || version?.isEmpty == false),

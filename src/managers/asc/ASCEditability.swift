@@ -48,11 +48,21 @@ struct ASCWriteTarget {
     let appID: String
     let versionID: String?
     let appInfoID: String?
+    var releaseTarget: ASCReleaseOperationTarget? = nil
 }
 
 extension ASCManager {
     func canEditField(_ field: String) -> Bool {
-        ASCEditability.allows(field, version: selectedVersion, appInfo: appInfo)
+        configuredStoreTargetMatches && ASCEditability.allows(field, version: selectedVersion, appInfo: appInfo)
+    }
+
+    var configuredStoreTargetMatches: Bool {
+        guard let project = appState?.activeProject else { return true }
+        guard loadedProjectId == project.id, let target = project.selectedReleaseTarget,
+              target.id == loadedReleaseTargetId, target.bundleIdentifier == app?.bundleId,
+              target.platform == releasePlatform else { return false }
+        guard let binding = target.storeBinding else { return true }
+        return binding.appId == app?.id && binding.accountKey == DashboardSummaryStore.accountKey(for: credentials)
     }
 
     var screenshotEditingMessage: String {
@@ -67,6 +77,7 @@ extension ASCManager {
     func checkWriteTarget(_ target: ASCWriteTarget) throws {
         try MCPMutationScope.checkCurrent()
         guard !Task.isCancelled, projectRevision == target.revision, app?.id == target.appID,
+              configuredStoreTargetMatches, target.releaseTarget?.matches(self) ?? true,
               selectedVersion?.id == target.versionID, appInfo?.id == target.appInfoID else {
             throw CancellationError()
         }
@@ -77,7 +88,8 @@ extension ASCManager {
         try MCPMutationScope.checkCurrent()
         guard let appID = app?.id else { throw ASCError.notFound("Keine App ausgewählt.") }
         for field in fields where !canEditField(field) { throw ASCError.notFound(editingBlockedMessage(field)) }
-        let target = ASCWriteTarget(revision: projectRevision, appID: appID, versionID: selectedVersion?.id, appInfoID: appInfo?.id)
+        let target = ASCWriteTarget(revision: projectRevision, appID: appID, versionID: selectedVersion?.id,
+            appInfoID: appInfo?.id, releaseTarget: releaseOperationTarget())
         let needsVersion = !fields.isDisjoint(with: ASCEditability.versionFields.union(ASCEditability.anytimeVersionFields))
         if needsVersion {
             let versions = try await service.fetchAppStoreVersions(appId: appID)

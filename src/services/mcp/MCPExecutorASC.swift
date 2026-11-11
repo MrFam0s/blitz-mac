@@ -170,11 +170,12 @@ extension MCPExecutor {
 
     private func screenshotsDisplayTypesForActiveProject() async -> [String] {
         await MainActor.run {
-            switch appState.activeProject?.platform ?? .iOS {
+            switch appState.ascManager.releasePlatform {
             case .iOS:
                 return ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129"]
             case .macOS:
                 return ["APP_DESKTOP"]
+            case nil: return []
             }
         }
     }
@@ -337,7 +338,8 @@ extension MCPExecutor {
                 let app = try await appState.ascManager.confirmBundleIDSetupAppCreated(bundleId: bundleId,
                     expectedName: args["expectedName"] as? String, expectedSKU: args["expectedSKU"] as? String,
                     expectedPlatform: args["expectedPlatform"] as? String, expectedLocale: args["expectedLocale"] as? String,
-                    projectId: args["projectId"] as? String, operationId: args["operationId"] as? String)
+                    projectId: args["projectId"] as? String, operationId: args["operationId"] as? String,
+                    releaseTargetId: args["releaseTargetId"] as? String)
                 return mcpJSON([
                     "success": true,
                     "attempts": attempt,

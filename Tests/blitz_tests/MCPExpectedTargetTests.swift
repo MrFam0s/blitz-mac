@@ -39,6 +39,21 @@ private actor ScopedDraftTransport {
 }
 
 struct MCPExpectedTargetTests {
+    @Test func multiTargetMutationRequiresExactConfiguredTarget() throws {
+        var current = capture()
+        current.releaseTargetID = "native-ios"
+        current.releaseTargetCount = 2
+        #expect(try !MCPExpectedTarget(json: json()).matches(current))
+        var exact = json(); exact["releaseTargetId"] = "native-ios"
+        let bound = try MCPExpectedTarget(json: exact)
+        #expect(bound.matches(current))
+        current.releaseTargetID = "other-ios"
+        #expect(!bound.matches(current))
+        current.releaseTargetID = "legacy"
+        #expect(try !MCPExpectedTarget(json: json()).matches(current))
+        current.releaseTargetCount = 1
+        #expect(try MCPExpectedTarget(json: json()).matches(current))
+    }
     private func json(version: Any = "version-a") -> [String: Any] {
         ["projectId": "project-a", "projectPath": "/projects/a", "appId": "app-a",
          "bundleId": "org.example.A", "platform": "iOS", "accountKey": "account-a", "versionId": version]

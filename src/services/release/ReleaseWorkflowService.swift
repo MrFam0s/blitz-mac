@@ -12,13 +12,23 @@ struct ReleaseWorkflowTarget: Codable, Equatable, Sendable {
     let accountKey: String
     let versionID: String
     let buildID: String
+    let releaseTargetID: String?
+
+    init(projectID: String, projectPath: String, appID: String, bundleID: String, platform: String,
+         accountKey: String, versionID: String, buildID: String, releaseTargetID: String? = nil) {
+        self.projectID = projectID; self.projectPath = projectPath
+        self.appID = appID; self.bundleID = bundleID; self.platform = platform
+        self.accountKey = accountKey; self.versionID = versionID; self.buildID = buildID
+        self.releaseTargetID = releaseTargetID
+    }
     enum CodingKeys: String, CodingKey {
         case projectID = "projectId", projectPath, appID = "appId", bundleID = "bundleId", platform, accountKey
-        case versionID = "versionId", buildID = "buildId"
+        case versionID = "versionId", buildID = "buildId", releaseTargetID = "releaseTargetId"
     }
 
     func validate() throws {
         guard !projectID.isEmpty, !bundleID.isEmpty, !accountKey.isEmpty,
+              releaseTargetID.map(Self.validID) ?? true,
               ["IOS", "MAC_OS", "TV_OS", "VISION_OS"].contains(platform),
               [appID, versionID, buildID].allSatisfy(Self.validID),
               projectPath.hasPrefix("/"),
@@ -71,8 +81,9 @@ struct ReleaseWorkflowValidation: Codable, Equatable, Sendable {
     let blocking: Int
     let warnings: Int
     let unverified: Int
-    /// Only stable check identifiers are persisted. CLI output can contain private review data.
+    /// Stable identifiers and generated diagnostics only; never persist raw CLI/review data.
     let checkIDs: [String]
+    var diagnostics: [ReleaseReadinessDiagnostic]? = nil
 }
 
 protocol ReleaseWorkflowAPI {

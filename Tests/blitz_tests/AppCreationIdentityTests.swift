@@ -188,7 +188,7 @@ func appCreationRegistrationDoesNotIgnoreCapabilityFailure(_ statusCode: Int) as
         _ = try await manager.confirmBundleIDSetupAppCreated(bundleId: creationIdentity.bundleId, using: service, refreshData: false)
         Issue.record("Confirmation without a registered operation succeeded")
     } catch {}
-    _ = try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app)
+    _ = try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app, requireRegisteredProject: false)
     do {
         _ = try await manager.confirmBundleIDSetupAppCreated(using: service, refreshData: false)
         Issue.record("Unregistered operation was accepted")
@@ -292,7 +292,7 @@ func appCreationConfirmationRejectsDelayedResultAfterProjectChange(_ stage: Stri
     } catch {}
     #expect(service.calls.isEmpty)
     #expect(manager.activeAppCreationFormRequest?.id == request.id)
-    let next = try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app)
+    let next = try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app, requireRegisteredProject: false)
     #expect(next.operationId != result.context.operationId)
     #expect(manager.activeAppCreationFormRequest == nil)
 }
@@ -396,4 +396,14 @@ func appCreationStateCannotAuthorizeAuthResumeAfterContextChanged(_ change: Stri
     if change == "operationInvalidated" { manager.clearPendingBundleIDSetup() }
     manager.irisSessionState = .valid
     #expect(MCPExecutor.appCreationSetupState(manager) == nil)
+}
+
+@MainActor
+@Test func appCreationProductionRequiresReadableRegisteredProject() throws {
+    let manager = creationManager()
+    manager.loadedProjectId = "unregistered-test-" + UUID().uuidString
+    #expect(throws: ASCManager.BundleIDSetupConfirmationError.self) {
+        try manager.beginPendingBundleIDSetup(identity: creationIdentity, tab: .app)
+    }
+    #expect(manager.pendingBundleIDSetup == nil)
 }

@@ -17,16 +17,30 @@ struct ReleaseAutomationContext: Codable, Equatable, Sendable {
     var preparedVersion: PreparedReleaseVersion? = nil
     /// Non-secret issuer/key identity; a renewed web session does not change the target account.
     var accountKey: String? = nil
+    /// Persisted project target, separate from the Store app's platform/version.
+    var releaseTargetID: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case projectID, projectPath, appID, appName, bundleID, platform, displayedLiveVersion, preparedVersion, accountKey
+        case releaseTargetID = "releaseTargetId"
+    }
 
     // Keep a single release conversation for this target, including when a
     // newly created draft becomes the prepared version on a subsequent click.
-    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath)" }
+    var sessionKey: String { "release:\(appID):\(platform.rawValue):\(projectPath)" + (releaseTargetID.map { ":\($0)" } ?? "") }
 
     func matches(project: Project?, app: ASCApp?) -> Bool {
         guard let project, let app else { return false }
-        return project.id == projectID && app.id == appID && app.bundleId == bundleID
-            && project.metadata.bundleIdentifier == bundleID && project.platform == platform
-            && URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path == projectPath
+        guard project.id == projectID && app.id == appID && app.bundleId == bundleID,
+              URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path == projectPath,
+              let selected = project.metadata.selectedReleaseTarget,
+              let resolved = try? project.metadata.resolveReleaseTarget(id: releaseTargetID),
+              selected.id == resolved.id, resolved.bundleIdentifier == bundleID, resolved.platform == platform else { return false }
+        if let accountKey {
+            return (try? RegisteredReleaseTarget.resolve(project: project, releaseTargetID: resolved.id,
+                appID: appID, bundleID: bundleID, platform: platform.ascPlatformValue, accountKey: accountKey)) != nil
+        }
+        return resolved.storeBinding == nil && resolved.id == "legacy" && project.metadata.resolvedReleaseTargets.count == 1
     }
 }
 

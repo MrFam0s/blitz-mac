@@ -7,6 +7,15 @@ description: Create an App Store Connect app record through Blitz Neo for reques
 
 ## Start from the project's creation request
 
+This workflow creates **one new Store record** for the confirmed release target.
+When `creationMode` is present it must be `newStoreApp`. Preserve and verify
+`releaseTargetId` when present in the handoff and `appCreationSetup` state.
+For iOS and native macOS under the same Store record, retain the existing App ID,
+Bundle ID and SKU, configure another release target in Blitz Neo, then explicitly
+create that platform's first version draft. Do not run this new-record POST for it.
+An iOS app's availability on Apple-silicon Macs remains part of the iOS target;
+it does not create a native macOS target or a second Store record.
+
 For **„App im App Store neu erstellen“** (also „App im AppStore neu erstellen“),
 first identify the intended project/account and check Apple read-only for an
 existing app with the exact Release bundle ID. If it exists, report/reconcile

@@ -2,6 +2,16 @@ import Testing
 @testable import Blitz
 
 struct MCPRegistryCompatibilityTests {
+    @Test func explicitReleaseTargetDiscoveryAndPrepareAreRegistered() throws {
+        let discovery = try #require(tool(named: "get_release_targets", in: MCPRegistry.allTools()))
+        #expect((discovery["inputSchema"] as? [String: Any])?["required"] as? [String] == ["projectId"])
+        #expect(MCPRegistry.category(for: "get_release_targets") == .query)
+        for name in ["get_release_context", "release_prepare", "release_status", "release_submit", "asc_confirm_created_app"] {
+            let entry = try #require(tool(named: name, in: MCPRegistry.allTools()))
+            let properties = try #require((entry["inputSchema"] as? [String: Any])?["properties"] as? [String: Any])
+            #expect(properties["releaseTargetId"] != nil)
+        }
+    }
     @Test func tabSchemasDoNotAdvertiseRemovedLegacyTabs() throws {
         let tools = MCPRegistry.allTools()
 

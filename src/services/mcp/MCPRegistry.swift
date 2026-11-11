@@ -9,9 +9,15 @@ enum MCPRegistry {
         var tools: [[String: Any]] = []
 
         tools.append(tool(
+            name: "get_release_targets",
+            description: "List configured release targets and Store bindings for the explicitly named local project. Read-only, independent of UI selection. Select exactly one releaseTargetId; this never creates an app or submits every platform.",
+            properties: ["projectId": ["type": "string"]], required: ["projectId"]
+        ))
+        tools.append(tool(
             name: "get_release_context",
             description: "Read the current UI target only if it matches the explicitly intended project and App Store app. Returns expectedTarget for UI-bound mutations. Does not switch apps or authorize writes. Release workflow operations below do not depend on UI selection.",
             properties: ["projectId": ["type": "string"], "appId": ["type": "string"],
+                         "releaseTargetId": ["type": "string", "description": "Required when the project has several targets; must match the selected UI target."],
                          "versionId": ["type": ["string", "null"], "description": "Optional expected selected version; explicit null expects no version."]],
             required: ["projectId", "appId"]
         ))
@@ -20,8 +26,9 @@ enum MCPRegistry {
             description: "Prepare a durable release operation for exact project/account/app/platform/version/build IDs, independently of the selected UI app. Apple reads only. The build must already be attached and valid. Records a content fingerprint without changing metadata, assets or submission state. Local tests and source/artifact provenance must be established separately in the project release dossier.",
             properties: [
                 "projectId": ["type": "string"], "projectPath": ["type": "string"],
+                "releaseTargetId": ["type": "string", "description": "Exact configured target from get_release_targets. Required when several targets exist; UI selection is never adopted."],
                 "appId": ["type": "string"], "bundleId": ["type": "string"],
-                "platform": ["type": "string", "enum": ["IOS", "MAC_OS"]],
+                "platform": ["type": "string", "enum": ProjectPlatform.allCases.map(\.ascPlatformValue)],
                 "accountKey": ["type": "string", "description": "Expected nonsecret issuerId:keyId fingerprint."],
                 "versionId": ["type": "string"], "buildId": ["type": "string"],
                 "releaseMode": ["type": "string", "enum": ["MANUAL", "AFTER_APPROVAL"]]
@@ -33,7 +40,8 @@ enum MCPRegistry {
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
             ("release_submit", "Submit the exact validated operation after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets only the prepared release mode, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
         ] {
-            var properties: [String: Any] = ["operationId": ["type": "string"], "accountKey": ["type": "string"]]
+            var properties: [String: Any] = ["operationId": ["type": "string"], "accountKey": ["type": "string"],
+                "releaseTargetId": ["type": "string", "description": "Optional assertion of the saved operation's immutable target ID; cannot change it."]]
             var required = ["operationId", "accountKey"]
             if name == "release_submit" {
                 properties["confirmationDigest"] = ["type": "string"]
@@ -398,6 +406,7 @@ enum MCPRegistry {
                 "expectedPlatform": ["type": "string", "enum": ["iOS", "macOS"]],
                 "expectedLocale": ["type": "string", "description": "Confirmed primaryLocale, e.g. de-DE."],
                 "projectId": ["type": "string", "description": "Original projectId from the identity JSON."],
+                "releaseTargetId": ["type": "string", "description": "Original configured releaseTargetId from the identity JSON; required for multi-target projects."],
                 "operationId": ["type": "string", "description": "Original operationId from the identity JSON."]
             ],
             required: ["bundleId", "expectedName", "expectedSKU", "expectedPlatform", "expectedLocale", "projectId", "operationId"]
@@ -479,7 +488,7 @@ enum MCPRegistry {
         // Navigation / read-only
         case "app_get_state", "nav_switch_tab", "nav_list_tabs":
             return .navigation
-        case "project_list", "project_get_active", "get_release_context", "release_prepare", "release_validate", "release_status":
+        case "project_list", "project_get_active", "get_release_context", "get_release_targets", "release_prepare", "release_validate", "release_status":
             return .query
         case "simulator_list_devices":
             return .query

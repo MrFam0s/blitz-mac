@@ -4,6 +4,14 @@ Diese Wege ersetzen ältere allgemeine Einreichungsanweisungen (MCP-Vorschau,
 direktes `asc submit` oder direkte API). Projektspezifische Identitäten,
 Versions-, Test- und Buildregeln gelten weiterhin.
 
+Hat das Projekt mehrere Veröffentlichungsziele (z. B. iOS und macOS), lies zuerst
+mit `~/.blitz/bin/blitz-neo release targets --request <JSON-Datei>` die Ziele für
+die explizite `projectId`. Verwende die zum Auftrag gehörende `releaseTargetId`;
+bei unklarer Plattform nachfragen. Die sichtbare Auswahl ist keine Freigabe für
+andere Ziele. App-ID, Bundle-ID, Konto, Version und Build bleiben pro Ziel getrennt,
+auch wenn beide Plattformen denselben App-Store-Datensatz verwenden. Ein einzelner
+Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
+
 - **„Update einreichen“**: Lies `.agents/skills/blitz-release/SKILL.md` und nutze
   `~/.blitz/bin/blitz-neo release --help`. Der Auftrag umfasst für diese App die
   nötige Update-Vorbereitung, Tests, den passenden Build/Upload, den belegbaren

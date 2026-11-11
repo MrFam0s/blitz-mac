@@ -1,5 +1,36 @@
 import Testing
+import Foundation
 @testable import Blitz
+
+@Test func archiveDestinationKeepsNativeMacAndCatalystDistinct() throws {
+    #expect(try BuildPipelineService.archiveDestination(platform: .iOS, configured: nil) == "generic/platform=iOS")
+    #expect(try BuildPipelineService.archiveDestination(platform: .macOS, configured: nil) == "generic/platform=macOS")
+    #expect(try BuildPipelineService.archiveDestination(platform: .macOS,
+        configured: "generic/platform=macOS,variant=Mac Catalyst") == "generic/platform=macOS,variant=Mac Catalyst")
+    for value in ["", "generic/platform=macOS", "generic/platform=macOS,variant=Mac Catalyst", "platform=iOS,id=device", "generic/platform=iOS Simulator", "generic/platform=iOS\n"] {
+        #expect(throws: Error.self) { try BuildPipelineService.archiveDestination(platform: .iOS, configured: value) }
+    }
+    for value in ["generic/platform=iOS", "platform=macOS,id=host", "generic/platform=macOS,arch=arm64", "generic/platform=macOS; echo bad"] {
+        #expect(throws: Error.self) { try BuildPipelineService.archiveDestination(platform: .macOS, configured: value) }
+    }
+}
+
+@Test func signingCacheSeparatesAccountsPlatformsAndBundlesWithoutUsingLegacyState() throws {
+    let root = URL(fileURLWithPath: "/private/tmp/signing-fixture")
+    func directory(_ bundle: String = "org.example.Shared", _ platform: ProjectPlatform = .iOS, _ account: String = "issuer:key") throws -> URL {
+        try BuildPipelineService.signingCacheDirectory(bundleId: bundle, platform: platform, accountKey: account, root: root)
+    }
+    let ios = try directory()
+    #expect(ios == (try directory()))
+    #expect(ios != (try directory("org.example.Shared", .macOS)))
+    #expect(ios != (try directory("org.example.Shared", .iOS, "other:key")))
+    #expect(ios != (try directory("org.example.Other")))
+    #expect(ios.deletingLastPathComponent().lastPathComponent == "scopes")
+    #expect(ios.appendingPathComponent("signing-state.json") != root.appendingPathComponent("org.example.Shared/signing-state.json"))
+    #expect(!ios.path.contains("issuer:key"))
+    #expect(throws: Error.self) { try directory("../../escape") }
+    #expect(throws: Error.self) { try directory("org.example.Shared", .iOS, "") }
+}
 
 @Test func processOutputCollectorPrioritizesAppIconFailures() {
     let collector = ProcessOutputCollector(maxStoredLines: 40, maxSummaryLines: 12)

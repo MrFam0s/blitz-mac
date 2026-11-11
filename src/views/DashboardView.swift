@@ -336,7 +336,9 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func appCard(row: DashboardAppRow) -> some View {
-        let isSelected = row.linkedProjectId != nil && row.linkedProjectId == appState.activeProjectId
+        let isSelected = row.projectLinks?.contains(where: {
+            $0.projectId == appState.activeProjectId && $0.targetId == appState.activeProject?.selectedReleaseTarget?.id
+        }) ?? (row.linkedProjectId != nil && row.linkedProjectId == appState.activeProjectId)
         let project = row.linkedProjectId.flatMap { id in projects.first(where: { $0.id == id }) }
 
         Button { selectRow(row) } label: {
@@ -347,7 +349,17 @@ struct DashboardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Open \(row.name)")
-        .contextMenu { visibilityAction(for: row) }
+        .contextMenu {
+            if let links = row.projectLinks, links.count > 1 {
+                ForEach(links) { link in
+                    Button("\(projects.first { $0.id == link.projectId }?.name ?? link.projectId) · \(link.platform.rawValue)") {
+                        selectLinkedTarget(link)
+                    }
+                }
+                Divider()
+            }
+            visibilityAction(for: row)
+        }
         .help([row.name, row.bundleId, statusCaption(for: row)].compactMap { $0 }.joined(separator: "\n"))
     }
 
@@ -387,6 +399,12 @@ struct DashboardView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .accessibilityHidden(statusCaption(for: row) == nil)
+            if let platforms = row.status?.platformSummaries, platforms.count > 1 {
+                ForEach(platforms.keys.sorted(), id: \.self) { platform in
+                    Text("\(platform == "MAC_OS" ? "macOS" : platform == "IOS" ? "iOS" : platform) · \(platforms[platform] ?? "")")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
         }
         .frame(minHeight: 112, alignment: .top)
     }
@@ -441,7 +459,9 @@ struct DashboardView: View {
     }
 
     private func selectRow(_ row: DashboardAppRow) {
-        if let projectId = row.linkedProjectId {
+        if let links = row.projectLinks, links.count == 1, let link = links.first {
+            selectLinkedTarget(link)
+        } else if row.projectLinks == nil, let projectId = row.linkedProjectId {
             // Linked local project — open it as before.
             appState.activeTab = .app
             appState.activeAppSubTab = .overview
@@ -460,6 +480,21 @@ struct DashboardView: View {
                 await appState.ascManager.loadCredentials(for: "asc:\(bundleId)", bundleId: bundleId)
                 await appState.ascManager.ensureTabData(.app)
             }
+        }
+    }
+
+    private func selectLinkedTarget(_ link: DashboardProjectLink) {
+        Task {
+            do {
+                try await appState.projectManager.selectReleaseTarget(projectId: link.projectId, targetId: link.targetId)
+                appState.activeProjectId = link.projectId
+                appState.activeTab = .app
+                appState.activeAppSubTab = .overview
+                let bundle = appState.activeProject?.metadata.bundleIdentifier
+                appState.ascManager.prepareForProjectSwitch(to: link.projectId, bundleId: bundle)
+                await appState.ascManager.loadCredentials(for: link.projectId, bundleId: bundle)
+                await appState.ascManager.ensureTabData(.app)
+            } catch { visibilityError = error.localizedDescription }
         }
     }
 

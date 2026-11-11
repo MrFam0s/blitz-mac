@@ -178,7 +178,7 @@ struct BundleIDSetupView: View {
             Text("Register Your Bundle ID")
                 .font(.title2.weight(.semibold))
         }
-        Text("Create a bundle ID to connect your app to App Store Connect.")
+        Text("Separaten Store-Eintrag für dieses Veröffentlichungsziel anlegen. Für eine weitere Plattform derselben App verwende „Veröffentlichungsziele verwalten“ und den bestehenden Store-Eintrag.")
             .font(.callout)
             .foregroundStyle(.secondary)
 
@@ -559,7 +559,7 @@ struct BundleIDSetupView: View {
               let metadata = ProjectStorage().readMetadata(projectId: projectId) else { return }
         hasPrefilled = true
         publicAppName = metadata.name
-        sku = "\(metadata.name)-\(effectivePlatform.rawValue)"
+        sku = metadata.selectedReleaseTarget?.storeBinding?.sku ?? "\(metadata.name)-\(effectivePlatform.rawValue)"
         if let existingBundleId = metadata.bundleIdentifier, !existingBundleId.isEmpty {
             applyBundleIdToForm(existingBundleId)
         } else {
@@ -613,7 +613,8 @@ struct BundleIDSetupView: View {
                 _ = try await asc.confirmBundleIDSetupAppCreated(bundleId: context.identity.bundleId,
                     expectedName: context.identity.appName, expectedSKU: context.identity.sku,
                     expectedPlatform: context.identity.platform.rawValue, expectedLocale: context.identity.primaryLocale,
-                    projectId: context.projectId, operationId: context.operationId.uuidString)
+                    projectId: context.projectId, operationId: context.operationId.uuidString,
+                    releaseTargetId: context.releaseTargetId)
             } catch {
                 guard viewOperationId == operation else { return }
                 if let ascError = error as? ASCError, ascError.isProgramLicenseAgreementRequired {
@@ -651,10 +652,12 @@ struct BundleIDSetupView: View {
                 .prepareBundledCreationSkill(projectDir: projectDir)
             try asc.validateBundleIDSetupContext(context)
             let identity = context.identity
-            let values: [String: String] = ["appName": identity.appName, "bundleId": identity.bundleId,
+            var values: [String: String] = ["appName": identity.appName, "bundleId": identity.bundleId,
                 "sku": identity.sku, "platform": identity.platform.rawValue, "primaryLocale": identity.primaryLocale,
                 "projectId": context.projectId, "operationId": context.operationId.uuidString,
-                "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId]
+                "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId,
+                "creationMode": "newStoreApp"]
+            if let releaseTargetId = context.releaseTargetId { values["releaseTargetId"] = releaseTargetId }
             let identityFile = try ReleaseHandoffService.writeCreationIdentity(values,
                 projectDirectory: projectDir, operationID: context.operationId)
             let prompt = try AppCreationAgentPrompt.make(identityFile: identityFile)

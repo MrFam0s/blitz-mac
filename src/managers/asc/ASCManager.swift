@@ -170,6 +170,7 @@ final class ASCManager {
         set { configuredReleasePlatform = newValue }
     }
     var loadedProjectId: String?
+    var loadedReleaseTargetId: String?
     var pendingBundleIDSetup: PendingBundleIDSetupContext?
     var appCreationFormRequest: AppCreationFormRequest?
 

@@ -15,7 +15,7 @@ class MCPInstallerTests(unittest.TestCase):
     def stub(self,body):
         npm=self.prefix/'bin/npm';npm.write_text('#!/bin/bash\nset -eu\n'+body+'\n');npm.chmod(0o755)
     def fake_package(self,version,lock=True):
-        manifest={'name':'@blitzdev/iphone-mcp','version':version,'type':'module','blitzMaintenance':{'upstreamCommit':'3259f756279cd8cb6bc507b46369111fb5672fa2'}}
+        manifest={'name':'@blitzdev/iphone-mcp','version':version,'type':'module','allowScripts':{'unix-dgram@2.0.7':True},'blitzMaintenance':{'upstreamCommit':'3259f756279cd8cb6bc507b46369111fb5672fa2'}}
         files={'package.json':json.dumps(manifest),'dist/index.js':'// fixture','dist/cli.js':'#!/usr/bin/env node\n'}
         if lock:files['npm-shrinkwrap.json']='{}'
         with tarfile.open(self.package,'w:gz') as archive:
@@ -37,11 +37,13 @@ class MCPInstallerTests(unittest.TestCase):
         self.fake_package('0.1.18');self.stub('exit 0');r=self.run_install();self.assertNotEqual(r.returncode,0);self.assert_preserved()
     def test_missing_dependency_lock_is_rejected(self):
         self.fake_package('0.1.18-blitz.1',lock=False);self.stub('exit 0');r=self.run_install();self.assertNotEqual(r.returncode,0);self.assert_preserved()
+    def test_successful_rebuild_without_native_module_keeps_existing_package(self):
+        self.stub('exit 0');r=self.run_install();self.assertNotEqual(r.returncode,0);self.assert_preserved()
     def test_success_uses_ci_updates_link_and_retains_backup(self):
         self.stub('''[ -f npm-shrinkwrap.json ]
 case "$1" in
  ci) [ "$2" = --omit=dev ] && [ "$3" = --ignore-scripts ]; touch .ci-ran ;;
- rebuild) [ "$2" = unix-dgram ] && [ -f .ci-ran ]; touch .rebuild-ran ;;
+ rebuild) [ "$2" = unix-dgram ] && [ "$3" = --strict-allow-scripts ] && [ -f .ci-ran ]; mkdir -p node_modules/unix-dgram; echo 'module.exports = {}' > node_modules/unix-dgram/index.js; touch .rebuild-ran ;;
  *) exit 20 ;;
 esac''')
         r=self.run_install();self.assertEqual(r.returncode,0,r.stderr)

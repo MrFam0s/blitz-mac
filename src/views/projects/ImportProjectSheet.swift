@@ -11,6 +11,14 @@ struct ImportProjectSheet: View {
     @State private var discoveredBundleIds: [String] = []
     @State private var selectedBundleId = ""
     @State private var hasSavedMetadata = false
+    @State private var savedTargets: [ProjectReleaseTarget] = []
+    @State private var selectedReleaseTargetId = ""
+    @State private var addingReleaseTarget = false
+    @State private var discoveredTargets: [ProjectReleaseTargetDiscovery.Candidate] = []
+    @State private var selectedDiscoveredTarget = ""
+    @State private var scheme = ""
+    @State private var configuration = "Release"
+    @State private var destination: String?
     @State private var isImporting = false
     @State private var errorMessage: String?
 
@@ -34,6 +42,22 @@ struct ImportProjectSheet: View {
                     }
                 }
 
+                if !savedTargets.isEmpty {
+                    Toggle("Weiteres Veröffentlichungsziel hinzufügen", isOn: $addingReleaseTarget)
+                    if !addingReleaseTarget {
+                        Picker("Gespeichertes Ziel", selection: $selectedReleaseTargetId) {
+                            ForEach(savedTargets) { Text("\($0.displayName) · \($0.bundleIdentifier ?? "ohne Bundle-ID")").tag($0.id) }
+                        }
+                        .onChange(of: selectedReleaseTargetId) { _, id in applySavedTarget(id) }
+                    }
+                }
+                if !discoveredTargets.isEmpty {
+                    Picker("Xcode-App-Ziel", selection: $selectedDiscoveredTarget) {
+                        Text("Manuell auswählen").tag("")
+                        ForEach(discoveredTargets) { Text($0.label).tag($0.id) }
+                    }
+                    .onChange(of: selectedDiscoveredTarget) { _, id in applyDiscoveredTarget(id) }
+                }
                 Picker("Platform", selection: $platform) {
                     Text("iOS").tag(ProjectPlatform.iOS)
                     Text("macOS").tag(ProjectPlatform.macOS)
@@ -43,8 +67,16 @@ struct ImportProjectSheet: View {
                     if newPlatform == .macOS {
                         projectType = .swift
                     }
+                    if let target = selectedXcodeTarget, target.platform != newPlatform {
+                        selectedDiscoveredTarget = ""
+                        destination = newPlatform == .iOS ? "generic/platform=iOS" : "generic/platform=macOS"
+                    }
                 }
 
+                if projectType == .swift {
+                    TextField("Scheme", text: $scheme)
+                    TextField("Konfiguration", text: $configuration)
+                }
                 if platform == .iOS {
                     Picker("Type", selection: $projectType) {
                         Text("React Native").tag(ProjectType.reactNative)
@@ -61,8 +93,7 @@ struct ImportProjectSheet: View {
             .onChange(of: projectPath) { _, newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else {
-                    discoveredBundleIds = []
-                    selectedBundleId = ""
+                    resetDetectedProjectState()
                     return
                 }
 
@@ -70,7 +101,13 @@ struct ImportProjectSheet: View {
                 refreshDetectedProjectState(for: url)
             }
 
-            if discoveredBundleIds.count > 1 {
+            if selectedXcodeTarget?.bundleIdentifier == nil && selectedXcodeTarget != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    TextField("Exakte Release-Bundle-ID", text: $selectedBundleId)
+                    Text("Die Bundle-ID dieses Ziels wird von Xcode bedingt oder abgeleitet. Übernimm die genaue Release-Bundle-ID aus den Build-Einstellungen dieses Ziels; die ID einer anderen Plattform wird nicht automatisch verwendet.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else if discoveredBundleIds.count > 1 {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Bundle ID")
                         .font(.callout.weight(.medium))
@@ -149,8 +186,8 @@ struct ImportProjectSheet: View {
         let hasXcodeProj = dirContents.contains(where: { $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace") })
         let hasPackageSwift = fm.fileExists(atPath: url.appendingPathComponent("Package.swift").path)
         if hasXcodeProj || hasPackageSwift {
-            // Detect macOS vs iOS by checking pbxproj for SDKROOT or MACOSX_DEPLOYMENT_TARGET
-            let detectedPlatform = detectSwiftPlatform(at: url, dirContents: dirContents)
+            let platforms = Set(ProjectReleaseTargetDiscovery.discover(in: url).map(\.platform))
+            let detectedPlatform = platforms.count == 1 ? platforms.first! : .iOS
             return DetectedProject(type: .swift, platform: detectedPlatform)
         }
         // React Native: package.json with react-native dependency
@@ -163,33 +200,50 @@ struct ImportProjectSheet: View {
         return nil
     }
 
-    /// Check xcodeproj for macOS vs iOS indicators
-    private func detectSwiftPlatform(at url: URL, dirContents: [String]) -> ProjectPlatform {
-        guard let xcodeproj = dirContents.first(where: { $0.hasSuffix(".xcodeproj") }) else {
-            return .iOS
-        }
-        let pbxprojPath = url.appendingPathComponent(xcodeproj).appendingPathComponent("project.pbxproj").path
-        guard let contents = try? String(contentsOfFile: pbxprojPath, encoding: .utf8) else {
-            return .iOS
-        }
-        if contents.contains("SDKROOT = macosx") || contents.contains("MACOSX_DEPLOYMENT_TARGET") {
-            return .macOS
-        }
-        return .iOS
+    private var selectedXcodeTarget: ProjectReleaseTargetDiscovery.Candidate? {
+        discoveredTargets.first { $0.id == selectedDiscoveredTarget }
     }
 
     private var requiresBundleIdSelection: Bool {
-        discoveredBundleIds.count > 1 && selectedBundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let target = selectedXcodeTarget, target.bundleIdentifier == nil {
+            return !AppCreationIdentity.validBundleID(selectedBundleId)
+        }
+        return discoveredBundleIds.count > 1 && selectedBundleId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func resetDetectedProjectState() {
+        hasSavedMetadata = false
+        savedTargets = []
+        selectedReleaseTargetId = ""
+        addingReleaseTarget = false
+        discoveredTargets = []
+        selectedDiscoveredTarget = ""
+        discoveredBundleIds = []
+        selectedBundleId = ""
+        scheme = ""
+        configuration = "Release"
+        destination = nil
+        platform = .iOS
+        projectType = .reactNative
     }
 
     private func refreshDetectedProjectState(for url: URL) {
         errorMessage = nil
+        resetDetectedProjectState()
         do {
             let saved = try ProjectStorage().readMetadataFromDirectory(url)
             hasSavedMetadata = saved != nil
+            savedTargets = saved?.resolvedReleaseTargets ?? []
+            selectedReleaseTargetId = saved?.selectedReleaseTarget?.id ?? ""
+            addingReleaseTarget = false
+            discoveredTargets = ProjectReleaseTargetDiscovery.discover(in: url)
+            selectedDiscoveredTarget = ""
             if let saved {
                 platform = saved.resolvedPlatform
                 projectType = saved.type
+                scheme = saved.buildSettings?.scheme ?? ""
+                configuration = saved.buildSettings?.configuration ?? "Release"
+                destination = saved.buildSettings?.destination
             } else if let detected = detectProject(at: url) {
                 platform = detected.platform
                 projectType = detected.type
@@ -202,12 +256,35 @@ struct ImportProjectSheet: View {
             }
             discoveredBundleIds = candidates
             selectedBundleId = !savedID.isEmpty ? savedID : (candidates.count == 1 ? candidates[0] : "")
+            if saved == nil, let candidate = discoveredTargets.first,
+               discoveredTargets.filter({ $0.configuration == "Release" }).count == 1 {
+                selectedDiscoveredTarget = candidate.id
+                applyDiscoveredTarget(candidate.id)
+            }
         } catch {
             discoveredBundleIds = []
             selectedBundleId = ""
             hasSavedMetadata = false
             errorMessage = "The existing project metadata could not be read. It will not be overwritten: \(error.localizedDescription)"
         }
+    }
+
+    private func applySavedTarget(_ id: String) {
+        guard let target = savedTargets.first(where: { $0.id == id }) else { return }
+        platform = target.platform
+        selectedBundleId = target.bundleIdentifier ?? ""
+        scheme = target.buildSettings?.scheme ?? ""
+        configuration = target.buildSettings?.configuration ?? "Release"
+        destination = target.buildSettings?.destination
+    }
+
+    private func applyDiscoveredTarget(_ id: String) {
+        guard let target = discoveredTargets.first(where: { $0.id == id }) else { return }
+        platform = target.platform
+        scheme = target.scheme
+        configuration = target.configuration
+        destination = target.destination
+        selectedBundleId = target.bundleIdentifier ?? ""
     }
 
     private func importProject() async {
@@ -242,7 +319,10 @@ struct ImportProjectSheet: View {
                 directory: url,
                 type: projectType,
                 platform: platform,
-                selectedBundleID: selectedBundleId
+                selectedBundleID: selectedBundleId,
+                releaseTargetId: selectedReleaseTargetId.isEmpty ? nil : selectedReleaseTargetId,
+                addingReleaseTarget: addingReleaseTarget,
+                selectedBuildSettings: scheme.isEmpty ? nil : BuildSettings(scheme: scheme, configuration: configuration, destination: destination)
             )
             // Write metadata into the original project directory first,
             // then register it as a symlink in ~/.blitz/projects/.

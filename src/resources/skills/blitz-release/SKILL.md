@@ -50,8 +50,28 @@ the project; do not infer privacy, rights, encryption or demo-login answers.
 
 Keep project path/ID, Apple account, app ID, case-sensitive bundle ID, platform,
 version ID and eventual build ID together. A dashboard selection is not identity.
+Discover the configured targets with `~/.blitz/bin/blitz-neo release targets
+--request <JSON-file>` and a request containing the explicit `projectId`. This
+reads only local registration; verify the returned Store binding against Apple.
+Use one `releaseTargetId` throughout the workflow. When several targets exist,
+choose the one named by the user's platform/scope; ask if ambiguous. The current
+UI selection is never a default for an external release. The compatible single-target
+case, including an ordinary first import, resolves to `legacy`; new operations still
+record that explicit ID. It may lack a saved binding, but exact live account/app/bundle
+verification remains required. Additional targets need verified Store registration
+before release preparation.
+
+Native iOS and macOS versions may share one Store app ID, while separate products
+may have distinct app IDs or bundle IDs. Preserve each configured binding and its
+build scheme. Never infer a second app record from a different platform, rewrite
+a bundle ID, share version/build numbers, or reuse the other platform's changelog
+without checking its actual changes. One operation releases one target. A request
+covering both platforms needs separate scoped operations, builds and validation;
+success for one is not success for the other.
+
 Use `get_release_context` with the explicitly intended project/app IDs and compare
-its returned target with the handoff before using UI-bound MCP tools. Supply the
+its returned target with the handoff before using UI-bound MCP tools. Include the
+same `releaseTargetId` for multi-target projects. Supply the
 unchanged `expectedTarget` required by those tools; if selection or account changes,
 stop that operation rather than capturing and adopting the new selection.
 Use separate explicit IDs for new versions/builds returned by verified operations.
@@ -90,7 +110,7 @@ reconcile a pending or uncertain operation instead of starting another one.
 Once the build is attached and the Store content is ready:
 
 1. Run `~/.blitz/bin/blitz-neo release prepare --request <JSON-file>` with explicit `projectId`, canonical `projectPath`, `appId`,
-   exact `bundleId`, `platform` (`IOS` or `MAC_OS`), the original nonsecret `accountKey`
+   `releaseTargetId`, exact `bundleId`, the target's supported `platform` (`IOS` or `MAC_OS`), the original nonsecret `accountKey`
    (`issuerId:keyId`), `versionId`, `buildId` and the requested `releaseMode`
    (`MANUAL` or `AFTER_APPROVAL`). This reads Apple
    state and creates a private operation; it does not submit. Preserve its operation
@@ -115,7 +135,7 @@ Write request JSON with a serializer and quote the actual absolute file path;
 `<JSON-file>` above is a placeholder, not a shell expression. Stdin is also
 supported via `--request -`. The equivalent MCP tools use the same backend, but
 this project's default route is the CLI. `release context` accepts `projectId`
-and `appId` and verifies the current UI target when UI-bound tools are needed;
+and `appId`, plus `releaseTargetId` when several targets exist, and verifies the current UI target when UI-bound tools are needed;
 the final prepare/validate/submit/status workflow is independent of UI selection.
 Do not invent commands or replace guarded final submission with direct ASC
 because a check failed. If an installed toolset is older, report the missing capability.

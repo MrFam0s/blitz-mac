@@ -279,6 +279,11 @@ def validate_identity(raw):
     if not isinstance(raw, dict):
         raise IdentityError("Identity must be a JSON object.")
     identity = dict(raw)
+    if identity.get("creationMode", "newStoreApp") != "newStoreApp":
+        raise IdentityError("This workflow only creates a new Store record. Add a platform to the existing Store app instead.")
+    if "releaseTargetId" in identity and (not isinstance(identity["releaseTargetId"], str)
+            or not identity["releaseTargetId"] or identity["releaseTargetId"] != identity["releaseTargetId"].strip()):
+        raise IdentityError("Confirm the exact releaseTargetId.")
     for key in ("appName", "bundleId", "sku", "platform", "primaryLocale", "projectId", "operationId", "expectedIssuerId", "expectedKeyId"):
         value = identity.get(key)
         if not isinstance(value, str) or not value or value != value.strip():
@@ -324,10 +329,13 @@ def build_payload(raw):
 
 def confirmation_arguments(identity):
     identity = validate_identity(identity)
-    return {"bundleId": identity["bundleId"], "expectedName": identity["appName"],
+    result = {"bundleId": identity["bundleId"], "expectedName": identity["appName"],
             "expectedSKU": identity["sku"], "expectedPlatform": identity["platform"],
             "expectedLocale": identity["primaryLocale"], "projectId": identity["projectId"],
             "operationId": identity["operationId"]}
+    if "releaseTargetId" in identity:
+        result["releaseTargetId"] = identity["releaseTargetId"]
+    return result
 
 
 def read_body(response):

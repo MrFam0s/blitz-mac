@@ -20,7 +20,7 @@ struct BuildsView: View {
             await asc.ensureTabData(.builds)
         }
         .onAppear { syncSelection() }
-        .onChange(of: asc.builds.map(\.id)) { _, _ in syncSelection() }
+        .onChange(of: asc.releasePlatformBuilds.map(\.id)) { _, _ in syncSelection() }
     }
 
     private var buildsContent: some View {
@@ -32,7 +32,7 @@ struct BuildsView: View {
                     .help("Refresh builds and selected distribution details")
             }.blitzToolbar()
             Divider()
-            if asc.builds.isEmpty {
+            if asc.releasePlatformBuilds.isEmpty {
                 if asc.isTabLoading(.builds) {
                     ASCTabLoadingPlaceholder(title: "Loading Builds", message: "Fetching TestFlight build metadata.")
                 } else {
@@ -44,7 +44,7 @@ struct BuildsView: View {
                     if geometry.size.width < 760 {
                         VStack(spacing: 0) {
                             Picker("Build", selection: selection) {
-                                ForEach(asc.builds) { build in
+                                ForEach(asc.releasePlatformBuilds) { build in
                                     Text(TestFlightPresentation.buildLabel(build)).tag(Optional(build.id))
                                 }
                             }
@@ -56,7 +56,7 @@ struct BuildsView: View {
                     } else {
                         HStack(spacing: 0) {
                             List(selection: selection) {
-                                ForEach(asc.builds) { build in buildRow(build).tag(build.id) }
+                                ForEach(asc.releasePlatformBuilds) { build in buildRow(build).tag(build.id) }
                             }.listStyle(.inset).frame(width: 280)
                             Divider()
                             selectedBuildDetail
@@ -69,7 +69,7 @@ struct BuildsView: View {
 
     @ViewBuilder private var selectedBuildDetail: some View {
         if let id = asc.selectedTestFlightBuildId,
-           let build = asc.builds.first(where: { $0.id == id }) {
+           let build = asc.releasePlatformBuilds.first(where: { $0.id == id }) {
             buildDetail(build)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .task(id: "\(asc.app?.id ?? ""):\(asc.projectRevision):\(id)") {
@@ -173,8 +173,8 @@ struct BuildsView: View {
     }
 
     private func syncSelection() {
-        if !asc.builds.contains(where: { $0.id == asc.selectedTestFlightBuildId }) {
-            asc.selectedTestFlightBuildId = asc.builds.first?.id
+        if !asc.releasePlatformBuilds.contains(where: { $0.id == asc.selectedTestFlightBuildId }) {
+            asc.selectedTestFlightBuildId = asc.releasePlatformBuilds.first?.id
         }
     }
 
@@ -190,7 +190,7 @@ struct BuildsView: View {
             await asc.refreshTabData(.builds)
             guard asc.projectRevision == revision, asc.app?.id == appId, !Task.isCancelled,
                   asc.tabError[.builds] == nil, asc.selectedTestFlightBuildId == buildId,
-                  let buildId, asc.builds.contains(where: { $0.id == buildId }) else { return }
+                  let buildId, asc.releasePlatformBuilds.contains(where: { $0.id == buildId }) else { return }
             await asc.refreshTestFlightBuildDetail(buildId: buildId)
         }
     }

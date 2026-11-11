@@ -22,6 +22,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
     private let cli: CLI
     private let loadBuild: (String) async throws -> ASCBuild
     private let validateContext: () async throws -> Void
+    private let readinessReport: ((ReleaseWorkflowTarget) async throws -> ReleaseReadinessPayload)?
 
     init(credentials: ASCCredentials, validateContext: @escaping () async throws -> Void = {}) {
         accountKey = "\(credentials.issuerId):\(credentials.keyId)"
@@ -30,15 +31,21 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         transport = { try await client.request(method: $0, path: $1, headers: $2, body: $3) }
         cli = { try await service.cliExec(args: $0, responseTimeoutSeconds: 240) }
         loadBuild = { try await service.fetchBuild(id: $0) }
+        readinessReport = { target in
+            try await client.releaseReadiness(appID: target.appID, bundleID: target.bundleID,
+                                              versionID: target.versionID, platform: target.platform)
+        }
         self.validateContext = validateContext
     }
 
     /// All integration tests inject transports; no credentials or real Apple calls are needed.
     init(accountKey: String, transport: @escaping Request, cli: @escaping CLI,
          loadBuild: @escaping (String) async throws -> ASCBuild,
-         validateContext: @escaping () async throws -> Void = {}) {
+         validateContext: @escaping () async throws -> Void = {},
+         readinessReport: ((ReleaseWorkflowTarget) async throws -> ReleaseReadinessPayload)? = nil) {
         self.accountKey = accountKey; self.transport = transport; self.cli = cli
         self.loadBuild = loadBuild; self.validateContext = validateContext
+        self.readinessReport = readinessReport
     }
 
     func snapshot(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowSnapshot {
@@ -118,23 +125,32 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
     }
 
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
+        try target.validate()
+        guard accountKey == target.accountKey else { throw ReleaseWorkflowError.accountChanged }
+        let app = try await single("/v1/apps/\(target.appID)")
+        guard app["id"] as? String == target.appID,
+              (app["attributes"] as? [String: Any])?["bundleId"] as? String == target.bundleID else {
+            throw ReleaseWorkflowError.identityChanged
+        }
         try await validateContext()
-        let result = try await cli(["validate", "--app", target.appID,
-            "--version-id", target.versionID, "--platform", target.platform, "--strict", "--deep", "--output", "json"])
-        guard let data = result.stdout.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              object["appId"] as? String == target.appID, object["versionId"] as? String == target.versionID,
-              object["platform"] as? String == target.platform,
-              let summary = object["summary"] as? [String: Any], let blocking = summary["blocking"] as? Int,
-              let warnings = summary["warnings"] as? Int,
-              let deep = object["deep"] as? [String: Any], let deepSummary = deep["summary"] as? [String: Any],
-              let unverified = deepSummary["unverified"] as? Int, let deepBlocked = deepSummary["blocked"] as? Int else {
+        let payload: ReleaseReadinessPayload
+        if let readinessReport { payload = try await readinessReport(target) }
+        else {
+            // Legacy injected transports do not provide provider evidence and
+            // therefore can never silently turn a default web cache into proof.
+            let result = try await cli(["validate", "--app", target.appID,
+                "--version-id", target.versionID, "--platform", target.platform, "--strict", "--deep", "--output", "json"])
+            payload = .init(report: Data(result.stdout.utf8), web: .unavailable(target), exitCode: result.exitCode)
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: payload.report) as? [String: Any] else {
             throw ReleaseWorkflowAPIError.validationUnavailable
         }
-        let checks = (object["checks"] as? [[String: Any]] ?? []) + (deep["checks"] as? [[String: Any]] ?? [])
-        return ReleaseWorkflowValidation(ready: result.exitCode == 0 && blocking == 0 && deepBlocked == 0 && unverified == 0,
-            blocking: blocking + deepBlocked, warnings: warnings, unverified: unverified,
-            checkIDs: checks.compactMap { $0["id"] as? String }.sorted())
+        let versions = try await all("/v1/apps/\(target.appID)/appStoreVersions")
+        let firstPublication = try ReleaseReadinessPolicy.isFirstPublication(versions: versions, target: target)
+        let localizations = try await all("/v1/appStoreVersions/\(target.versionID)/appStoreVersionLocalizations")
+        return try ReleaseReadinessPolicy.normalize(report: object, exitCode: payload.exitCode, target: target,
+            firstPublication: firstPublication, localizations: localizations, web: payload.web,
+            webBindingStable: payload.web.matches(payload.web, target: target))
     }
 
     func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws {
@@ -225,6 +241,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         var next: String? = initial.string
         var seenPages: Set<String> = [], seenIDs: Set<String> = []
         var output: [[String: Any]] = []
+        var expectedTotal: Int?
         while let page = next {
             let base = URL(string: "https://api.appstoreconnect.apple.com")!
             guard let url = URL(string: page, relativeTo: base)?.absoluteURL,
@@ -237,12 +254,19 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
                 !pageQuery.contains { $0.name == key && $0.value != value } }) else { throw ReleaseWorkflowAPIError.invalidResponse }
             let response = try await request("GET", url.path + (url.query.map { "?" + $0 } ?? ""))
             guard let values = response["data"] as? [[String: Any]] else { throw ReleaseWorkflowAPIError.invalidResponse }
+            if let paging = (response["meta"] as? [String: Any])?["paging"] as? [String: Any], let total = paging["total"] as? Int {
+                guard total >= 0, expectedTotal == nil || expectedTotal == total else { throw ReleaseWorkflowAPIError.invalidResponse }
+                expectedTotal = total
+            }
             for resource in values {
                 guard seenIDs.insert(try Self.id(resource)).inserted else { throw ReleaseWorkflowAPIError.invalidResponse }
                 output.append(resource)
             }
-            next = (response["links"] as? [String: Any])?["next"] as? String
+            let nextValue = (response["links"] as? [String: Any])?["next"]
+            guard nextValue == nil || nextValue is NSNull || (nextValue as? String)?.isEmpty == false else { throw ReleaseWorkflowAPIError.invalidResponse }
+            next = nextValue as? String
         }
+        guard expectedTotal == nil || expectedTotal == output.count else { throw ReleaseWorkflowAPIError.invalidResponse }
         return output
     }
     private func request(_ method: String, _ path: String, body: [String: Any]? = nil) async throws -> [String: Any] {

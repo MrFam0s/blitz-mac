@@ -118,7 +118,7 @@ struct ScreenshotsView: View {
     var appState: AppState
 
     private var asc: ASCManager { appState.ascManager }
-    private var platform: ProjectPlatform { appState.activeProject?.platform ?? .iOS }
+    private var platform: ProjectPlatform { asc.releasePlatform ?? appState.activeProject?.platform ?? .iOS }
 
     // General state
     @State private var selectedDevice: ScreenshotDeviceType = .iPhone
@@ -140,7 +140,7 @@ struct ScreenshotsView: View {
     @State private var dragStartSlotIndex: Int?
 
     private var availableDeviceTypes: [ScreenshotDeviceType] {
-        ScreenshotDeviceType.types(for: platform)
+        asc.releasePlatform.map(ScreenshotDeviceType.types) ?? []
     }
 
     private var currentLocale: String {
@@ -516,7 +516,7 @@ struct ScreenshotsView: View {
                         ASCVersionPickerBar(
                             asc: asc,
                             selection: selectedVersionBinding,
-                            appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/ios/version/inflight") },
+                            appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                             refreshTab: .screenshots,
                             refreshHelpText: "Refresh screenshots"
                         ) {
@@ -538,7 +538,7 @@ struct ScreenshotsView: View {
 
                     Divider()
 
-                    trackToolbar
+                    if asc.releasePlatform != nil { trackToolbar }
 
                     if !asc.canEditField("screenshots") {
                         Label(asc.screenshotEditingMessage, systemImage: "lock.fill")
@@ -552,7 +552,8 @@ struct ScreenshotsView: View {
                     writeErrorBanner
 
                     GeometryReader { geometry in
-                        trackCanvas(in: geometry.size)
+                        if asc.releasePlatform != nil { trackCanvas(in: geometry.size) }
+                        else { ContentUnavailableView("Plattform wählen", systemImage: "desktopcomputer.and.iphone") }
                     }
                 }
             }
@@ -560,7 +561,7 @@ struct ScreenshotsView: View {
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             handleFinderDrop(providers)
         }
-        .task(id: "\(appState.activeProjectId ?? ""):\(asc.credentialActivationRevision)") {
+        .task(id: "\(appState.activeProjectId ?? ""):\(asc.loadedReleaseTargetId ?? ""):\(asc.releasePlatform?.rawValue ?? ""):\(asc.credentialActivationRevision)") {
             await loadData()
         }
         .onChange(of: draggingSlot) { _, newValue in

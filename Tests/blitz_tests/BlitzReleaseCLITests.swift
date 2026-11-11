@@ -3,6 +3,17 @@ import Testing
 import BlitzMCPCommon
 
 struct BlitzReleaseCLITests {
+    @Test func discoversTargetsAndPassesExplicitSelectionUnchanged() throws {
+        let discovery = try BlitzReleaseCLI.parse(["release", "targets", "--request", "-"])
+        #expect(discovery.tool == "get_release_targets")
+        let prepare = try BlitzReleaseCLI.parse(["release", "prepare", "--request", "-"])
+        let data = Data(#"{"projectId":"shared","releaseTargetId":"native-mac","appId":"123","platform":"MAC_OS"}"#.utf8)
+        let payload = try BlitzReleaseCLI.request(prepare, data: data, id: "id")
+        let parsed = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+        let args = try #require((parsed["params"] as? [String: Any])?["arguments"] as? [String: String])
+        #expect(args["releaseTargetId"] == "native-mac")
+        #expect(args["platform"] == "MAC_OS")
+    }
     @Test func encodesUntrustedArgumentsAsData() throws {
         let call = try BlitzReleaseCLI.parse(["release", "prepare", "--request", "-"])
         let source: [String: Any] = ["appId": "123", "name": "$(touch /tmp/wrong); `x`\nKontaktimport"]

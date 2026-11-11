@@ -179,6 +179,17 @@ private struct InformationFixture: ASCAppInformationService {
     #expect(manager.primaryAppInfoLocalization()?.attributes.name == "Current name")
 }
 
+@MainActor @Test func firstMacPlatformDoesNotBorrowIOSVersionText() async throws {
+    let manager = tabManager()
+    manager.selectReleasePlatform(.macOS)
+    try await manager.refreshAppInformationMetadata(service: InformationFixture(), appId: "app-a",
+                                                     preferredVersionId: cacheVersion.id)
+    #expect(manager.appStoreVersions.count == 1)
+    #expect(manager.selectedVersionId == nil)
+    #expect(manager.localizations.isEmpty)
+    #expect(manager.primaryAppInfoLocalization()?.attributes.name == "Current name")
+}
+
 @Test func previewCacheReusesDiskSeparatesAccountsAndRejectsBadDownloads() async throws {
     let root = temporaryCache()
     defer { try? FileManager.default.removeItem(at: root) }

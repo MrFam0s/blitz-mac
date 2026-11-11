@@ -52,21 +52,34 @@ There is no shell interpolation or generic remote-command execution.
 
 | CLI command | MCP tool | Effect |
 | --- | --- | --- |
+| `targets` | `get_release_targets` | List the explicitly named project's local release targets and Store bindings |
 | `context` | `get_release_context` | Verify the explicitly requested current UI target |
 | `prepare` | `release_prepare` | Read Apple and record a fixed release snapshot |
 | `validate` | `release_validate` | Fresh readiness and unchanged-content checks |
 | `status` | `release_status` | Read-only reconciliation after delay/restart |
 | `submit` | `release_submit` | Guarded release-mode update and review submission |
 
+Start with `blitz-neo release targets --request /absolute/path/targets.json`,
+where the request contains `{"projectId":"the-registered-project-id"}`. Its result
+includes the canonical `projectPath`, `releaseTargets` and
+`requiresReleaseTargetId`. Each target has its stable `releaseTargetId`, native
+`platform`, exact `bundleId` and any verified `storeBinding` (app ID, account
+fingerprint, bundle ID and SKU). This is local configuration, not a fresh Apple
+readiness check or permission to create/submit an app.
+
 `release_prepare` requires `projectId`, canonical `projectPath`, `appId`, exact
 `bundleId`, `platform` (`IOS`/`MAC_OS`), nonsecret `accountKey` (`issuerId:keyId`),
-`versionId`, `buildId`, and `releaseMode` (`MANUAL`/`AFTER_APPROVAL`). There is no
+`versionId`, `buildId`, and `releaseMode` (`MANUAL`/`AFTER_APPROVAL`). Include the
+discovered `releaseTargetId`; it is required when several targets exist. There is no
 fallback to the UI selection or newest build. The exact valid build must already
 be attached, using the existing explicit-ID ASC preparation/upload flow.
 
 The response contains `operationId`, `target`, `mode`, `state`, version/build and
 `confirmationDigest`. `validate` and `status` require `operationId` and original
 `accountKey`. `submit` additionally requires `confirm: true` and that exact digest.
+Later commands may assert `releaseTargetId`, but cannot use it to retarget a saved
+operation. New operation records persist the resolved target ID in their immutable
+`target`; it participates in the confirmation digest.
 The digest identifies reviewed content; it is not user authorization. Preparation
 alone never authorizes submission. The manual UI uses the same backend and can
 attach its explicitly chosen build under the same durable operation lock.
@@ -76,15 +89,53 @@ unconfirmed submission exit nonzero. A successful `status` query can describe an
 unresolved operation and exit zero: callers must inspect `state`/`appleState`.
 `submitted` does not mean published or currently sold on the App Store.
 
+## Projects with more than one release target
+
+Blitz Neo 1.0.69 separates a local project from its native release targets. Each
+target has its own platform, exact bundle ID, scheme/configuration/destination,
+and Store binding. A native iOS and native macOS app may use the same Store app
+ID and SKU; versions, builds, screenshots and release checks still belong to the
+chosen platform. Separate Store products instead keep their distinct app IDs,
+bundle IDs and SKUs. Do not create a second app record just because a second
+native platform is being added to the existing product.
+
+For **Update einreichen** with several configured targets, use the platform named
+in the user's request or the exact target in an authorized handoff. If that scope
+is ambiguous, ask which target. The current dashboard selection never chooses an
+external release implicitly. A request to release both platforms requires separate
+operations and evidence for each; no CLI/MCP call automatically submits all targets.
+For example, a pending iOS review does not select the iOS build for a requested
+macOS release or authorize changing the iOS submission.
+
+The compatible single-target representation has ID `legacy`, including ordinary
+first imports. An omitted target ID can resolve only when exactly one target
+exists. That single target can operate without a saved Store binding after exact
+live account/app/bundle verification. Additional targets must be explicitly bound
+to their intended Store record before release preparation. Old operation records
+without a target ID remain readable; an ambiguous current project cannot silently
+give them a different meaning. Retain the saved operation and reconcile its
+identity before attempting further writes.
+
+Mac Catalyst is a native `MAC_OS` release using
+`generic/platform=macOS,variant=Mac Catalyst`; a native Mac target uses
+`generic/platform=macOS`. An iPhone/iPad app merely available on Apple-silicon Macs
+remains an `IOS` release. Signing caches and generated signing files are separated
+by account, native platform and bundle ID. Old unscoped caches are retained but
+not reused without trustworthy scope; profile-name conflicts stop for
+reconciliation instead of deleting existing profiles.
+
 ## Scope and recovery
 
 UI-bound Store tools now require `expectedTarget` returned by
-`get_release_context(projectId, appId)`. It includes exact project/path/app/bundle/
-platform/account and explicit nullable `versionId`. Missing/mismatched targets
+`get_release_context(projectId, appId, releaseTargetId)`. The target ID is required
+for multi-target projects and must match the current UI target. The returned
+`expectedTarget` includes exact project/path/app/bundle/platform/account, configured
+target ID and explicit nullable `versionId`. Missing/mismatched targets
 fail before navigation or approval; a UI switch aborts subsequent writes.
 An intended version switch returns a new context. `settings.bundleId` requires
 the intended `projectId` instead because the Store app does not exist yet.
-Creation confirmation/reopening keep their separate confirmed-operation checks.
+Creation confirmation/reopening keep their separate confirmed-operation checks;
+new creation handoffs also carry `releaseTargetId` where present.
 
 The independent release tools do not navigate the UI. They use the registered
 project, captured account, fixed version and build, per-app/platform process locks
@@ -94,6 +145,38 @@ A lost write response is uncertain: inspect `status`; never repeat the command
 through raw ASC or create a new operation to bypass the journal. An unresolved
 partial Apple submission requires investigation; the backend does not delete or
 silently adopt another submission.
+
+## Readiness diagnostics
+
+`validate` returns `validation.ready`, `blocking`, `warnings`, `unverified`,
+`checkIDs`, and structured `diagnostics`. Each diagnostic includes `id`, `status`,
+`source` and `reason`, with optional `locale` and `guidance`. Statuses distinguish
+confirmed blockers from checks that could not be verified; an unknown status is
+not reported as an inactive contract. The diagnostic fields contain sanitized
+check results, not raw review data or Apple session material.
+
+The current policy verifies the complete version history for the chosen platform.
+What's New is not applicable to a verified first publication, even if its draft
+number is above 1.0 or an earlier first submission was withdrawn. After a verified
+publication, missing release notes remain blockers for the affected locales.
+History from another native platform does not establish that this platform has
+already published an app. Missing or unknown history stops validation rather than
+guessing first-release status.
+
+Apple Developer Program License, free-app business agreement and paid-app business
+agreement are separate checks. Healthy business agreements do not prove that the
+Developer Program License is current. Web evidence must belong to the exact app
+and provider; unavailable authentication, unresolved teams/providers or unknown
+agreement status remain `unverified` and prevent submission. Where applicable,
+`guidance` names the next check or required login/Account Holder action. Blitz does
+not accept legal agreements automatically. Known Apple agreement blockers remain
+blockers even when a different endpoint appears healthy.
+
+Warnings that remain relevant under strict validation count as blockers. Both
+confirmed blockers and unverified required checks make `ready` false. Refreshing
+authentication or correcting metadata permits revalidation of the same unchanged
+operation; changed content/builds need a newly prepared snapshot. An interrupted
+write still follows the separate status/reconciliation rules above.
 
 Apple readiness validation is not functional software testing. The originating
 chat still verifies source provenance, artifact identity, functionality and true

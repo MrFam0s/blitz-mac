@@ -24,7 +24,7 @@ struct FeedbackView: View {
 
     @ViewBuilder
     private var feedbackContent: some View {
-        let builds = asc.builds
+        let builds = asc.releasePlatformBuilds
         let effectiveBuildId = resolvedBuildId(from: builds)
         let feedback = asc.betaFeedback[effectiveBuildId] ?? []
         let isLoadingFeedback = asc.isFeedbackLoading(for: effectiveBuildId)

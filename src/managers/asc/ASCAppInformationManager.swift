@@ -75,7 +75,7 @@ extension ASCManager {
         return releaseVersions.contains { previous in
             previous.id != selectedVersion.id
                 && previous.attributes.platform?.uppercased() == selectedPlatform
-                && ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize(previous.attributes.appStoreState))
+                && ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize(previous.attributes.effectiveState))
                 && ReleaseAutomationService.compareVersions(
                     previous.attributes.versionString, selectedVersion.attributes.versionString
                 ) == .orderedAscending
@@ -114,9 +114,11 @@ extension ASCManager {
         let fetchedAppInfo = try await appInfoTask
 
         guard projectRevision == revision, !Task.isCancelled else { throw CancellationError() }
+        let platform = configuredReleasePlatform ?? ASCReleaseStatus.inferredPlatform(from: versions)
+        let candidates = platform.map { ASCReleaseStatus.versions(versions, for: $0) } ?? []
         let resolvedVersionId = [preferredVersionId, selectedVersionId].compactMap { $0 }
-            .first(where: { id in versions.contains { $0.id == id } })
-            ?? ASCReleaseStatus.defaultSelectedVersion(for: versions)?.id
+            .first(where: { id in candidates.contains { $0.id == id } })
+            ?? ASCReleaseStatus.defaultSelectedVersion(for: candidates)?.id
         async let infoLocalizationsTask = service.fetchAppInfoLocalizations(appInfoId: fetchedAppInfo.id)
 
         let versionLocalizations: [ASCVersionLocalization]

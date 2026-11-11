@@ -9,6 +9,8 @@ extension ASCManager {
         let failedFields: Set<String>
         let cacheDate: Date?
         let bundleId: String?
+        let platform: ProjectPlatform?
+        let releaseTargetId: String?
         let app: ASCApp?
         let appStoreVersions: [ASCAppStoreVersion]
         let localizations: [ASCVersionLocalization]
@@ -67,6 +69,8 @@ extension ASCManager {
             failedFields = manager.overviewFailedFields
             cacheDate = manager.overviewCacheDate
             bundleId = Self.normalizedBundleId(manager.app?.bundleId)
+            platform = manager.releasePlatform
+            releaseTargetId = manager.loadedReleaseTargetId
             app = manager.app
             appStoreVersions = manager.appStoreVersions
             localizations = manager.localizations
@@ -171,6 +175,8 @@ extension ASCManager {
             manager.overviewResolvedFields = resolvedFields
             manager.overviewFailedFields = failedFields
             manager.overviewCacheDate = cacheDate
+            manager.releasePlatform = platform
+            manager.loadedReleaseTargetId = releaseTargetId
             manager.overviewReadinessLoadingFields = loadedTabs.contains(.app)
                 ? [] : ASCManager.overviewAllFields.subtracting(resolvedFields)
         }
@@ -211,15 +217,19 @@ extension ASCManager {
         refreshAppIconStatusIfNeeded(for: projectId)
     }
 
-    func prepareForProjectSwitch(to projectId: String, bundleId: String?) {
-        if loadedProjectId == projectId,
+    func prepareForProjectSwitch(to projectId: String, bundleId: String?, force: Bool = false) {
+        let metadata = ProjectStorage().readMetadata(projectId: projectId)
+        let platform = metadata?.resolvedPlatform
+        let targetId = metadata?.selectedReleaseTarget?.id
+        if !force, loadedProjectId == projectId, loadedReleaseTargetId == targetId,
+           configuredReleasePlatform == platform,
            app?.bundleId == bundleId, app != nil { return }
-        let platform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform
-        defer { releasePlatform = platform }
+        defer { releasePlatform = platform; loadedReleaseTargetId = targetId }
         cacheCurrentProjectSnapshot()
         resetProjectData(preserveCredentials: true)
 
         if let snapshot = projectSnapshots[projectId], snapshot.matches(bundleId: bundleId),
+           snapshot.platform == platform, snapshot.releaseTargetId == targetId,
            snapshot.accountKey == DashboardSummaryStore.accountKey(for: credentials) {
             snapshot.apply(to: self)
         } else {
@@ -246,7 +256,11 @@ extension ASCManager {
 
     func loadCredentials(for projectId: String, bundleId: String?) async {
         let bundle = bundleId?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if loadedProjectId != projectId {
+        let selectedTarget = ProjectStorage().readMetadata(projectId: projectId)?.selectedReleaseTarget
+        // An old view task must not pair its captured bundle with a newly
+        // selected target in the same local project.
+        if let selectedTarget, selectedTarget.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines) != bundle { return }
+        if loadedProjectId != projectId || loadedReleaseTargetId != selectedTarget?.id {
             prepareForProjectSwitch(to: projectId, bundleId: bundle)
         }
         loadStoredCredentialsIfNeeded()
@@ -254,9 +268,16 @@ extension ASCManager {
         if let bundle, app != nil, app?.bundleId != bundle {
             resetProjectData(preserveCredentials: true)
             loadedProjectId = projectId
+            loadedReleaseTargetId = selectedTarget?.id
         }
         if let platform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform {
             releasePlatform = platform
+        }
+        if let binding = selectedTarget?.storeBinding,
+           binding.accountKey != DashboardSummaryStore.accountKey(for: credentials) {
+            app = nil
+            credentialsError = "Dieses Veröffentlichungsziel gehört zu einem anderen App-Store-Connect-Konto. Bitte das hinterlegte Konto verwenden."
+            return
         }
         let revision = projectRevision
         credentialsError = nil
@@ -264,12 +285,14 @@ extension ASCManager {
            let account = DashboardSummaryStore.accountKey(for: credentials) {
             restoringCache = true
             isLoadingApp = true
-            let saved = await overviewCache.load(account: account, bundle: bundle)
+            let saved = await overviewCache.load(account: account, bundle: bundle, platform: releasePlatform)
             guard projectRevision == revision else { return }
             restoringCache = false
             isLoadingApp = false
             guard !Task.isCancelled else { return }
-            if let saved { saved.apply(to: self) }
+            if let saved, selectedTarget?.storeBinding == nil || selectedTarget?.storeBinding?.appId == saved.app.id {
+                saved.apply(to: self)
+            }
             isLoadingApp = false
         }
         refreshAppIconStatusIfNeeded(for: projectId)
@@ -287,7 +310,9 @@ extension ASCManager {
         let previousPlatform = loadedProjectId == projectId ? configuredReleasePlatform : nil
         resetProjectData(preserveCredentials: false)
         loadedProjectId = projectId
-        releasePlatform = ProjectStorage().readMetadata(projectId: projectId)?.resolvedPlatform ?? previousPlatform
+        let metadata = ProjectStorage().readMetadata(projectId: projectId)
+        releasePlatform = metadata?.resolvedPlatform ?? previousPlatform
+        loadedReleaseTargetId = metadata?.selectedReleaseTarget?.id
         credentials = creds
         service = AppStoreConnectService(credentials: creds)
         credentialsError = nil
@@ -384,6 +409,7 @@ extension ASCManager {
 
         app = nil
         releasePlatform = nil
+        loadedReleaseTargetId = nil
         isLoadingCredentials = false
         credentialsError = nil
         isLoadingApp = false

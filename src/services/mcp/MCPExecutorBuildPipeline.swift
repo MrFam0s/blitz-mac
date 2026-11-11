@@ -261,6 +261,7 @@ extension MCPExecutor {
                 try await pipeline.setupSigning(
                     projectPath: project.path,
                     bundleId: bundleId,
+                    accountKey: ctx.accountKey,
                     teamId: teamId,
                     ascService: service,
                     platform: projectPlatform,
@@ -268,12 +269,14 @@ extension MCPExecutor {
                     configuration: project.metadata.buildSettings?.configuration,
                     onProgress: { msg in
                         Task { @MainActor in
+                            guard Self.releaseApprovalTargetMatches(appStateRef) else { return }
                             appStateRef.ascManager.buildPipelineMessage = msg
                         }
                     }
                 )
             }
 
+            try await MCPMutationScope.checkBeforeWrite()
             if !result.teamId.isEmpty {
                 await MainActor.run {
                     let storage = ProjectStorage()
@@ -284,6 +287,7 @@ extension MCPExecutor {
             }
 
             await MainActor.run {
+                guard Self.releaseApprovalTargetMatches(appState) else { return }
                 appState.ascManager.buildPipelinePhase = .idle
                 appState.ascManager.buildPipelineMessage = ""
             }
@@ -302,6 +306,7 @@ extension MCPExecutor {
             return mcpJSON(resultDict)
         } catch {
             await MainActor.run {
+                guard Self.releaseApprovalTargetMatches(appState) else { return }
                 appState.ascManager.buildPipelinePhase = .idle
                 appState.ascManager.buildPipelineMessage = ""
             }
@@ -318,6 +323,7 @@ extension MCPExecutor {
         let teamID: String
         let appID: String
         let platform: ProjectPlatform
+        let releaseTargetID: String
         let version: ASCAppStoreVersion?
         let selectedVersionID: String?
         let revision: UUID
@@ -340,9 +346,14 @@ extension MCPExecutor {
                 throw BuildArtifactMetadata.ValidationError(message: "Another build pipeline operation is already running for this project.")
             }
             let metadata = ProjectStorage().readMetadata(projectId: project.id) ?? project.metadata
-            guard let bundleID = metadata.bundleIdentifier, bundleID == app.bundleId else {
+            guard let configured = metadata.selectedReleaseTarget,
+                  configured.id == project.selectedReleaseTarget?.id,
+                  let bundleID = configured.bundleIdentifier, bundleID == app.bundleId else {
                 throw BuildArtifactMetadata.ValidationError(message: "The project's Bundle ID does not match the loaded App Store app.")
             }
+            let registeredProject = Project(id: project.id, metadata: metadata, path: project.path)
+            _ = try RegisteredReleaseTarget.resolve(project: registeredProject, releaseTargetID: configured.id,
+                appID: app.id, bundleID: bundleID, platform: configured.platform.ascPlatformValue, accountKey: accountKey)
             let teamID = metadata.teamId ?? ""
             guard !needsTeamID || !teamID.isEmpty else {
                 throw BuildArtifactMetadata.ValidationError(message: "No team ID is set. Run app_store_setup_signing first.")
@@ -362,8 +373,8 @@ extension MCPExecutor {
             Self.pipelineOperations[key] = operation
             asc.buildPipelinePhase = needsTeamID ? .archiving : .uploading
             asc.buildPipelineMessage = "Validating build inputs…"
-            return PipelineTarget(operationID: operationID, project: project, bundleID: bundleID, teamID: teamID,
-                                  appID: app.id, platform: project.platform, version: version,
+            return PipelineTarget(operationID: operationID, project: registeredProject, bundleID: bundleID, teamID: teamID,
+                                  appID: app.id, platform: configured.platform, releaseTargetID: configured.id, version: version,
                                   selectedVersionID: asc.selectedVersion?.id, revision: asc.projectRevision,
                                   accountKey: accountKey, credentialRevision: asc.credentialActivationRevision,
                                   credentials: credentials, service: service)
@@ -374,6 +385,9 @@ extension MCPExecutor {
         let asc = appState.ascManager
         return Self.pipelineOperations[ObjectIdentifier(appState)]?.operationID == target.operationID
             && appState.activeProject?.id == target.project.id
+            && appState.activeProject?.selectedReleaseTarget?.id == target.releaseTargetID
+            && (asc.loadedReleaseTargetId == target.releaseTargetID
+                || (asc.loadedReleaseTargetId == nil && target.releaseTargetID == "legacy" && target.project.releaseTargets.count == 1))
             && asc.loadedProjectId == target.project.id && asc.app?.id == target.appID
             && asc.app?.bundleId == target.bundleID && asc.projectRevision == target.revision
             && asc.selectedVersion?.id == target.selectedVersionID
@@ -438,8 +452,9 @@ extension MCPExecutor {
         do {
             try await requireCurrentPipelineTarget(target)
             let result = try await BuildPipelineService().buildIPA(
-                projectPath: target.project.path, bundleId: target.bundleID, teamId: target.teamID,
+                projectPath: target.project.path, bundleId: target.bundleID, accountKey: target.accountKey, teamId: target.teamID,
                 scheme: scheme, configuration: configuration, platform: target.platform,
+                destination: target.project.selectedReleaseTarget?.buildSettings?.destination,
                 onProgress: { message in
                     Task { @MainActor in
                         guard Self.pipelineTargetMatches(target, appState: appStateRef) else { return }

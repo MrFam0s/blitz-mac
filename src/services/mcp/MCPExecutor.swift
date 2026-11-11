@@ -34,9 +34,12 @@ struct MCPReleaseRequestTarget: Equatable, Sendable {
     let credentialRevision: Int
     let accountKey: String?
     let selectedVersionID: String?
+    var releaseTargetID: String? = nil
+    var releaseTargetCount: Int = 1
 
     func matches(_ current: Self) -> Bool {
         projectID == current.projectID && projectPath == current.projectPath
+            && releaseTargetID == current.releaseTargetID && releaseTargetCount == current.releaseTargetCount
             && bundleID == current.bundleID && platform == current.platform
             && projectRevision == current.projectRevision
             && credentialRevision == current.credentialRevision && accountKey == current.accountKey
@@ -48,6 +51,7 @@ struct MCPReleaseRequestTarget: Equatable, Sendable {
     /// their own verified transition; every other request still matches version.
     func matchesOwner(_ current: Self) -> Bool {
         projectID == current.projectID && projectPath == current.projectPath
+            && releaseTargetID == current.releaseTargetID && releaseTargetCount == current.releaseTargetCount
             && bundleID == current.bundleID && platform == current.platform && appID == current.appID
             && projectRevision == current.projectRevision && credentialRevision == current.credentialRevision
             && accountKey == current.accountKey
@@ -65,7 +69,9 @@ struct MCPReleaseRequestTarget: Equatable, Sendable {
             projectRevision: manager.projectRevision,
             credentialRevision: manager.credentialActivationRevision,
             accountKey: DashboardSummaryStore.accountKey(for: manager.credentials),
-            selectedVersionID: manager.selectedVersionId
+            selectedVersionID: manager.selectedVersionId,
+            releaseTargetID: project?.metadata.selectedReleaseTarget?.id,
+            releaseTargetCount: project?.metadata.resolvedReleaseTargets.count ?? 0
         )
     }
 }
@@ -425,6 +431,8 @@ actor MCPExecutor {
             return try await executeGetTabState(arguments)
         case "get_release_context":
             return await executeGetReleaseContext(arguments)
+        case "get_release_targets":
+            return try await executeGetReleaseTargets(arguments)
         case "release_prepare", "release_validate", "release_status", "release_submit":
             return try await executeReleaseWorkflow(name: name, arguments: arguments)
 
@@ -575,39 +583,38 @@ actor MCPExecutor {
         let project: Project
         let bundleId: String
         let teamId: String
+        let accountKey: String
         let service: AppStoreConnectService
     }
 
     /// Resolve and validate bundle ID + ASC service for build pipeline tools.
     /// Returns `(context, nil)` on success or `(nil, errorResponse)` on failure.
     func requireBuildContext(needsTeamId: Bool = false) async -> (BuildContext?, [String: Any]?) {
-        guard let project = await MainActor.run(body: { appState.activeProject }) else {
-            return (nil, mcpText("Error: no active project."))
-        }
-        guard let service = await MainActor.run(body: { appState.ascManager.service }) else {
-            return (nil, mcpText("Error: ASC credentials not configured."))
-        }
-        let bundleId = await MainActor.run { () -> String? in
-            ProjectStorage().readMetadata(projectId: project.id)?.bundleIdentifier
-        }
-        guard let bundleId, !bundleId.isEmpty else {
-            return (nil, mcpText(
-                "Error: no bundle identifier set. Use asc_fill_form tab=settings.bundleId to set it first."
-            ))
-        }
-        let ascBundleId = await MainActor.run { appState.ascManager.app?.bundleId }
-        if let ascBundleId, !ascBundleId.isEmpty, ascBundleId != bundleId {
-            return (
-                nil,
-                mcpText("Error: bundle ID mismatch. Project has '\(bundleId)' but ASC app uses '\(ascBundleId)'.")
-            )
-        }
-        let teamId = await MainActor.run { () -> String? in
-            ProjectStorage().readMetadata(projectId: project.id)?.teamId
-        }
-        if needsTeamId, (teamId == nil || teamId?.isEmpty == true) {
-            return (nil, mcpText("Error: no team ID set. Run app_store_setup_signing first."))
-        }
-        return (BuildContext(project: project, bundleId: bundleId, teamId: teamId ?? "", service: service), nil)
+        do {
+            let context = try await MainActor.run { () throws -> BuildContext in
+                try MCPMutationScope.checkCurrent()
+                let manager = appState.ascManager
+                guard let active = appState.activeProject, manager.loadedProjectId == active.id,
+                      let app = manager.app, let service = manager.service,
+                      let accountKey = DashboardSummaryStore.accountKey(for: manager.credentials) else {
+                    throw MCPBoundRequestError.targetChanged
+                }
+                let metadata = ProjectStorage().readMetadata(projectId: active.id) ?? active.metadata
+                let project = Project(id: active.id, metadata: metadata, path: active.path)
+                guard let selected = metadata.selectedReleaseTarget,
+                      selected.id == active.selectedReleaseTarget?.id,
+                      let bundleID = selected.bundleIdentifier, bundleID == app.bundleId else {
+                    throw MCPBoundRequestError.targetChanged
+                }
+                _ = try RegisteredReleaseTarget.resolve(project: project, releaseTargetID: selected.id,
+                    appID: app.id, bundleID: bundleID, platform: selected.platform.ascPlatformValue, accountKey: accountKey)
+                let teamID = metadata.teamId ?? ""
+                guard !needsTeamId || !teamID.isEmpty else {
+                    throw BuildArtifactMetadata.ValidationError(message: "No team ID is set. Run app_store_setup_signing first.")
+                }
+                return BuildContext(project: project, bundleId: bundleID, teamId: teamID, accountKey: accountKey, service: service)
+            }
+            return (context, nil)
+        } catch { return (nil, mcpText("Error: \(error.localizedDescription)")) }
     }
 }

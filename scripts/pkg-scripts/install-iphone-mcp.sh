@@ -22,6 +22,7 @@ tar -xzf "$PACKAGE" -C "$STAGED_PACKAGE" --strip-components=1
 import fs from 'node:fs';
 const pkg=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 if(pkg.blitzMaintenance?.upstreamCommit!=='3259f756279cd8cb6bc507b46369111fb5672fa2') process.exit(1);
+if(JSON.stringify(pkg.allowScripts)!==JSON.stringify({'unix-dgram@2.0.7':true})) process.exit(1);
 JS
 # Global `npm install` can re-resolve the published dependency ranges. Install
 # the staged application with `ci` so the shipped lockfile is mandatory.
@@ -29,7 +30,8 @@ JS
     cd "$STAGED_PACKAGE"
     export PATH="$PREFIX/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     "$NPM" ci --omit=dev --ignore-scripts --no-audit --no-fund
-    "$NPM" rebuild unix-dgram --no-audit --no-fund
+    "$NPM" rebuild unix-dgram --strict-allow-scripts --no-audit --no-fund
+    "$NODE" -e "require('unix-dgram')"
 )
 "$NODE" --input-type=module - "$STAGED_PACKAGE/dist/index.js" <<'JS'
 import {pathToFileURL} from 'node:url';

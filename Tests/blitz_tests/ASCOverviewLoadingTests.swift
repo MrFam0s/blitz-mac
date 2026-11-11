@@ -180,11 +180,11 @@ private func overviewManager() -> ASCManager {
     manager.overviewResolvedFields = ASCManager.overviewAllFields
     let date = Date()
     await cache.save(ASCOverviewCacheEntry(manager: manager, savedAt: date), account: "account-a")
-    let loaded = await cache.load(account: "account-a", bundle: listingApp.bundleId)
+    let loaded = await cache.load(account: "account-a", bundle: listingApp.bundleId, platform: .iOS)
     #expect(loaded?.localizations.first?.attributes.description == "Saved description")
-    #expect(await cache.load(account: "account-b", bundle: listingApp.bundleId) == nil)
-    #expect(await cache.load(account: "account-a", bundle: "wrong.bundle") == nil)
-    #expect(await cache.load(account: "account-a", bundle: listingApp.bundleId,
+    #expect(await cache.load(account: "account-b", bundle: listingApp.bundleId, platform: .iOS) == nil)
+    #expect(await cache.load(account: "account-a", bundle: "wrong.bundle", platform: .iOS) == nil)
+    #expect(await cache.load(account: "account-a", bundle: listingApp.bundleId, platform: .iOS,
                              now: date.addingTimeInterval(ASCOverviewCache.maximumAge + 1)) == nil)
     let file = try #require(FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).first)
     let bytes = try String(contentsOf: file, encoding: .utf8)
@@ -197,7 +197,7 @@ private func overviewManager() -> ASCManager {
     #expect(restored.shouldRefreshTabCache(.app))
     #expect(restored.overviewReadinessLoadingFields.contains("Review Contact Email"))
     try Data("broken cache".utf8).write(to: file)
-    #expect(await cache.load(account: "account-a", bundle: listingApp.bundleId) == nil)
+    #expect(await cache.load(account: "account-a", bundle: listingApp.bundleId, platform: .iOS) == nil)
 }
 
 @MainActor

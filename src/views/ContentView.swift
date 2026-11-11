@@ -401,6 +401,7 @@ struct DetailView: View {
         ZStack {
             // Keep MonetizationView alive so creation progress survives tab switches
             MonetizationView(appState: appState)
+                .id("\(appState.activeProjectId ?? ""):\(appState.ascManager.loadedReleaseTargetId ?? ""):\(appState.ascManager.app?.id ?? "")")
                 .opacity(appState.activeTab == .monetization ? 1 : 0)
                 .allowsHitTesting(appState.activeTab == .monetization)
 
@@ -419,12 +420,14 @@ struct DetailView: View {
             AppTabView(appState: appState)
         case .appInformation:
             AppInformationView(appState: appState)
+                .id(appState.ascManager.projectRevision)
         case .screenshots:
             ScreenshotsView(appState: appState)
         case .monetization:
             EmptyView() // handled above
         case .review:
             ReviewView(appState: appState)
+                .id(appState.ascManager.projectRevision)
         case .analytics:
             AnalyticsView(appState: appState)
         case .reviews:

@@ -5,6 +5,7 @@ import Foundation
 /// material, draft edits, image bytes and tester data deliberately stay out.
 struct ASCOverviewCacheEntry: Codable {
     let schema: Int
+    let platform: ProjectPlatform?
     let savedAt: Date
     let app: ASCApp
     let versions: [ASCAppStoreVersion]
@@ -20,7 +21,8 @@ struct ASCOverviewCacheEntry: Codable {
 
     @MainActor
     init(manager: ASCManager, savedAt: Date = Date()) {
-        schema = 1
+        schema = 2
+        platform = manager.releasePlatform
         self.savedAt = savedAt
         app = manager.app!
         versions = manager.appStoreVersions
@@ -40,6 +42,12 @@ struct ASCOverviewCacheEntry: Codable {
 
     @MainActor
     func apply(to manager: ASCManager) {
+        guard manager.releasePlatform == nil || manager.releasePlatform == platform,
+              manager.selectedVersionId == nil || manager.selectedVersionId == selectedVersionId,
+              selectedVersionId == nil || versions.contains(where: {
+                  $0.id == selectedVersionId && $0.attributes.platform == platform?.ascPlatformValue
+              }) else { return }
+        manager.releasePlatform = platform
         manager.app = app
         manager.appStoreVersions = versions
         manager.selectedVersionId = selectedVersionId
@@ -72,19 +80,21 @@ actor ASCOverviewCache {
         self.directory = directory
     }
 
-    private func url(account: String, bundle: String) -> URL {
-        let digest = SHA256.hash(data: Data("\(account)\u{0}\(bundle)".utf8))
+    private func url(account: String, bundle: String, platform: ProjectPlatform?) -> URL {
+        let digest = SHA256.hash(data: Data("\(account)\u{0}\(bundle)\u{0}\(platform?.ascPlatformValue ?? "unknown")".utf8))
             .map { String(format: "%02x", $0) }.joined()
         return directory.appendingPathComponent(digest + ".json")
     }
 
-    func load(account: String, bundle: String, now: Date = Date()) -> ASCOverviewCacheEntry? {
-        let file = url(account: account, bundle: bundle)
+    func load(account: String, bundle: String, platform: ProjectPlatform? = nil,
+              versionId: String? = nil, now: Date = Date()) -> ASCOverviewCacheEntry? {
+        let file = url(account: account, bundle: bundle, platform: platform)
         guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
               size <= Self.maximumEntryBytes,
               let data = try? Data(contentsOf: file),
               let entry = try? JSONDecoder().decode(ASCOverviewCacheEntry.self, from: data),
-              entry.schema == 1, entry.app.bundleId == bundle,
+              entry.schema == 2, entry.app.bundleId == bundle, entry.platform == platform,
+              versionId == nil || entry.selectedVersionId == versionId,
               now.timeIntervalSince(entry.savedAt) >= -60,
               now.timeIntervalSince(entry.savedAt) <= Self.maximumAge else { return nil }
         return entry
@@ -96,7 +106,7 @@ actor ASCOverviewCache {
         do {
             try fm.createDirectory(at: directory, withIntermediateDirectories: true,
                                    attributes: [.posixPermissions: 0o700])
-            let file = url(account: account, bundle: entry.app.bundleId)
+            let file = url(account: account, bundle: entry.app.bundleId, platform: entry.platform)
             try data.write(to: file, options: .atomic)
             try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
             let files = try fm.contentsOfDirectory(at: directory,

@@ -1,5 +1,12 @@
 import Foundation
 
+struct DashboardProjectLink: Codable, Sendable, Equatable, Identifiable {
+    let projectId: String
+    let targetId: String
+    let platform: ProjectPlatform
+    var id: String { projectId + ":" + targetId }
+}
+
 /// A single app row on the Dashboard > My Apps page.
 ///
 /// Unifies two worlds:
@@ -19,12 +26,14 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
     let linkedProjectId: String?
     let status: ASCDashboardProjectStatus?
     let iconURL: URL?
+    var projectLinks: [DashboardProjectLink]? = nil
 
     static func asc(
         app: ASCApp,
         status: ASCDashboardProjectStatus?,
         linkedProjectId: String?,
-        iconURL: URL?
+        iconURL: URL?,
+        projectLinks: [DashboardProjectLink]? = nil
     ) -> DashboardAppRow {
         DashboardAppRow(
             id: app.bundleId,
@@ -34,20 +43,23 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
             ascAppId: app.id,
             linkedProjectId: linkedProjectId,
             status: status,
-            iconURL: iconURL
+            iconURL: iconURL,
+            projectLinks: projectLinks
         )
     }
 
-    static func localOnly(project: Project) -> DashboardAppRow {
-        DashboardAppRow(
-            id: "local:\(project.id)",
-            bundleId: project.metadata.bundleIdentifier,
-            name: project.name,
+    static func localOnly(project: Project, target: ProjectReleaseTarget? = nil) -> DashboardAppRow {
+        let target = target ?? project.selectedReleaseTarget
+        return DashboardAppRow(
+            id: "local:\(project.id)" + (project.releaseTargets.count > 1 ? ":\(target?.id ?? "")" : ""),
+            bundleId: target?.bundleIdentifier ?? project.metadata.bundleIdentifier,
+            name: project.name + (project.releaseTargets.count > 1 ? " · \(target?.displayName ?? "")" : ""),
             source: .localOnly,
             ascAppId: nil,
             linkedProjectId: project.id,
             status: nil,
-            iconURL: nil
+            iconURL: nil,
+            projectLinks: target.map { [DashboardProjectLink(projectId: project.id, targetId: $0.id, platform: $0.platform)] }
         )
     }
 }
@@ -424,35 +436,31 @@ final class DashboardSummaryStore {
         projectStatuses: [String: ASCDashboardProjectStatus],
         iconURLs: [String: URL]
     ) -> [DashboardAppRow] {
-        var projectsByBundleId: [String: Project] = [:]
-        for project in projects {
-            if let bundleId = project.metadata.bundleIdentifier?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-               !bundleId.isEmpty {
-                projectsByBundleId[bundleId] = project
-            }
-        }
-
-        var linkedBundleIds: Set<String> = []
+        var linkedTargetIds: Set<String> = []
         let ascRows = ascApps.map { app in
-            let linkedProjectId = projectsByBundleId[app.bundleId]?.id
-            if linkedProjectId != nil {
-                linkedBundleIds.insert(app.bundleId)
+            let links = projects.sorted { $0.id < $1.id }.flatMap { project in
+                project.releaseTargets.filter { target in
+                    guard target.bundleIdentifier == app.bundleId else { return false }
+                    guard let binding = target.storeBinding else { return true }
+                    return binding.appId == app.id && binding.accountKey == activeAccountKey()
+                }.map { DashboardProjectLink(projectId: project.id, targetId: $0.id, platform: $0.platform) }
             }
+            linkedTargetIds.formUnion(links.map(\.id))
             return DashboardAppRow.asc(
                 app: app,
                 status: projectStatuses[app.bundleId],
-                linkedProjectId: linkedProjectId,
-                iconURL: iconURLs[app.bundleId]
+                linkedProjectId: links.first?.projectId,
+                iconURL: iconURLs[app.bundleId],
+                projectLinks: links
             )
         }
 
         var localOnlyRows: [DashboardAppRow] = []
         for project in projects {
-            let bundleId = project.metadata.bundleIdentifier?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if bundleId.isEmpty || !linkedBundleIds.contains(bundleId) {
-                localOnlyRows.append(DashboardAppRow.localOnly(project: project))
+            for target in project.releaseTargets {
+                if !linkedTargetIds.contains(project.id + ":" + target.id) {
+                    localOnlyRows.append(DashboardAppRow.localOnly(project: project, target: target))
+                }
             }
         }
 

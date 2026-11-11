@@ -15,6 +15,20 @@ and checksum; the installer uses `npm ci --omit=dev` in a staging directory
 and builds the required native addon before replacing the installed
 package and retains a backup. Never replace it with `@latest` during an update.
 
+The build uses `BLITZ_NODE_BIN` when explicitly supplied, otherwise the installed
+Blitz Node runtime, and only then the normal `PATH`. Use the supported Node 22 /
+npm 10 toolchain for packaging. npm 12 removes `npm-shrinkwrap.json` from packed
+archives even when listed in `files`, so the builder rejects npm 12 and newer
+rather than shipping an unlocked dependency tree.
+
+The generated package also records an exact `allowScripts` entry for
+`unix-dgram@2.0.7`. Build and installation keep dependency lifecycle scripts
+disabled during `npm ci`, then rebuild only this addon. Both verify that Node
+can load `unix-dgram` before packaging or replacing the existing installation.
+No global npm policy is changed. The stdio startup test reports an early
+process exit with bounded diagnostics instead of hiding a missing native addon
+behind a timeout.
+
 The overlay creates one private IDB companion socket per selected simulator,
 without global discovery/cache or `idb kill`. CLI exit status acknowledges each
 input; requests are serialized and bounded, and failed inputs are not replayed.

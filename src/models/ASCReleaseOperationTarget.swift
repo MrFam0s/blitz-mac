@@ -10,9 +10,11 @@ struct ASCReleaseOperationTarget: Equatable {
     let credentialRevision: Int
     let versionId: String?
     let platform: ProjectPlatform?
+    var releaseTargetID: String? = nil
 
     @MainActor func matches(_ manager: ASCManager) -> Bool {
         manager.projectRevision == revision && manager.loadedProjectId == projectId
+            && manager.loadedReleaseTargetId == releaseTargetID
             && manager.app?.id == appId && manager.app?.bundleId == bundleId && (platform == nil || manager.releasePlatform == platform)
             && DashboardSummaryStore.accountKey(for: manager.credentials) == accountKey
             && manager.credentialActivationRevision == credentialRevision

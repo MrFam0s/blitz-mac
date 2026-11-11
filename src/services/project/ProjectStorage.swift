@@ -34,8 +34,11 @@ struct ProjectStorage {
         try repository.readMetadataFromDirectory(directory)
     }
 
-    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?) throws -> BlitzProjectMetadata {
-        try repository.metadataForImport(directory: directory, type: type, platform: platform, selectedBundleID: selectedBundleID)
+    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?,
+                           releaseTargetId: String? = nil, addingReleaseTarget: Bool = false,
+                           selectedBuildSettings: BuildSettings? = nil) throws -> BlitzProjectMetadata {
+        try repository.metadataForImport(directory: directory, type: type, platform: platform, selectedBundleID: selectedBundleID, releaseTargetId: releaseTargetId,
+            addingReleaseTarget: addingReleaseTarget, selectedBuildSettings: selectedBuildSettings)
     }
 
     func writeMetadata(projectId: String, metadata: BlitzProjectMetadata) throws {

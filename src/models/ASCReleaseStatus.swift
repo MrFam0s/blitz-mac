@@ -5,6 +5,7 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
     let isPendingReview: Bool
     let isRejected: Bool
     let storeAvailability: ASCStoreAvailability?
+    var platformSummaries: [String: String]? = nil
 
     var isUnavailableOnStore: Bool { storeAvailability == .unavailable }
 
@@ -26,12 +27,20 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
         // A newer release on one platform must not hide another platform's review.
         let platforms = Set(versions.map { ASCReleaseStatus.normalize($0.attributes.platform) })
         if platforms.count > 1 {
-            let statuses = platforms.map { platform in
-                ASCDashboardProjectStatus(
+            let byPlatform = Dictionary(uniqueKeysWithValues: platforms.map { platform in
+                (platform, ASCDashboardProjectStatus(
                     versions: versions.filter { ASCReleaseStatus.normalize($0.attributes.platform) == platform },
                     availability: availability
-                )
+                ))
+            })
+            platformSummaries = byPlatform.mapValues { status in
+                if status.isRejected { return "Abgelehnt" }
+                if status.isPendingReview { return "In Prüfung" }
+                if status.isLiveOnStore { return availability == .available ? "Live" : "Freigegeben" }
+                if status.isUnavailableOnStore { return "Nicht im Store" }
+                return "Nicht veröffentlicht"
             }
+            let statuses = Array(byPlatform.values)
             isLiveOnStore = statuses.contains { $0.isLiveOnStore }
             isPendingReview = statuses.contains { $0.isPendingReview }
             isRejected = statuses.contains { $0.isRejected }

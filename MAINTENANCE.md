@@ -2,6 +2,67 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.69 — platform-specific release targets and readiness corrections
+
+Projects can now hold explicit iOS and macOS release targets. Each target keeps
+its exact bundle ID, platform, build scheme/configuration/destination and verified
+Store binding. A shared Store record retains the same app ID, bundle ID and SKU;
+separate records retain separate identities. Existing records are not merged.
+Native macOS and Mac Catalyst destinations are distinguished; an unresolved
+Xcode identity must be supplied explicitly instead of borrowing another target's
+bundle ID. Existing single-target projects continue to work without migration.
+
+The target picker, import/setup flow, dashboard links, forms, screenshots,
+TestFlight builds, caches and in-flight write checks use the selected target.
+Adding or verifying a local binding does not create or submit anything at Apple.
+The CLI adds `release targets`; multi-target preparation requires an explicit
+`releaseTargetId`. Operations freeze that identity, and signed profiles are scoped
+to account, platform and bundle ID. Both managed skills explain shared versus
+separate records and independent platform releases.
+
+Readiness now determines first publication from complete, fresh platform history,
+not a hard-coded version number. This removes the spurious first-release
+What's New warning for versions such as 1.2.0 while retaining changelog checks for
+actual updates. The read-only `release.readiness` helper uses one app/provider-bound
+web session and reports Business agreements separately from the Developer Program
+license. A fresh, unambiguous Developer Portal team match is required; unrelated
+single-team or prefix fallbacks cannot provide a false positive. Unknown evidence
+stays blocked with a specific diagnostic and recovery guidance. Real Apple errors,
+changed content, incorrect builds and uncertain submissions remain blocked.
+
+Validation (2026-11-11): 517 Swift tests, 43 offline creation/recovery Python
+checks, the full ASC package, helper/CLI compatibility, validate and exact-team
+regressions pass. The ASC upstream Xcode Cloud output test had a synchronous-pipe
+deadlock on this Mac; a drift-checked, test-only Go overlay reuses its existing
+concurrent capture helper. Four generator regressions pass; no production ASC
+source is changed by that workaround.
+
+The signed native release passes, including 18 iPhone MCP JavaScript tests, seven
+HID Python tests and six atomic installer checks. A global npm 12 upgrade exposed
+both a skipped native addon build and omitted shrinkwrap in its tarball. Packaging
+now selects the existing supported Blitz Node 22/npm 10 runtime, keeps the exact
+native-addon lifecycle policy, verifies the binding, and rejects incompatible
+packaging tools. The startup test reports early process failures directly.
+
+Live read-only verification of EntryCheck Mobile 1.2.0/build 8 confirms that
+What's New is not applicable to this first publication and both Business
+agreements are active. Developer Program license evidence remains unverified
+because its Portal team could not be unambiguously bound; this is reported
+separately, without mislabeling the Business contracts or suppressing the unknown.
+No app was created, uploaded or submitted during verification.
+
+ASC remains pinned to 6.6.1. No cloud workflow or global npm configuration changed.
+
+Version 1.0.69/build 75 is installed under Applications with the existing
+Developer ID requirement; build 74 is retained for rollback. The installed target
+menu, both Store-binding modes, macOS/iOS overview and Mac-only TestFlight list
+were inspected without saving project targets or changing Apple records. Two
+remaining iOS-only web links now open the selected app's neutral Store page.
+The installed CLI exposes `targets` and resolves the existing EntryCheck project
+correctly. Startup synchronizes all 28 routing prefixes and 56 skill copies across
+14 registered projects. Opening a project can also apply the pre-existing exact
+legacy TestFlight-example migration; authored project content is otherwise kept.
+
 ## 1.0.68 — project shortcuts for updates and app creation
 
 Registered app projects now receive a small managed prefix in `AGENTS.md` and

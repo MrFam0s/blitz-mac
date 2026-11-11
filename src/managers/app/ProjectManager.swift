@@ -7,6 +7,29 @@ final class ProjectManager {
     var isLoading = false
     private var hasTrackedInventory = false
 
+    func selectReleaseTarget(projectId: String, targetId: String) async throws {
+        let storage = ProjectStorage()
+        guard var metadata = storage.readMetadata(projectId: projectId) else { throw ProjectReleaseTargetError.missing }
+        try metadata.selectReleaseTarget(id: targetId)
+        try storage.writeMetadata(projectId: projectId, metadata: metadata)
+        await loadProjects()
+    }
+
+    func saveReleaseTarget(projectId: String, target: ProjectReleaseTarget, select: Bool = true,
+                           verifiedBindings: [String: ProjectStoreBinding] = [:]) async throws {
+        let storage = ProjectStorage()
+        guard var metadata = storage.readMetadata(projectId: projectId) else { throw ProjectReleaseTargetError.missing }
+        for (id, binding) in verifiedBindings {
+            guard var existing = metadata.releaseTarget(id: id),
+                  existing.bundleIdentifier == binding.bundleIdentifier else { throw ProjectReleaseTargetError.invalid }
+            existing.storeBinding = binding
+            try metadata.upsertReleaseTarget(existing, select: false)
+        }
+        try metadata.upsertReleaseTarget(target, select: select)
+        try storage.writeMetadata(projectId: projectId, metadata: metadata)
+        await loadProjects()
+    }
+
     func loadProjects() async {
         isLoading = true
         defer { isLoading = false }

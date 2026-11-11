@@ -37,6 +37,20 @@ struct AppCreationIdentity: Codable, Equatable {
         }
     }
 
+    /// A new-record operation belongs to one selected, unbound local target.
+    /// Before registration the confirmed form may replace a placeholder bundle;
+    /// once registered, that exact spelling must remain unchanged.
+    func validateProjectTarget(_ metadata: BlitzProjectMetadata, targetId: String?, registrationComplete: Bool) throws -> String {
+        try metadata.validateReleaseTargetConfiguration()
+        guard let target = metadata.selectedReleaseTarget,
+              targetId == nil || target.id == targetId,
+              target.platform == platform, target.storeBinding == nil,
+              !registrationComplete || target.bundleIdentifier == bundleId else {
+            throw InvalidIdentity(message: "Das bestätigte Veröffentlichungsziel hat sich geändert oder besitzt bereits eine Store-Zuordnung. Bitte die ursprüngliche Identität erneut prüfen.")
+        }
+        return target.id
+    }
+
     func verify(app: ASCApp, versions: [ASCAppStoreVersion]) throws {
         try validate()
         guard app.bundleId == bundleId else { throw InvalidIdentity(message: "Apple returned bundle ID ‘\(app.bundleId)’ instead of ‘\(bundleId)’. Confirm the actual registered identifier before continuing.") }

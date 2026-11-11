@@ -80,7 +80,9 @@ struct ProjectRepository {
     }
 
     /// Re-import only changes choices visible in the import form, never the saved name or unrelated settings.
-    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?) throws -> BlitzProjectMetadata {
+    func metadataForImport(directory: URL, type: ProjectType, platform: ProjectPlatform, selectedBundleID: String?,
+                           releaseTargetId: String? = nil, addingReleaseTarget: Bool = false,
+                           selectedBuildSettings: BuildSettings? = nil) throws -> BlitzProjectMetadata {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw ProjectSetupService.SetupError(message: "Select an existing project folder to import.")
@@ -89,9 +91,22 @@ struct ProjectRepository {
             name: directory.lastPathComponent, type: type, platform: platform, createdAt: Date()
         )
         metadata.type = type
-        metadata.platform = platform
-        if let selected = selectedBundleID?.trimmingCharacters(in: .whitespacesAndNewlines), !selected.isEmpty {
-            metadata.bundleIdentifier = selected
+        let selected = selectedBundleID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if addingReleaseTarget {
+            guard let selected, !selected.isEmpty else { throw ProjectReleaseTargetError.invalid }
+            let target = ProjectReleaseTarget(platform: platform, bundleIdentifier: selected,
+                buildSettings: selectedBuildSettings)
+            try metadata.upsertReleaseTarget(target)
+        } else {
+            let target = try metadata.resolveReleaseTarget(id: releaseTargetId)
+            try metadata.selectReleaseTarget(id: target.id)
+            if let binding = target.storeBinding,
+               let selected, !selected.isEmpty, selected != binding.bundleIdentifier {
+                throw ProjectReleaseTargetError.boundIdentity
+            }
+            metadata.platform = platform
+            if let selected, !selected.isEmpty { metadata.bundleIdentifier = selected }
+            if let selectedBuildSettings { metadata.buildSettings = selectedBuildSettings }
         }
         metadata.lastOpenedAt = Date()
         return metadataHydrator.hydrate(metadata, projectDirectory: directory).metadata
@@ -108,8 +123,11 @@ struct ProjectRepository {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(metadata)
-        try data.write(to: blitzDir.appendingPathComponent("project.json"))
+        var migrated = metadata
+        migrated.materializeReleaseTargets()
+        try migrated.validateReleaseTargetConfiguration()
+        let data = try encoder.encode(migrated)
+        try data.write(to: blitzDir.appendingPathComponent("project.json"), options: .atomic)
     }
 
     func deleteProject(projectId: String) throws {

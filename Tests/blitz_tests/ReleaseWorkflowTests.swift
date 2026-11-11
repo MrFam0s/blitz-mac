@@ -247,14 +247,19 @@ private func workflowDirectory() -> URL {
 @Test func releaseWorkflowAdapterUsesExplicitReadinessScopeAndRejectsUnverifiedDeepChecks() async throws {
     let target = workflowTarget(workflowDirectory())
     for count in [0, 1] {
-        let adapter = ReleaseWorkflowASCAdapter(accountKey: "issuer:key", transport: { _, _, _, _ in
-            throw ReleaseWorkflowAPIError.invalidResponse
-        }, cli: { args in
-            #expect(args == ["validate", "--app", "app1", "--version-id", "version1", "--platform", "IOS", "--strict", "--deep", "--output", "json"])
-            return (0, """
-            {"appId":"app1","versionId":"version1","platform":"IOS","summary":{"blocking":0,"warnings":0},"deep":{"summary":{"blocked":0,"unverified":\(count)},"checks":[]},"checks":[]}
-            """, "")
-        }, loadBuild: { _ in throw ReleaseWorkflowAPIError.invalidResponse })
+        let fixture = WorkflowSnapshotFixture()
+        let adapter = ReleaseWorkflowASCAdapter(accountKey: "issuer:key", transport: { try await fixture.response($0,$1,$2,$3) },
+            cli: { _ in throw ReleaseWorkflowAPIError.invalidResponse },
+            loadBuild: { _ in throw ReleaseWorkflowAPIError.invalidResponse }, readinessReport: { requested in
+                #expect(requested == target)
+                let web = ReleaseWebEvidence(appId: target.appID, bundleId: target.bundleID, bindingVerified: true,
+                    bindingReason: "fixture", appleId: "fixture@example.invalid", providerId: "PROVIDER",
+                    programLicense: .init(status: count == 0 ? "passed" : "unverified", reason: "fixture"),
+                    businessFree: .init(status: "passed", reason: "fixture"), businessPaid: .init(status: "passed", reason: "fixture"))
+                return ReleaseReadinessPayload(report: Data("""
+                {"appId":"app1","versionId":"version1","platform":"IOS","summary":{"blocking":0,"warnings":0},"deep":{"summary":{"blocked":0,"unverified":0},"checks":[]},"checks":[]}
+                """.utf8), web: web, exitCode: 0)
+            })
         let report = try await adapter.readiness(target)
         #expect(report.ready == (count == 0))
     }

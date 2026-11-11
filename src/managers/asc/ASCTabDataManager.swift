@@ -47,6 +47,15 @@ extension ASCManager {
         do {
             let fetched = try await service.fetchApp(bundleId: bundleId, exactName: exactName)
             guard projectRevision == revision, !Task.isCancelled else { return false }
+            if let projectId = loadedProjectId,
+               let target = ProjectStorage().readMetadata(projectId: projectId)?.selectedReleaseTarget,
+               let binding = target.storeBinding {
+                guard target.id == loadedReleaseTargetId, binding.appId == fetched.id,
+                      binding.bundleIdentifier == fetched.bundleId,
+                      binding.accountKey == DashboardSummaryStore.accountKey(for: credentials) else {
+                    throw ProjectReleaseTargetError.invalid
+                }
+            }
             app = fetched
             credentialsError = nil
             isLoadingApp = false

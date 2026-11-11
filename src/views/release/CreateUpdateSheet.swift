@@ -114,7 +114,8 @@ struct ReleaseAutomationSheet: View {
                 appID: app.id, appName: app.name, bundleID: app.bundleId, platform: project.platform,
                 displayedLiveVersion: ASCReleaseStatus.currentLiveVersion(for: ASCReleaseStatus.versions(versions, for: project.platform))?.attributes.versionString,
                 preparedVersion: prepared,
-                accountKey: DashboardSummaryStore.accountKey(for: appState.ascManager.credentials)
+                accountKey: DashboardSummaryStore.accountKey(for: appState.ascManager.credentials),
+                releaseTargetID: project.selectedReleaseTarget?.id
             )
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {

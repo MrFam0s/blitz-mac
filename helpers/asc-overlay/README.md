@@ -46,12 +46,75 @@ source. Do not replace `ascd` with an ordinary upstream release executable: the
 Swift app requires its protocol adapter. Do not edit the generated staging tree.
 
 ```sh
-bash scripts/build-asc-helper.sh
-cd .build/asc-source
-ASC_BYPASS_KEYCHAIN=1 ASC_TELEMETRY_DISABLED=1 \
-  ASC_CONFIG_PATH=/tmp/blitz-no-auth.json \
-  go test ./internal/asc ./internal/helper
+bash scripts/test-asc-helper.sh
 ```
 
 The helper tests compare CLI output/exit codes across the entire command tree;
 HTTP tests use mocked transport and do not write to App Store Connect.
+
+## Bound release readiness
+
+`release.readiness` is a fixed, read-only protocol operation for an explicit
+app/bundle/version/platform. It uses upstream's `BuildReadinessReport` with
+strict public validation, including deep public IAP and pricing checks. The
+small `internal/cli/validate/blitz_release.go` addition applies the unchanged
+upstream private checks to one web client, after that client has returned the
+exact app ID and case-sensitive bundle ID in the selected provider. It never
+falls back to a different default cache for the individual private checks.
+
+The helper separately reports the current Developer Program License and the
+relevant Free/Paid Applications Business contracts. It clears the cached Portal
+team only in memory and requires a unique exact provider-ID or provider-name
+match in the fresh team list before upstream revalidates that explicit team.
+An unrelated sole team or a name prefix is insufficient for release evidence.
+A missing/expired Portal session, unresolved team, partial history, unclassified
+outstanding agreement or unavailable Business response remains **unverified**.
+An active Business contract alone cannot prove the Program License accepted.
+Known pending agreements and upstream fatal findings remain blocking. No
+agreement acceptance or other Store mutation is performed by this operation.
+Only fixed reason codes and non-secret scope identifiers accompany the normal
+validation report; raw authentication errors and legal-entity data are omitted.
+
+Swift interprets What's New using fresh, completely paginated publication
+history for the exact platform, including removed and replaced releases. It does
+not infer an initial release from a `1.0` version string. It only normalizes the
+upstream warning after that evidence is complete and retains unrelated warnings,
+fatal checks and genuinely unverifiable evidence. Private raw reports remain in
+memory; saved operations contain generated diagnostics and stable check IDs.
+
+Offline coverage includes first publication at 1.2, an update numbered 1.0,
+withdrawn first submissions, removed/replaced history, platform separation,
+incomplete pages, provider mismatch, active Business with unknown Program
+License, current versus older licenses and outstanding contract changes.
+Run `go test ./internal/helper ./internal/cli/validate` in the staged source in
+addition to the transport and CLI compatibility checks above.
+
+## Upstream test-only stdout capture workaround
+
+ASC 6.6.1's `captureXcodeCloudStdout` writes to an `os.Pipe` synchronously
+before draining it. The wide Xcode Cloud table can fill that pipe on macOS and
+deadlock the otherwise unchanged `internal/asc` tests. The existing upstream
+`captureStdout` already drains concurrently and closes both descriptors.
+
+`scripts/prepare-asc-test-overlay.py` verifies both complete helper functions and
+their expected imports, then creates a temporary replacement test file that
+delegates to the existing safe helper. A Go `-overlay` JSON file points only to
+that `_test.go` file. It changes neither the pinned submodule nor the staging
+tree or production binary. Changed upstream helpers/import usage fail closed:
+review or remove the workaround when advancing the ASC pin.
+
+`scripts/test-asc-helper.sh` runs the generator's offline regression tests, builds
+the helper, and applies that test overlay with bounded parallelism (default 2,
+`BLITZ_ASC_TEST_JOBS` accepts 1–4). It includes `internal/asc`, `internal/helper`,
+`internal/cli/validate` and the new `TestBlitzReleaseTeam` web regressions. To
+reuse an existing staging tree without rebuilding:
+
+```sh
+test_overlay_dir="$(mktemp -d)"
+test_overlay="$(python3 scripts/prepare-asc-test-overlay.py \
+  --stage-dir .build/asc-source --output-dir "$test_overlay_dir")"
+# Keep the same isolated ASC_CONFIG_PATH and authentication-free test environment.
+(cd .build/asc-source && go test -p 2 -parallel 2 -count=1 \
+  -overlay "$test_overlay" ./internal/asc)
+rm -rf "$test_overlay_dir"
+```

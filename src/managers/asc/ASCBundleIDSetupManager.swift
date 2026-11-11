@@ -22,6 +22,7 @@ extension ASCManager {
         var identity: AppCreationIdentity
         let tab: AppTab
         var registrationComplete = false
+        var releaseTargetId: String? = nil
         var bundleId: String { identity.bundleId }
     }
 
@@ -83,14 +84,19 @@ extension ASCManager {
     }
 
     @discardableResult
-    func beginPendingBundleIDSetup(identity: AppCreationIdentity, tab: AppTab) throws -> PendingBundleIDSetupContext {
+    func beginPendingBundleIDSetup(identity: AppCreationIdentity, tab: AppTab, requireRegisteredProject: Bool = true) throws -> PendingBundleIDSetupContext {
         try identity.validate()
         guard let projectId = loadedProjectId, let credentials,
               let accountKey = DashboardSummaryStore.accountKey(for: credentials) else {
             throw BundleIDSetupConfirmationError.projectUnavailable
         }
-        let context = PendingBundleIDSetupContext(operationId: UUID(), projectId: projectId, accountKey: accountKey,
+        var context = PendingBundleIDSetupContext(operationId: UUID(), projectId: projectId, accountKey: accountKey,
             expectedIssuerId: credentials.issuerId, expectedKeyId: credentials.keyId, revision: projectRevision, identity: identity, tab: tab)
+        if let metadata = ProjectStorage().readMetadata(projectId: projectId) {
+            context.releaseTargetId = try identity.validateProjectTarget(metadata, targetId: nil, registrationComplete: false)
+        } else if requireRegisteredProject {
+            throw BundleIDSetupConfirmationError.projectUnavailable
+        }
         pendingBundleIDSetup = context
         appCreationFormRequest = nil
         return context
@@ -105,6 +111,13 @@ extension ASCManager {
               pendingBundleIDSetup?.operationId == context.operationId else {
             throw BundleIDSetupConfirmationError.staleOperation
         }
+        if let targetID = context.releaseTargetId {
+            guard let metadata = ProjectStorage().readMetadata(projectId: context.projectId) else {
+                throw BundleIDSetupConfirmationError.staleOperation
+            }
+            _ = try context.identity.validateProjectTarget(metadata, targetId: targetID,
+                registrationComplete: context.registrationComplete)
+        }
     }
 
     func registerBundleIDForCreation(
@@ -113,7 +126,7 @@ extension ASCManager {
         persist: ((String, String) throws -> Void)? = nil
     ) async throws -> BundleIDRegistrationResult {
         guard let creationService = overrideService ?? service else { throw BundleIDSetupConfirmationError.ascServiceNotConfigured }
-        var context = try beginPendingBundleIDSetup(identity: identity, tab: tab)
+        var context = try beginPendingBundleIDSetup(identity: identity, tab: tab, requireRegisteredProject: overrideService == nil)
         var completed = false
         defer {
             if !completed, pendingBundleIDSetup?.operationId == context.operationId { pendingBundleIDSetup = nil }
@@ -162,11 +175,19 @@ extension ASCManager {
     func confirmBundleIDSetupAppCreated(
         bundleId: String? = nil, expectedName: String? = nil, expectedSKU: String? = nil,
         expectedPlatform: String? = nil, expectedLocale: String? = nil,
-        projectId: String? = nil, operationId: String? = nil,
+        projectId: String? = nil, operationId: String? = nil, releaseTargetId: String? = nil,
         using overrideService: (any ASCAppCreationService)? = nil, refreshData: Bool = true
     ) async throws -> ASCApp {
         guard let context = pendingBundleIDSetup, context.registrationComplete else { throw BundleIDSetupConfirmationError.missingBundleId }
         try validateBundleIDSetupContext(context)
+        if let releaseTargetId, releaseTargetId != context.releaseTargetId {
+            throw BundleIDSetupConfirmationError.identityMismatch
+        }
+        if context.releaseTargetId != nil,
+           (ProjectStorage().readMetadata(projectId: context.projectId)?.resolvedReleaseTargets.count ?? 0) > 1,
+           releaseTargetId != context.releaseTargetId {
+            throw BundleIDSetupConfirmationError.identityMismatch
+        }
         for (provided, expected) in [(bundleId, context.identity.bundleId), (expectedName, context.identity.appName),
             (expectedSKU, context.identity.sku), (expectedPlatform, context.identity.platform.rawValue),
             (expectedLocale, context.identity.primaryLocale), (projectId, context.projectId),
@@ -179,11 +200,29 @@ extension ASCManager {
         let versions = try await creationService.fetchAppStoreVersions(appId: fetched.id)
         try validateBundleIDSetupContext(context)
         try context.identity.verify(app: fetched, versions: versions)
+        if let targetID = context.releaseTargetId {
+            let storage = ProjectStorage()
+            guard var metadata = storage.readMetadata(projectId: context.projectId),
+                  var target = metadata.releaseTarget(id: targetID),
+                  target.bundleIdentifier == fetched.bundleId else { throw BundleIDSetupConfirmationError.staleOperation }
+            target.storeBinding = ProjectStoreBinding(appId: fetched.id, accountKey: context.accountKey,
+                sku: fetched.attributes.sku, bundleIdentifier: fetched.bundleId)
+            try metadata.upsertReleaseTarget(target)
+            try storage.writeMetadata(projectId: context.projectId, metadata: metadata)
+        }
         self.app = fetched
         credentialsError = nil
         pendingBundleIDSetup = nil
         resetTabState()
         let confirmedRevision = projectRevision
+        if context.releaseTargetId != nil {
+            await appState?.projectManager.loadProjects()
+            guard loadedProjectId == context.projectId, projectRevision == confirmedRevision,
+                  DashboardSummaryStore.accountKey(for: credentials) == context.accountKey,
+                  ProjectStorage().readMetadata(projectId: context.projectId)?.selectedReleaseTarget?.id == context.releaseTargetId else {
+                throw BundleIDSetupConfirmationError.staleOperation
+            }
+        }
         if refreshData { await fetchTabData(context.tab) }
         guard loadedProjectId == context.projectId, projectRevision == confirmedRevision,
               DashboardSummaryStore.accountKey(for: credentials) == context.accountKey else {

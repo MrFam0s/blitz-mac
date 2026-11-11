@@ -36,19 +36,24 @@ struct ASCManualReleaseRequest {
 
     init(project: Project, captured: ASCReleaseOperationTarget, version: ASCAppStoreVersion, build: ASCBuild) throws {
         guard let accountKey = captured.accountKey, !accountKey.isEmpty,
-              project.id == captured.projectId, project.metadata.bundleIdentifier == captured.bundleId,
-              project.platform == captured.platform, version.id == captured.versionId,
-              version.attributes.platform == project.platform.ascPlatformValue,
+              project.id == captured.projectId,
+              let configured = project.metadata.selectedReleaseTarget,
+              (captured.releaseTargetID == configured.id
+                || (captured.releaseTargetID == nil && configured.id == "legacy" && project.metadata.resolvedReleaseTargets.count == 1)),
+              configured.platform == captured.platform, version.id == captured.versionId,
+              version.attributes.platform == configured.platform.ascPlatformValue,
               build.matchesRelease(appId: captured.appId, versionString: version.attributes.versionString,
-                                   platform: project.platform) else { throw ReleaseWorkflowError.identityChanged }
+                                   platform: configured.platform) else { throw ReleaseWorkflowError.identityChanged }
+        _ = try RegisteredReleaseTarget.resolve(project: project, releaseTargetID: configured.id,
+            appID: captured.appId, bundleID: captured.bundleId, platform: configured.platform.ascPlatformValue, accountKey: accountKey)
         guard let rawMode = version.attributes.releaseType, let mode = ReleaseWorkflowMode(rawValue: rawMode) else {
             throw ASCError.notFound("Die Veröffentlichungsart dieser Version ist nicht eindeutig unterstützt. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen; eine geplante Veröffentlichung wird nicht stillschweigend geändert.")
         }
         self.mode = mode
         self.target = ReleaseWorkflowTarget(projectID: project.id,
             projectPath: URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path,
-            appID: captured.appId, bundleID: captured.bundleId, platform: project.platform.ascPlatformValue,
-            accountKey: accountKey, versionID: version.id, buildID: build.id)
+            appID: captured.appId, bundleID: captured.bundleId, platform: configured.platform.ascPlatformValue,
+            accountKey: accountKey, versionID: version.id, buildID: build.id, releaseTargetID: configured.id)
         try self.target.validate()
     }
 }
@@ -74,15 +79,24 @@ extension ASCManager {
     func selectReleasePlatform(_ platform: ProjectPlatform?) {
         guard configuredReleasePlatform != platform else { return }
         releasePlatform = platform
+        selectedTestFlightBuildId = nil
+        selectedBuildId = nil
+        trackSlots = [:]
+        savedTrackState = [:]
         prepareForVersionSelection(nil, force: true)
         syncSelectedVersion()
+    }
+
+    var releasePlatformBuilds: [ASCBuild] {
+        guard let platform = releasePlatform else { return [] }
+        return builds.filter { $0.preReleaseVersion?.attributes.platform == platform.ascPlatformValue }
     }
 
     func releaseOperationTarget() -> ASCReleaseOperationTarget? {
         guard let app else { return nil }
         return ASCReleaseOperationTarget(revision: projectRevision, projectId: loadedProjectId,
             appId: app.id, bundleId: app.bundleId, accountKey: DashboardSummaryStore.accountKey(for: credentials), credentialRevision: credentialActivationRevision,
-            versionId: selectedVersion?.id, platform: releasePlatform)
+            versionId: selectedVersion?.id, platform: releasePlatform, releaseTargetID: loadedReleaseTargetId)
     }
 
     // MARK: - Version Selection

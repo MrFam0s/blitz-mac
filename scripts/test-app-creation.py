@@ -27,6 +27,17 @@ def identity(**changes):
 
 
 class CreationTests(unittest.TestCase):
+    def test_existing_store_platform_intent_cannot_create_duplicate_record(self):
+        with self.assertRaises(create_app.IdentityError):
+            create_app.build_payload(identity(creationMode="addPlatform"))
+
+    def test_release_target_is_preserved_in_confirmation_not_apple_payload(self):
+        given = identity(creationMode="newStoreApp", releaseTargetId="mac-target")
+        self.assertEqual(create_app.confirmation_arguments(given)["releaseTargetId"], "mac-target")
+        self.assertNotIn("releaseTargetId", json.dumps(create_app.build_payload(given)))
+        with self.assertRaises(create_app.IdentityError):
+            create_app.validate_identity(identity(releaseTargetId=" "))
+
     def test_public_name_is_data_not_code(self):
         for name in ["Bob's Calendar", 'Reader "Plus"', 'Cash $HOME `echo`', 'Path \\ Day', 'Mühlenstein']:
             with self.subTest(name=name):
