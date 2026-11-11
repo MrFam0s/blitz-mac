@@ -101,6 +101,9 @@ private struct DashboardTestFetcher: DashboardFetching {
     var empty = false
     var iconURL: URL? = nil
     var iconFailure = false
+    var availability: ASCStoreAvailability = .available
+    var availabilityFailure = false
+    var versionState = "READY_FOR_SALE"
     func fetchAllApps(appStoreStateFilter: String?) async throws -> [ASCApp] {
         if let failure { throw failure }
         if empty { return [] }
@@ -110,8 +113,12 @@ private struct DashboardTestFetcher: DashboardFetching {
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] {
         if statusFailure { throw URLError(.timedOut) }
         return try JSONDecoder().decode([ASCAppStoreVersion].self, from: Data("""
-        [{"id":"v1","attributes":{"versionString":"1.0","appStoreState":"READY_FOR_SALE","platform":"IOS"}}]
+        [{"id":"v1","attributes":{"versionString":"1.0","appStoreState":"\(versionState)","platform":"IOS"}}]
         """.utf8))
+    }
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability {
+        if availabilityFailure { throw URLError(.timedOut) }
+        return availability
     }
     func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? {
         #expect(dimension == 1024)
@@ -131,6 +138,7 @@ private actor DelayedDashboardFetcher: DashboardFetching {
         return try await DashboardTestFetcher().fetchAllApps(appStoreStateFilter: nil)
     }
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] { [] }
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability { .unavailable }
     func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? { nil }
     func waitForRequest() async { if !requested { await withCheckedContinuation { requestWaiter = $0 } } }
     func finish() { responseWaiter?.resume(); responseWaiter = nil }
@@ -161,7 +169,7 @@ private actor DelayedDashboardFetcher: DashboardFetching {
     {"accountKey":"account","summary":{"liveCount":0,"pendingCount":0,"rejectedCount":0},"projectStatuses":{},"appRows":[]}
     """.utf8).write(to: file)
     let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
-    #expect(store.hasLoadedSummary)
+    #expect(!store.hasLoadedSummary)
     #expect(store.refreshedAt == nil)
     #expect(store.isShowingSavedData)
     #expect(store.shouldRefresh(for: "account"))
@@ -183,4 +191,119 @@ private actor DelayedDashboardFetcher: DashboardFetching {
     await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(iconFailure: true), projects: [], force: true)
     #expect(store.appRows.first?.iconURL == newURL)
     #expect(store.iconRefreshRevision == 2)
+}
+
+@MainActor
+@Test func dashboardRefreshReconcilesRemovalAndRestoredAvailability() async {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(), projects: [])
+    #expect(store.summary.liveCount == 1)
+    // Apple can retain READY_FOR_SALE after removing every territory from sale.
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availability: .unavailable), projects: [], force: true)
+    #expect(store.summary.liveCount == 0)
+    #expect(store.appRows.first?.status?.isUnavailableOnStore == true)
+    #expect(store.appRows.first?.status?.isLiveOnStore == false)
+    #expect(store.loadIssue == nil)
+    let restored = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    #expect(restored.appRows.first?.status?.isUnavailableOnStore == true)
+    #expect(restored.summary.liveCount == 0)
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(), projects: [], force: true)
+    #expect(store.summary.liveCount == 1)
+    #expect(store.appRows.first?.status?.isUnavailableOnStore == false)
+}
+
+@MainActor
+@Test func dashboardAvailabilityFailureDoesNotClaimFreshLiveOrRemoval() async {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availabilityFailure: true), projects: [])
+    #expect(store.appRows.first?.status == nil)
+    #expect(store.unavailableStatusBundleIDs == ["org.example.test"])
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availability: .unavailable), projects: [], force: true)
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availabilityFailure: true), projects: [], force: true)
+    #expect(store.appRows.first?.status?.isUnavailableOnStore == true)
+    #expect(store.summary.liveCount == 0)
+    #expect(store.loadIssue == .partialStatuses(1))
+    #expect(store.unavailableStatusBundleIDs == ["org.example.test"])
+}
+
+@MainActor
+@Test func dashboardDraftDoesNotRequireAnAvailabilityRecord() async {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availabilityFailure: true, versionState: "PREPARE_FOR_SUBMISSION"), projects: [])
+    #expect(store.loadIssue == nil)
+    #expect(store.appRows.first?.status?.isLiveOnStore == false)
+    #expect(store.appRows.first?.status?.isUnavailableOnStore == false)
+}
+
+@MainActor
+@Test func dashboardOldVersionOnlyCacheCannotRestoreAGreenBadge() async throws {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(), projects: [])
+    var cache = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    cache.removeValue(forKey: "statusSchemaVersion")
+    try JSONSerialization.data(withJSONObject: cache).write(to: file)
+    let old = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    #expect(old.appRows.count == 1)
+    #expect(old.appRows.first?.name == "Test")
+    #expect(old.appRows.first?.status == nil)
+    #expect(old.projectStatuses.isEmpty)
+    #expect(!old.hasLoadedSummary)
+    #expect(old.refreshedAt == nil)
+    #expect(old.shouldRefresh(for: "account"))
+}
+
+private actor DelayedDashboardAvailabilityFetcher: DashboardFetching {
+    private var requested = false
+    private var requestWaiter: CheckedContinuation<Void, Never>?
+    private var responseWaiter: CheckedContinuation<ASCStoreAvailability, Never>?
+    func fetchAllApps(appStoreStateFilter: String?) async throws -> [ASCApp] {
+        try await DashboardTestFetcher().fetchAllApps(appStoreStateFilter: appStoreStateFilter)
+    }
+    func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] {
+        try await DashboardTestFetcher().fetchAppStoreVersions(appId: appId)
+    }
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability {
+        requested = true
+        requestWaiter?.resume(); requestWaiter = nil
+        return await withCheckedContinuation { responseWaiter = $0 }
+    }
+    func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? { nil }
+    func waitForRequest() async { if !requested { await withCheckedContinuation { requestWaiter = $0 } } }
+    func finish() { responseWaiter?.resume(returning: .available); responseWaiter = nil }
+}
+
+@MainActor
+@Test func dashboardLateAvailabilityCannotReplaceAnotherAccountsData() async {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "new")
+    let old = DelayedDashboardAvailabilityFetcher()
+    let task = Task { await store.refresh(for: "old", accountKey: "old", service: old, projects: []) }
+    await old.waitForRequest()
+    await store.refresh(for: "new", accountKey: "new", service: DashboardTestFetcher(empty: true), projects: [])
+    await old.finish()
+    await task.value
+    #expect(store.cacheKey == "new")
+    #expect(store.appRows.isEmpty)
+    #expect(store.summary.liveCount == 0)
+    #expect(store.loadIssue == nil)
+}
+
+@MainActor
+@Test func dashboardLegacyRemovedReleaseGetsStoreAvailabilityCaption() async {
+    let file = dashboardRefreshTestFile()
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    let store = DashboardSummaryStore(cacheURL: file, accountKeyOverride: "account")
+    await store.refresh(for: "account", accountKey: "account", service: DashboardTestFetcher(availability: .unavailable, versionState: "DEVELOPER_REMOVED_FROM_SALE"), projects: [])
+    #expect(store.loadIssue == nil)
+    #expect(store.appRows.first?.status?.isUnavailableOnStore == true)
+    #expect(store.summary.liveCount == 0)
 }

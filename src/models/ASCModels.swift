@@ -196,6 +196,15 @@ struct ASCAppStoreVersion: Codable, Identifiable {
         let createdDate: String?
         let copyright: String?
         var platform: String? = nil
+        var appVersionState: String? = nil
+
+        var effectiveState: String? {
+            if let appVersionState,
+               !appVersionState.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return appVersionState
+            }
+            return appStoreState
+        }
     }
 }
 

@@ -54,6 +54,7 @@ enum DashboardLoadIssue: Equatable {
 protocol DashboardFetching {
     func fetchAllApps(appStoreStateFilter: String?) async throws -> [ASCApp]
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion]
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability
     func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL?
 }
 

@@ -1084,6 +1084,166 @@ final class AppStoreConnectService {
         return allIds
     }
 
+    /// A released version is not necessarily available for sale in any territory.
+    /// Unknown/failed reads must remain unknown to the dashboard, never unavailable.
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability {
+        let appID = try testFlightResourceID(appId)
+        let response = try await get(
+            "apps/\(appID)/appAvailabilityV2",
+            as: ASCSingleResponse<StoreAvailabilityResource>.self
+        )
+        guard response.data.type == "appAvailabilities" else {
+            throw ASCError.notFound("Unexpected app availability resource.")
+        }
+        let availabilityID = try testFlightResourceID(response.data.id)
+        let endpoint = "/v2/appAvailabilities/\(availabilityID)/territoryAvailabilities"
+        let query = [URLQueryItem(name: "limit", value: "200")]
+        var next: String? = endpoint
+        var visited: Set<String> = []
+        var territories: [String: StoreTerritoryAvailability] = [:]
+
+        while let page = next {
+            try Task.checkCancellation()
+            let checked = try paginationPath(page, queryItems: query, endpoint: endpoint)
+            // This endpoint has no filters. A continuation must not silently
+            // restrict the territory list or change which attributes are read.
+            let items = URLComponents(string: checked)?.queryItems ?? []
+            guard items.allSatisfy({ $0.name == "limit" || $0.name == "cursor" }),
+                  Set(items.map(\.name)).count == items.count,
+                  items.filter({ $0.name == "limit" }).allSatisfy({
+                      guard let value = $0.value, let limit = Int(value) else { return false }
+                      return (1...200).contains(limit)
+                  }) else { throw ASCError.invalidURL }
+            guard visited.insert(checked).inserted else {
+                throw ASCError.notFound("Repeated app availability page.")
+            }
+            let pageResponse = try await get(checked, as: ASCPaginatedResponse<StoreTerritoryAvailability>.self)
+            guard let links = pageResponse.links else {
+                throw ASCError.notFound("App availability pagination is incomplete.")
+            }
+            for territory in pageResponse.data {
+                _ = try testFlightResourceID(territory.id)
+                guard territory.type == "territoryAvailabilities" else {
+                    throw ASCError.notFound("Unexpected territory availability resource.")
+                }
+                if let previous = territories[territory.id], previous != territory {
+                    throw ASCError.notFound("Conflicting territory availability data.")
+                }
+                territories[territory.id] = territory
+            }
+            next = links.next
+        }
+
+        var hasAvailableTerritory = false
+        var hasUnknownTerritory = false
+        for territory in territories.values {
+            let available = territory.attributes?.available
+            let statuses = territory.attributes?.contentStatuses
+            if available == true, statuses?.contains("AVAILABLE") == true {
+                hasAvailableTerritory = true
+            } else if let enabled = available, let statuses {
+                if (enabled && statuses.isEmpty) ||
+                    statuses.contains(where: { !Self.knownTerritoryContentStatuses.contains($0) }) {
+                    hasUnknownTerritory = true
+                }
+            } else {
+                hasUnknownTerritory = true
+            }
+        }
+        if hasAvailableTerritory { return .available }
+        guard !hasUnknownTerritory else {
+            throw ASCError.notFound("App availability contains unknown or incomplete territory attributes.")
+        }
+        return .unavailable
+    }
+
+    private struct StoreAvailabilityResource: Decodable {
+        let id: String
+        let type: String
+    }
+
+    private struct StoreTerritoryAvailability: Decodable, Equatable {
+        let id: String
+        let type: String
+        let attributes: Attributes?
+
+        private enum CodingKeys: String, CodingKey { case id, type, attributes }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            type = try container.decode(String.self, forKey: .type)
+            // Retain uncertain attributes so a separate confirmed available
+            // territory can still provide positive evidence after every page loads.
+            attributes = try? container.decode(Attributes.self, forKey: .attributes)
+        }
+
+        struct Attributes: Decodable, Equatable {
+            let available: Bool?
+            let contentStatuses: [String]?
+            private enum CodingKeys: String, CodingKey { case available, contentStatuses }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                available = try? container.decode(Bool.self, forKey: .available)
+                contentStatuses = try? container.decode([String].self, forKey: .contentStatuses)
+            }
+        }
+    }
+
+    // Apple's TerritoryAvailability.contentStatuses enum, pinned OpenAPI 4.6.
+    // New values remain unknown until their meaning has been checked.
+    private static let knownTerritoryContentStatuses: Set<String> = [
+        "AVAILABLE",
+        "AVAILABLE_FOR_PREORDER_ON_DATE",
+        "PROCESSING_TO_NOT_AVAILABLE",
+        "PROCESSING_TO_AVAILABLE",
+        "PROCESSING_TO_PRE_ORDER",
+        "AVAILABLE_FOR_SALE_UNRELEASED_APP",
+        "PREORDER_ON_UNRELEASED_APP",
+        "AVAILABLE_FOR_PREORDER",
+        "MISSING_RATING",
+        "CANNOT_SELL_RESTRICTED_RATING",
+        "BRAZIL_REQUIRED_TAX_ID",
+        "BRAZIL_GAMBLING_NOT_VERIFIED",
+        "MISSING_GRN",
+        "UNVERIFIED_GRN",
+        "ICP_NUMBER_INVALID",
+        "ICP_NUMBER_MISSING",
+        "TRADER_STATUS_NOT_PROVIDED",
+        "TRADER_STATUS_VERIFICATION_FAILED",
+        "TRADER_STATUS_VERIFICATION_STATUS_MISSING",
+        "CANNOT_SELL_SEVENTEEN_PLUS_APPS",
+        "CANNOT_SELL_SEXUALLY_EXPLICIT",
+        "CANNOT_SELL_NON_IOS_GAMES",
+        "CANNOT_SELL_SEVENTEEN_PLUS_GAMES",
+        "CANNOT_SELL_CASINO",
+        "CANNOT_SELL_CASINO_WITHOUT_GRAC",
+        "CANNOT_SELL_CASINO_WITHOUT_AGE_VERIFICATION",
+        "CANNOT_SELL_ADULT_ONLY",
+        "CANNOT_SELL_GAMBLING_CONTESTS",
+        "CANNOT_SELL_GAMBLING",
+        "CANNOT_SELL_CONTESTS",
+        "CANNOT_SELL_NINETEEN_PLUS_WITHOUT_GRAC",
+        "CANNOT_SELL",
+        "CANNOT_SELL_FREQUENT_INTENSE_GAMBLING",
+        "CANNOT_SELL_FREQUENT_INTENSE_ALCOHOL_TOBACCO_DRUGS",
+        "CANNOT_SELL_FREQUENT_INTENSE_VIOLENCE",
+        "CANNOT_SELL_FREQUENT_INTENSE_SEXUAL_CONTENT_NUDITY",
+        "CANNOT_SELL_INFREQUENT_MILD_ALCOHOL_TOBACCO_DRUGS",
+        "CANNOT_SELL_INFREQUENT_MILD_SEXUAL_CONTENT_NUDITY",
+        "CANNOT_SELL_FREQUENT_INTENSE",
+        "CANNOT_SELL_FREQUENT_INTENSE_WITHOUT_GRAC",
+        "CANNOT_SELL_FREQUENT_GAMBLING",
+        "CANNOT_SELL_FREQUENT_ALCOHOL_TOBACCO_DRUGS",
+        "CANNOT_SELL_FREQUENT_VIOLENCE",
+        "CANNOT_SELL_FREQUENT_SEXUAL_CONTENT_NUDITY",
+        "CANNOT_SELL_INFREQUENT_ALCOHOL_TOBACCO_DRUGS",
+        "CANNOT_SELL_INFREQUENT_SEXUAL_CONTENT_NUDITY",
+        "CANNOT_SELL_FREQUENT",
+        "CANNOT_SELL_FREQUENT_WITHOUT_GRAC",
+    ]
+
     func createIAPAvailability(iapId: String, territoryIds: [String]) async throws {
         let territoryData = territoryIds.map { ["type": "territories", "id": $0] }
         let body: [String: Any] = [

@@ -4,11 +4,15 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
     let isLiveOnStore: Bool
     let isPendingReview: Bool
     let isRejected: Bool
+    let storeAvailability: ASCStoreAvailability?
 
-    init(isLiveOnStore: Bool, isPendingReview: Bool, isRejected: Bool) {
-        self.isLiveOnStore = isLiveOnStore
+    var isUnavailableOnStore: Bool { storeAvailability == .unavailable }
+
+    init(isLiveOnStore: Bool, isPendingReview: Bool, isRejected: Bool, storeAvailability: ASCStoreAvailability? = nil) {
+        self.isLiveOnStore = isLiveOnStore && storeAvailability != .unavailable
         self.isPendingReview = isPendingReview
         self.isRejected = isRejected
+        self.storeAvailability = storeAvailability
     }
 
     static let empty = ASCDashboardProjectStatus(
@@ -17,12 +21,16 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
         isRejected: false
     )
 
-    init(versions: [ASCAppStoreVersion]) {
+    init(versions: [ASCAppStoreVersion], availability: ASCStoreAvailability? = nil) {
+        storeAvailability = availability
         // A newer release on one platform must not hide another platform's review.
         let platforms = Set(versions.map { ASCReleaseStatus.normalize($0.attributes.platform) })
         if platforms.count > 1 {
             let statuses = platforms.map { platform in
-                ASCDashboardProjectStatus(versions: versions.filter { ASCReleaseStatus.normalize($0.attributes.platform) == platform })
+                ASCDashboardProjectStatus(
+                    versions: versions.filter { ASCReleaseStatus.normalize($0.attributes.platform) == platform },
+                    availability: availability
+                )
             }
             isLiveOnStore = statuses.contains { $0.isLiveOnStore }
             isPendingReview = statuses.contains { $0.isPendingReview }
@@ -30,18 +38,23 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
             return
         }
         let sortedVersions = ASCReleaseStatus.sortedVersionsByRecency(versions)
-        let liveIndex = sortedVersions.firstIndex {
-            ASCReleaseStatus.liveStates.contains(
-                ASCReleaseStatus.normalize($0.attributes.appStoreState)
+        // Removal or replacement is a publication boundary too: an older ready
+        // version and older review outcomes no longer describe this platform.
+        let publishedIndex = sortedVersions.firstIndex {
+            ASCReleaseStatus.publishedStates.contains(
+                ASCReleaseStatus.normalize($0.attributes.effectiveState)
             )
         }
         let actionableIndex = sortedVersions.firstIndex { version in
-            let state = ASCReleaseStatus.normalize(version.attributes.appStoreState)
+            let state = ASCReleaseStatus.normalize(version.attributes.effectiveState)
             return ASCReleaseStatus.pendingReviewStates.contains(state)
                 || ASCReleaseStatus.rejectedStates.contains(state)
         }
 
-        isLiveOnStore = liveIndex != nil
+        let hasLiveVersion = publishedIndex.map {
+            ASCReleaseStatus.isLive(sortedVersions[$0].attributes.effectiveState)
+        } ?? false
+        isLiveOnStore = hasLiveVersion && availability != .unavailable
 
         guard let actionableIndex else {
             isPendingReview = false
@@ -50,9 +63,9 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
         }
 
         let actionableState = ASCReleaseStatus.normalize(
-            sortedVersions[actionableIndex].attributes.appStoreState
+            sortedVersions[actionableIndex].attributes.effectiveState
         )
-        let actionableStateIsCurrent = liveIndex == nil || actionableIndex < liveIndex!
+        let actionableStateIsCurrent = publishedIndex == nil || actionableIndex < publishedIndex!
 
         isPendingReview = actionableStateIsCurrent
             && ASCReleaseStatus.pendingReviewStates.contains(actionableState)

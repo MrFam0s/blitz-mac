@@ -58,8 +58,10 @@ final class DashboardSummaryStore {
     static let shared = DashboardSummaryStore()
 
     private static let freshness: TimeInterval = 120
+    private static let statusSchemaVersion = 1
 
     private struct Snapshot: Codable {
+        let statusSchemaVersion: Int?
         let accountKey: String
         let summary: ASCDashboardSummary
         let projectStatuses: [String: ASCDashboardProjectStatus]
@@ -256,7 +258,17 @@ final class DashboardSummaryStore {
 
                     do {
                         let versions = try await service.fetchAppStoreVersions(appId: next.id)
-                        status = ASCDashboardProjectStatus(versions: versions)
+                        let versionStatus = ASCDashboardProjectStatus(versions: versions)
+                        let hasPublishedVersion = versions.contains {
+                            ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.effectiveState))
+                        }
+                        if hasPublishedVersion {
+                            // Approval/distribution readiness is not proof of a live storefront.
+                            let availability = try await service.fetchStoreAvailability(appId: next.id)
+                            status = ASCDashboardProjectStatus(versions: versions, availability: availability)
+                        } else {
+                            status = versionStatus
+                        }
                     } catch {
                         status = nil
                     }
@@ -345,15 +357,25 @@ final class DashboardSummaryStore {
             return
         }
 
-        refreshedAt = snapshot.refreshedAt
+        let verifiedSchema = snapshot.statusSchemaVersion == Self.statusSchemaVersion
+        refreshedAt = verifiedSchema ? snapshot.refreshedAt : nil
         unavailableStatusBundleIDs = snapshot.unavailableStatusBundleIDs ?? []
         if !unavailableStatusBundleIDs.isEmpty { loadIssue = .partialStatuses(unavailableStatusBundleIDs.count) }
         isShowingSavedData = true
-        summary = snapshot.summary
-        projectStatuses = snapshot.projectStatuses
+        summary = verifiedSchema ? snapshot.summary : .empty
+        projectStatuses = verifiedSchema ? snapshot.projectStatuses : [:]
         ascApps = snapshot.ascApps ?? restoredASCApps(from: snapshot.appRows)
-        appRows = snapshot.appRows
-        hasLoadedSummary = true
+        // Preserve the warm app/icon list, but never revive pre-availability green badges.
+        appRows = verifiedSchema ? snapshot.appRows : snapshot.appRows.map { row in
+            DashboardAppRow(id: row.id, bundleId: row.bundleId, name: row.name,
+                            source: row.source, ascAppId: row.ascAppId,
+                            linkedProjectId: row.linkedProjectId, status: nil, iconURL: row.iconURL)
+        }
+        if !verifiedSchema {
+            unavailableStatusBundleIDs = Set(ascApps.map(\.bundleId))
+            loadIssue = nil
+        }
+        hasLoadedSummary = verifiedSchema
         loadedAccountKey = accountKey
     }
 
@@ -361,6 +383,7 @@ final class DashboardSummaryStore {
         guard let accountKey else { return }
 
         let snapshot = Snapshot(
+            statusSchemaVersion: Self.statusSchemaVersion,
             accountKey: accountKey,
             summary: summary,
             projectStatuses: projectStatuses,

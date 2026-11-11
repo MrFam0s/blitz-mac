@@ -259,5 +259,6 @@ private struct OfflineIconDashboardFetcher: DashboardFetching {
         throw URLError(.notConnectedToInternet)
     }
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] { [] }
+    func fetchStoreAvailability(appId: String) async throws -> ASCStoreAvailability { .unavailable }
     func fetchAppStoreIconURL(app: ASCApp, dimension: Int) async throws -> URL? { nil }
 }

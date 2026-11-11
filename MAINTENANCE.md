@@ -2,6 +2,38 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.64 — dashboard storefront availability
+
+The dashboard no longer treats an approved/distributable version as proof that
+an app is currently sold. For previously published apps it reads app availability
+and all territory pages. Live requires an eligible current version and at least
+one enabled territory with Apple's `AVAILABLE` content status. Removed apps show
+a neutral minus badge and "Not on the App Store" instead of a green checkmark.
+
+The latest publication boundary is resolved per platform; newer removal/replacement
+states prevent old live/review states from resurfacing. The current `appVersionState`
+takes precedence over the deprecated `appStoreState` for dashboard classification.
+Review/rejection flags remain independent. Draft-only apps need no availability
+record. Failed, unknown or incomplete availability reads remain visibly unknown;
+previously confirmed status is retained as stale, never presented as fresh proof.
+Old version-only disk caches retain app names/icons but discard their status/counts.
+
+Availability reads validate resource types/IDs and endpoint scope, follow every
+page, and reject cycles, changed filters and contradictory duplicate resources.
+No availability settings are written. Read-only verification found ClubBundle's
+version still marked ready while all 175 territories had `available=false` and
+`CANNOT_SELL`, reproducing the original false live badge.
+
+Validation (2026-11-11): all 391 Swift tests pass, including availability, pagination,
+unknown/error/cache, multi-platform history and delayed-account regression cases.
+Independent review found no remaining blockers. The native release build and
+strict/deep Developer ID verification pass with the previous signing requirement.
+ASC 6.6.1 is unchanged; protocol ping, direct CLI and `cli.exec` pass, and installed
+app/local CLI helpers are byte-identical. Installed UI and refreshed cache show
+ClubBundle unavailable and the live total corrected from seven to six, with no
+failed status reads. Build 69 is installed under Applications; build 68 is retained
+for rollback. No Store mutations, device actions or cloud workflows were used.
+
 ## 1.0.63 — ASC 6.6.1 and project icon audit
 
 Build 68 updates the shared app/terminal ASC implementation from 5.17.0

@@ -348,7 +348,7 @@ struct DashboardView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Open \(row.name)")
         .contextMenu { visibilityAction(for: row) }
-        .help([row.name, row.bundleId].compactMap { $0 }.joined(separator: "\n"))
+        .help([row.name, row.bundleId, statusCaption(for: row)].compactMap { $0 }.joined(separator: "\n"))
     }
 
     private func appCardContent(row: DashboardAppRow, project: Project?, isSelected: Bool) -> some View {
@@ -383,10 +383,10 @@ struct DashboardView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            Text(row.source == .localOnly ? "Local only" : " ")
+            Text(statusCaption(for: row) ?? " ")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-                .accessibilityHidden(row.source != .localOnly)
+                .accessibilityHidden(statusCaption(for: row) == nil)
         }
         .frame(minHeight: 112, alignment: .top)
     }
@@ -494,6 +494,12 @@ struct DashboardView: View {
         dashboardSummary.hasLoadedSummary ? "\(count)" : "—"
     }
 
+    private func statusCaption(for row: DashboardAppRow) -> String? {
+        if row.source == .localOnly { return "Local only" }
+        if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) { return nil }
+        return row.status?.isUnavailableOnStore == true ? "Not on the App Store" : nil
+    }
+
     @ViewBuilder
     private func statusIcon(for row: DashboardAppRow) -> some View {
         if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) {
@@ -510,6 +516,10 @@ struct DashboardView: View {
             } else if status.isLiveOnStore {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+            } else if status.isUnavailableOnStore {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .help("Not available in any App Store territory")
             } else {
                 Image(systemName: "pencil.circle.fill")
                     .foregroundStyle(.secondary)
