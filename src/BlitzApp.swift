@@ -185,6 +185,13 @@ final class MCPBootstrap {
                            """
         try? bridgeScript.write(to: BlitzPaths.mcpBridge, atomically: true, encoding: .utf8)
         try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: BlitzPaths.mcpBridge.path)
+
+        // A thin human-facing CLI for the same MCP backend, with no separate
+        // credentials, release state or duplicated publishing implementation.
+        let cli = BlitzPaths.bin.appendingPathComponent("blitz-neo")
+        try? fm.createDirectory(at: BlitzPaths.bin, withIntermediateDirectories: true)
+        try? bridgeScript.write(to: cli, atomically: true, encoding: .utf8)
+        try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: cli.path)
     }
 
     private func installASCEnvironment(settings: SettingsService) {

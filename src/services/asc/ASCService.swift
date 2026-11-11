@@ -22,6 +22,7 @@ final class AppStoreConnectService {
         args: [String],
         responseTimeoutSeconds: TimeInterval? = nil
     ) async throws -> (exitCode: Int, stdout: String, stderr: String) {
+        try await MCPMutationScope.checkBeforeWrite()
         guard let client else { throw ASCError.notFound("CLI is unavailable for this request transport.") }
         return try await client.cliExec(args: args, responseTimeoutSeconds: responseTimeoutSeconds)
     }
@@ -37,6 +38,9 @@ final class AppStoreConnectService {
         body: Data? = nil
     ) async throws -> ASCDaemonClient.HTTPResponse {
         let resolvedPath = try resolvedPath(path, queryItems: queryItems)
+        if !["GET", "HEAD", "OPTIONS"].contains(method.uppercased()) {
+            try await MCPMutationScope.checkBeforeWrite()
+        }
         if let requestTransport { return try await requestTransport(method, resolvedPath, headers, body) }
         guard let client else { throw ASCError.notFound("App Store Connect transport is unavailable.") }
         let requestId = UUID().uuidString
@@ -44,6 +48,9 @@ final class AppStoreConnectService {
                                    body: body.map { ASCTestFlightPrivacy.bodyForLogging($0, path: resolvedPath) })
 
         do {
+            if !["GET", "HEAD", "OPTIONS"].contains(method.uppercased()) {
+                try await MCPMutationScope.checkBeforeWrite()
+            }
             let response = try await client.request(
                 method: method,
                 path: resolvedPath,
@@ -255,6 +262,7 @@ final class AppStoreConnectService {
         await updateLogger.request(id: requestId, method: method, path: url.absoluteString, body: body)
 
         do {
+            try await MCPMutationScope.checkBeforeWrite()
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse {
                 await updateLogger.response(

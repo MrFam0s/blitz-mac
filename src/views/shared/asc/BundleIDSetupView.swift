@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Multi-phase inline view for registering a bundle ID, enabling capabilities,
@@ -36,6 +37,7 @@ struct BundleIDSetupView: View {
     @State private var showAdditional = false
 
     @State private var showCreateInstructions = false
+    @State private var copiedCreationHandoff = false
     @State private var showProgramLicenseAlert = false
     @State private var programLicenseAlertMessage = ""
 
@@ -395,11 +397,24 @@ struct BundleIDSetupView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Button {
-                    launchClaudeCodeForAppCreate(bundleId: createdBundleId)
+                    launchClaudeCodeForAppCreate(bundleId: createdBundleId, inExistingChat: true)
+                } label: {
+                    Label("Im bestehenden Chat fortsetzen", systemImage: "doc.on.clipboard")
+                        .font(.callout.weight(.medium))
+                }
+                .buttonStyle(.borderedProminent)
+
+                if copiedCreationHandoff {
+                    Text("Auftrag kopiert. Im Entwicklungs-Chat einfügen, um genau diese bestätigte App anzulegen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
+                Button {
+                    launchClaudeCodeForAppCreate(bundleId: createdBundleId, inExistingChat: false)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
-                        Text("Setup with AI")
+                        Text("Im Blitz-Terminal starten")
                         Image(systemName: "arrow.right")
                             .font(.caption)
                     }
@@ -501,6 +516,7 @@ struct BundleIDSetupView: View {
         phase = .form
         error = nil
         creationContext = nil
+        copiedCreationHandoff = false
         createdBundleId = ""
         createdAppName = ""
         canonicalIdentifierNotice = nil
@@ -523,6 +539,7 @@ struct BundleIDSetupView: View {
         let identity = request.context.identity
         viewOperationId = UUID()
         creationContext = nil
+        copiedCreationHandoff = false
         bundleIdentifier = identity.bundleId
         publicAppName = identity.appName
         sku = identity.sku
@@ -622,7 +639,7 @@ struct BundleIDSetupView: View {
 
     // MARK: - Auto-create via AI agent
 
-    private func launchClaudeCodeForAppCreate(bundleId: String) {
+    private func launchClaudeCodeForAppCreate(bundleId: String, inExistingChat: Bool) {
         do {
             guard let context = creationContext, context.identity.bundleId == bundleId else {
                 throw ASCManager.BundleIDSetupConfirmationError.missingBundleId
@@ -633,17 +650,24 @@ struct BundleIDSetupView: View {
             try ProjectAgentConfigService(baseDirectory: storage.baseDirectory)
                 .prepareBundledCreationSkill(projectDir: projectDir)
             try asc.validateBundleIDSetupContext(context)
-            let identityDirectory = projectDir.appendingPathComponent(".blitz", isDirectory: true)
-            try FileManager.default.createDirectory(at: identityDirectory, withIntermediateDirectories: true)
-            let identityFile = identityDirectory.appendingPathComponent("app-creation-\(context.operationId.uuidString).json")
             let identity = context.identity
             let values: [String: String] = ["appName": identity.appName, "bundleId": identity.bundleId,
                 "sku": identity.sku, "platform": identity.platform.rawValue, "primaryLocale": identity.primaryLocale,
                 "projectId": context.projectId, "operationId": context.operationId.uuidString,
                 "expectedIssuerId": context.expectedIssuerId, "expectedKeyId": context.expectedKeyId]
-            try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
-                .write(to: identityFile, options: .atomic)
+            let identityFile = try ReleaseHandoffService.writeCreationIdentity(values,
+                projectDirectory: projectDir, operationID: context.operationId)
             let prompt = try AppCreationAgentPrompt.make(identityFile: identityFile)
+            if inExistingChat {
+                NSPasteboard.general.clearContents()
+                guard NSPasteboard.general.setString(prompt, forType: .string) else {
+                    throw NSError(domain: "BlitzReleaseHandoff", code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: "Der Auftrag konnte nicht in die Zwischenablage kopiert werden."])
+                }
+                copiedCreationHandoff = true
+                error = nil
+                return
+            }
             let settings = SettingsService.shared
             let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
             let terminal = settings.resolveDefaultTerminal().terminal

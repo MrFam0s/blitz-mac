@@ -28,6 +28,31 @@ protocol ASCReleaseSubmissionService: ASCVersionBuildService {
 extension AppStoreConnectService: ASCReleaseSubmissionService {}
 extension AppStoreConnectService: ASCVersionCreationService {}
 
+/// The manual submit button preserves the release mode already configured at
+/// Apple. It never interprets a missing/unsupported mode as automatic release.
+struct ASCManualReleaseRequest {
+    let target: ReleaseWorkflowTarget
+    let mode: ReleaseWorkflowMode
+
+    init(project: Project, captured: ASCReleaseOperationTarget, version: ASCAppStoreVersion, build: ASCBuild) throws {
+        guard let accountKey = captured.accountKey, !accountKey.isEmpty,
+              project.id == captured.projectId, project.metadata.bundleIdentifier == captured.bundleId,
+              project.platform == captured.platform, version.id == captured.versionId,
+              version.attributes.platform == project.platform.ascPlatformValue,
+              build.matchesRelease(appId: captured.appId, versionString: version.attributes.versionString,
+                                   platform: project.platform) else { throw ReleaseWorkflowError.identityChanged }
+        guard let rawMode = version.attributes.releaseType, let mode = ReleaseWorkflowMode(rawValue: rawMode) else {
+            throw ASCError.notFound("Die Veröffentlichungsart dieser Version ist nicht eindeutig unterstützt. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen; eine geplante Veröffentlichung wird nicht stillschweigend geändert.")
+        }
+        self.mode = mode
+        self.target = ReleaseWorkflowTarget(projectID: project.id,
+            projectPath: URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path,
+            appID: captured.appId, bundleID: captured.bundleId, platform: project.platform.ascPlatformValue,
+            accountKey: accountKey, versionID: version.id, buildID: build.id)
+        try self.target.validate()
+    }
+}
+
 // MARK: - Release Manager
 // Extension containing release-related functionality for ASCManager
 
@@ -416,6 +441,7 @@ extension ASCManager {
 
     @discardableResult
     func submitForReview(attachBuildId: String? = nil, expectedTarget: ASCReleaseOperationTarget? = nil,
+                         expectedReleaseMode: String? = nil,
                          using serviceOverride: (any ASCReleaseSubmissionService)? = nil) async -> Bool {
         guard !isSubmitting, let service = serviceOverride ?? service,
               let target = expectedTarget ?? releaseOperationTarget(), target.matches(self),
@@ -437,6 +463,9 @@ extension ASCManager {
                   ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
                 throw ASCError.notFound("Die ausgewählte Version ist nicht mehr zur Einreichung bearbeitbar.")
             }
+            if let expectedReleaseMode, version.attributes.releaseType != expectedReleaseMode {
+                throw ASCError.notFound("Die Veröffentlichungsart wurde seit der Vorschau geändert. Bitte die Vorschau neu öffnen und den aktuellen Stand prüfen.")
+            }
             let build: ASCBuild?
             if let buildId = attachBuildId, !buildId.isEmpty { build = try await service.fetchBuild(id: buildId) }
             else { build = try await service.fetchBuildAttachedToVersion(versionId: versionId) }
@@ -450,7 +479,11 @@ extension ASCManager {
                 guard submissionReadiness.isComplete(selectingBuild: build) else {
                     throw ASCError.notFound("Erforderliche Angaben fehlen oder konnten nicht frisch geprüft werden.")
                 }
+                return try await submitUsingReleaseWorkflow(target: target, version: version, build: build,
+                    attachBuild: attachBuildId != nil, service: service)
             }
+            // Dependency-injected test doubles exercise the existing UI identity
+            // gates offline. Production always uses the durable shared workflow.
             if attachBuildId != nil {
                 try await service.attachBuild(versionId: versionId, buildId: build.id)
                 try target.check(self)
@@ -464,6 +497,75 @@ extension ASCManager {
             guard target.matches(self), !Task.isCancelled else { return false }
             submissionError = error.localizedDescription
             return false
+        }
+    }
+
+    private func submitUsingReleaseWorkflow(target: ASCReleaseOperationTarget, version: ASCAppStoreVersion,
+                                           build: ASCBuild, attachBuild: Bool,
+                                           service: any ASCReleaseSubmissionService) async throws -> Bool {
+        guard let credentials, DashboardSummaryStore.accountKey(for: credentials) == target.accountKey,
+              let projectID = target.projectId else { throw ReleaseWorkflowError.accountChanged }
+        let projects = await ProjectStorage().listProjects()
+        try target.check(self)
+        guard let project = projects.first(where: { $0.id == projectID }) else {
+            throw ASCError.notFound("Für die Einreichung muss diese App mit ihrem lokalen Projekt verknüpft sein.")
+        }
+        let request = try ASCManualReleaseRequest(project: project, captured: target, version: version, build: build)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: request.target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw ReleaseWorkflowError.invalidTarget
+        }
+        let api = ReleaseWorkflowASCAdapter(credentials: credentials, validateContext: { [weak self] in
+            try await MainActor.run {
+                guard let self else { throw CancellationError() }
+                try target.check(self)
+            }
+        })
+        let workflow = ReleaseWorkflowService(directory: BlitzPaths.root.appendingPathComponent("release-operations"), api: api)
+        do {
+            if let previous = try await workflow.activeOperation(target: request.target),
+               previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
+                let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
+                try target.check(self)
+                if reconciled.state == .submitted, reconciled.target == request.target {
+                    await refreshTabData(.app)
+                    return true
+                }
+                guard reconciled.state == .prepared || reconciled.state == .validated else {
+                    throw ASCError.notFound("Der frühere Release-Vorgang \(previous.operationID) wurde lesend abgeglichen. Er muss vor einer neuen Einreichung geklärt werden; es wurde kein weiterer Versuch gestartet.")
+                }
+            }
+            let prepared: ReleaseWorkflowRecord
+            if attachBuild {
+                prepared = try await workflow.prepareAfterAttachingBuild(target: request.target, mode: request.mode) {
+                    try await MainActor.run { try target.check(self) }
+                    try await service.attachBuild(versionId: version.id, buildId: build.id)
+                    try await MainActor.run { try target.check(self) }
+                }
+            } else {
+                prepared = try await workflow.prepare(target: request.target, mode: request.mode)
+            }
+            try target.check(self)
+            selectedVersionBuild = build
+            let validated = try await workflow.validate(operationID: prepared.operationID, accountKey: request.target.accountKey)
+            try target.check(self)
+            guard validated.state == .validated, validated.validation?.ready == true else {
+                let checks = validated.validation?.checkIDs.prefix(8).joined(separator: ", ") ?? ""
+                throw ASCError.notFound("Die vollständige Release-Prüfung blockiert die Einreichung." + (checks.isEmpty ? "" : " Prüfpunkte: \(checks)")
+                    + " Vorgang: \(prepared.operationID)")
+            }
+            let submitted = try await workflow.submit(operationID: prepared.operationID,
+                accountKey: request.target.accountKey, confirmationDigest: validated.confirmationDigest)
+            try target.check(self)
+            guard submitted.state == .submitted else {
+                throw ASCError.notFound("Die Einreichung wurde angefordert, ist bei Apple aber noch nicht bestätigt. Bitte nur den Status des Vorgangs \(submitted.operationID) abgleichen; nicht erneut einreichen.")
+            }
+            await refreshTabData(.app)
+            return true
+        } catch {
+            let active = try? await workflow.activeOperation(target: request.target)
+            let suffix = active.map { " Vorgang: \($0.operationID)." } ?? ""
+            throw ASCError.notFound(error.localizedDescription + suffix)
         }
     }
 

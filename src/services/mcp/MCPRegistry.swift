@@ -8,6 +8,41 @@ enum MCPRegistry {
     static func allTools() -> [[String: Any]] {
         var tools: [[String: Any]] = []
 
+        tools.append(tool(
+            name: "get_release_context",
+            description: "Read the current UI target only if it matches the explicitly intended project and App Store app. Returns expectedTarget for UI-bound mutations. Does not switch apps or authorize writes. Release workflow operations below do not depend on UI selection.",
+            properties: ["projectId": ["type": "string"], "appId": ["type": "string"],
+                         "versionId": ["type": ["string", "null"], "description": "Optional expected selected version; explicit null expects no version."]],
+            required: ["projectId", "appId"]
+        ))
+        tools.append(tool(
+            name: "release_prepare",
+            description: "Prepare a durable release operation for exact project/account/app/platform/version/build IDs, independently of the selected UI app. Apple reads only. The build must already be attached and valid. Records a content fingerprint without changing metadata, assets or submission state. Local tests and source/artifact provenance must be established separately in the project release dossier.",
+            properties: [
+                "projectId": ["type": "string"], "projectPath": ["type": "string"],
+                "appId": ["type": "string"], "bundleId": ["type": "string"],
+                "platform": ["type": "string", "enum": ["IOS", "MAC_OS"]],
+                "accountKey": ["type": "string", "description": "Expected nonsecret issuerId:keyId fingerprint."],
+                "versionId": ["type": "string"], "buildId": ["type": "string"],
+                "releaseMode": ["type": "string", "enum": ["MANUAL", "AFTER_APPROVAL"]]
+            ],
+            required: ["projectId", "projectPath", "appId", "bundleId", "platform", "accountKey", "versionId", "buildId", "releaseMode"]
+        ))
+        for (name, description) in [
+            ("release_status", "Read and reconcile a durable operation with Apple. Never replays an upload or submission. Use after a timeout or restart before any retry."),
+            ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
+            ("release_submit", "Submit the exact validated operation after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets only the prepared release mode, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
+        ] {
+            var properties: [String: Any] = ["operationId": ["type": "string"], "accountKey": ["type": "string"]]
+            var required = ["operationId", "accountKey"]
+            if name == "release_submit" {
+                properties["confirmationDigest"] = ["type": "string"]
+                properties["confirm"] = ["type": "boolean", "description": "True only when the user authorized this exact release and mode."]
+                required += ["confirmationDigest", "confirm"]
+            }
+            tools.append(tool(name: name, description: description, properties: properties, required: required))
+        }
+
         // -- App State --
         tools.append(tool(
             name: "app_get_state",
@@ -186,6 +221,7 @@ enum MCPRegistry {
             name: "asc_fill_form",
             description: "Fill one or more App Store Connect form fields. Navigates to the tab automatically if auto-nav is enabled. For `appInformation`, pass locale to target a specific localization safely. Legacy tabs `storeListing` and `appDetails` are still accepted. See CLAUDE.md for complete field reference.",
             properties: [
+                "projectId": ["type": "string", "description": "Required for settings.bundleId before a Store app exists. Store form tabs use expectedTarget instead."],
                 "tab": ["type": "string", "description": "Target form tab", "enum": [
                     "appInformation", "storeListing", "appDetails", "monetization", "review.ageRating", "review.contact", "settings.bundleId"
                 ]],
@@ -418,7 +454,23 @@ enum MCPRegistry {
             required: ["ipaPath"]
         ))
 
-        return tools
+        return tools.map { definition in
+            guard let name = definition["name"] as? String, MCPExpectedTarget.boundTools.contains(name),
+                  var schema = definition["inputSchema"] as? [String: Any],
+                  var properties = schema["properties"] as? [String: Any] else { return definition }
+            var result = definition
+            properties["expectedTarget"] = MCPExpectedTarget.schema
+            schema["properties"] = properties
+            // settings.bundleId is a pre-Store identity form with its own operation
+            // protocol. All other asc_fill_form tabs require this at runtime.
+            if name != "asc_fill_form" {
+                schema["required"] = (schema["required"] as? [String] ?? []) + ["expectedTarget"]
+            }
+            result["inputSchema"] = schema
+            result["description"] = (result["description"] as? String ?? "")
+                + " Pass expectedTarget from get_release_context for the intended app; missing or changed targets are rejected."
+            return result
+        }
     }
 
     /// Determine the category for a given tool name
@@ -427,7 +479,7 @@ enum MCPRegistry {
         // Navigation / read-only
         case "app_get_state", "nav_switch_tab", "nav_list_tabs":
             return .navigation
-        case "project_list", "project_get_active":
+        case "project_list", "project_get_active", "get_release_context", "release_prepare", "release_validate", "release_status":
             return .query
         case "simulator_list_devices":
             return .query
@@ -453,7 +505,7 @@ enum MCPRegistry {
             return .ascFormMutation
         case "asc_select_version":
             return .query
-        case "asc_create_version":
+        case "asc_create_version", "release_submit":
             return .ascSubmitMutation
         case "screenshots_switch_localization", "screenshots_put_track_slot",
              "screenshots_remove_track_slot", "screenshots_reorder_track", "screenshots_save":

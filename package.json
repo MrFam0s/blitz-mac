@@ -1,7 +1,7 @@
 {
   "name": "blitz-neo-macos",
-  "version": "1.0.66",
-  "buildNumber": 71,
+  "version": "1.0.67",
+  "buildNumber": 73,
   "type": "module",
   "private": true,
   "scripts": {

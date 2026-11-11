@@ -15,6 +15,8 @@ struct ReleaseAutomationContext: Codable, Equatable, Sendable {
     let platform: ProjectPlatform
     let displayedLiveVersion: String?
     var preparedVersion: PreparedReleaseVersion? = nil
+    /// Non-secret issuer/key identity; a renewed web session does not change the target account.
+    var accountKey: String? = nil
 
     // Keep a single release conversation for this target, including when a
     // newly created draft becomes the prepared version on a subsequent click.

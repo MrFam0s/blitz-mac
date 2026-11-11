@@ -19,6 +19,13 @@ use UI-selection-dependent Blitz Neo tools for mutations: another project can be
 selected while this terminal is running. Prefer ASC with explicit identifiers.
 Use the installed Blitz Neo ASC wrapper, existing authentication and CLI help; do not
 replace the helper, install tools globally, export keys or print credentials.
+Read the project's `blitz-release` skill and `docs/blitz-product.md`. Both an existing
+development chat and a Blitz terminal follow that same skill. Revalidate product
+facts against source and the tested artifact; incomplete documentation is unknown.
+Keep the original nonsecret `accountKey` from Target JSON throughout. The final
+submission uses Blitz Neo's guarded release operation below, not a separate direct
+ASC submit command. UI-selection-bound MCP changes require the original verified
+`expectedTarget`; never adopt another chat's current selection.
 
 ## Prepared drafts and existing Store content
 
@@ -53,6 +60,10 @@ the newly created update, preserving texts and media while generating the new
 changelog. An unexpected unrelated draft is a conflict, never permission to submit
 someone's unfinished edits. Resume an automation-created draft only if the private
 release state proves it belongs to this same update.
+For a verified first release there is no prior live listing to copy. Preserve the
+explicit initial draft and prepare only missing required content from verified
+product facts within the user's scope; never invent a predecessor or release notes
+about changes from a version that was not published.
 
 ## 1. Recover state and prevent duplicate releases
 
@@ -89,6 +100,17 @@ before retrying upload, version creation or submission. Do not blindly repeat.
 
 ## 2. Establish whether an update exists
 
+First query the full version history for the target platform. If it proves there
+has never been a published version, this is a first release, not an update with
+an unknown baseline. Reuse the exact intended editable initial draft. Establish
+the source commit or reproducible snapshot, actual app identity, signed artifact,
+version/build consistency, required tests and verified product/Store content. An
+initial release needs no comparison against a fictional live build. A missing
+or failed history read does not prove first-release status. If no initial draft
+is specified and an existing draft cannot be attributed to this request, stop
+for that target decision instead of adopting it. The following change/no-op
+comparison applies when a prior published release has been established.
+
 Inspect the project's documented build/export directories and actual artifacts
 (.xcarchive, .ipa, .pkg or device/macOS .app), their bundle/platform, embedded
 marketing version, build number, signing and source provenance. Ignore simulator
@@ -104,10 +126,11 @@ against the live listing as well: a verified Store-content change can justify a
 release even if the app source is unchanged. Compare normalized field values and
 ordered media content checksums (or downloaded content hashes where necessary),
 not resource IDs, timestamps or the higher draft version alone. The mere existence
-of an empty or unchanged draft is not proof of changes. No newer artifact AND no proven unreleased
+of an empty or unchanged draft is not proof of changes. For an existing published
+baseline, no newer artifact AND no proven unreleased
 app change AND no prepared Store-content change means a successful no-op: report “Kein neuer
-Stand”, leave version numbers and Store records untouched, and stop. If the live
-baseline or artifact provenance cannot be established, ask for that specific
+Stand”, leave version numbers and Store records untouched, and stop. If a required
+published baseline or artifact provenance cannot be established, ask for that specific
 missing information; never invent a baseline or publish an arbitrary old build.
 
 ## 3. Prepare source, versions, tests and changelog
@@ -121,7 +144,8 @@ If preparedVersion is present, its version is the intended marketing version;
 keep it and make the source/archive/build match it. Stop if a different newer
 release artifact conflicts with this prepared version. Otherwise reuse a newer
 valid intended marketing version when appropriate, or increment the project's
-patch version beyond the live version. Choose a unique
+patch version beyond the live version for an update. A verified first release
+keeps its intended initial version instead of inventing an increment. Choose a unique
 build number above relevant uploaded builds. Keep source targets/extensions,
 archive metadata and ASC version consistent. Changing a version requires a new
 build from source: never patch the Info.plist of an already signed artifact.
@@ -175,9 +199,26 @@ Re-query the intended version, exact attached build and all required metadata.
 Confirm tests/checks passed, build processing is VALID, version/build identity
 matches, every required locale is complete, screenshot and preview-video processing
 is complete, protected prepared content still matches the recorded baseline,
-releaseType is AFTER_APPROVAL and no conflicting submission exists. Submit only when all checks pass. Record the
-submission ID and verify Apple's resulting status. If submission fails, keep
-the prepared version, save the error and stop; do not delete/recreate records.
+releaseType is AFTER_APPROVAL and no conflicting submission exists.
+
+Prepare a guarded Blitz release operation with `release_prepare`: exact projectId,
+canonical projectPath, appId, case-sensitive bundleId, platform (`IOS`/`MAC_OS`),
+original accountKey, versionId, attached buildId and releaseMode=AFTER_APPROVAL.
+This is a read-only Apple check plus private local state, not a submission. Keep
+the returned operationId with the report. Call `release_validate` with operationId
+and accountKey; inspect its fresh readiness result and current confirmationDigest.
+Only when it passes and the verified product/build/test evidence above remains
+valid, call `release_submit` with that same operationId, accountKey, confirm=true
+and confirmationDigest. The user's scoped release request above already authorizes
+this exact submission; do not ask for redundant confirmation of unchanged scope.
+Do not bypass a failed check using a direct ASC submission.
+
+Use `release_status` with operationId and accountKey to verify Apple's actual state.
+After interruption or an uncertain response, reconcile this same operation before
+anything else; never create a replacement to retry an unresolved submission. If
+content or the intended build changes before submission, prepare and validate a
+fresh snapshot and record why the prior one became obsolete. Preserve the prepared
+version after an error; do not delete/recreate Store records.
 
 Finish with the app, version/build, artifact/source evidence, actual test results,
 changelog/report paths and verified Apple status. Distinguish “Zur Prüfung

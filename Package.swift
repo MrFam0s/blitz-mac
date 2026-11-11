@@ -44,7 +44,7 @@ let package = Package(
         ),
         .testTarget(
             name: "BlitzTests",
-            dependencies: ["Blitz"],
+            dependencies: ["Blitz", "BlitzMCPCommon"],
             path: "Tests/blitz_tests"
         ),
     ]

@@ -65,6 +65,7 @@ extension ASCManager {
     }
 
     func checkWriteTarget(_ target: ASCWriteTarget) throws {
+        try MCPMutationScope.checkCurrent()
         guard !Task.isCancelled, projectRevision == target.revision, app?.id == target.appID,
               selectedVersion?.id == target.versionID, appInfo?.id == target.appInfoID else {
             throw CancellationError()
@@ -73,6 +74,7 @@ extension ASCManager {
 
     /// Called by manager entry points as well as UI: MCP callers receive the same protection.
     func validateWrite(fields: Set<String>, using service: any ASCWriteStateService) async throws -> ASCWriteTarget {
+        try MCPMutationScope.checkCurrent()
         guard let appID = app?.id else { throw ASCError.notFound("Keine App ausgewählt.") }
         for field in fields where !canEditField(field) { throw ASCError.notFound(editingBlockedMessage(field)) }
         let target = ASCWriteTarget(revision: projectRevision, appID: appID, versionID: selectedVersion?.id, appInfoID: appInfo?.id)

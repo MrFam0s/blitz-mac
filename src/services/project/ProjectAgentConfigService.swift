@@ -226,6 +226,32 @@ struct ProjectAgentConfigService {
                 includeProjectDocFallback: true
             )
         }
+        for issue in syncBundledReleaseSkillsForRegisteredProjects() {
+            print("[ProjectAgentConfigService] Release skill sync failed: \(issue)")
+        }
+    }
+
+    /// External development chats need the bundled workflow without first
+    /// opening a release dialog. This startup migration is local-only: it does
+    /// not clone/update upstream skills or change authored project documents.
+    @discardableResult
+    func syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: URL? = nil) -> [String] {
+        let fm = FileManager.default
+        let entries: [URL]
+        do {
+            entries = try fm.contentsOfDirectory(at: baseDirectory, includingPropertiesForKeys: [.isDirectoryKey])
+        } catch { return ["Registered project directory could not be read: \(error.localizedDescription)"] }
+        let repository = ProjectRepository(baseDirectory: baseDirectory)
+        var issues: [String] = []
+        for entry in entries {
+            var isDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: entry.path, isDirectory: &isDirectory), isDirectory.boolValue,
+                  (try? repository.readMetadataFromDirectory(entry)) != nil else { continue }
+            do {
+                try prepareBundledReleaseSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory)
+            } catch { issues.append("\(entry.lastPathComponent): \(error.localizedDescription)") }
+        }
+        return issues
     }
 
     func ensureMCPConfig(
@@ -573,16 +599,26 @@ struct ProjectAgentConfigService {
     private static let skillInstallLock = NSLock()
 
     func prepareBundledCreationSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil) throws {
+        try prepareBundledSkill("asc-app-create-ui", requiredFiles: ["SKILL.md", "scripts/create_app.py"],
+            projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
+    }
+
+    func prepareBundledReleaseSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil) throws {
+        try prepareBundledSkill("blitz-release", requiredFiles: ["SKILL.md"],
+            projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
+    }
+
+    private func prepareBundledSkill(_ name: String, requiredFiles: [String], projectDir: URL, sourceSkillsDirectory: URL?) throws {
         guard let source = sourceSkillsDirectory ?? Self.bundledProjectSkillsDirectory() else {
             throw NSError(domain: "BlitzProjectSkills", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "The bundled app-creation instructions are unavailable. Restart Blitz Neo before continuing."])
+                          userInfo: [NSLocalizedDescriptionKey: "The bundled \(name) instructions are unavailable. Restart Blitz Neo before continuing."])
         }
-        let skill = source.appendingPathComponent("asc-app-create-ui")
+        let skill = source.appendingPathComponent(name)
         let fm = FileManager.default
-        for file in ["SKILL.md", "scripts/create_app.py"] {
+        for file in requiredFiles {
             guard fm.fileExists(atPath: skill.appendingPathComponent(file).path) else {
                 throw NSError(domain: "BlitzProjectSkills", code: 2,
-                              userInfo: [NSLocalizedDescriptionKey: "The bundled app-creation instructions are incomplete. Reinstall Blitz Neo before continuing."])
+                              userInfo: [NSLocalizedDescriptionKey: "The bundled \(name) instructions are incomplete. Reinstall Blitz Neo before continuing."])
             }
         }
         Self.skillInstallLock.lock()
@@ -652,7 +688,7 @@ struct ProjectAgentConfigService {
             }
 
             let repoSkillsDir = repoDir.appendingPathComponent("skills")
-            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui"])
+            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui", "blitz-release"])
 
             if let bundledSkillsDir = Self.bundledProjectSkillsDirectory() {
                 Self.syncSkillDirectories(from: bundledSkillsDir, into: skillDirectories, using: fm)

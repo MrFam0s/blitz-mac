@@ -194,13 +194,13 @@ extension MCPExecutor {
     private func prepareAppInformationLocale(
         _ locale: String,
         forceRefresh: Bool = false
-    ) async -> String? {
+    ) async throws -> String? {
         let trimmedLocale = locale.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLocale.isEmpty else {
             return "Error: locale is required."
         }
 
-        let needsRefresh = await MainActor.run { () -> Bool in
+        let needsRefresh = try await scopedUI { () -> Bool in
             let asc = appState.ascManager
             asc.selectedAppInformationLocale = trimmedLocale
             return forceRefresh
@@ -213,7 +213,7 @@ extension MCPExecutor {
             await appState.ascManager.refreshTabData(.appInformation)
         }
 
-        let availableLocales = await MainActor.run {
+        let availableLocales = try await scopedUI {
             appState.ascManager.localizations.map(\.attributes.locale).sorted()
         }
         guard availableLocales.contains(trimmedLocale) else {
@@ -222,7 +222,7 @@ extension MCPExecutor {
                 + "Available localizations: \(availableText)"
         }
 
-        await MainActor.run {
+        try await scopedUI {
             appState.ascManager.selectedAppInformationLocale = trimmedLocale
         }
         return nil
@@ -412,8 +412,8 @@ extension MCPExecutor {
                 let locale = await resolveAppInformationLocale(from: args)
                 resolvedAppInformationLocale = locale
 
-                if let localeError = await prepareAppInformationLocale(locale) {
-                    _ = await MainActor.run { appState.ascManager.pendingFormValues.removeValue(forKey: tab) }
+                if let localeError = try await prepareAppInformationLocale(locale) {
+                    _ = try await scopedUI { appState.ascManager.pendingFormValues.removeValue(forKey: tab) }
                     return mcpText(localeError)
                 }
             }
@@ -456,6 +456,7 @@ extension MCPExecutor {
                 )
             }
             if isFree == "true" {
+                try await MCPMutationScope.checkBeforeWrite()
                 await appState.ascManager.setPriceFree()
             } else {
                 return mcpText(
@@ -472,31 +473,32 @@ extension MCPExecutor {
             for (field, value) in fieldMap {
                 attrs[field] = boolFields.contains(field) ? (value == "true") : value
             }
+            try await MCPMutationScope.checkBeforeWrite()
             await appState.ascManager.updateAgeRating(attrs)
             if let err = await checkASCWriteError(tab: tab) { return err }
 
         case "review.contact":
-            let normalizedDraft = await MainActor.run { () -> [String: String] in
+            let normalizedDraft = try await scopedUI { () -> [String: String] in
                 let merged = (appState.ascManager.pendingFormValues[tab] ?? [:]).merging(fieldMap) { _, new in new }
                 let normalized = Self.normalizedReviewContactDraft(merged)
                 return normalized
             }
 
-            let mergedAttributes = await MainActor.run {
+            let mergedAttributes = try await scopedUI {
                 Self.mergedReviewContactAttributes(
                     reviewDetail: appState.ascManager.reviewDetail,
                     draft: normalizedDraft
                 )
             }
 
-            let missingInitialCreateFields = await MainActor.run {
+            let missingInitialCreateFields = try await scopedUI {
                 Self.missingRequiredReviewContactFieldsForInitialCreate(
                     reviewDetail: appState.ascManager.reviewDetail,
                     mergedAttributes: mergedAttributes
                 )
             }
             if !missingInitialCreateFields.isEmpty {
-                await MainActor.run {
+                try await scopedUI {
                     if appState.ascManager.pendingFormValues.removeValue(forKey: tab) != nil {
                         appState.ascManager.pendingFormVersion += 1
                     }
@@ -510,7 +512,7 @@ extension MCPExecutor {
 
             await appState.ascManager.updateReviewContact(mergedAttributes)
 
-            let reviewContactWriteError = await MainActor.run { () -> String? in
+            let reviewContactWriteError = try await scopedUI { () -> String? in
                 let asc = appState.ascManager
                 let error = asc.writeError
                 asc.writeError = nil
@@ -527,7 +529,7 @@ extension MCPExecutor {
                 return mcpText("Error: \(reviewContactWriteError)")
             }
 
-            let persistedMissingRequired = await MainActor.run {
+            let persistedMissingRequired = try await scopedUI {
                 Self.missingRequiredReviewContactFields(
                     from: Self.mergedReviewContactAttributes(
                         reviewDetail: appState.ascManager.reviewDetail,
@@ -552,7 +554,7 @@ extension MCPExecutor {
                 }
                 // Both local files are updated in one MainActor turn. A project
                 // switch cannot interleave between the Xcode and metadata writes.
-                let context = try await MainActor.run {
+                let context = try await scopedUI {
                     let storage = ProjectStorage()
                     guard let project = appState.activeProject,
                           var metadata = storage.readMetadata(projectId: project.id) else {
@@ -569,7 +571,7 @@ extension MCPExecutor {
                     return (projectId: project.id, revision: originalRevision, account: originalAccount)
                 }
                 await appState.projectManager.loadProjects()
-                let mayRefresh = await MainActor.run {
+                let mayRefresh = try await scopedUI {
                     appState.activeProjectId == context.projectId && appState.ascManager.projectRevision == context.revision
                         && DashboardSummaryStore.accountKey(for: appState.ascManager.credentials) == context.account
                 }
@@ -581,7 +583,7 @@ extension MCPExecutor {
             return mcpText("Unknown tab: \(tab)")
         }
 
-        _ = await MainActor.run { appState.ascManager.pendingFormValues.removeValue(forKey: tab) }
+        _ = try await scopedUI { appState.ascManager.pendingFormValues.removeValue(forKey: tab) }
         var response: [String: Any] = ["success": true, "tab": tab, "fieldsUpdated": fieldMap.count]
         if let resolvedAppInformationLocale {
             response["locale"] = resolvedAppInformationLocale
@@ -602,11 +604,11 @@ extension MCPExecutor {
             throw MCPServerService.MCPError.invalidToolArgs
         }
 
-        if let localeError = await prepareAppInformationLocale(locale, forceRefresh: true) {
+        if let localeError = try await prepareAppInformationLocale(locale, forceRefresh: true) {
             return mcpText(localeError)
         }
 
-        let state = await MainActor.run { () -> [String: Any] in
+        let state = try await scopedUI { () -> [String: Any] in
             let asc = appState.ascManager
             let versionLocalization = asc.appInformationLocalization(locale: locale)
             let appInfoLocalization = asc.appInfoLocalizationForLocale(locale)
@@ -664,7 +666,9 @@ extension MCPExecutor {
         }) else { return mcpText("Error: app or version changed; retry for the intended target.") }
         await appState.ascManager.refreshTabData(refreshTab)
         guard await MainActor.run(body: { selectedTarget.matches(appState.ascManager) }) else { return mcpText("Error: selection changed while refreshing.") }
-        return mcpJSON(["success": true, "refreshedTab": refreshTab.rawValue, "selectedVersion": versionPayload(resolvedVersion)])
+        let next = try await MainActor.run { try Self.contextAfterVersionTransition(resolvedVersion.id, appState: appState) }
+        return mcpJSON(["success": true, "refreshedTab": refreshTab.rawValue,
+            "selectedVersion": versionPayload(resolvedVersion), "expectedTarget": next])
     }
 
     func executeASCCreateVersion(_ args: [String: Any]) async throws -> [String: Any] {
@@ -689,7 +693,12 @@ extension MCPExecutor {
             return mcpText("Error: \(error ?? "Version creation did not complete for the captured target. Re-read the intended app before retrying.")")
         }
         // The result belongs to the captured operation, never a later selection.
-        return mcpJSON(["success": true, "appId": target.appId, "selectedVersion": versionPayload(created), "canCreateUpdate": false])
+        var response: [String: Any] = ["success": true, "appId": target.appId,
+            "selectedVersion": versionPayload(created), "canCreateUpdate": false]
+        if let next = try? await MainActor.run(body: { try Self.contextAfterVersionTransition(created.id, appState: appState) }) {
+            response["expectedTarget"] = next
+        }
+        return mcpJSON(response)
     }
 
     func executeScreenshotsSwitchLocalization(_ args: [String: Any]) async throws -> [String: Any] {
@@ -701,7 +710,7 @@ extension MCPExecutor {
             throw MCPServerService.MCPError.invalidToolArgs
         }
 
-        let previousLocale = await MainActor.run {
+        let previousLocale = try await scopedUI {
             let previous = appState.ascManager.selectedScreenshotsLocale
             appState.ascManager.selectedScreenshotsLocale = locale
             return previous
@@ -709,11 +718,11 @@ extension MCPExecutor {
 
         await appState.ascManager.refreshTabData(.screenshots)
 
-        let availableLocales = await MainActor.run {
+        let availableLocales = try await scopedUI {
             appState.ascManager.localizations.map(\.attributes.locale).sorted()
         }
         guard availableLocales.contains(locale) else {
-            await MainActor.run {
+            try await scopedUI {
                 appState.ascManager.selectedScreenshotsLocale = previousLocale
             }
             let availableText = availableLocales.isEmpty ? "none" : availableLocales.joined(separator: ", ")
@@ -726,7 +735,7 @@ extension MCPExecutor {
         await appState.ascManager.loadScreenshots(locale: locale, force: true)
 
         let displayTypes = await screenshotsDisplayTypesForActiveProject()
-        let trackCounts = await MainActor.run { () -> [String: Int] in
+        let trackCounts = try await scopedUI { () -> [String: Int] in
             var counts: [String: Int] = [:]
             for displayType in displayTypes {
                 appState.ascManager.loadTrackFromASC(displayType: displayType, locale: locale)
@@ -765,13 +774,13 @@ extension MCPExecutor {
         displayType: String,
         locale: String,
         explicitlyRequestedLocale: Bool
-    ) async -> String? {
+    ) async throws -> String? {
         let selectedLocale = await selectedScreenshotsLocale()
         if explicitlyRequestedLocale, selectedLocale != locale {
             return "Error: screenshots locale '\(locale)' is not selected in Blitz Neo. Call screenshots_switch_localization first."
         }
 
-        await MainActor.run {
+        try await scopedUI {
             let asc = appState.ascManager
             if !asc.hasTrackState(displayType: displayType, locale: locale),
                selectedLocale == locale {
@@ -779,7 +788,7 @@ extension MCPExecutor {
             }
         }
 
-        let trackReady = await MainActor.run {
+        let trackReady = try await scopedUI {
             appState.ascManager.hasTrackState(displayType: displayType, locale: locale)
         }
         guard trackReady else {
@@ -877,7 +886,7 @@ extension MCPExecutor {
         let slotRaw = slotIndex + 1
         let displayType = args["displayType"] as? String ?? "APP_IPHONE_67"
         let (locale, explicitlyRequestedLocale) = await resolveScreenshotsLocale(from: args)
-        if let error = await ensurePreparedScreenshotsTrack(
+        if let error = try await ensurePreparedScreenshotsTrack(
             displayType: displayType,
             locale: locale,
             explicitlyRequestedLocale: explicitlyRequestedLocale
@@ -885,7 +894,7 @@ extension MCPExecutor {
             return mcpText(error)
         }
 
-        guard let projectId = await MainActor.run(body: { appState.activeProjectId }) else {
+        guard let projectId = try await scopedUI(body: { appState.activeProjectId }) else {
             return mcpText("Error: no active project")
         }
 
@@ -900,7 +909,7 @@ extension MCPExecutor {
             return mcpText("Error: \(error.localizedDescription)")
         }
 
-        let error = await MainActor.run {
+        let error = try await scopedUI {
             appState.ascManager.addAssetToTrack(
                 displayType: displayType,
                 slotIndex: slotIndex,
@@ -927,7 +936,7 @@ extension MCPExecutor {
         let slotRaw = slotIndex + 1
         let displayType = args["displayType"] as? String ?? "APP_IPHONE_67"
         let (locale, explicitlyRequestedLocale) = await resolveScreenshotsLocale(from: args)
-        if let error = await ensurePreparedScreenshotsTrack(
+        if let error = try await ensurePreparedScreenshotsTrack(
             displayType: displayType,
             locale: locale,
             explicitlyRequestedLocale: explicitlyRequestedLocale
@@ -935,14 +944,14 @@ extension MCPExecutor {
             return mcpText(error)
         }
 
-        let slotExists = await MainActor.run {
+        let slotExists = try await scopedUI {
             appState.ascManager.trackSlotsForDisplayType(displayType, locale: locale)[slotIndex] != nil
         }
         guard slotExists else {
             return mcpText("Error: slot \(slotRaw) is already empty")
         }
 
-        await MainActor.run {
+        try await scopedUI {
             appState.ascManager.removeFromTrack(
                 displayType: displayType,
                 slotIndex: slotIndex,
@@ -977,7 +986,7 @@ extension MCPExecutor {
 
         let displayType = args["displayType"] as? String ?? "APP_IPHONE_67"
         let (locale, explicitlyRequestedLocale) = await resolveScreenshotsLocale(from: args)
-        if let error = await ensurePreparedScreenshotsTrack(
+        if let error = try await ensurePreparedScreenshotsTrack(
             displayType: displayType,
             locale: locale,
             explicitlyRequestedLocale: explicitlyRequestedLocale
@@ -985,7 +994,7 @@ extension MCPExecutor {
             return mcpText(error)
         }
 
-        if let error = await MainActor.run(body: {
+        if let error = try await scopedUI(body: {
             appState.ascManager.reorderTrack(
                 displayType: displayType,
                 order: order,
@@ -1008,7 +1017,7 @@ extension MCPExecutor {
         let (locale, explicitlyRequestedLocale) = await resolveScreenshotsLocale(from: args)
         let projectDisplayTypes = await screenshotsDisplayTypesForActiveProject()
 
-        let selectedLocale = await MainActor.run {
+        let selectedLocale = try await scopedUI {
             appState.ascManager.selectedScreenshotsLocale ?? appState.ascManager.localizations.first?.attributes.locale
         }
         if explicitlyRequestedLocale, selectedLocale != locale {
@@ -1018,7 +1027,7 @@ extension MCPExecutor {
             )
         }
 
-        let displayTypes = await MainActor.run {
+        let displayTypes = try await scopedUI {
             Self.screenshotSaveDisplayTypes(
                 requestedDisplayType: requestedDisplayType,
                 locale: locale,
@@ -1032,7 +1041,7 @@ extension MCPExecutor {
         var preparedTrackCount = 0
 
         for displayType in displayTypes {
-            await MainActor.run {
+            try await scopedUI {
                 let asc = appState.ascManager
                 if !asc.hasTrackState(displayType: displayType, locale: locale),
                    selectedLocale == locale {
@@ -1040,7 +1049,7 @@ extension MCPExecutor {
                 }
             }
 
-            let trackReady = await MainActor.run {
+            let trackReady = try await scopedUI {
                 appState.ascManager.hasTrackState(displayType: displayType, locale: locale)
             }
             if !trackReady {
@@ -1054,7 +1063,7 @@ extension MCPExecutor {
             }
             preparedTrackCount += 1
 
-            let trackHasChanges = await MainActor.run {
+            let trackHasChanges = try await scopedUI {
                 appState.ascManager.hasUnsavedChanges(displayType: displayType, locale: locale)
             }
             if !trackHasChanges {
@@ -1062,11 +1071,12 @@ extension MCPExecutor {
             }
 
             hadChanges = true
+            try await MCPMutationScope.checkBeforeWrite()
             await appState.ascManager.syncTrackToASC(displayType: displayType, locale: locale)
 
             if let err = await checkASCWriteError(tab: "screenshots") { return err }
 
-            let slotCount = await MainActor.run {
+            let slotCount = try await scopedUI {
                 appState.ascManager.trackSlotsForDisplayType(displayType, locale: locale).compactMap { $0 }.count
             }
             syncedTracks.append([
@@ -1170,10 +1180,10 @@ extension MCPExecutor {
         }
         let effectiveDate = args["effectiveDate"] as? String
 
-        guard let service = await MainActor.run(body: { appState.ascManager.service }) else {
+        guard let service = try await scopedUI(body: { appState.ascManager.service }) else {
             return mcpText("Error: ASC service not configured")
         }
-        guard let appId = await MainActor.run(body: { appState.ascManager.app?.id }) else {
+        guard let appId = try await scopedUI(body: { appState.ascManager.app?.id }) else {
             return mcpText("Error: no ASC app loaded. Open a project with a bundle ID first.")
         }
 
@@ -1182,7 +1192,7 @@ extension MCPExecutor {
             do {
                 try await service.setPriceFree(appId: appId)
                 try await service.ensureAppAvailability(appId: appId)
-                await MainActor.run {
+                try await scopedUI {
                     appState.ascManager.currentAppPricePointId = appState.ascManager.freeAppPricePointId
                     appState.ascManager.scheduledAppPricePointId = nil
                     appState.ascManager.scheduledAppPriceEffectiveDate = nil
@@ -1248,7 +1258,7 @@ extension MCPExecutor {
                     effectiveDate: effectiveDate
                 )
                 try await service.ensureAppAvailability(appId: appId)
-                await MainActor.run {
+                try await scopedUI {
                     appState.ascManager.currentAppPricePointId = currentId
                     appState.ascManager.scheduledAppPricePointId = match.id
                     appState.ascManager.scheduledAppPriceEffectiveDate = effectiveDate
@@ -1270,7 +1280,7 @@ extension MCPExecutor {
 
             try await service.setAppPrice(appId: appId, pricePointId: match.id)
             try await service.ensureAppAvailability(appId: appId)
-            await MainActor.run {
+            try await scopedUI {
                 appState.ascManager.currentAppPricePointId = match.id
                 appState.ascManager.scheduledAppPricePointId = nil
                 appState.ascManager.scheduledAppPriceEffectiveDate = nil
@@ -1309,7 +1319,7 @@ extension MCPExecutor {
             return mcpText("Error: invalid type '\(type)'. Must be one of: \(validTypes.joined(separator: ", "))")
         }
 
-        await MainActor.run {
+        try await scopedUI {
             var values: [String: String] = [
                 "kind": "iap",
                 "name": name,
@@ -1322,7 +1332,7 @@ extension MCPExecutor {
             appState.ascManager.pendingCreateValues = values
         }
 
-        await MainActor.run {
+        try await scopedUI {
             appState.ascManager.createIAP(
                 name: name,
                 productId: productId,
@@ -1366,7 +1376,7 @@ extension MCPExecutor {
             )
         }
 
-        await MainActor.run {
+        try await scopedUI {
             var values: [String: String] = [
                 "kind": "subscription",
                 "groupName": groupName,
@@ -1380,7 +1390,7 @@ extension MCPExecutor {
             appState.ascManager.pendingCreateValues = values
         }
 
-        await MainActor.run {
+        try await scopedUI {
             appState.ascManager.createSubscription(
                 groupName: groupName,
                 name: name,
@@ -1409,13 +1419,19 @@ extension MCPExecutor {
 
     func pollASCCreation() async -> String? {
         for _ in 0..<10 {
+            do { try await MCPMutationScope.checkBeforeWrite() }
+            catch { return error.localizedDescription }
             let creating = await MainActor.run { appState.ascManager.isCreating }
             if creating { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
         while await MainActor.run(body: { appState.ascManager.isCreating }) {
+            do { try await MCPMutationScope.checkBeforeWrite() }
+            catch { return error.localizedDescription }
             try? await Task.sleep(for: .milliseconds(500))
         }
+        do { try await MCPMutationScope.checkBeforeWrite() }
+        catch { return error.localizedDescription }
         return await MainActor.run { appState.ascManager.writeError }
     }
 

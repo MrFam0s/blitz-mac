@@ -2,6 +2,63 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.67 — releases from the existing development chat
+
+Creation and release dialogs now offer a copyable handoff to the existing
+development chat, with the Blitz terminal retained as an alternative. Creation
+handoffs preserve the confirmed identity and operation. Release handoffs create
+`docs/blitz-product.md` only if missing, keeping verified product facts separate
+from chat history. The bundled `blitz-release` skill is synchronized locally into
+both agent directories of every registered project, including imported symlinks;
+authored documents and unrelated skills remain untouched.
+
+The manual submission UI, five release MCP tools and thin `blitz-neo release`
+CLI share one durable backend and the existing ASC helper. Exact project/path,
+account, app, case-sensitive bundle ID, platform, version and build are explicit.
+Preparation and validation read Apple without submitting. Final submission checks
+fresh readiness, the attached build, release mode and a fingerprint of metadata,
+ordered media and review information. Saved journals contain no credentials or
+raw review text. Per-app/platform process locks and durable write-intent states
+prevent concurrent or repeated mutations after an uncertain response. Status
+reconciles known effects without replaying a submission. The manual UI preserves
+the existing supported release mode and rejects missing or scheduled modes rather
+than silently enabling automatic publication.
+
+Existing UI-bound Store tools now require an explicit `expectedTarget` and check
+it before navigation, approval, local draft changes and outbound writes. A changed
+selection/account or expired task scope cannot affect another app. The CLI uses
+JSON request data, rejects malformed responses, reports blocked validation and
+unconfirmed submission as failures, and needs no second server or credentials.
+The socket transport never retries after sending begins. Nonblocking reads drain
+large buffered replies even after the peer closes, avoiding a macOS `setsockopt`
+failure reproduced with the complete MCP tool list.
+
+Validation (2026-11-11): all 470 Swift tests and 41 offline creation Python tests
+pass. Coverage includes changed targets/content/builds, durable recovery, process
+locks, exact handoffs, startup skill sync, incomplete JSON:API responses, actual
+Unix-socket reply loss, large fragmented UTF-8 replies and saturated queues.
+Independent reviews found and verified the final corrections. A real read-only
+Apple snapshot for Muehlenstein completed and correctly refused preparation of
+its already released version. No Store mutation or duplicate submission was used
+for validation; functional release decisions still require project evidence.
+
+See [the release workflow](docs/release-workflow.md) for CLI/MCP fields, project
+facts, authorization and recovery. Older chats may need to refresh their cached
+MCP tool list; the installed CLI uses the same current backend immediately.
+ASC remains pinned to 6.6.1. No paid CI or cloud workflow was started.
+
+The native release build and strict/deep Developer ID signature verification pass,
+with the previous designated requirement. ASC ping, direct CLI version and
+`cli.exec` checks pass without account access. Build 73 is installed under
+Applications; build 71 and the intermediate build 72 remain available for rollback.
+The installed UI shows the expected version/build and the handoff dialog was
+inspected without starting a release. The installed CLI returns the intended
+context, all 43 MCP tools are discoverable, missing/mismatched write targets are
+rejected, and an unknown operation fails cleanly. Installed and built helper
+binaries are byte-identical. The user's completed submission was not repeated.
+The release skill matches the bundled source in all 28 copies across the 14
+registered projects after startup synchronization.
+
 ## 1.0.66 — resume app creation after expired authentication
 
 The creation workflow no longer treats a failed account-verification GET as a

@@ -33,6 +33,33 @@ extension MCPExecutor {
         return state
     }
 
+    /// Explicit caller identity is required even for obtaining a writable context.
+    /// This never opens a project or adopts a different selected version silently.
+    func executeGetReleaseContext(_ args: [String: Any]) async -> [String: Any] {
+        guard let projectId = args["projectId"] as? String, !projectId.isEmpty,
+              let appId = args["appId"] as? String, !appId.isEmpty else {
+            return mcpText("Error: projectId and appId are required; use project_list and the intended app's documented Store ID.")
+        }
+        do {
+            let expected = try await MainActor.run { () throws -> MCPExpectedTarget in
+                let captured = MCPReleaseRequestTarget.capture(appState)
+                guard captured.projectID == projectId, captured.appID == appId,
+                      appState.ascManager.loadedProjectId == projectId,
+                      appState.ascManager.app?.bundleId == captured.bundleID else {
+                    throw MCPBoundRequestError.targetChanged
+                }
+                if args.keys.contains("versionId") {
+                    let version = args["versionId"] as? String
+                    guard (args["versionId"] is NSNull || version?.isEmpty == false),
+                          version == captured.selectedVersionID else { throw MCPBoundRequestError.targetChanged }
+                }
+                return try MCPExpectedTarget(captured: captured)
+            }
+            return mcpJSON(["success": true, "expectedTarget": expected.json,
+                "note": "This verifies the current local target, not Apple readiness or authorization to publish. Re-read after a version change."])
+        } catch { return mcpText("Error: \(error.localizedDescription)") }
+    }
+
     // MARK: - Tab State Tool
 
     private static let ageRatingBooleanFieldReaders: [(String, (ASCAgeRatingDeclaration.Attributes) -> Bool?)] = [

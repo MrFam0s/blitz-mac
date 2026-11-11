@@ -1,4 +1,5 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+import AppKit
 import SwiftUI
 
 struct ReleaseAutomationSheet: View {
@@ -8,6 +9,7 @@ struct ReleaseAutomationSheet: View {
     @State private var preflight: ReleasePreflight?
     @State private var error: String?
     @State private var releaseTarget: ASCReleaseOperationTarget?
+    @State private var copiedHandoff: URL?
 
     private var agent: AIAgent { AIAgent(rawValue: appState.settingsStore.defaultAgentCLI) ?? .claudeCode }
 
@@ -65,16 +67,25 @@ struct ReleaseAutomationSheet: View {
                 Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
                 Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
             }.font(.callout)
-            Text("Startet \(agent.displayName) im Blitz-Neo-Terminal. Ohne neuen App-Stand oder vorbereitete Store-Änderungen wird nichts eingereicht. Fehlende Angaben oder fehlgeschlagene Tests stoppen den Ablauf.")
+            Text("Setze den Auftrag bevorzugt im Entwicklungs-Chat fort oder starte \(agent.displayName) im Blitz-Neo-Terminal. Beide Wege prüfen denselben App- und Build-Stand. Ohne nachgewiesene Änderungen oder bei fehlgeschlagenen Tests wird nichts eingereicht.")
                 .font(.caption).foregroundStyle(.secondary)
+            if let copiedHandoff {
+                Label("Auftrag kopiert. Füge ihn im Entwicklungs-Chat ein, um den Ablauf zu starten.", systemImage: "checkmark.circle")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .help(copiedHandoff.path)
+            }
             if let error { Text(error).font(.callout).foregroundStyle(.orange) }
             Divider()
-            HStack {
-                Button("Abbrechen") { dismiss() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Update automatisch veröffentlichen") { start() }
+            VStack(alignment: .trailing, spacing: 10) {
+                Button("Im bestehenden Chat fortsetzen") { start(inExistingChat: true) }
                     .buttonStyle(.borderedProminent)
                     .disabled(context == nil || preflight == nil)
+                HStack {
+                    Button(copiedHandoff == nil ? "Abbrechen" : "Schließen") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Spacer()
+                    Button("Im Blitz-Terminal starten") { start(inExistingChat: false) }
+                        .disabled(context == nil || preflight == nil)
+                }
             }
         }
         .padding(24)
@@ -102,7 +113,8 @@ struct ReleaseAutomationSheet: View {
                 projectPath: URL(fileURLWithPath: project.path).resolvingSymlinksInPath().path,
                 appID: app.id, appName: app.name, bundleID: app.bundleId, platform: project.platform,
                 displayedLiveVersion: ASCReleaseStatus.currentLiveVersion(for: ASCReleaseStatus.versions(versions, for: project.platform))?.attributes.versionString,
-                preparedVersion: prepared
+                preparedVersion: prepared,
+                accountKey: DashboardSummaryStore.accountKey(for: appState.ascManager.credentials)
             )
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -123,17 +135,31 @@ struct ReleaseAutomationSheet: View {
         return "Version \(version) · Build \(build)" + (newer ? " · neuer als die angezeigte freigegebene Version" : " · noch kein Nachweis für ein neues Release")
     }
 
-    private func start() {
+    private func start(inExistingChat: Bool) {
         guard let context, let preflight else { return }
         guard releaseTarget?.matches(appState.ascManager) == true, context.matches(project: appState.activeProject, app: appState.ascManager.app),
-              ReleaseAutomationService.matchesPreparedVersion(context, versions: appState.ascManager.appStoreVersions) else {
+              ReleaseAutomationService.matchesPreparedVersion(context, versions: appState.ascManager.appStoreVersions),
+              context.accountKey == DashboardSummaryStore.accountKey(for: appState.ascManager.credentials) else {
             error = "Die ausgewählte App oder ihr Entwurf hat sich geändert. Bitte schließe den Dialog und starte erneut."
             return
         }
         do {
-            let prompt = try ReleaseAutomationService.prompt(context: context, preflight: preflight)
+            let projectDirectory = URL(fileURLWithPath: context.projectPath, isDirectory: true)
+            try ProjectAgentConfigService(baseDirectory: ProjectStorage().baseDirectory)
+                .prepareBundledReleaseSkill(projectDir: projectDirectory)
+            let handoff = try ReleaseHandoffService.prepare(context: context, preflight: preflight)
+            if inExistingChat {
+                NSPasteboard.general.clearContents()
+                guard NSPasteboard.general.setString(handoff.instructions, forType: .string) else {
+                    throw NSError(domain: "BlitzReleaseHandoff", code: 2,
+                        userInfo: [NSLocalizedDescriptionKey: "Der Auftrag konnte nicht in die Zwischenablage kopiert werden."])
+                }
+                copiedHandoff = handoff.document
+                error = nil
+                return
+            }
             appState.terminalManager.createAgentSession(
-                projectPath: context.projectPath, agent: agent, prompt: prompt,
+                projectPath: context.projectPath, agent: agent, prompt: handoff.instructions,
                 skipPermissions: appState.settingsStore.skipAgentPermissions, reuseKey: context.sessionKey
             )
             appState.showTerminal = true

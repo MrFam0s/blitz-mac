@@ -11,6 +11,7 @@ struct SubmitPreviewSheet: View {
     @State private var appIcon: NSImage?
 
     @State private var releaseTarget: ASCReleaseOperationTarget?
+    @State private var expectedReleaseMode: String?
 
     private var targetMatches: Bool { releaseTarget?.matches(asc) == true }
     private var validBuilds: [ASCBuild] {
@@ -87,6 +88,14 @@ struct SubmitPreviewSheet: View {
             if asc.canCreateUpdate {
                 createUpdateRequiredContent
             } else if isSubmittable {
+                if let mode = expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) {
+                    Label(mode == .manual ? "Veröffentlichung: manuell nach Apples Freigabe" : "Veröffentlichung: automatisch nach Apples Freigabe",
+                          systemImage: "calendar.badge.checkmark")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else if !isCheckingReadiness {
+                    Text("Die Veröffentlichungsart ist unbekannt oder geplant. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen und diese Vorschau neu öffnen.")
+                        .font(.callout).foregroundStyle(.orange)
+                }
                 submittableContent
             } else {
                 nonSubmittableContent
@@ -110,13 +119,15 @@ struct SubmitPreviewSheet: View {
                         Task {
                             let buildId = selectedBuildId.isEmpty ? nil : selectedBuildId
                             guard let releaseTarget, releaseTarget.matches(asc) else { return }
-                            if await asc.submitForReview(attachBuildId: buildId, expectedTarget: releaseTarget) {
+                            if await asc.submitForReview(attachBuildId: buildId, expectedTarget: releaseTarget,
+                                                        expectedReleaseMode: expectedReleaseMode) {
                                 dismiss()
                             }
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete(selectingBuild: selectedBuild) || selectedBuild == nil)
+                    .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete(selectingBuild: selectedBuild) || selectedBuild == nil
+                              || expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) == nil)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -132,6 +143,7 @@ struct SubmitPreviewSheet: View {
             guard !Task.isCancelled, initialTarget.matches(asc) else { return }
             releaseTarget = asc.releaseOperationTarget()
             guard let releaseTarget else { return }
+            expectedReleaseMode = asc.selectedVersion?.attributes.releaseType
             // The overview fetch also reloads the fully paginated build inventory.
             if let attached = asc.selectedVersionBuild, validBuilds.contains(where: { $0.id == attached.id }) {
                 selectedBuildId = attached.id

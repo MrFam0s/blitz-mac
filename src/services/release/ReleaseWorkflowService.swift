@@ -1,0 +1,430 @@
+import CryptoKit
+import Darwin
+import Foundation
+
+/// A release belongs to this identity, never to the currently visible Blitz tab.
+struct ReleaseWorkflowTarget: Codable, Equatable, Sendable {
+    let projectID: String
+    let projectPath: String
+    let appID: String
+    let bundleID: String
+    let platform: String
+    let accountKey: String
+    let versionID: String
+    let buildID: String
+    enum CodingKeys: String, CodingKey {
+        case projectID = "projectId", projectPath, appID = "appId", bundleID = "bundleId", platform, accountKey
+        case versionID = "versionId", buildID = "buildId"
+    }
+
+    func validate() throws {
+        guard !projectID.isEmpty, !bundleID.isEmpty, !accountKey.isEmpty,
+              ["IOS", "MAC_OS", "TV_OS", "VISION_OS"].contains(platform),
+              [appID, versionID, buildID].allSatisfy(Self.validID),
+              projectPath.hasPrefix("/"),
+              URL(fileURLWithPath: projectPath).resolvingSymlinksInPath().path == projectPath else {
+            throw ReleaseWorkflowError.invalidTarget
+        }
+    }
+
+    static func validID(_ value: String) -> Bool {
+        !value.isEmpty && value.utf8.count <= 128 && value.utf8.allSatisfy {
+            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
+        }
+    }
+}
+
+enum ReleaseWorkflowMode: String, Codable, Sendable {
+    case manual = "MANUAL"
+    case automaticAfterApproval = "AFTER_APPROVAL"
+}
+
+struct ReleaseWorkflowSnapshot: Equatable, Sendable {
+    let appID: String
+    let bundleID: String
+    let versionID: String
+    let platform: String
+    let versionString: String
+    let buildID: String
+    let buildNumber: String
+    let buildValid: Bool
+    let attachedBuildID: String?
+    let appleState: String
+    let releaseType: String?
+    /// Digest of all protected metadata/media, not their plaintext or demo credentials.
+    let contentDigest: String
+    var submissionID: String? = nil
+    var hasSubmissionConflict: Bool = false
+
+    func check(_ target: ReleaseWorkflowTarget, requirePreparedBuild: Bool = true) throws {
+        guard appID == target.appID, bundleID == target.bundleID,
+              versionID == target.versionID, platform == target.platform,
+              buildID == target.buildID,
+              (!requirePreparedBuild || (buildValid && attachedBuildID == target.buildID)) else {
+            throw ReleaseWorkflowError.identityChanged
+        }
+    }
+}
+
+struct ReleaseWorkflowValidation: Codable, Equatable, Sendable {
+    let ready: Bool
+    let blocking: Int
+    let warnings: Int
+    let unverified: Int
+    /// Only stable check identifiers are persisted. CLI output can contain private review data.
+    let checkIDs: [String]
+}
+
+protocol ReleaseWorkflowAPI {
+    var accountKey: String { get }
+    func snapshot(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowSnapshot
+    func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation
+    func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws
+    func submit(_ target: ReleaseWorkflowTarget, expectedContentDigest: String) async throws -> String?
+}
+
+enum ReleaseWorkflowState: String, Codable, Sendable {
+    case prepared, validated, needsPreparation, attachmentPending, releaseModePending, submissionPending, submitted
+}
+
+struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
+    let operationID: String
+    let target: ReleaseWorkflowTarget
+    let mode: ReleaseWorkflowMode
+    let versionString: String
+    let buildNumber: String
+    let contentDigest: String
+    let confirmationDigest: String
+    let preparedAt: Date
+    var updatedAt: Date
+    var state: ReleaseWorkflowState
+    var validation: ReleaseWorkflowValidation?
+    var lastErrorCode: String?
+    var appleState: String?
+    var submissionID: String?
+    enum CodingKeys: String, CodingKey {
+        case operationID = "operationId", target, mode, versionString, buildNumber, contentDigest, confirmationDigest
+        case preparedAt, updatedAt, state, validation, lastErrorCode, appleState, submissionID = "submissionId"
+    }
+}
+
+enum ReleaseWorkflowError: Error, LocalizedError {
+    case invalidTarget, accountChanged, identityChanged, contentChanged, buildNotPrepared
+    case unknownOperation, busy, unsafeState, confirmationRequired, notReady, uncertainOutcome, storage
+    var errorDescription: String? {
+        switch self {
+        case .invalidTarget: return "Der Release-Auftrag benötigt eindeutige Projekt-, Konto-, App-, Plattform-, Versions- und Build-IDs."
+        case .accountChanged: return "Der Release-Auftrag gehört zu einem anderen Apple-Konto."
+        case .identityChanged: return "App, Plattform, Version oder zugeordneter Build stimmen nicht mit dem Release-Auftrag überein."
+        case .contentChanged: return "Texte, Medien oder Release-Daten haben sich geändert. Bitte erneut vorbereiten und prüfen."
+        case .buildNotPrepared: return "Zuerst die genaue Version mit einem verarbeiteten, passenden Build vorbereiten und verknüpfen."
+        case .unknownOperation: return "Der Release-Auftrag wurde nicht gefunden."
+        case .busy: return "Für diese App und Plattform läuft bereits ein Release-Schritt."
+        case .unsafeState: return "Der gespeicherte Release-Zustand ist ungültig oder nicht mehr aktiv."
+        case .confirmationRequired: return "Der Bestätigungswert muss genau dem geprüften Release-Auftrag entsprechen."
+        case .notReady: return "Die frische Release-Prüfung hat offene oder nicht verifizierte Punkte gefunden."
+        case .uncertainOutcome: return "Ein vorheriger Schreibauftrag hat einen unklaren Ausgang. Nur den Status abgleichen; nicht erneut einreichen."
+        case .storage: return "Der private Release-Zustand konnte nicht sicher gespeichert werden."
+        }
+    }
+}
+
+/// Persistent boundaries survive new chats, helper processes and app restarts.
+/// All network effects remain in a captured account-bound API implementation.
+actor ReleaseWorkflowService {
+    private let directory: URL
+    private let api: any ReleaseWorkflowAPI
+
+    init(directory: URL, api: any ReleaseWorkflowAPI) {
+        self.directory = directory
+        self.api = api
+    }
+
+    /// Local inspection only; callers can verify registration/account before any API access.
+    func loadRecord(operationID: String) throws -> ReleaseWorkflowRecord { try load(operationID) }
+
+    func activeOperation(target: ReleaseWorkflowTarget) throws -> ReleaseWorkflowRecord? {
+        try target.validate()
+        try checkAccount(target.accountKey, target: target)
+        return try activeRecord(target)
+    }
+
+    func prepare(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode) async throws -> ReleaseWorkflowRecord {
+        try await prepareInternal(target: target, mode: mode, attach: nil)
+    }
+
+    /// Explicit UI action only. MCP/CLI `release_prepare` never attaches a build.
+    /// The existing manager supplies its checked attachment operation; the same
+    /// process lock and durable intent cover it before final preparation begins.
+    func prepareAfterAttachingBuild(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode,
+                                   attach: @escaping () async throws -> Void) async throws -> ReleaseWorkflowRecord {
+        try await prepareInternal(target: target, mode: mode, attach: attach)
+    }
+
+    private func prepareInternal(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode,
+                                 attach: (() async throws -> Void)?) async throws -> ReleaseWorkflowRecord {
+        try target.validate()
+        try checkAccount(target.accountKey, target: target)
+        let lock = try acquire(target); defer { release(lock) }
+        let previous = try activeRecord(target)
+        if let previous, previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
+            // A new operation ID must not bypass a consumed mutation boundary.
+            throw ReleaseWorkflowError.uncertainOutcome
+        }
+        let snapshot = try await api.snapshot(target)
+        try snapshot.check(target, requirePreparedBuild: attach == nil)
+        guard snapshot.buildValid else { throw ReleaseWorkflowError.buildNotPrepared }
+        guard !snapshot.hasSubmissionConflict else { throw ReleaseWorkflowError.uncertainOutcome }
+        guard ASCReleaseStatus.isEditable(snapshot.appleState) else { throw ReleaseWorkflowError.buildNotPrepared }
+        if let previous, previous.target == target, previous.mode == mode,
+           snapshot.attachedBuildID == target.buildID,
+           previous.contentDigest == snapshot.contentDigest, previous.versionString == snapshot.versionString,
+           previous.buildNumber == snapshot.buildNumber,
+           previous.state == .prepared || previous.state == .validated {
+            return previous
+        }
+        let id = UUID().uuidString.lowercased()
+        let now = Date()
+        let digest = try Self.digest(Confirmation(target: target, mode: mode, operationID: id,
+            versionString: snapshot.versionString, buildNumber: snapshot.buildNumber, contentDigest: snapshot.contentDigest))
+        var record = ReleaseWorkflowRecord(operationID: id, target: target, mode: mode,
+            versionString: snapshot.versionString, buildNumber: snapshot.buildNumber,
+            contentDigest: snapshot.contentDigest, confirmationDigest: digest, preparedAt: now,
+            updatedAt: now, state: .prepared, appleState: snapshot.appleState)
+        try save(record)
+        try write(Data(id.utf8), to: activeURL(target))
+        if let attach, snapshot.attachedBuildID != target.buildID {
+            record.state = .attachmentPending
+            try save(record)
+            do {
+                try await attach()
+                let after = try await api.snapshot(target)
+                try checkUnchanged(after, record: record)
+                record.state = .prepared
+                record.updatedAt = Date()
+                try save(record)
+            } catch { throw ReleaseWorkflowError.uncertainOutcome }
+        }
+        return record
+    }
+
+    func status(operationID: String, accountKey: String) async throws -> ReleaseWorkflowRecord {
+        var record = try load(operationID)
+        try checkAccount(accountKey, target: record.target)
+        let lock = try acquire(record.target); defer { release(lock) }
+        record = try load(operationID)
+        let snapshot = try await api.snapshot(record.target)
+        try snapshot.check(record.target, requirePreparedBuild: false)
+        record.appleState = snapshot.appleState
+        if record.state == .submissionPending || Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
+            record.submissionID = snapshot.submissionID ?? record.submissionID
+        }
+        if Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
+            guard snapshot.attachedBuildID == record.target.buildID,
+                  snapshot.versionString == record.versionString, snapshot.buildNumber == record.buildNumber else {
+                throw ReleaseWorkflowError.identityChanged
+            }
+            record.state = .submitted
+            record.lastErrorCode = nil
+        } else if (record.state == .releaseModePending && snapshot.releaseType == record.mode.rawValue) ||
+                    (record.state == .attachmentPending && snapshot.attachedBuildID == record.target.buildID) {
+            // The mode effect is now known. Changed content needs a new plan, not
+            // an irreversible pending state: no submission request was sent yet.
+            do {
+                try checkUnchanged(snapshot, record: record)
+                record.state = .prepared
+                record.lastErrorCode = nil
+            } catch {
+                record.state = .needsPreparation
+                record.lastErrorCode = "prepared_content_changed"
+            }
+        }
+        // An editable version does NOT prove that a timed-out submission POST failed.
+        record.updatedAt = Date()
+        try save(record)
+        return record
+    }
+
+    func validate(operationID: String, accountKey: String) async throws -> ReleaseWorkflowRecord {
+        var record = try load(operationID)
+        try checkAccount(accountKey, target: record.target)
+        let lock = try acquire(record.target); defer { release(lock) }
+        record = try requireActive(record)
+        guard record.state == .prepared || record.state == .validated else { throw ReleaseWorkflowError.unsafeState }
+        return try await validateLocked(record)
+    }
+
+    func submit(operationID: String, accountKey: String, confirmationDigest: String) async throws -> ReleaseWorkflowRecord {
+        var record = try load(operationID)
+        try checkAccount(accountKey, target: record.target)
+        let lock = try acquire(record.target); defer { release(lock) }
+        record = try requireActive(record)
+        guard record.confirmationDigest == confirmationDigest else { throw ReleaseWorkflowError.confirmationRequired }
+        if record.state == .submitted { return record }
+        guard record.state != .submissionPending, record.state != .releaseModePending,
+              record.state != .attachmentPending else { throw ReleaseWorkflowError.uncertainOutcome }
+        guard record.state == .validated else { throw ReleaseWorkflowError.notReady }
+        record = try await validateLocked(record)
+        guard record.validation?.ready == true else { throw ReleaseWorkflowError.notReady }
+
+        var snapshot = try await api.snapshot(record.target)
+        try checkUnchanged(snapshot, record: record)
+        if snapshot.releaseType != record.mode.rawValue {
+            record.state = .releaseModePending
+            record.updatedAt = Date()
+            try save(record) // Intent must be durable before the first mutation.
+            do { try await api.setReleaseMode(record.mode, target: record.target) }
+            catch { throw ReleaseWorkflowError.uncertainOutcome }
+            snapshot = try await api.snapshot(record.target)
+            try checkUnchanged(snapshot, record: record)
+            guard snapshot.releaseType == record.mode.rawValue else { throw ReleaseWorkflowError.uncertainOutcome }
+            record.state = .validated
+            try save(record)
+        }
+        record.state = .submissionPending
+        record.updatedAt = Date()
+        try save(record) // Never replay this boundary, even after a crash or lost reply.
+        do {
+            record.submissionID = try await api.submit(record.target, expectedContentDigest: record.contentDigest)
+            let after = try await api.snapshot(record.target)
+            try after.check(record.target)
+            record.appleState = after.appleState
+            if Self.submittedStates.contains(ASCReleaseStatus.normalize(after.appleState)) {
+                record.state = .submitted
+            }
+            record.updatedAt = Date()
+            try save(record)
+            return record
+        } catch {
+            // Do not store raw Apple/CLI bodies, cookies or demo credentials.
+            record.lastErrorCode = "submission_outcome_unknown"
+            record.updatedAt = Date()
+            try save(record)
+            throw ReleaseWorkflowError.uncertainOutcome
+        }
+    }
+
+    private func validateLocked(_ input: ReleaseWorkflowRecord) async throws -> ReleaseWorkflowRecord {
+        var record = input
+        do {
+            let before = try await api.snapshot(record.target)
+            try checkUnchanged(before, record: record)
+            let validation = try await api.readiness(record.target)
+            let after = try await api.snapshot(record.target)
+            try checkUnchanged(after, record: record)
+            record.validation = validation
+            record.state = validation.ready ? .validated : .prepared
+            record.lastErrorCode = validation.ready ? nil : "readiness_blocked"
+            record.appleState = after.appleState
+            record.updatedAt = Date()
+            try save(record)
+            return record
+        } catch {
+            if case ReleaseWorkflowError.contentChanged = error { record.state = .needsPreparation }
+            else { record.state = .prepared }
+            record.validation = nil
+            record.lastErrorCode = "preflight_failed"
+            record.updatedAt = Date()
+            try save(record)
+            throw error
+        }
+    }
+
+    private func checkUnchanged(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) throws {
+        try snapshot.check(record.target)
+        guard ASCReleaseStatus.isEditable(snapshot.appleState), snapshot.versionString == record.versionString,
+              snapshot.buildNumber == record.buildNumber, snapshot.contentDigest == record.contentDigest else {
+            throw ReleaseWorkflowError.contentChanged
+        }
+        guard !snapshot.hasSubmissionConflict else { throw ReleaseWorkflowError.uncertainOutcome }
+    }
+
+    private func checkAccount(_ account: String, target: ReleaseWorkflowTarget) throws {
+        guard account == target.accountKey, api.accountKey == target.accountKey else { throw ReleaseWorkflowError.accountChanged }
+    }
+
+    private func requireActive(_ record: ReleaseWorkflowRecord) throws -> ReleaseWorkflowRecord {
+        guard try activeRecord(record.target)?.operationID == record.operationID else { throw ReleaseWorkflowError.unsafeState }
+        return try load(record.operationID)
+    }
+
+    private static let submittedStates: Set<String> = ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE",
+        "PENDING_APPLE_RELEASE", "PROCESSING_FOR_APP_STORE", "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "ACCEPTED"]
+
+    private struct Confirmation: Encodable {
+        let target: ReleaseWorkflowTarget
+        let mode: ReleaseWorkflowMode
+        let operationID: String
+        let versionString: String
+        let buildNumber: String
+        let contentDigest: String
+    }
+
+    static func digest<T: Encodable>(_ value: T) throws -> String {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return SHA256.hash(data: try encoder.encode(value)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func scope(_ target: ReleaseWorkflowTarget) -> String {
+        SHA256.hash(data: Data("\(target.accountKey)|\(target.appID)|\(target.platform)".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func activeURL(_ target: ReleaseWorkflowTarget) -> URL { directory.appendingPathComponent("active-\(scope(target)).txt") }
+
+    private func activeRecord(_ target: ReleaseWorkflowTarget) throws -> ReleaseWorkflowRecord? {
+        let url = activeURL(target)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        try rejectSymlink(url)
+        let id = try String(contentsOf: url, encoding: .utf8)
+        return try load(id)
+    }
+
+    private func load(_ id: String) throws -> ReleaseWorkflowRecord {
+        guard UUID(uuidString: id) != nil else { throw ReleaseWorkflowError.unknownOperation }
+        let url = directory.appendingPathComponent("\(id.lowercased()).json")
+        try rejectSymlink(url)
+        guard FileManager.default.fileExists(atPath: url.path) else { throw ReleaseWorkflowError.unknownOperation }
+        let record = try JSONDecoder().decode(ReleaseWorkflowRecord.self, from: Data(contentsOf: url))
+        guard record.operationID == id.lowercased() else { throw ReleaseWorkflowError.unsafeState }
+        try record.target.validate()
+        let expected = try Self.digest(Confirmation(target: record.target, mode: record.mode, operationID: record.operationID,
+            versionString: record.versionString, buildNumber: record.buildNumber, contentDigest: record.contentDigest))
+        guard expected == record.confirmationDigest else { throw ReleaseWorkflowError.unsafeState }
+        return record
+    }
+
+    private func save(_ record: ReleaseWorkflowRecord) throws {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try write(encoder.encode(record), to: directory.appendingPathComponent("\(record.operationID).json"))
+    }
+
+    private func write(_ data: Data, to url: URL) throws {
+        try rejectSymlink(url)
+        try data.write(to: url, options: .atomic)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        let fd = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW)
+        guard fd >= 0 else { throw ReleaseWorkflowError.storage }
+        defer { Darwin.close(fd) }
+        guard fsync(fd) == 0 else { throw ReleaseWorkflowError.storage }
+        let parent = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY)
+        guard parent >= 0 else { throw ReleaseWorkflowError.storage }
+        defer { Darwin.close(parent) }
+        guard fsync(parent) == 0 else { throw ReleaseWorkflowError.storage }
+    }
+
+    private func rejectSymlink(_ url: URL) throws {
+        guard url.standardizedFileURL.path == url.resolvingSymlinksInPath().path else { throw ReleaseWorkflowError.storage }
+    }
+
+    private func acquire(_ target: ReleaseWorkflowTarget) throws -> Int32 {
+        try rejectSymlink(directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let path = directory.appendingPathComponent("lock-\(scope(target))").path
+        let fd = Darwin.open(path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { throw ReleaseWorkflowError.storage }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { Darwin.close(fd); throw ReleaseWorkflowError.busy }
+        return fd
+    }
+
+    private func release(_ fd: Int32) { _ = flock(fd, LOCK_UN); Darwin.close(fd) }
+}

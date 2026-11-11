@@ -44,6 +44,15 @@ struct MCPReleaseRequestTarget: Equatable, Sendable {
             && (selectedVersionID == nil || selectedVersionID == current.selectedVersionID)
     }
 
+    /// Only explicit version-selection/create handlers use this after completing
+    /// their own verified transition; every other request still matches version.
+    func matchesOwner(_ current: Self) -> Bool {
+        projectID == current.projectID && projectPath == current.projectPath
+            && bundleID == current.bundleID && platform == current.platform && appID == current.appID
+            && projectRevision == current.projectRevision && credentialRevision == current.credentialRevision
+            && accountKey == current.accountKey
+    }
+
     @MainActor static func capture(_ appState: AppState) -> Self {
         let project = appState.activeProject
         let manager = appState.ascManager
@@ -70,12 +79,22 @@ actor MCPExecutor {
         approvedReleaseTarget.map { $0.matches(.capture(appState)) } ?? true
     }
 
+    @MainActor static func contextAfterVersionTransition(_ versionID: String, appState: AppState) throws -> [String: Any] {
+        let current = MCPReleaseRequestTarget.capture(appState)
+        guard let previous = approvedReleaseTarget, previous.matchesOwner(current),
+              current.selectedVersionID == versionID,
+              appState.ascManager.loadedProjectId == current.projectID,
+              appState.ascManager.app?.bundleId == current.bundleID else { throw MCPBoundRequestError.targetChanged }
+        return try MCPExpectedTarget(captured: current).json
+    }
+
     private struct NavigationState: Sendable {
         let tab: AppTab
         let appSubTab: AppSubTab
     }
 
     let appState: AppState
+    private var targetLease: UUID?
     private static let gateableCategories: [ApprovalRequest.ToolCategory] = [
         .ascFormMutation, .ascScreenshotMutation, .ascSubmitMutation,
         .buildPipeline, .projectMutation, .settingsMutation, .simulatorControl,
@@ -113,13 +132,75 @@ actor MCPExecutor {
     /// Execute a tool call, requesting approval if needed.
     func execute(name: String, arguments: [String: Any]) async throws -> [String: Any] {
         let category = MCPRegistry.category(for: name)
-        let releaseTools: Set<String> = [
-            "asc_create_version", "asc_open_submit_preview", "app_store_build", "app_store_upload",
-        ]
-        let releaseTarget: MCPReleaseRequestTarget? = releaseTools.contains(name)
-            ? await MainActor.run { MCPReleaseRequestTarget.capture(appState) } : nil
+        let bound = MCPExpectedTarget.requiresBinding(tool: name, arguments: arguments)
+        let changesSelection: Set<String> = ["project_open", "project_close", "project_create", "project_import",
+            "asc_set_credentials", "asc_web_auth", "asc_reopen_app_setup", "asc_confirm_created_app", "nav_switch_tab", "release_submit"]
+        let needsLease = bound || changesSelection.contains(name) || name == "asc_fill_form"
+        guard !needsLease || targetLease == nil else { return mcpText("Error: \(MCPBoundRequestError.busy.localizedDescription)") }
+        let lease = needsLease ? UUID() : nil
+        if let lease { targetLease = lease }
+        defer { if let lease, targetLease == lease { targetLease = nil } }
 
-        // Pre-navigate for ASC form tools so the user sees the target tab before approving.
+        let captured: MCPReleaseRequestTarget?
+        let scope: MCPMutationScope?
+        if bound {
+            guard let json = arguments["expectedTarget"] as? [String: Any] else {
+                return mcpText("Error: \(MCPBoundRequestError.invalidTarget.localizedDescription)")
+            }
+            do {
+                let expected = try MCPExpectedTarget(json: json)
+                let initial = try await MainActor.run { () throws -> MCPReleaseRequestTarget in
+                    let current = MCPReleaseRequestTarget.capture(appState)
+                    guard expected.matches(current), appState.ascManager.loadedProjectId == expected.projectId,
+                          appState.ascManager.app?.bundleId == expected.bundleId else {
+                        throw MCPBoundRequestError.targetChanged
+                    }
+                    return current
+                }
+                captured = initial
+                scope = MCPMutationScope { [appState] in
+                    let current = MCPReleaseRequestTarget.capture(appState)
+                    guard initial.matches(current), expected.matches(current),
+                          appState.ascManager.loadedProjectId == expected.projectId,
+                          appState.ascManager.app?.bundleId == expected.bundleId else {
+                        throw MCPBoundRequestError.targetChanged
+                    }
+                }
+            } catch { return mcpText("Error: \(error.localizedDescription)") }
+        } else if name == "asc_fill_form", arguments["tab"] as? String == "settings.bundleId" {
+            guard let projectId = arguments["projectId"] as? String, !projectId.isEmpty else {
+                return mcpText("Error: settings.bundleId requires the intended projectId. It cannot adopt the current UI selection.")
+            }
+            let initial = await MainActor.run { MCPReleaseRequestTarget.capture(appState) }
+            guard initial.projectID == projectId, initial.projectPath != nil else {
+                return mcpText("Error: \(MCPBoundRequestError.targetChanged.localizedDescription)")
+            }
+            captured = nil
+            // This local identity edit may change its own bundle ID. Project,
+            // account and load revision must remain the ones named at entry.
+            scope = MCPMutationScope { [appState] in
+                let current = MCPReleaseRequestTarget.capture(appState)
+                guard current.projectID == projectId, current.projectPath == initial.projectPath,
+                      current.projectRevision == initial.projectRevision,
+                      current.accountKey == initial.accountKey,
+                      current.credentialRevision == initial.credentialRevision else {
+                    throw MCPBoundRequestError.targetChanged
+                }
+            }
+        } else { captured = nil; scope = nil }
+        defer { scope?.finish() }
+
+        do {
+            return try await MCPMutationScope.$current.withValue(scope) {
+                try await Self.$approvedReleaseTarget.withValue(captured) {
+                    try await executeApproved(name: name, arguments: arguments, category: category)
+                }
+            }
+        } catch { return mcpText("Error: \(error.localizedDescription)") }
+    }
+
+    private func executeApproved(name: String, arguments: [String: Any], category: ApprovalRequest.ToolCategory) async throws -> [String: Any] {
+        // Bind before auto-navigation or an approval wait, not after either.
         var previousNavigation: NavigationState?
         if name == "asc_fill_form" || name == "asc_create_version" || name == "asc_open_submit_preview"
             || MCPAppInformationCompatibility.isLocalizationTool(name)
@@ -129,45 +210,32 @@ actor MCPExecutor {
             || name == "screenshots_remove_track_slot"
             || name == "screenshots_reorder_track"
             || name == "screenshots_save" {
-            previousNavigation = await preNavigateASCTool(name: name, arguments: arguments)
+            previousNavigation = try await preNavigateASCTool(name: name, arguments: arguments)
         }
-
-        let request = ApprovalRequest(
-            id: UUID().uuidString,
-            toolName: name,
-            description: "Execute '\(name)'",
-            parameters: arguments.mapValues { "\($0)" },
-            category: category
-        )
-
+        let request = ApprovalRequest(id: UUID().uuidString, toolName: name,
+            description: "Execute '\(name)'", parameters: arguments.mapValues { "\($0)" }, category: category)
         if request.requiresApproval(permissionToggles: await SettingsService.shared.permissionToggles) {
             let approved = await requestApproval(request)
             guard approved else {
-                if let prev = previousNavigation {
-                    await MainActor.run {
-                        appState.activeTab = prev.tab
-                        appState.activeAppSubTab = prev.appSubTab
+                // Do not clear another project's drafts if the user navigated while waiting.
+                if let previousNavigation {
+                    try? await MainActor.run {
+                        try MCPMutationScope.checkCurrent()
+                        appState.activeTab = previousNavigation.tab
+                        appState.activeAppSubTab = previousNavigation.appSubTab
+                        appState.ascManager.pendingFormValues.removeAll()
                     }
-                    _ = await MainActor.run { appState.ascManager.pendingFormValues.removeAll() }
                 }
-                return mcpText("Tool '\(name)' was denied by the user.")
+                return mcpText("Error: tool '\(name)' was denied by the user.")
             }
         }
-
-        if let releaseTarget {
-            let stillMatches = await MainActor.run { releaseTarget.matches(.capture(appState)) }
-            guard stillMatches else {
-                return mcpText("Error: the app, account or version changed while preparing this release request. Select the intended target and start the tool again.")
-            }
-        }
-        return try await Self.$approvedReleaseTarget.withValue(releaseTarget) {
-            try await executeTool(name: name, arguments: arguments)
-        }
+        try await MCPMutationScope.checkBeforeWrite()
+        return try await executeTool(name: name, arguments: arguments)
     }
 
     /// Navigate to the appropriate tab before approval, and set pending form values.
     /// Returns the previous navigation state so we can navigate back if denied.
-    private func preNavigateASCTool(name: String, arguments: [String: Any]) async -> NavigationState {
+    private func preNavigateASCTool(name: String, arguments: [String: Any]) async throws -> NavigationState {
         let previousNavigation = await MainActor.run {
             NavigationState(tab: appState.activeTab, appSubTab: appState.activeAppSubTab)
         }
@@ -214,7 +282,8 @@ actor MCPExecutor {
         }
 
         if let targetTab {
-            await MainActor.run {
+            try await MainActor.run {
+                try MCPMutationScope.checkCurrent()
                 appState.activeTab = targetTab
                 if let targetAppSubTab {
                     appState.activeAppSubTab = targetAppSubTab
@@ -234,7 +303,8 @@ actor MCPExecutor {
 
             if !fieldMap.isEmpty {
                 let fieldMapCopy = fieldMap
-                await MainActor.run {
+                try await MainActor.run {
+                    try MCPMutationScope.checkCurrent()
                     let existing = appState.ascManager.pendingFormValues[tab] ?? [:]
                     appState.ascManager.pendingFormValues[tab] = existing.merging(fieldMapCopy) { _, new in new }
                     appState.ascManager.pendingFormVersion += 1
@@ -353,6 +423,10 @@ actor MCPExecutor {
             return try await executeGetRejectionFeedback(arguments)
         case "get_tab_state":
             return try await executeGetTabState(arguments)
+        case "get_release_context":
+            return await executeGetReleaseContext(arguments)
+        case "release_prepare", "release_validate", "release_status", "release_submit":
+            return try await executeReleaseWorkflow(name: name, arguments: arguments)
 
         case "asc_set_credentials":
             return await executeASCSetCredentials(arguments)
@@ -426,10 +500,20 @@ actor MCPExecutor {
         }
     }
 
+    /// Check and execute local UI/draft access in one MainActor turn.
+    func scopedUI<T>(body: @MainActor @Sendable () throws -> T) async throws -> T {
+        try await MainActor.run {
+            try MCPMutationScope.checkCurrent()
+            return try body()
+        }
+    }
+
     // MARK: - Shared Helpers
 
     func mcpText(_ text: String) -> [String: Any] {
-        ["content": [["type": "text", "text": text]]]
+        var result: [String: Any] = ["content": [["type": "text", "text": text]]]
+        if text.hasPrefix("Error:") { result["isError"] = true }
+        return result
     }
 
     func mcpJSON(_ value: Any) -> [String: Any] {
@@ -469,7 +553,12 @@ actor MCPExecutor {
 
     /// Check for ASC write error and return it, clearing pending form values.
     func checkASCWriteError(tab: String) async -> [String: Any]? {
+        do { try await MCPMutationScope.checkBeforeWrite() }
+        catch { return mcpText("Error: \(error.localizedDescription)") }
         let error = await MainActor.run { () -> String? in
+            // A second check shares the same actor turn as clearing the error.
+            do { try MCPMutationScope.checkCurrent() }
+            catch { return error.localizedDescription }
             let asc = appState.ascManager
             let current = asc.writeError
             if current != nil {

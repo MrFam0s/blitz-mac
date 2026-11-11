@@ -227,7 +227,7 @@ actor MCPServerService {
                 ],
                 "serverInfo": [
                     "name": "blitz-mcp",
-                    "version": "1.0.0"
+                    "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development"
                 ]
             ] as [String: Any]
 
