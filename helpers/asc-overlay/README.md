@@ -1,7 +1,7 @@
 # ASC integration in Blitz
 
-Blitz Neo builds official ASC **6.5.3**, commit
-`130e7508e6319845eba98b7a997deaef4393dd22`, from
+Blitz Neo builds official ASC **6.6.1**, commit
+`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`, from
 https://github.com/rorkai/App-Store-Connect-CLI.
 
 The upstream source is an unmodified pinned submodule. `scripts/build-asc-helper.sh`
@@ -36,7 +36,7 @@ CLI execution keeps its explicit caller environment, including these new modes.
 Optional upstream FIDO2 support is not compiled into this helper. Official ASC
 macOS releases enable `-tags fido2` and statically link additional native
 libraries; this fork's ordinary Go build does not. Fresh CLI sign-in requiring a
-USB security key therefore remains unavailable in this candidate. Blitz's
+USB security key therefore remains unavailable in this helper. Blitz's
 existing WebKit sign-in and session-import path are unchanged. This is an absent
 new optional 6.4 feature, not a removed 5.17 capability.
 
