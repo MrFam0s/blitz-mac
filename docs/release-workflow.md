@@ -1,5 +1,22 @@
 # Releases from an existing development chat
 
+Starting with 1.0.68, registered projects receive a small managed routing block
+at the beginning of `AGENTS.md` and `CLAUDE.md` (also `AGENTS.override.md` if it
+exists). **Update einreichen** selects the `blitz-release` skill and defaults to
+the Blitz Neo CLI. The explicit request covers the appropriate update preparation,
+tests, exact build/upload and submission with automatic publication after Apple's
+approval, unless the user or a deliberate release policy specifies otherwise.
+Preparation-only requests remain preparation-only. Existing project identity,
+versioning and test requirements are preserved.
+
+**App im App Store neu erstellen** selects `asc-app-create-ui`, checks for an
+existing record and uses Blitz's exact confirmed identity operation. It creates
+only the app record; it does not upload, submit or publish the first version.
+Neither routing rule starts work without the actual user request. These explicit
+routes supersede legacy generic MCP-first/final-submit instructions, preserving
+all authored text outside the managed block. Startup and project setup refresh
+the bundled skills and routing without requiring a prior handoff button click.
+
 Blitz Neo 1.0.67 uses one release backend for the manual submission preview,
 MCP tools and the thin `~/.blitz/bin/blitz-neo release` CLI. ASC remains the shared
 build/upload/metadata implementation. No extra server, credential store, paid CI,

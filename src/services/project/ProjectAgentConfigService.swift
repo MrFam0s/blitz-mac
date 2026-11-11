@@ -233,9 +233,10 @@ struct ProjectAgentConfigService {
 
     /// External development chats need the bundled workflow without first
     /// opening a release dialog. This startup migration is local-only: it does
-    /// not clone/update upstream skills or change authored project documents.
+    /// not clone/update upstream skills. Only the owned instruction prefix changes;
+    /// existing project-specific directives remain intact.
     @discardableResult
-    func syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: URL? = nil) -> [String] {
+    func syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil) -> [String] {
         let fm = FileManager.default
         let entries: [URL]
         do {
@@ -248,7 +249,8 @@ struct ProjectAgentConfigService {
             guard fm.fileExists(atPath: entry.path, isDirectory: &isDirectory), isDirectory.boolValue,
                   (try? repository.readMetadataFromDirectory(entry)) != nil else { continue }
             do {
-                try prepareBundledReleaseSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory)
+                try prepareBundledCreationSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory)
+                try prepareBundledReleaseSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory, instructionsBody: instructionsBody)
             } catch { issues.append("\(entry.lastPathComponent): \(error.localizedDescription)") }
         }
         return issues
@@ -472,6 +474,14 @@ struct ProjectAgentConfigService {
     ) {
         let fm = FileManager.default
         let projectDir = baseDirectory.appendingPathComponent(projectId)
+        let workflowBody: String
+        do {
+            workflowBody = try BlitzWorkflowInstructions.bundledBody()
+            try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: workflowBody)
+        } catch {
+            print("[ProjectAgentConfigService] Workflow instructions not installed: \(error.localizedDescription)")
+            return
+        }
         let claudeDir = projectDir.appendingPathComponent(".claude")
 
         let settingsFile = claudeDir.appendingPathComponent("settings.local.json")
@@ -534,6 +544,12 @@ struct ProjectAgentConfigService {
             // Migrate only exact obsolete examples from our own template, never replace the document.
             let updated = Self.updatedLegacyTestFlightExamples(in: existing)
             if updated != existing { try? updated.write(to: claudeMdFile, atomically: true, encoding: .utf8) }
+        }
+        do {
+            try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: workflowBody)
+        } catch {
+            print("[ProjectAgentConfigService] Workflow instructions not installed: \(error.localizedDescription)")
+            return
         }
 
         let rulesDir = claudeDir.appendingPathComponent("rules")
@@ -603,9 +619,12 @@ struct ProjectAgentConfigService {
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
     }
 
-    func prepareBundledReleaseSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil) throws {
+    func prepareBundledReleaseSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil) throws {
+        let body = try instructionsBody ?? BlitzWorkflowInstructions.bundledBody()
+        try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: body)
         try prepareBundledSkill("blitz-release", requiredFiles: ["SKILL.md"],
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
+        try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: body)
     }
 
     private func prepareBundledSkill(_ name: String, requiredFiles: [String], projectDir: URL, sourceSkillsDirectory: URL?) throws {

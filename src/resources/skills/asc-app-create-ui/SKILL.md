@@ -1,9 +1,27 @@
 ---
 name: asc-app-create-ui
-description: Create an App Store Connect app from the identity confirmed in Blitz Neo
+description: Create an App Store Connect app record through Blitz Neo for requests such as "App im App Store neu erstellen", using the exact confirmed identity. This does not submit or publish the first version.
 ---
 
 <!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+
+## Start from the project's creation request
+
+For **„App im App Store neu erstellen“** (also „App im AppStore neu erstellen“),
+first identify the intended project/account and check Apple read-only for an
+existing app with the exact Release bundle ID. If it exists, report/reconcile
+that record; do not delete it, duplicate it, rename it or change its identifiers.
+A registered Bundle ID alone is not an existing App Store app record.
+
+If no confirmed Blitz operation exists yet, open that project's identity form
+using the available Blitz tools or UI. Use the project's intended public name,
+actual Release bundle ID, existing SKU when present, platform and primary locale.
+Explicit Debug/Release identity differences are intentional until proven otherwise.
+Present the concrete identity for the existing confirmation flow; do not invent
+an operation ID or bypass confirmation. Preserve an already confirmed operation
+instead of asking again. This request authorizes app-record creation only, not
+an upload, review submission or publication. A conflict is handled below, never
+by automatically changing the name, Bundle ID or SKU.
 
 Use the confirmed identity supplied by Blitz Neo: `appName`, `bundleId`, `sku`,
 `platform` (`iOS` or `macOS`), `primaryLocale`, `projectId` and `operationId`.

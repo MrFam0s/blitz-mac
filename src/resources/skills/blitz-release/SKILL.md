@@ -1,9 +1,28 @@
 ---
 name: blitz-release
-description: Prepare, verify and submit an existing Apple app release from its development chat using Blitz Neo and the shared ASC CLI, including resuming a handed-off release.
+description: Prepare, verify and submit updates of existing App Store apps through the Blitz Neo CLI, especially for "Update einreichen" or a release handoff in the app's development chat. App-record creation and TestFlight-only tasks use their separate workflows.
 ---
 
 # Release an app with Blitz Neo
+
+## Short update request
+
+An explicit request such as **„Update einreichen“** means preparing and testing
+this project's next appropriate update, building/uploading the exact artifact,
+preparing truthful release notes and submitting through the **Blitz Neo CLI**.
+Use `AFTER_APPROVAL` by default unless the user or an explicit release policy
+specifies another mode. Preserve an explicitly configured manual/scheduled release;
+the CLI supports only `MANUAL` and `AFTER_APPROVAL`. A preparation-only request
+does not authorize submission. These stored instructions alone authorize nothing.
+
+Read `~/.blitz/bin/blitz-neo release --help` first. Keep Blitz Neo running. Prefer
+this CLI even when a chat has an old MCP tool list; never fall back to raw ASC/API
+submission to bypass a missing capability or a blocked check. Use the shared ASC
+CLI for builds, uploads and metadata, and the Blitz CLI for the final workflow.
+If the intended release is already submitted, reconcile/report it instead of
+creating another update. Ask only about a genuinely ambiguous target, missing
+product fact or requested change of scope, not to reconfirm this same authorized
+submission after discovering its exact version/build.
 
 Use the existing development chat when available. The embedded Blitz terminal and
 an external chat use the same project facts, target identity and release operation.
@@ -18,8 +37,11 @@ authorize submitting the first version.
 
 ## Establish the target and product facts
 
-Read applicable project instructions, `docs/blitz-product.md` when present, and the
-handoff's immutable target. Verify facts against the current source and actual build.
+Read applicable project instructions, `docs/blitz-product.md` when present, and any
+handoff's immutable target. Without a handoff, establish the target from this
+project's registered Blitz metadata, Release build settings and a read-only Apple
+lookup; do not require a new chat or a prior dashboard-button click. Verify facts
+against the current source and actual build.
 Chat history includes plans and abandoned ideas; do not turn those into Store claims.
 Keep supported features, limitations, platforms, external services, privacy facts,
 test evidence and public URLs in that project document. Preserve authored text.
@@ -67,33 +89,36 @@ reconcile a pending or uncertain operation instead of starting another one.
 
 Once the build is attached and the Store content is ready:
 
-1. Call `release_prepare` with explicit `projectId`, canonical `projectPath`, `appId`,
+1. Run `~/.blitz/bin/blitz-neo release prepare --request <JSON-file>` with explicit `projectId`, canonical `projectPath`, `appId`,
    exact `bundleId`, `platform` (`IOS` or `MAC_OS`), the original nonsecret `accountKey`
    (`issuerId:keyId`), `versionId`, `buildId` and the requested `releaseMode`
    (`MANUAL` or `AFTER_APPROVAL`). This reads Apple
    state and creates a private operation; it does not submit. Preserve its operation
    ID, immutable target and confirmation digest in the private release report.
-2. Call `release_validate` with its `operationId` and original `accountKey`. It checks fresh scoped Store readiness
+2. Run `~/.blitz/bin/blitz-neo release validate --request <JSON-file>` with its `operationId` and original `accountKey`. It checks fresh scoped Store readiness
    and the saved content snapshot. These checks supplement, not replace, functional
    app tests and the reviewed product facts. Resolve blockers within the user's
    scope. If the intended content/build changes, prepare and validate its new
    snapshot; never edit a saved operation or reuse an old confirmation digest.
-3. If submission is already authorized for this exact release, call `release_submit`
+3. If submission is already authorized for this exact release, run `~/.blitz/bin/blitz-neo release submit --request <JSON-file>`
    with that `operationId`, original `accountKey`, `confirm: true` and the current
-   `confirmationDigest` returned by validation. Otherwise present the
+   `confirmationDigest` returned by validation. For an explicit preparation-only
+   request, stop and report the prepared result without asking to submit. Otherwise present the
    concrete version/build, changes, checks and release mode before asking for the
    missing authorization. A returned digest is evidence of a snapshot, not permission.
-4. Use `release_status` with `operationId` and `accountKey` to reconcile and report Apple's actual status. The operation
+4. Run `~/.blitz/bin/blitz-neo release status --request <JSON-file>` with `operationId` and `accountKey` to reconcile and report Apple's actual status. The operation
    records the submission boundary durably. After timeout, interruption, account
    change or an uncertain response, query status; do not replay submission through
    ASC or create a new operation to bypass an unresolved attempt.
 
-The `~/.blitz/bin/blitz-neo release` CLI exposes the same guarded backend when available.
-Read its `--help`. The `context`, `prepare`, `validate`, `status` and `submit`
-subcommands accept `--request /absolute/path/request.json` with the corresponding
-MCP fields as data. Do not invent commands
-or replace guarded final submission with a direct CLI submission because a check
-failed. If an installed toolset is older, report the missing capability.
+Write request JSON with a serializer and quote the actual absolute file path;
+`<JSON-file>` above is a placeholder, not a shell expression. Stdin is also
+supported via `--request -`. The equivalent MCP tools use the same backend, but
+this project's default route is the CLI. `release context` accepts `projectId`
+and `appId` and verifies the current UI target when UI-bound tools are needed;
+the final prepare/validate/submit/status workflow is independent of UI selection.
+Do not invent commands or replace guarded final submission with direct ASC
+because a check failed. If an installed toolset is older, report the missing capability.
 
 An authentication failure during read-only preparation/validation can resume after
 login with the same unchanged target. A failure after a write might have taken

@@ -2,6 +2,48 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.68 — project shortcuts for updates and app creation
+
+Registered app projects now receive a small managed prefix in `AGENTS.md` and
+`CLAUDE.md`, and in `AGENTS.override.md` when present. It routes an explicit
+"Update einreichen" request to the `blitz-release` skill and the Blitz Neo CLI,
+including the project's preparation, tests, exact build/upload and guarded final
+submission. Automatic publication after approval is the default unless the user
+or an explicit release policy specifies otherwise. Preparation-only requests stop
+without submission or an unsolicited request to publish.
+
+"App im App Store neu erstellen" routes separately to `asc-app-create-ui`. It
+checks for an existing app first, respects intentional Debug/Release identity
+differences and uses Blitz's confirmed creation operation. It creates only the
+app record, without uploading or submitting the first version. Stored routing
+instructions alone never start a release or create an app.
+
+The prefix takes precedence over obsolete generic submission examples while
+preserving authored project rules. Placing it first also keeps it discoverable
+in very large instruction documents. Updates are idempotent, replace only the
+marked section and reject malformed markers or instruction-file symlinks.
+Startup installs both managed skills and the routing locally for registered
+projects; project setup installs the routing for newly created/imported apps.
+
+Validation (2026-11-11): all 479 Swift tests pass, including prefix preservation,
+idempotence, imported project aliases, overrides, malformed markers and instruction
+symlinks. A deterministic concurrent-save regression verifies that a changed file
+displaced during the final atomic exchange is retained at a reported conflict
+path instead of deleted. Independent behavioral review covers the two short
+requests, preparation-only scope, existing records and uncertain submissions.
+Skill YAML/name/description validation passed via Ruby's YAML parser; the bundled
+Python validator could not run because PyYAML is unavailable. No global Python
+package was installed.
+
+The signed native release, strict/deep Developer ID verification and unchanged
+ASC 6.6.1 helper contract pass. Build 74 is installed under Applications with
+build 73 retained for rollback. The installed UI and MCP handshake report 1.0.68.
+Post-startup verification found all 28 instruction files across 14 registered
+projects have exactly the new prefix plus their original bytes. All 56 copies of
+the two managed skills match source, the creation scripts are unchanged and no
+conflict files were produced. No app was created, uploaded or submitted at Apple;
+no cloud workflow was run. Unrelated project changes were not committed.
+
 ## 1.0.67 — releases from the existing development chat
 
 Creation and release dialogs now offer a copyable handoff to the existing

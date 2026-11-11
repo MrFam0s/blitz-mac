@@ -119,6 +119,10 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
     let skill = "---\nname: blitz-release\ndescription: Verified release workflow.\n---\nKeep exact IDs.\n"
     try skill.write(to: source.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+    let creation = source.deletingLastPathComponent().appendingPathComponent("asc-app-create-ui")
+    try FileManager.default.createDirectory(at: creation.appendingPathComponent("scripts"), withIntermediateDirectories: true)
+    try "Creation instructions".write(to: creation.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+    try "Creation script".write(to: creation.appendingPathComponent("scripts/create_app.py"), atomically: true, encoding: .utf8)
     let project = projects.appendingPathComponent("RegisteredApp")
     try FileManager.default.createDirectory(at: project.appendingPathComponent(".blitz"), withIntermediateDirectories: true)
     let metadata = BlitzProjectMetadata(name: "Registered App", type: .swift, bundleIdentifier: "org.example.App")
@@ -139,13 +143,16 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try FileManager.default.createDirectory(at: unregistered, withIntermediateDirectories: true)
 
     let service = ProjectAgentConfigService(baseDirectory: projects)
-    let issues = service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent())
+    let body = "Use the bundled release or app-creation skill for the corresponding request."
+    let issues = service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body)
     #expect(issues.isEmpty)
     for agent in [".agents", ".claude"] {
         #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
         #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
+        #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/asc-app-create-ui/scripts/create_app.py"), encoding: .utf8) == "Creation script")
     }
-    #expect(try String(contentsOf: authored, encoding: .utf8) == "Authored instructions stay unchanged.\n")
+    #expect(try String(contentsOf: authored, encoding: .utf8) == BlitzWorkflowInstructions.updatedDocument("Authored instructions stay unchanged.\n", body: body))
+    #expect(try String(contentsOf: imported.appendingPathComponent("AGENTS.md"), encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.beginMarker))
     #expect(try String(contentsOf: otherSkill.appendingPathComponent("SKILL.md"), encoding: .utf8) == "My own skill")
     #expect(try Data(contentsOf: project.appendingPathComponent(".blitz/project.json")) == metadataBytes)
     #expect(try FileManager.default.contentsOfDirectory(atPath: unregistered.path).isEmpty)
@@ -153,6 +160,6 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     #expect(!FileManager.default.fileExists(atPath: project.appendingPathComponent(".claude/asc-skills").path))
 
     try FileManager.default.removeItem(at: source.appendingPathComponent("SKILL.md"))
-    #expect(service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent()).count == 2)
+    #expect(service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body).count == 2)
     #expect(try String(contentsOf: project.appendingPathComponent(".agents/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
 }
