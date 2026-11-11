@@ -1,7 +1,7 @@
 # ASC integration in Blitz
 
-Blitz Neo builds official ASC **5.17.0**, commit
-`ecad9f122524248749b6c44bb01e951734131889`, from
+Blitz Neo builds official ASC **6.6.1**, commit
+`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`, from
 https://github.com/rorkai/App-Store-Connect-CLI.
 
 The upstream source is an unmodified pinned submodule. `scripts/build-asc-helper.sh`
@@ -26,6 +26,19 @@ The production entry point reserves the original stdout for JSON-lines responses
 and redirects incidental library output to stderr once at startup, so reads do
 not contend on a process-wide stdout-capture lock. CLI mode keeps normal output.
 The upstream CLI retains its own current retry/error behavior.
+
+The app daemon pins authentication to the key selected in Blitz. It removes
+inherited `ASC_BEARER_TOKEN` and `ASC_KEY_TYPE` before starting the helper, so
+`cli.exec` uploads cannot silently use a different account or the Enterprise API
+while `session.request` uses the selected App Store Connect key. Direct terminal
+CLI execution keeps its explicit caller environment, including these new modes.
+
+Optional upstream FIDO2 support is not compiled into this helper. Official ASC
+macOS releases enable `-tags fido2` and statically link additional native
+libraries; this fork's ordinary Go build does not. Fresh CLI sign-in requiring a
+USB security key therefore remains unavailable in this helper. Blitz's
+existing WebKit sign-in and session-import path are unchanged. This is an absent
+new optional 6.4 feature, not a removed 5.17 capability.
 
 To update, advance the submodule, update the version/commit in the build script
 and bundle verification, then run transport and protocol tests in the staged

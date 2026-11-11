@@ -2,6 +2,53 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.63 — ASC 6.6.1 and project icon audit
+
+Build 68 updates the shared app/terminal ASC implementation from 5.17.0
+(`ecad9f122524248749b6c44bb01e951734131889`) to stable 6.6.1
+(`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`), built with project-local Go 1.27.3.
+GitHub release metadata excludes drafts/prereleases; annotated tag
+`d54ea184b13d49fa5273734ef3b016b9c1eaf51b` resolves to the same commit through
+the API and git. The tag is unsigned; verification establishes matching
+release/ref/commit identity, not a cryptographic signature. This supersedes the
+uninstalled 6.5.3 candidate in the existing update PR.
+
+The Blitz JSON-lines adapter remains unchanged. The 6.6 updates improve upload
+processing/recovery, screenshot preflight validation and inline signing-key
+handling. Removed ASC 6 commands are not used by Blitz; the actual upload and
+web-session import arguments and response fields remain compatible. HTTP status,
+headers and error bodies retain the adapter's existing semantics.
+
+The app daemon now removes inherited `ASC_BEARER_TOKEN` and `ASC_KEY_TYPE`, so
+CLI uploads cannot silently override the account/API host selected in Blitz.
+The direct terminal CLI preserves its caller's explicit environment. An offline
+regression checks the subprocess boundary with fictional credentials.
+
+All 13 imported local apps were checked against their active project icon sources
+using the production loader and actual image decoding. Each resolves to a complete
+1024x1024 icon; generated/stale copies and Icon Composer layers are not preferred.
+ContactHelper and EntryCheck use complete native Composer previews. All icons
+also render correctly in the installed dashboard after refresh. No additional
+icon-code change or modification of those app projects was needed.
+
+Validation (2026-11-11): the helper build and full `internal/asc` / `internal/helper`
+Go packages pass, including all 1,998 CLI compatibility cases and mocked HTTP
+status/header/error/redirect tests. All 369 Swift tests pass with the native build
+system and four jobs. The release bundle uses the newly built helper and passes
+strict/deep Developer ID verification with the previous signing requirement.
+Protocol ping, direct CLI version and `cli.exec` pass without account access.
+Installed app and local CLI helpers are byte-identical and report ASC 6.6.1.
+Independent compatibility and final diff reviews found no remaining blockers.
+
+Blitz Neo 1.0.63/build 68 is installed under Applications; the prior 1.0.62/build 67
+bundle is retained for rollback. No Store mutations, device actions, paid cloud
+runs or global Codex configuration changes were used.
+
+Limitation: upstream's optional native FIDO2 backend is not compiled into this
+helper. Fresh CLI login with a USB security key remains unavailable; existing
+Blitz WebKit sign-in/session import is unchanged. This is an absent optional
+ASC 6 feature, not a removed 5.17 capability.
+
 ## 1.0.62 — Icon Composer project icons
 
 Local icon discovery understands Icon Composer `.icon` documents, including

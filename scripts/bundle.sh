@@ -40,7 +40,7 @@ verify_ascd_helper() {
 
     response="$(printf '{"id":"bundle-check","method":"ping"}\n' | "$helper_path" 2>/dev/null | head -1 || true)"
     case "$response" in
-        *'"id":"bundle-check"'*'"result"'*'"version":"5.17.0 (commit: ecad9f122524248749b6c44bb01e951734131889,'*)
+        *'"id":"bundle-check"'*'"result"'*'"version":"6.6.1 (commit: d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b,'*)
             return 0
             ;;
     esac
@@ -141,7 +141,7 @@ if [ -n "$ASC_HELPER_BINARY" ]; then
     if ! verify_ascd_helper "$ASC_HELPER_BINARY"; then
         echo "ERROR: ascd helper is not compatible with Blitz:"
         echo "       $ASC_HELPER_BINARY"
-        echo "       Expected ASC 5.17.0 at the pinned commit with the Blitz JSON-line protocol adapter."
+        echo "       Expected ASC 6.6.1 at the pinned commit with the Blitz JSON-line protocol adapter."
         exit 1
     fi
     cp "$ASC_HELPER_BINARY" "$BUNDLE_DIR/Contents/Helpers/ascd"

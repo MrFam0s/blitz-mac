@@ -364,14 +364,29 @@ actor ASCDaemonClient {
         return candidates
     }
 
-    private func helperEnvironment() -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
+    /// The app's daemon and its CLI subprocesses must use the selected ASC key.
+    /// Inherited token/Enterprise modes must not override that account or API host.
+    nonisolated static func credentialEnvironment(
+        credentials: ASCCredentials,
+        inherited: [String: String]
+    ) -> [String: String] {
+        var environment = inherited
         environment["ASC_KEY_ID"] = credentials.keyId
         environment["ASC_ISSUER_ID"] = credentials.issuerId
         environment["ASC_PRIVATE_KEY"] = credentials.privateKey
         environment["ASC_PRIVATE_KEY_PATH"] = nil
         environment["ASC_PRIVATE_KEY_B64"] = nil
+        environment["ASC_BEARER_TOKEN"] = nil
+        environment["ASC_KEY_TYPE"] = nil
         environment["ASC_BYPASS_KEYCHAIN"] = "1"
+        return environment
+    }
+
+    private func helperEnvironment() -> [String: String] {
+        var environment = Self.credentialEnvironment(
+            credentials: credentials,
+            inherited: ProcessInfo.processInfo.environment
+        )
         if environment["ASC_DEBUG"]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
             environment["ASC_DEBUG"] = nil
         }
