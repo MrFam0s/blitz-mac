@@ -14,6 +14,9 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # Load .env (existing env vars take precedence)
 [ -f "$ROOT_DIR/.env" ] && set -a && source "$ROOT_DIR/.env" && set +a
 
+source "$ROOT_DIR/scripts/node-toolchain.sh"
+blitz_resolve_node_toolchain "$ROOT_DIR/config/node-toolchain.json"
+
 SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
 ENTITLEMENTS="$ROOT_DIR/scripts/Entitlements.plist"
 TIMESTAMP_MODE="${CODESIGN_TIMESTAMP:-auto}"
@@ -157,6 +160,7 @@ cp "$ROOT_DIR/helpers/asc-overlay/LICENSE" "$BUNDLE_DIR/Contents/Resources/ASC-L
 cp "$ROOT_DIR/helpers/asc-overlay/README.md" "$BUNDLE_DIR/Contents/Resources/ASC-PROVENANCE.md"
 cp "$ROOT_DIR/LICENSE" "$BUNDLE_DIR/Contents/Resources/LICENSE"
 cp "$ROOT_DIR/NOTICE" "$BUNDLE_DIR/Contents/Resources/NOTICE"
+cp "$ROOT_DIR/config/node-toolchain.json" "$BUNDLE_DIR/Contents/Resources/node-toolchain.json"
 
 # The Dock/Finder icon uses opaque full-bleed artwork and a compiled catalog.
 # The standalone rounded PNG remains separate for onboarding and website use.

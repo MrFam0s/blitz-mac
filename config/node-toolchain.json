@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "nodeVersion": "26.13.1",
+  "npmVersion": "12.2.2",
+  "nodeArchives": {
+    "darwin-arm64": {
+      "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-darwin-arm64.tar.gz",
+      "sha256": "aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735"
+    },
+    "darwin-x64": {
+      "url": "https://nodejs.org/dist/v26.13.1/node-v26.13.1-darwin-x64.tar.gz",
+      "sha256": "82bb96078a24ca50b9c9a38f2379e6be6d87171fcd400fc14c8934b3bce96e2f"
+    }
+  },
+  "npmArchive": {
+    "url": "https://registry.npmjs.org/npm/-/npm-12.2.2.tgz",
+    "sha512": "KglgbZyacf7jH+FHuNRqVuCzQi8VhI2a7J87Ix43FsPTuZoGWmIXXGdZtBUOA79vwL+IJREqURVzupA7PsQTcA=="
+  }
+}

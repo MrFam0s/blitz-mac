@@ -9,6 +9,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Load .env (existing env vars take precedence)
 [ -f "$ROOT_DIR/.env" ] && set -a && source "$ROOT_DIR/.env" && set +a
 
+source "$ROOT_DIR/scripts/node-toolchain.sh"
+blitz_resolve_node_toolchain "$ROOT_DIR/config/node-toolchain.json"
+
 # Config
 APP_NAME="Blitz Neo"
 ARTIFACT_NAME="BlitzNeo"

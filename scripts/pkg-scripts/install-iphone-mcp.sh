@@ -1,49 +1,11 @@
 #!/bin/bash
-# Install the bundled maintenance package atomically; keep existing MCP names.
+# Install the bundled maintenance package; keep existing MCP names.
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREFIX="${1:?Pass the Blitz Node runtime prefix}"
 PACKAGE="${2:?Pass the bundled iPhone MCP tarball}"
-VERSION=0.1.18-blitz.1
-NODE="$PREFIX/bin/node"
-NPM="$PREFIX/bin/npm"
-DESTINATION="$PREFIX/lib/node_modules/@blitzdev/iphone-mcp"
-EXPECTED=$(cat "$PACKAGE.sha256")
-ACTUAL=$(shasum -a 256 "$PACKAGE" | awk '{print $1}')
-[ "$EXPECTED" = "$ACTUAL" ] || { echo 'iPhone MCP checksum mismatch' >&2; exit 1; }
-[ -x "$NODE" ] && [ -x "$NPM" ]
-STAGING=$(mktemp -d "$PREFIX/.iphone-mcp-install.XXXXXX")
-trap 'rm -rf "$STAGING"' EXIT
-STAGED_PACKAGE="$STAGING/package"
-mkdir "$STAGED_PACKAGE"
-tar -xzf "$PACKAGE" -C "$STAGED_PACKAGE" --strip-components=1
-[ -f "$STAGED_PACKAGE/npm-shrinkwrap.json" ]
-[ "$("$NODE" -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).version" "$STAGED_PACKAGE/package.json")" = "$VERSION" ]
-"$NODE" --input-type=module - "$STAGED_PACKAGE/package.json" <<'JS'
-import fs from 'node:fs';
-const pkg=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-if(pkg.blitzMaintenance?.upstreamCommit!=='3259f756279cd8cb6bc507b46369111fb5672fa2') process.exit(1);
-if(JSON.stringify(pkg.allowScripts)!==JSON.stringify({'unix-dgram@2.0.7':true})) process.exit(1);
-JS
-# Global `npm install` can re-resolve the published dependency ranges. Install
-# the staged application with `ci` so the shipped lockfile is mandatory.
-(
-    cd "$STAGED_PACKAGE"
-    export PATH="$PREFIX/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-    "$NPM" ci --omit=dev --ignore-scripts --no-audit --no-fund
-    "$NPM" rebuild unix-dgram --strict-allow-scripts --no-audit --no-fund
-    "$NODE" -e "require('unix-dgram')"
-)
-"$NODE" --input-type=module - "$STAGED_PACKAGE/dist/index.js" <<'JS'
-import {pathToFileURL} from 'node:url';
-await import(pathToFileURL(process.argv[2]).href);
-JS
-mkdir -p "$(dirname "$DESTINATION")"
-BACKUP="${DESTINATION}.backup.$(date +%Y%m%d%H%M%S).$$"
-if [ -e "$DESTINATION" ]; then mv "$DESTINATION" "$BACKUP"; fi
-if ! mv "$STAGED_PACKAGE" "$DESTINATION"; then
-    if [ -e "$BACKUP" ]; then mv "$BACKUP" "$DESTINATION"; fi
-    exit 1
+MANIFEST="${3:-$SCRIPT_DIR/../node-toolchain.json}"
+if [ ! -f "$MANIFEST" ] && [ "$#" -lt 3 ]; then
+    MANIFEST="$SCRIPT_DIR/../../config/node-toolchain.json"
 fi
-ln -s ../lib/node_modules/@blitzdev/iphone-mcp/dist/cli.js "$STAGING/iphone-mcp"
-mv -f "$STAGING/iphone-mcp" "$PREFIX/bin/iphone-mcp"
-echo "Installed iPhone MCP $VERSION; previous package retained at $BACKUP"
+exec python3 -B "$SCRIPT_DIR/iphone_mcp_install.py" "$PREFIX" "$PACKAGE" "$MANIFEST"

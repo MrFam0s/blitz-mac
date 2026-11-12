@@ -1,0 +1,45 @@
+name: Set up the pinned Blitz Node toolchain
+description: Read the central versions, install Node and verify the pinned npm archive.
+runs:
+  using: composite
+  steps:
+    - name: Read Node version
+      id: pins
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import json, os, re
+        from pathlib import Path
+        config = json.loads(Path('config/node-toolchain.json').read_text())
+        version = config['nodeVersion']
+        assert re.fullmatch(r'\d+\.\d+\.\d+', version)
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write(f'node={version}\n')
+        PY
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ steps.pins.outputs.node }}
+    - name: Install the pinned npm when needed
+      shell: bash
+      run: |
+        python3 - <<'PY'
+        import base64, hashlib, json, subprocess, tempfile, urllib.request
+        from pathlib import Path
+        config = json.loads(Path('config/node-toolchain.json').read_text())
+        if subprocess.check_output(['npm', '--version'], text=True).strip() != config['npmVersion']:
+            archive = config['npmArchive']
+            expected_url = f"https://registry.npmjs.org/npm/-/npm-{config['npmVersion']}.tgz"
+            assert archive['url'] == expected_url
+            with tempfile.TemporaryDirectory(prefix='blitz-build-npm-') as temp:
+                package = Path(temp) / 'npm.tgz'
+                with urllib.request.urlopen(expected_url, timeout=60) as response:
+                    package.write_bytes(response.read())
+                digest = base64.b64encode(hashlib.sha512(package.read_bytes()).digest()).decode()
+                assert digest == archive['sha512'].removeprefix('sha512-'), 'npm archive checksum mismatch'
+                subprocess.run(['npm', 'install', '--global', str(package), '--ignore-scripts',
+                                '--no-audit', '--no-fund'], check=True)
+        PY
+        source scripts/node-toolchain.sh
+        blitz_resolve_node_toolchain config/node-toolchain.json
+        node --version
+        npm --version

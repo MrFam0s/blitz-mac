@@ -6,20 +6,23 @@ held as `deps/iPhone-mcp`. The upstream license is included in every package.
 The local package identifies itself as **0.1.18-blitz.1**.
 
 `maintenance.patch` contains the source changes and regression tests. Build with
-Node 22 and npm 10 using `bash scripts/build-iphone-mcp.sh`. This exports the exact
+the Node/npm pair in `config/node-toolchain.json` using
+`bash scripts/build-iphone-mcp.sh`. This exports the exact
 upstream commit, applies the patch, installs lockfile dependencies, runs tests and
-packs the result. No npm publication is required. `npm-shrinkwrap.json` fixes
+packs the result. No npm publication is required. `package-lock.json` fixes
 the install dependency tree. Package metadata records the upstream commit and
 overlay SHA-256. The release bundle includes the tarball
 and checksum; the installer uses `npm ci --omit=dev` in a staging directory
 and builds the required native addon before replacing the installed
 package and retains a backup. Never replace it with `@latest` during an update.
 
-The build uses `BLITZ_NODE_BIN` when explicitly supplied, otherwise the installed
-Blitz Node runtime, and only then the normal `PATH`. Use the supported Node 22 /
-npm 10 toolchain for packaging. npm 12 removes `npm-shrinkwrap.json` from packed
-archives even when listed in `files`, so the builder rejects npm 12 and newer
-rather than shipping an unlocked dependency tree.
+The build validates `BLITZ_NODE_BIN` when explicitly supplied, otherwise it checks
+the active Node directory followed by the installed Blitz runtime. Both Node and
+npm must match the central manifest. npm 12 consumes `package-lock.json` and
+excludes both lockfile names from `npm pack`. This private app distribution
+explicitly includes the verified source `package-lock.json` after npm selects
+the payload files, then calculates the final checksum. A conflicting legacy
+shrinkwrap is rejected. Installation requires this exact lock and uses `npm ci`. See `docs/node-toolchain.md` for toolchain updates and runtime isolation.
 
 The generated package also records an exact `allowScripts` entry for
 `unix-dgram@2.0.7`. Build and installation keep dependency lifecycle scripts

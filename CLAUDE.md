@@ -4,6 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
+Node/npm versions and official archive checksums are defined centrally in
+`config/node-toolchain.json`. See `docs/node-toolchain.md`. The installed runtime
+and release scripts must use that tested pair; do not substitute a moving
+`current`/`latest` alias or apply the ASC documentation website's `.nvmrc` to Blitz.
+
 ```bash
 # Debug build
 swift build

@@ -2,6 +2,46 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.71 — centrally pinned Node LTS and locked MCP packaging
+
+`config/node-toolchain.json` now defines the tested Node 26.13.1/npm 12.2.2 pair
+and official archive checksums. Local builds, GitHub setup and the bundled
+installer consume it directly. A matching system installation can build Blitz;
+the installed iPhone MCP continues to use its own private runtime. Neither path
+silently follows a moving `current` or `latest` alias. ASC's documentation website
+retains its independent upstream Node configuration.
+
+The maintained packer includes npm 12's omitted `package-lock.json` from the
+verified source and normalizes archive metadata. This private application archive
+uses `npm ci`; it does not depend on the removed shrinkwrap installation behavior.
+It rejects unsafe archive members,
+unexpected locks and mismatched source/toolchain provenance. Installation uses
+the locked dependency tree, enables only the required native module build and
+checks both native loading and the MCP initialization/EOF exchange.
+
+Node, npm and the MCP are prepared and validated together before an atomic runtime
+exchange. The previous complete runtime remains available for rollback; failed
+downloads, checksums, builds or initialization preserve it. Installation locks
+prevent concurrent changes, and a healthy matching installation is verified
+without being downloaded again. A damaged installation is rebuilt in staging.
+See `docs/node-toolchain.md` for the toolchain update procedure.
+
+Validation (2026-11-12): all 540 Swift tests, the ASC protocol/full CLI comparison
+and auth regressions, 43 creation/recovery checks, five app-migration checks,
+three IDB installer checks and four ASC test-overlay checks pass. Node-specific
+validation includes 13 archive checks (with real offline npm 12 `ci`), 17 MCP
+installer checks and 15 runtime/resolver checks. The real Node 26 build passes
+18 MCP JavaScript and seven HID Python tests. Independent reviews covered the
+installer transactions, archive contract and central CI/build integration.
+
+A complete isolated runtime installation, reuse through the bundled installer,
+and installation at the real private runtime all pass with macOS's Python 3.9.
+Version 1.0.71/build 77 is installed under Applications with the existing Developer
+ID requirement; build 76 and the old private runtime are retained for rollback.
+The UI reports build 77. The installed native module/MCP initialization and
+strict/deep codesign checks pass. CI YAML and shell syntax were checked locally;
+no cloud workflow or Store mutation was run. ASC remains at 6.6.1.
+
 ## 1.0.70 — resumable review drafts and shared web authentication
 
 Review submission now treats `READY_FOR_REVIEW` as the expected state after adding
@@ -1077,7 +1117,7 @@ still apply to HID input; verify the field with `describe_after`.
 Build the package before bundling to reuse it:
 
 ```sh
-# Node 22 / npm 10 on PATH
+# Exact Node/npm pair from config/node-toolchain.json on PATH
 bash scripts/build-iphone-mcp.sh
 python3 scripts/test-iphone-mcp-installer.py
 BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz" \

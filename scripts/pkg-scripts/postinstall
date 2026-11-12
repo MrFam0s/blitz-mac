@@ -87,86 +87,35 @@ fi
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
 
 # ============================================================================
-# Install Node.js runtime to ~/.blitz/node-runtime
+# Install the pinned Node/npm and maintained MCP as a single verified transaction
 # ============================================================================
 
 T_NODE_START=$(date +%s)
-NODE_VERSION="v22.16.0"
 BLITZ_NODE_DIR="$CONSOLE_HOME/.blitz/node-runtime"
-NODE_DIR=""
-
-if [ -x "$BLITZ_NODE_DIR/bin/node" ]; then
-    EXISTING_NODE=$("$BLITZ_NODE_DIR/bin/node" --version 2>/dev/null || echo "")
-    if [ "$EXISTING_NODE" = "$NODE_VERSION" ]; then
-        echo "OK: Node.js $NODE_VERSION already installed at $BLITZ_NODE_DIR" >> "$LOG"
-        NODE_DIR="$BLITZ_NODE_DIR/bin"
-    else
-        echo "Node.js version mismatch ($EXISTING_NODE vs $NODE_VERSION), reinstalling..." >> "$LOG"
-        rm -rf "$BLITZ_NODE_DIR"
-    fi
-fi
-
-if [ -z "$NODE_DIR" ]; then
-    echo "Installing Node.js $NODE_VERSION..." >> "$LOG"
-    show_progress "Installing Node.js runtime..."
-
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "arm64" ]; then
-        NODE_ARCH="arm64"
-    else
-        NODE_ARCH="x64"
-    fi
-    NODE_TARBALL="node-${NODE_VERSION}-darwin-${NODE_ARCH}.tar.gz"
-    NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/${NODE_TARBALL}"
-
-    NODE_TMP="/tmp/blitz-node-$$"
-    rm -rf "$NODE_TMP"
-    mkdir -p "$NODE_TMP"
-
-    if curl -fsSL "$NODE_URL" -o "$NODE_TMP/$NODE_TARBALL" 2>> "$LOG"; then
-        mkdir -p "$BLITZ_NODE_DIR"
-        tar -xzf "$NODE_TMP/$NODE_TARBALL" -C "$BLITZ_NODE_DIR" --strip-components=1 2>> "$LOG"
-        if [ "$IS_ROOT" = true ]; then chown -R "$CONSOLE_USER" "$BLITZ_NODE_DIR"; fi
-        echo "Node.js $("$BLITZ_NODE_DIR/bin/node" --version 2>/dev/null) installed to $BLITZ_NODE_DIR" >> "$LOG"
-        NODE_DIR="$BLITZ_NODE_DIR/bin"
-    else
-        echo "ERROR: Failed to download Node.js from $NODE_URL" >> "$LOG"
-    fi
-
-    rm -rf "$NODE_TMP"
-fi
-
-if [ -z "$NODE_DIR" ] || [ ! -x "$NODE_DIR/node" ]; then
-    fail "Failed to install Node.js $NODE_VERSION. Check /tmp/blitz_install.log for details."
-fi
-echo "Node ready at: $NODE_DIR/node ($("$NODE_DIR/node" --version 2>/dev/null))" >> "$LOG"
-rm -f "$CONSOLE_HOME/.blitz/node-bin-path" 2>/dev/null || true
-
-echo "TIMING: node install took $(( $(date +%s) - T_NODE_START ))s" >> "$LOG"
-
-# ============================================================================
-# Install/update @blitzdev/iphone-mcp in the bundled Node runtime
-# ============================================================================
-
-T_IPHONE_MCP_START=$(date +%s)
+NODE_DIR="$BLITZ_NODE_DIR/bin"
 NPM_BIN="$NODE_DIR/npm"
 IPHONE_MCP_BIN="$NODE_DIR/iphone-mcp"
-
 IPHONE_MCP_PACKAGE="$RESOURCES_DIR/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz"
-if [ -x "$NPM_BIN" ] && [ -f "$IPHONE_MCP_PACKAGE" ]; then
-    if ! run_as_user env -i "HOME=$CONSOLE_HOME" \
-        "PATH=$NODE_DIR:/usr/bin:/bin:/usr/sbin:/sbin" \
-        "npm_config_cache=$CONSOLE_TMPDIR/blitz-npm-cache" \
-        "npm_config_loglevel=error" "npm_config_update_notifier=false" \
-        /bin/bash "$RESOURCES_DIR/pkg-scripts/install-iphone-mcp.sh" \
-        "$BLITZ_NODE_DIR" "$IPHONE_MCP_PACKAGE" >> "$LOG" 2>&1; then
-        echo "WARNING: Maintained iPhone MCP install failed; inspect retained package/backup" >> "$LOG"
-    fi
-else
-    echo "WARNING: Bundled maintained iPhone MCP or npm missing; keeping current installation" >> "$LOG"
-fi
+NODE_MANIFEST="$RESOURCES_DIR/node-toolchain.json"
+NODE_INSTALLER="$RESOURCES_DIR/pkg-scripts/install-node-runtime.py"
 
-echo "TIMING: iphone-mcp install took $(( $(date +%s) - T_IPHONE_MCP_START ))s" >> "$LOG"
+# Run downloads, compilation and activation as the console user. Existing
+# runtime/package bytes remain available until the complete replacement passes.
+mkdir -p "$CONSOLE_HOME/.blitz" || fail "Could not create the Blitz user directory."
+if [ "$IS_ROOT" = true ]; then chown "$CONSOLE_USER" "$CONSOLE_HOME/.blitz"; fi
+show_progress "Preparing the verified Node.js runtime and iPhone tools..."
+if ! run_as_user env -i "HOME=$CONSOLE_HOME" \
+    "PATH=/usr/bin:/bin:/usr/sbin:/sbin" \
+    "npm_config_cache=$CONSOLE_TMPDIR/blitz-npm-cache" \
+    "npm_config_loglevel=error" "npm_config_update_notifier=false" \
+    /usr/bin/python3 "$NODE_INSTALLER" \
+    --prefix "$BLITZ_NODE_DIR" --manifest "$NODE_MANIFEST" \
+    --mcp-package "$IPHONE_MCP_PACKAGE" \
+    --mcp-installer "$RESOURCES_DIR/pkg-scripts/install-iphone-mcp.sh" >> "$LOG" 2>&1; then
+    fail "Node.js/iPhone tools could not be verified. The previous runtime was preserved. See /tmp/blitz_install.log."
+fi
+rm -f "$CONSOLE_HOME/.blitz/node-bin-path" 2>/dev/null || true
+echo "TIMING: verified node + iphone-mcp install took $(( $(date +%s) - T_NODE_START ))s" >> "$LOG"
 
 if [ ! -d "$APP_DIR" ]; then
     echo "WARNING: Blitz Neo.app not found in /Applications — skipping chown (app may be installed later)." >> "$LOG"
