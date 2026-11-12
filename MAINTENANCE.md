@@ -2,6 +2,55 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.70 — resumable review drafts and shared web authentication
+
+Review submission now treats `READY_FOR_REVIEW` as the expected state after adding
+the version item, separately from the UI's metadata-editing rules. Active review
+drafts take precedence over dated, historical `COMPLETE` submissions. Each write
+boundary and confirmed resource identity is journaled; sanitized phase/error
+diagnostics distinguish an Apple rejection from an unverified response.
+
+Read-only status can identify an unambiguous `resumableSubmissionId`. The explicit
+`submit` continuation supplies that exact `resumeSubmissionId` with the original
+operation and confirmation digest. It checks identity, prepared content, build,
+release mode and fresh readiness again and sends only the existing draft. An
+uncertain final submit cannot be replayed. Legacy journals and confirmation
+digests remain intact; volatile App Info state transitions are handled separately
+from substantive metadata changes. CLI, MCP and the bundled release skill share
+this path; no direct-submit fallback or journal reset is introduced.
+
+Browser authentication now uses `web.session.import` with isolated validation and
+atomic compare-and-swap against the canonical ASC cache. Existing equally capable
+or stronger valid CLI sessions remain intact, including their Developer Portal
+cookies and provider/team binding. Provider/account conflicts, concurrent login
+changes and unverifiable current sessions prevent replacement. The native browser
+retains its own session and legacy-script export without rewriting the shared ASC
+Keychain cache at startup. Developer Portal capability is reported separately;
+`asc_web_auth` can request it explicitly for a diagnosed Portal-login gap.
+
+Validation (2026-11-12): 540 Swift tests, 43 offline creation/recovery Python
+checks, the ASC package and full helper/CLI compatibility comparison pass. The
+session-import/provider/cookie regressions and four test-overlay generator checks
+pass with isolated configuration and no account access. A final focused legacy
+recovery regression also confirms that the evidence assertion is required.
+Independent reviews covered release recovery, authentication and CLI/MCP/skill
+contracts. The signed native release includes 18 iPhone MCP JavaScript and seven
+HID Python checks and passes strict/deep codesign verification.
+
+Version 1.0.70/build 76 is installed under Applications with the same Developer ID
+requirement; build 75 is retained for rollback. The running UI reports build 76,
+and the shared ASC helper matches the signed bundled helper byte-for-byte.
+Installed read-only status recognizes the existing EntryCheck Mobile 1.2.0/build 8
+draft as resumable, in READY_FOR_REVIEW, preserving the original operation,
+target, content and confirmation digests and automatic release mode. No final
+submission was performed. Fresh installed validation reports ready with zero
+blockers, warnings or unverified checks, including current Business agreements
+and the exact Developer Portal team license. Browser sign-in was tested offline rather than opening
+a live login flow that could modify the working session.
+
+ASC remains pinned to 6.6.1. No Store upload, submission, agreement acceptance,
+global tool configuration or cloud workflow is part of this maintenance check.
+
 ## 1.0.69 — platform-specific release targets and readiness corrections
 
 Projects can now hold explicit iOS and macOS release targets. Each target keeps

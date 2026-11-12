@@ -81,6 +81,12 @@ current `--help`. Pass explicit app, platform, version and build identifiers ins
 of relying on defaults such as the newest version/build. Do not create another ASC
 installation or export keys/session cookies. Renew required web authentication
 through Blitz; a successful login is not evidence that a Store write succeeded.
+Keep a working CLI session. Do not routinely log out or repeat browser login.
+App Store Connect and Developer Portal authentication are separate capabilities:
+for a diagnosed Portal authentication gap use `asc_web_auth` with
+`requireDeveloperPortal: true`, then rerun the original readiness check. An ASC-only
+login does not prove program-license status. Do not export cookies, overwrite the
+session cache, or treat any authentication receipt as legal-agreement acceptance.
 
 ## Prepare without submitting
 
@@ -130,6 +136,26 @@ Once the build is attached and the Store content is ready:
    records the submission boundary durably. After timeout, interruption, account
    change or an uncertain response, query status; do not replay submission through
    ASC or create a new operation to bypass an unresolved attempt.
+
+If `status` returns `resumableSubmissionId`, it has identified a unique existing
+unsubmitted draft for this same operation. Verify that ID against the saved release
+evidence. For this already authorized, unchanged release, use the same `submit`
+request with **`resumeSubmissionId` set to that exact ID**, keeping `operationId`,
+`accountKey`, `confirmationDigest` and `confirm: true`. This is the explicit
+continuation path: the backend rechecks target, content, build, release mode and
+readiness, then sends only the existing draft. It does not create a new submission
+or reset the journal. Without a resumable ID, or after an uncertain final submit,
+stop at read-only reconciliation. Never hand-edit a journal or guess a draft ID.
+Old journals without write phases additionally report
+`requiresLegacyRecoveryConfirmation: true`. Supply `confirmLegacyDraftRecovery: true`
+only when the saved incident report or trace proves the old run stopped before
+its final submit. A current draft state alone is insufficient. This assertion
+confirms that documented evidence was checked; it is not a new release authorization. The original authorization
+still applies to unchanged scope. With an unknown old final-submit outcome, stop.
+`READY_FOR_REVIEW` means a draft exists but has not been submitted; require the
+same draft and version to reach `WAITING_FOR_REVIEW` or a later review state before
+reporting submission. A historical `COMPLETE` submission is not proof that the
+current draft was sent.
 
 Write request JSON with a serializer and quote the actual absolute file path;
 `<JSON-file>` above is a placeholder, not a shell expression. Stdin is also

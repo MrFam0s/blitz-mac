@@ -65,7 +65,9 @@ extension MCPExecutor {
             case "release_submit":
                 guard arguments["confirm"] as? Bool == true else { throw ReleaseWorkflowError.confirmationRequired }
                 record = try await service.submit(operationID: id, accountKey: accountKey,
-                                                  confirmationDigest: try string("confirmationDigest"))
+                    confirmationDigest: try string("confirmationDigest"),
+                    resumeSubmissionID: try arguments.keys.contains("resumeSubmissionId") ? string("resumeSubmissionId") : nil,
+                    confirmLegacyDraftRecovery: arguments["confirmLegacyDraftRecovery"] as? Bool ?? false)
             default: throw MCPServerService.MCPError.invalidToolArgs
             }
         }

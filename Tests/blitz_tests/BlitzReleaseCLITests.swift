@@ -3,6 +3,23 @@ import Testing
 import BlitzMCPCommon
 
 struct BlitzReleaseCLITests {
+    @Test func draftContinuationKeepsExactSavedOperationAndDoesNotClaimSubmission() throws {
+        let invocation = try BlitzReleaseCLI.parse(["release", "submit", "--request", "-"])
+        let request: [String: Any] = ["operationId": "saved-operation", "accountKey": "issuer:key",
+            "confirmationDigest": "unchanged", "confirm": true, "resumeSubmissionId": "existing-draft",
+            "confirmLegacyDraftRecovery": true]
+        let payload = try BlitzReleaseCLI.request(invocation, data: JSONSerialization.data(withJSONObject: request), id: "id")
+        let parsed = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+        let arguments = try #require((parsed["params"] as? [String: Any])?["arguments"] as? [String: Any])
+        #expect(arguments["operationId"] as? String == "saved-operation")
+        #expect(arguments["resumeSubmissionId"] as? String == "existing-draft")
+        #expect(arguments["confirmationDigest"] as? String == "unchanged")
+        #expect(arguments["confirmLegacyDraftRecovery"] as? Bool == true)
+        let response = #"{"jsonrpc":"2.0","id":"id","result":{"content":[{"type":"text","text":"{\"operationId\":\"saved-operation\",\"state\":\"submissionPending\",\"resumableSubmissionId\":\"existing-draft\",\"appleState\":\"READY_FOR_REVIEW\"}"}]}}"#
+        #expect(try BlitzReleaseCLI.output(response: response, id: "id", tool: "release_submit").failed)
+        #expect(try !BlitzReleaseCLI.output(response: response, id: "id", tool: "release_status").failed)
+    }
+
     @Test func discoversTargetsAndPassesExplicitSelectionUnchanged() throws {
         let discovery = try BlitzReleaseCLI.parse(["release", "targets", "--request", "-"])
         #expect(discovery.tool == "get_release_targets")

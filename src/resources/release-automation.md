@@ -228,6 +228,17 @@ content or the intended build changes before submission, prepare and validate a
 fresh snapshot and record why the prior one became obsolete. Preserve the prepared
 version after an error; do not delete/recreate Store records.
 
+If status exposes resumableSubmissionId, compare it with the saved draft evidence.
+For this same authorized release, pass that exact ID as resumeSubmissionId to
+release_submit with the unchanged operationId, accountKey, confirmationDigest and
+confirm=true. The backend rechecks every guard and submits only the existing draft.
+For requiresLegacyRecoveryConfirmation=true, confirmLegacyDraftRecovery=true also
+requires documented proof that the old run stopped before final submission; the
+current draft state alone is insufficient. Unknown historical outcomes stay blocked.
+Without that supported continuation, or after an uncertain final submit, stay with
+read-only status. READY_FOR_REVIEW alone means not yet submitted; never claim review
+has started from an old COMPLETE record or create a replacement draft.
+
 Finish with the app, version/build, artifact/source evidence, actual test results,
 changelog/report paths and verified Apple status. Distinguish “Zur Prüfung
 eingereicht; automatische Veröffentlichung nach Freigabe” from already published.

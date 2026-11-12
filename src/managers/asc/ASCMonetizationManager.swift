@@ -637,7 +637,7 @@ extension ASCManager {
     }
 
     func refreshAttachedSubmissionItemIDs() async {
-        let revision = projectRevision
+        let target = ASCTabReadTarget(self)
         guard let appId = app?.id else {
             attachedSubmissionItemIDs = []
             return
@@ -651,8 +651,9 @@ extension ASCManager {
         let iapURL = "https://appstoreconnect.apple.com/iris/v1/apps/\(appId)/inAppPurchasesV2?limit=300&fields%5BinAppPurchases%5D=productId,name,state,submitWithNextAppStoreVersion"
 
         let attachedSubscriptions = await fetchAttachedSubmissionItemIDs(urlString: subscriptionURL, cookieHeader: cookieHeader)
+        guard target.matches(self), !Task.isCancelled else { return }
         let attachedIAPs = await fetchAttachedSubmissionItemIDs(urlString: iapURL, cookieHeader: cookieHeader)
-        guard projectRevision == revision, !Task.isCancelled else { return }
+        guard target.matches(self), !Task.isCancelled else { return }
         attachedSubmissionItemIDs = attachedSubscriptions.union(attachedIAPs)
     }
 
@@ -714,20 +715,12 @@ extension ASCManager {
     // MARK: - Web Session Helpers (for IAP attachment queries)
 
     func ascWebSessionCookieHeader() -> String? {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        guard let storeData = Self.readKeychainItem(service: "asc-web-session", account: "asc:web-session:store"),
-              let store = try? decoder.decode(ASCWebSessionStore.self, from: storeData),
-              let key = store.lastKey, let session = store.sessions[key] else {
-            return nil
-        }
-
-        let cookies = session.cookies["https://appstoreconnect.apple.com/", default: []].map {
-            IrisSession.IrisCookie(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path,
-                                   expires: $0.expires, secure: $0.secure, httpOnly: $0.httpOnly)
-        }
+        // Read the native session just accepted for Iris, never an unrelated
+        // last-account entry from ASC's independently managed Keychain store.
+        guard let session = irisSession ?? IrisSession.load() else { return nil }
+        if session.importEvidence != nil && !session.hasVerifiedImport() { return nil }
         let cookieHeader = ASCWebAuthentication.cookieHeader(
-            from: cookies, for: URL(string: "https://appstoreconnect.apple.com/iris/v1/")!
+            from: session.cookies, for: URL(string: "https://appstoreconnect.apple.com/iris/v1/")!
         )
 
         return cookieHeader.isEmpty ? nil : cookieHeader

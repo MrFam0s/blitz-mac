@@ -107,3 +107,39 @@ import Testing
     #expect(cookie.secure == nil)
     #expect(cookie.httpOnly == nil)
 }
+
+@Test func webAuthenticationCapturesExactFreshProviderInsteadOfChoosingAvailableAccount() throws {
+    let json = Data(#"{"user":{"emailAddress":" User@example.com "},"provider":{"providerId":123,"publicProviderId":"PUBLIC-123","name":"Example Team"},"availableProviders":[{"providerId":456,"publicProviderId":"OTHER"}]}"#.utf8)
+    let identity = try ASCWebAuthentication.authenticatedIdentity(statusCode: 200, data: json)
+    #expect(identity.email == "User@example.com")
+    #expect(identity.providerId == 123)
+    #expect(identity.publicProviderId == "PUBLIC-123")
+    #expect(identity.providerName == "Example Team")
+    for provider in ["{}", #"{"providerId":123}"#, #"{"providerId":true,"publicProviderId":"OTHER"}"#,
+        #"{"providerId":1.5,"publicProviderId":"OTHER"}"#, #"{"providerId":0,"publicProviderId":"OTHER"}"#] {
+        let invalid = Data((#"{"user":{"emailAddress":"user@example.com"},"provider": "# + provider + "}").utf8)
+        #expect(throws: ASCWebAuthenticationError.self) { try ASCWebAuthentication.authenticatedIdentity(statusCode: 200, data: invalid) }
+    }
+}
+
+@Test func webPortalCaptureRequiresExactSecureOrigin() {
+    #expect(ASCWebAuthentication.isDeveloperPortalURL(URL(string: "https://developer.apple.com/account/")))
+    for value in ["http://developer.apple.com/", "https://developer.apple.com.evil.test/", "https://developer.apple.com:8443/", "https://appstoreconnect.apple.com/"] {
+        #expect(!ASCWebAuthentication.isDeveloperPortalURL(URL(string: value)))
+    }
+}
+
+@Test func nativeSessionAndScriptExportPreserveProviderWithoutClaimingPortalVerification() throws {
+    let session = IrisSession(cookies: [.init(name: "portal", value: "test", domain: "developer.apple.com", path: "/services-account")],
+        email: "user@example.com", capturedAt: Date(timeIntervalSince1970: 100), providerId: 123,
+        publicProviderId: "PUBLIC-123", providerName: "Example Team")
+    let native = try JSONDecoder().decode(IrisSession.self, from: JSONEncoder().encode(session))
+    #expect(native.publicProviderId == "PUBLIC-123")
+    #expect(native.importEvidence == nil)
+    let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+    let store = try decoder.decode(ASCWebSessionStore.self, from: ASCWebSessionStore.mergedData(storing: session, into: nil))
+    let saved = try #require(store.sessions.values.first)
+    #expect(saved.providerId == 123)
+    #expect(saved.publicProviderId == "PUBLIC-123")
+    #expect(saved.cookies["https://developer.apple.com/"]?.first?.path == "/services-account")
+}

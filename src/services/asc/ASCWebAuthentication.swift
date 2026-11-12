@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 enum ASCWebAuthenticationError: Error, LocalizedError {
     case notAuthenticated
@@ -24,6 +25,35 @@ enum ASCWebAuthenticationError: Error, LocalizedError {
 /// endpoint before storing it or reporting successful MCP authentication.
 enum ASCWebAuthentication {
     static let sessionURL = URL(string: "https://appstoreconnect.apple.com/olympus/v1/session")!
+
+    struct Identity: Equatable, Sendable {
+        let email: String
+        let providerId: Int64
+        let publicProviderId: String
+        let providerName: String?
+    }
+
+    static func authenticatedIdentity(statusCode: Int, data: Data) throws -> Identity {
+        let email = try authenticatedEmail(statusCode: statusCode, data: data)
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let provider = json["provider"] as? [String: Any],
+              let rawID = provider["providerId"] as? NSNumber,
+              CFGetTypeID(rawID) != CFBooleanGetTypeID(), rawID.int64Value > 0,
+              rawID.decimalValue == Decimal(rawID.int64Value),
+              let publicID = provider["publicProviderId"] as? String,
+              !publicID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ASCWebAuthenticationError.invalidResponse
+        }
+        let name = (provider["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Identity(email: email, providerId: rawID.int64Value,
+            publicProviderId: publicID.trimmingCharacters(in: .whitespacesAndNewlines),
+            providerName: name?.isEmpty == false ? name : nil)
+    }
+
+    static func isDeveloperPortalURL(_ url: URL?) -> Bool {
+        url?.scheme?.lowercased() == "https" && url?.host?.lowercased() == "developer.apple.com"
+            && (url?.port == nil || url?.port == 443)
+    }
 
     static func isAppStoreConnectURL(_ url: URL?) -> Bool {
         url?.scheme?.lowercased() == "https"

@@ -2,10 +2,11 @@ import CryptoKit
 import Foundation
 
 enum ReleaseWorkflowAPIError: Error, LocalizedError {
-    case httpStatus(Int), invalidResponse, validationUnavailable
+    case httpStatus(Int), appleResponse(ReleaseAppleError), invalidResponse, validationUnavailable
     var errorDescription: String? {
         switch self {
         case .httpStatus(let status): return "Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(status))."
+        case .appleResponse(let error): return "Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(error.httpStatus), \(error.codes.joined(separator: ", ")))."
         case .invalidResponse: return "Apple lieferte keine vollständig zuordenbare Release-Antwort."
         case .validationUnavailable: return "Die vollständige ASC-Release-Prüfung konnte nicht verifiziert werden."
         }
@@ -111,8 +112,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             protected["review"] = Self.semantic(review)
             protected["reviewAttachments"] = try await all("/v1/appStoreReviewDetails/\(Self.id(review))/appStoreReviewAttachments").map(Self.semantic)
         }
-        let bytes = try JSONSerialization.data(withJSONObject: protected, options: [.sortedKeys])
-        let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+        let fingerprints = try Self.fingerprints(protected)
         let submission = try await submissionContext(target)
         // Protected values (including demo credentials) are hashed in memory only.
         return ReleaseWorkflowSnapshot(appID: target.appID, bundleID: target.bundleID,
@@ -120,8 +120,10 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             buildID: build.id, buildNumber: build.attributes.version,
             buildValid: build.attributes.processingState == "VALID" && build.attributes.expired != true,
             attachedBuildID: attached?["id"] as? String, appleState: state,
-            releaseType: attrs["releaseType"] as? String, contentDigest: digest,
-            submissionID: submission.id, hasSubmissionConflict: submission.conflict)
+            releaseType: attrs["releaseType"] as? String, contentDigest: fingerprints.current,
+            submissionID: submission.id, hasSubmissionConflict: submission.conflict,
+            submissionState: submission.state, canResumeSubmission: submission.canResume, submissionItemID: submission.itemID,
+            legacyContentDigests: fingerprints.legacy)
     }
 
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
@@ -158,32 +160,64 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             "type": "appStoreVersions", "id": target.versionID, "attributes": ["releaseType": mode.rawValue]]])
     }
 
-    func submit(_ target: ReleaseWorkflowTarget, expectedContentDigest: String) async throws -> String? {
+    func submit(_ target: ReleaseWorkflowTarget, expectedContentDigest: String,
+                expectedFingerprintVersion: Int? = 2,
+                expectedReleaseMode: ReleaseWorkflowMode = .manual,
+                resumingSubmissionID: String? = nil,
+                progress: @escaping @Sendable (ReleaseSubmissionProgress) async throws -> Void = { _ in }) async throws -> String? {
         // The outer engine persists a consumed boundary before any of these calls.
         // An interrupted partial submission is reconciled by read-only status, never recreated.
-        guard !(try await submissionContext(target)).conflict else { throw ReleaseWorkflowError.uncertainOutcome }
-        let created = try await request("POST", "/v1/reviewSubmissions", body: ["data": [
-            "type": "reviewSubmissions", "attributes": ["platform": target.platform],
-            "relationships": ["app": ["data": ["type": "apps", "id": target.appID]]]]])
-        guard let submission = created["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
-        let submissionID = try Self.id(submission)
-        _ = try await request("POST", "/v1/reviewSubmissionItems", body: ["data": [
-            "type": "reviewSubmissionItems", "relationships": [
-                "reviewSubmission": ["data": ["type": "reviewSubmissions", "id": submissionID]],
-                "appStoreVersion": ["data": ["type": "appStoreVersions", "id": target.versionID]]]]])
+        try await progress(.init(phase: resumingSubmissionID == nil ? .checkingExisting : .verifyingContent, submissionID: resumingSubmissionID))
+        let existing = try await submissionContext(target)
+        let submissionID: String
+        let itemID: String
+        if let resumingSubmissionID {
+            guard existing.id == resumingSubmissionID, existing.canResume else { throw ReleaseWorkflowError.uncertainOutcome }
+            submissionID = resumingSubmissionID
+            guard let id = existing.itemID else { throw ReleaseWorkflowAPIError.invalidResponse }
+            itemID = id
+        } else {
+            guard !existing.conflict else { throw ReleaseWorkflowError.uncertainOutcome }
+            try await progress(.init(phase: .creatingSubmission))
+            let created = try await request("POST", "/v1/reviewSubmissions", body: ["data": [
+                "type": "reviewSubmissions", "attributes": ["platform": target.platform],
+                "relationships": ["app": ["data": ["type": "apps", "id": target.appID]]]]])
+            guard let submission = created["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
+            submissionID = try Self.id(submission)
+            try await progress(.init(phase: .submissionCreated, submissionID: submissionID))
+            try await progress(.init(phase: .addingVersion, submissionID: submissionID))
+            let added = try await request("POST", "/v1/reviewSubmissionItems", body: ["data": [
+                "type": "reviewSubmissionItems", "relationships": [
+                    "reviewSubmission": ["data": ["type": "reviewSubmissions", "id": submissionID]],
+                    "appStoreVersion": ["data": ["type": "appStoreVersions", "id": target.versionID]]]]])
+            guard let item = added["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
+            itemID = try Self.id(item)
+            try await progress(.init(phase: .versionAdded, submissionID: submissionID, submissionItemID: itemID))
+        }
+        try await progress(.init(phase: .verifyingContent, submissionID: submissionID, submissionItemID: itemID))
         let finalSnapshot = try await snapshot(target)
         try finalSnapshot.check(target)
-        guard finalSnapshot.contentDigest == expectedContentDigest,
-              ASCReleaseStatus.isEditable(finalSnapshot.appleState) else { throw ReleaseWorkflowError.contentChanged }
-        _ = try await request("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: ["data": [
+        guard finalSnapshot.matchesContentDigest(expectedContentDigest, fingerprintVersion: expectedFingerprintVersion) else { throw ReleaseWorkflowError.contentChanged }
+        // Adding the version to this exact submission legitimately transitions it
+        // to READY_FOR_REVIEW. That is submission eligibility, not UI editability.
+        guard finalSnapshot.submissionID == submissionID, finalSnapshot.submissionItemID == itemID,
+              finalSnapshot.canResumeSubmission, finalSnapshot.releaseType == expectedReleaseMode.rawValue,
+              ASCReleaseStatus.isEditable(finalSnapshot.appleState) || ASCReleaseStatus.normalize(finalSnapshot.appleState) == "READY_FOR_REVIEW" else {
+            throw ReleaseWorkflowError.uncertainOutcome
+        }
+        try await progress(.init(phase: .submitting, submissionID: submissionID, submissionItemID: itemID))
+        let accepted = try await request("PATCH", "/v1/reviewSubmissions/\(submissionID)", body: ["data": [
             "type": "reviewSubmissions", "id": submissionID, "attributes": ["submitted": true]]])
+        guard let response = accepted["data"] as? [String: Any], response["id"] as? String == submissionID,
+              response["type"] as? String == "reviewSubmissions" else { throw ReleaseWorkflowAPIError.invalidResponse }
+        try await progress(.init(phase: .acknowledged, submissionID: submissionID, submissionItemID: itemID))
         return submissionID
     }
 
-    private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> (id: String?, conflict: Bool) {
+    private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> (id: String?, state: String?, conflict: Bool, canResume: Bool, itemID: String?) {
         let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app"])
-        var matches: [(id: String, date: String)] = []
-        var conflict = false
+        var matches: [(id: String, state: String, date: String, exactDraft: Bool, itemID: String?)] = []
+        var activeCount = 0
         for submission in submissions {
             guard let attributes = submission["attributes"] as? [String: Any],
                   let platform = attributes["platform"] as? String,
@@ -193,14 +227,76 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             let id = try Self.id(submission)
             // Incomplete/draft submissions also block a fresh POST, even if another
             // client has not attached its version item yet. Never adopt that draft.
-            if state != "COMPLETE" { conflict = true }
+            if state != "COMPLETE" { activeCount += 1 }
             let items = try await all("/v1/reviewSubmissions/\(id)/items", query: ["include": "appStoreVersion"])
             if Self.relationshipID(submission, "appStoreVersionForReview") == target.versionID ||
                 items.contains(where: { Self.relationshipID($0, "appStoreVersion") == target.versionID }) {
-                matches.append((id, attributes["submittedDate"] as? String ?? ""))
+                let submittedDate = attributes["submittedDate"] as? String ?? ""
+                let exactItem = items.count == 1 && Self.relationshipID(items[0], "appStoreVersion") == target.versionID &&
+                    Self.hasOnlyVersionContent(items[0]) &&
+                    (Self.relationshipID(submission, "appStoreVersionForReview") == nil || Self.relationshipID(submission, "appStoreVersionForReview") == target.versionID)
+                let itemReady = exactItem && (items[0]["attributes"] as? [String: Any])?["state"] as? String == "READY_FOR_REVIEW"
+                matches.append((id, state, submittedDate, state == "READY_FOR_REVIEW" && submittedDate.isEmpty && itemReady,
+                                exactItem ? try Self.id(items[0]) : nil))
             }
         }
-        return (matches.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date > $1.date }.first?.id, conflict)
+        let active = matches.filter { $0.state != "COMPLETE" }
+        // A current draft with no submittedDate is newer than completed history.
+        // Multiple active matches are ambiguous and must never be selected by ID.
+        guard active.count <= 1 else { throw ReleaseWorkflowAPIError.invalidResponse }
+        let chosen = active.first ?? matches.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date > $1.date }.first
+        return (chosen?.id, chosen?.state, activeCount > 0, activeCount == 1 && chosen?.exactDraft == true, chosen?.itemID)
+    }
+
+    private static func hasOnlyVersionContent(_ resource: [String: Any]) -> Bool {
+        guard let relationships = resource["relationships"] as? [String: [String: Any]] else { return false }
+        // The item may link back to its submission. Any other non-null content
+        // would publish more than this operation's single reviewed app version.
+        return relationships.allSatisfy { name, relation in
+            ["appStoreVersion", "reviewSubmission"].contains(name) || relation["data"] is NSNull
+        }
+    }
+
+    /// V2 excludes only Apple's app-info lifecycle state. Old journals remain
+    /// immutable: bounded candidate hashes prove their complete old protected
+    /// document, changing only this known READY_FOR_REVIEW transition. A metadata
+    /// edit, locale/asset reorder or other field change still changes every hash.
+    private static func fingerprints(_ protected: [String: Any]) throws -> (current: String, legacy: Set<String>) {
+        func digest(_ object: [String: Any]) throws -> String {
+            SHA256.hash(data: try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
+                .map { String(format: "%02x", $0) }.joined()
+        }
+        let infos = protected["appInfos"] as? [[String: Any]] ?? []
+        var normalized = protected
+        normalized["appInfos"] = infos.map { info in
+            var value = info
+            if var attrs = value["attributes"] as? [String: Any] {
+                attrs.removeValue(forKey: "state"); value["attributes"] = attrs
+            }
+            return value
+        }
+        var legacy = Set([try digest(protected)])
+        let candidates = ["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY", "READY_FOR_REVIEW"]
+        let changing = infos.indices.filter { (infos[$0]["attributes"] as? [String: Any])?["state"] as? String == "READY_FOR_REVIEW" }
+        // At most 216 variants; large/ambiguous histories require fresh preparation.
+        if changing.count <= 3 {
+            var variants = [infos]
+            for index in changing {
+                variants = variants.flatMap { value in
+                    candidates.map { state in
+                        var next = value
+                        var attrs = next[index]["attributes"] as? [String: Any] ?? [:]
+                        attrs["state"] = state; next[index]["attributes"] = attrs
+                        return next
+                    }
+                }
+            }
+            for infos in variants {
+                var value = protected; value["appInfos"] = infos
+                legacy.insert(try digest(value))
+            }
+        }
+        return (try digest(normalized), legacy)
     }
 
     private static func relationshipID(_ resource: [String: Any], _ name: String) -> String? {
@@ -230,6 +326,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             guard let data = object["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
             return data
         } catch ReleaseWorkflowAPIError.httpStatus(404) { return nil }
+        catch ReleaseWorkflowAPIError.appleResponse(let error) where error.httpStatus == 404 { return nil }
     }
     private func single(_ path: String) async throws -> [String: Any] {
         guard let value = try await optionalSingle(path) else { throw ReleaseWorkflowAPIError.invalidResponse }
@@ -275,7 +372,9 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         let response = try await transport(method, path,
             ["Accept": "application/json", "Content-Type": "application/json"],
             try body.map { try JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys]) })
-        guard (200..<300).contains(response.statusCode) else { throw ReleaseWorkflowAPIError.httpStatus(response.statusCode) }
+        guard (200..<300).contains(response.statusCode) else {
+            throw ReleaseWorkflowAPIError.appleResponse(.sanitized(status: response.statusCode, body: response.body))
+        }
         if response.body.isEmpty { return [:] }
         guard let object = try JSONSerialization.jsonObject(with: response.body) as? [String: Any],
               object["errors"] == nil else {

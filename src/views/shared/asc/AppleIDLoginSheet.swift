@@ -4,6 +4,7 @@ import WebKit
 
 struct AppleIDLoginSheet: View {
     var subtitle: String = "Sign in to App Store Connect to authenticate your Apple ID session."
+    var requireDeveloperPortal = false
     var onSessionCaptured: (IrisSession) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
@@ -17,7 +18,7 @@ struct AppleIDLoginSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Sign in with Apple ID")
                         .font(.headline)
-                    Text(subtitle)
+                    Text(requireDeveloperPortal ? "App Store Connect und Developer-Portal für denselben Anbieter bestätigen." : subtitle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -52,6 +53,7 @@ struct AppleIDLoginSheet: View {
                     ASCWebView(
                         isLoading: $isLoading,
                         validationMessage: $validationMessage,
+                        requireDeveloperPortal: requireDeveloperPortal,
                         onSessionCaptured: { session in
                             guard !isResettingBrowser else { return }
                             irisLog("AppleIDLoginSheet: onSessionCaptured called, \(session.cookies.count) cookies")
@@ -79,6 +81,7 @@ struct AppleIDLoginSheet: View {
 struct ASCWebView: NSViewRepresentable {
     @Binding var isLoading: Bool
     @Binding var validationMessage: String?
+    var requireDeveloperPortal = false
     var onSessionCaptured: (IrisSession) -> Void
 
     // A stable, app-scoped (not shared with Safari) *persistent* data store.
@@ -138,6 +141,7 @@ struct ASCWebView: NSViewRepresentable {
         private var pollTimer: Timer?
         private var validationTask: Task<Void, Never>?
         private var nextValidationAt = Date.distantPast
+        private var expectedIdentity: ASCWebAuthentication.Identity?
 
         init(parent: ASCWebView) { self.parent = parent }
 
@@ -162,37 +166,49 @@ struct ASCWebView: NSViewRepresentable {
             // Persisted myacinfo alone does not prove that sign-in or 2FA has
             // completed. Never capture from idmsa or while a redirect is loading.
             guard !hasCapture, let webView, !webView.isLoading,
-                  ASCWebAuthentication.isAppStoreConnectURL(webView.url),
+                  (ASCWebAuthentication.isAppStoreConnectURL(webView.url)
+                    || (parent.requireDeveloperPortal && expectedIdentity != nil
+                        && ASCWebAuthentication.isDeveloperPortalURL(webView.url))),
                   Date() >= nextValidationAt,
                   let token = gate.begin() else { return }
 
             validationTask = Task { @MainActor [weak self, weak webView] in
                 guard let self, let webView else { return }
                 do {
-                    let script = """
-                    const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), 15000);
-                    try {
-                        const response = await fetch('/olympus/v1/session', {
-                            credentials: 'include', cache: 'no-store', signal: controller.signal,
-                            headers: { 'Accept': 'application/json' }
-                        });
-                        return {status: response.status, body: await response.text()};
-                    } finally { clearTimeout(timer); }
-                    """
-                    let result: Any = try await withCheckedThrowingContinuation { continuation in
-                        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
-                            continuation.resume(with: result)
+                    let identity: ASCWebAuthentication.Identity
+                    if ASCWebAuthentication.isAppStoreConnectURL(webView.url) {
+                        let script = """
+                        const controller = new AbortController();
+                        const timer = setTimeout(() => controller.abort(), 15000);
+                        try {
+                            const response = await fetch('/olympus/v1/session', {
+                                credentials: 'include', cache: 'no-store', signal: controller.signal,
+                                headers: { 'Accept': 'application/json' }
+                            });
+                            return {status: response.status, body: await response.text()};
+                        } finally { clearTimeout(timer); }
+                        """
+                        let result: Any = try await withCheckedThrowingContinuation { continuation in
+                            webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
+                                continuation.resume(with: result)
+                            }
                         }
+                        guard self.gate.accepts(token), !Task.isCancelled,
+                              ASCWebAuthentication.isAppStoreConnectURL(webView.url) else { return }
+                        guard let result = result as? [String: Any],
+                              let status = result["status"] as? Int,
+                              let body = result["body"] as? String else {
+                            throw ASCWebAuthenticationError.invalidResponse
+                        }
+                        identity = try ASCWebAuthentication.authenticatedIdentity(statusCode: status, data: Data(body.utf8))
+                        if let expected = self.expectedIdentity, expected != identity {
+                            throw ASCWebAuthenticationError.accountChanged
+                        }
+                        self.expectedIdentity = identity
+                    } else {
+                        guard let expected = self.expectedIdentity else { throw ASCWebAuthenticationError.invalidResponse }
+                        identity = expected
                     }
-                    guard self.gate.accepts(token), !Task.isCancelled,
-                          ASCWebAuthentication.isAppStoreConnectURL(webView.url) else { return }
-                    guard let result = result as? [String: Any],
-                          let status = result["status"] as? Int,
-                          let body = result["body"] as? String else {
-                        throw ASCWebAuthenticationError.invalidResponse
-                    }
-                    let email = try ASCWebAuthentication.authenticatedEmail(statusCode: status, data: Data(body.utf8))
                     let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
                         webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
                             continuation.resume(returning: cookies)
@@ -205,18 +221,27 @@ struct ASCWebView: NSViewRepresentable {
                         return (domain == "apple.com" || domain.hasSuffix(".apple.com"))
                             && (cookie.expiresDate.map { $0 > now } ?? true)
                     }
-                    let session = IrisSession(cookies: appleCookies.map {
+                    var session = IrisSession(cookies: appleCookies.map {
                         .init(name: $0.name, value: $0.value, domain: $0.domain, path: $0.path,
                               expires: $0.expiresDate, secure: $0.isSecure, httpOnly: $0.isHTTPOnly)
-                    }, email: email, capturedAt: now)
+                    }, email: identity.email, capturedAt: now, providerId: identity.providerId,
+                        publicProviderId: identity.publicProviderId, providerName: identity.providerName)
                     guard !ASCWebAuthentication.cookieHeader(from: session.cookies).isEmpty else {
                         throw ASCWebAuthenticationError.notAuthenticated
                     }
                     self.parent.validationMessage = "Apple-Anmeldung wird für Blitz Neo und ASC geprüft …"
-                    // The official importer validates the exact CLI transport and
-                    // stores the accepted bundle before we report success.
-                    try await ASCWebSessionCLIImporter().importSession(session)
+                    let evidence = try await ASCWebSessionCLIImporter().importSession(session)
                     guard self.gate.accepts(token), !Task.isCancelled else { return }
+                    session.importEvidence = evidence
+                    if !evidence.satisfies(requireDeveloperPortal: self.parent.requireDeveloperPortal) {
+                        self.gate.finish(token)
+                        self.nextValidationAt = Date().addingTimeInterval(10)
+                        self.parent.validationMessage = "App Store Connect ist bestätigt. Bitte die Anmeldung im Developer-Portal für denselben Anbieter abschließen. Eine Vertragszustimmung wird hier nicht automatisch erteilt."
+                        if ASCWebAuthentication.isAppStoreConnectURL(webView.url) {
+                            webView.load(URLRequest(url: URL(string: "https://developer.apple.com/account/")!))
+                        }
+                        return
+                    }
                     self.hasCapture = true
                     self.pollTimer?.invalidate()
                     self.pollTimer = nil

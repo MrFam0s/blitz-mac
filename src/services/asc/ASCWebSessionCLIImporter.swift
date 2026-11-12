@@ -1,18 +1,46 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
-/// Uses ASC's supported, locked import path. The older aggregate export alone
-/// is not the file cache that `asc web` reads when Keychain access is bypassed.
+/// Evidence from the helper's isolated, fresh checks. Cookie presence alone is
+/// never a capability proof, and normal ASC login need not prove Portal access.
+struct ASCWebSessionImportEvidence: Codable, Equatable, Sendable {
+    enum Status: String, Codable, Sendable { case verified, unverified, invalid }
+    struct Capability: Codable, Equatable, Sendable {
+        let status: Status
+        let reason: String
+    }
+    let outcome: String
+    let reason: String
+    let appleId: String
+    let providerId: String
+    var developerTeamId: String? = nil
+    let asc: Capability
+    let developerPortal: Capability
+
+    var acceptsASC: Bool {
+        ["imported", "existingPreserved"].contains(outcome) && asc.status == .verified
+            && !appleId.isEmpty && !providerId.isEmpty
+    }
+
+    func satisfies(requireDeveloperPortal: Bool) -> Bool {
+        acceptsASC && (!requireDeveloperPortal || (developerPortal.status == .verified
+            && !(developerTeamId?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)))
+    }
+}
+
+/// Uses the helper's validated, atomic session selection. Existing stronger CLI
+/// sessions remain intact; no cache is overwritten by a blind portable import.
 struct ASCWebSessionCLIImporter {
     enum ImportError: Error, LocalizedError {
-        case helperUnavailable, invalidSession, rejected, timedOut
+        case helperUnavailable, invalidSession, rejected, timedOut, identityChanged
 
         var errorDescription: String? {
             switch self {
             case .helperUnavailable: return "Der ASC-Helfer ist nicht verfügbar. Bitte Blitz Neo neu starten."
-            case .invalidSession: return "Apple hat noch keine vollständige Anmeldung bestätigt."
+            case .invalidSession: return "Apple hat noch keine eindeutige App-Store-Connect-Anmeldung mit Anbieter bestätigt."
             case .rejected: return "ASC konnte die Apple-Anmeldung nicht bestätigen oder speichern. Bitte die Anmeldung abschließen und erneut prüfen."
             case .timedOut: return "Die Prüfung der Apple-Anmeldung hat zu lange gedauert. Bitte erneut versuchen."
+            case .identityChanged: return "Apple-Konto oder Anbieter haben sich während der Sitzungsprüfung geändert. Bitte die Anmeldung erneut prüfen."
             }
         }
     }
@@ -35,38 +63,41 @@ struct ASCWebSessionCLIImporter {
         }
     }
 
-    func importSession(_ session: IrisSession) async throws {
+    @discardableResult
+    func importSession(_ session: IrisSession) async throws -> ASCWebSessionImportEvidence {
         try Task.checkCancellation()
         guard let helperPath else { throw ImportError.helperUnavailable }
         let bundle = try Self.bundleData(for: session)
+        guard let providerID = session.publicProviderId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !providerID.isEmpty else { throw ImportError.invalidSession }
+        let requestID = UUID().uuidString
+        let request = try JSONSerialization.data(withJSONObject: ["id": requestID, "method": "web.session.import",
+            "params": ["bundle": try JSONSerialization.jsonObject(with: bundle), "expectedProviderId": providerID]]) + Data([0x0a])
         let directory = temporaryDirectory.appendingPathComponent("blitz-web-auth-\(UUID().uuidString)", isDirectory: true)
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: false,
                                         attributes: [.posixPermissions: 0o700])
         defer { try? fileManager.removeItem(at: directory) }
-        let file = directory.appendingPathComponent("session.json")
-        guard fileManager.createFile(atPath: file.path, contents: bundle, attributes: [.posixPermissions: 0o600]) else {
+        let file = directory.appendingPathComponent("request.json")
+        guard fileManager.createFile(atPath: file.path, contents: request, attributes: [.posixPermissions: 0o600]) else {
             throw ImportError.rejected
         }
         var env = environment
         if env["ASC_BYPASS_KEYCHAIN", default: ""].isEmpty { env["ASC_BYPASS_KEYCHAIN"] = "1" }
         env["ASC_TELEMETRY_DISABLED"] = "1"
-        let arguments = ["__ascd_run_cli__", "web", "auth", "import", "--file", file.path,
-                         "--validate", "--overwrite", "--output", "json"]
-        let (exitCode, output) = try await runner(helperPath, arguments, env, directory)
+        let (exitCode, output) = try await runner(helperPath, [], env, directory)
         try Task.checkCancellation()
         guard exitCode == 0,
-              let receipt = try? JSONDecoder().decode(Receipt.self, from: output), receipt.imported,
-              receipt.cookieCount > 0,
-              receipt.appleId.caseInsensitiveCompare(session.email?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") == .orderedSame else {
-            throw ImportError.rejected
-        }
+              let response = try? JSONDecoder().decode(Response.self, from: output), response.id == requestID,
+              let receipt = response.result, receipt.acceptsASC else { throw ImportError.rejected }
+        guard receipt.appleId.caseInsensitiveCompare(session.email?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") == .orderedSame,
+              receipt.providerId == providerID else { throw ImportError.identityChanged }
+        return receipt
     }
 
-    private struct Receipt: Decodable {
-        let imported: Bool
-        let appleId: String
-        let cookieCount: Int
+    private struct Response: Decodable {
+        let id: String?
+        let result: ASCWebSessionImportEvidence?
     }
 
     static func bundleData(for session: IrisSession) throws -> Data {
@@ -128,7 +159,9 @@ private final class ImportProcess: @unchecked Sendable {
         child.executableURL = URL(fileURLWithPath: path)
         child.arguments = arguments
         child.environment = environment
-        child.standardInput = FileHandle.nullDevice
+        let input = try FileHandle(forReadingFrom: directory.appendingPathComponent("request.json"))
+        defer { try? input.close() }
+        child.standardInput = input
         child.standardOutput = output
         child.standardError = FileHandle.nullDevice
         lock.lock()
@@ -136,7 +169,7 @@ private final class ImportProcess: @unchecked Sendable {
         process = child
         do { try child.run() } catch { lock.unlock(); throw ASCWebSessionCLIImporter.ImportError.helperUnavailable }
         lock.unlock()
-        let deadline = Date().addingTimeInterval(45)
+        let deadline = Date().addingTimeInterval(90)
         while child.isRunning {
             lock.lock()
             let stopped = cancelled
@@ -153,8 +186,8 @@ private final class ImportProcess: @unchecked Sendable {
             Thread.sleep(forTimeInterval: 0.05)
         }
         child.waitUntilExit()
-        let input = try FileHandle(forReadingFrom: outputURL)
-        defer { try? input.close() }
-        return (child.terminationStatus, try input.read(upToCount: 65_536) ?? Data())
+        let receiptFile = try FileHandle(forReadingFrom: outputURL)
+        defer { try? receiptFile.close() }
+        return (child.terminationStatus, try receiptFile.read(upToCount: 65_536) ?? Data())
     }
 }

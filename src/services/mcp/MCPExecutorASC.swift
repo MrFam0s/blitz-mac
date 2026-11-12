@@ -1147,12 +1147,16 @@ extension MCPExecutor {
         return abs(a - b) < 0.001
     }
 
-    func executeASCWebAuth() async -> [String: Any] {
+    func executeASCWebAuth(_ arguments: [String: Any]) async throws -> [String: Any] {
+        if arguments.keys.contains("requireDeveloperPortal"), arguments["requireDeveloperPortal"] as? Bool == nil {
+            throw MCPServerService.MCPError.invalidToolArgs
+        }
+        let requireDeveloperPortal = arguments["requireDeveloperPortal"] as? Bool ?? false
         await MainActor.run {
             NSApp.activate(ignoringOtherApps: true)
         }
 
-        guard let session = await appState.ascManager.requestWebAuthForMCP() else {
+        guard let session = await appState.ascManager.requestWebAuthForMCP(requireDeveloperPortal: requireDeveloperPortal) else {
             let authError = await MainActor.run { appState.ascManager.irisFeedbackError }
             if let authError, !authError.isEmpty {
                 return mcpJSON([
@@ -1169,11 +1173,15 @@ extension MCPExecutor {
         }
 
         let email = session.email ?? "unknown"
-        return mcpJSON([
+        var response: [String: Any] = [
             "success": true,
             "email": email,
-            "message": "Web session authenticated and synced to ~/.blitz/asc-agent/web-session.json. This renews authentication only, not the app-creation operation. Before continuing an app creation, compare get_tab_state appCreationSetup with the original confirmed identity and account. Only a proven account_verification/401 with creationAttempted=false permits the skill's one guarded --resume-after-auth continuation."
-        ])
+            "message": "App Store Connect authentication verified. Developer Portal capability is reported separately; authentication does not prove agreements are active or that a Store write succeeded. Before continuing app creation, compare get_tab_state appCreationSetup with the original confirmed identity and account. Only a proven account_verification/401 with creationAttempted=false permits the skill's guarded --resume-after-auth continuation."
+        ]
+        if let evidence = session.importEvidence {
+            response["sessionEvidence"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(evidence))
+        }
+        return mcpJSON(response)
     }
 
     func executeASCSetAppPrice(_ args: [String: Any]) async throws -> [String: Any] {

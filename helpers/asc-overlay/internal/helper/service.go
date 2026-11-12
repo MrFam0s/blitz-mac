@@ -15,6 +15,7 @@ import (
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared"
+	webcore "github.com/rudrankriyam/App-Store-Connect-CLI/internal/web"
 )
 
 const defaultRequestTimeout = 30 * time.Second
@@ -38,6 +39,7 @@ type Service struct {
 	resolveCredentials func(string) (shared.ResolvedAuthCredentials, error)
 	newClient          func(shared.ResolvedAuthCredentials) (rawRequester, error)
 	cliRunner          func([]string, string) (CLIExecResult, error)
+	webSessionImporter func(context.Context, webcore.BlitzSessionImportParams) (webcore.BlitzSessionImportResult, error)
 }
 
 var cliRunMu sync.Mutex
@@ -50,6 +52,7 @@ func NewService(version string) *Service {
 		resolveCredentials: shared.ResolveAuthCredentials,
 		newClient:          defaultNewClient,
 		cliRunner:          runCLI,
+		webSessionImporter: webcore.ImportBlitzSession,
 	}
 }
 
@@ -114,6 +117,17 @@ func (s *Service) Handle(ctx context.Context, request Request) Response {
 		result, err := releaseReadiness(ctx, params)
 		if err != nil {
 			return newErrorResponse(request.ID, CodeInternalError, "release readiness unavailable", nil)
+		}
+		return Response{ID: request.ID, Result: result}
+	case "web.session.import":
+		var params webcore.BlitzSessionImportParams
+		// Never echo decode/validation errors: imported data contains credentials.
+		if len(request.Params) > webcore.MaxSessionBundleSize+4096 || decodeParams(request.Params, &params) != nil {
+			return newErrorResponse(request.ID, CodeInvalidRequest, "invalid web.session.import params", nil)
+		}
+		result, err := s.webSessionImporter(ctx, params)
+		if err != nil {
+			return newErrorResponse(request.ID, CodeInvalidRequest, "web session import rejected", nil)
 		}
 		return Response{ID: request.ID, Result: result}
 	default:

@@ -280,7 +280,7 @@ struct ContentView: View {
         .sheet(isPresented: appleIDLoginBinding, onDismiss: {
             appState.ascManager.cancelPendingWebAuth()
         }) {
-            AppleIDLoginSheet { session in
+            AppleIDLoginSheet(requireDeveloperPortal: appState.ascManager.webAuthRequiresDeveloperPortal) { session in
                 appState.ascManager.setIrisSession(session)
                 Task { await appState.ascManager.fetchRejectionFeedback(force: true) }
             }

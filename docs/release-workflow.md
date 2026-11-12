@@ -146,6 +146,46 @@ through raw ASC or create a new operation to bypass the journal. An unresolved
 partial Apple submission requires investigation; the backend does not delete or
 silently adopt another submission.
 
+### Continue a verified draft
+
+Starting with 1.0.70, `status` distinguishes the active submission from historical
+`COMPLETE` records. `READY_FOR_REVIEW` is a valid intermediate state after the
+version item has been added; it is not a successful final submission and does not
+make the version's Store metadata freely editable.
+
+The journal records each submission write intent, confirmed submission/item IDs,
+and a sanitized diagnostic. After interruption, status only reads Apple. For an
+unambiguous existing draft whose final submit has not been attempted, it can return
+`resumableSubmissionId`. To continue the same authorized release, call `submit`
+with the unchanged `operationId`, `accountKey`, `confirmationDigest`, `confirm: true`
+and `resumeSubmissionId` equal to that result. Identity, content, media order, build,
+release mode and readiness are rechecked; only the existing submission is sent.
+No new submission/item, metadata edit, release-mode change or journal reset occurs.
+Legacy incomplete operations additionally expose
+`requiresLegacyRecoveryConfirmation: true`: their old journal cannot establish
+whether the final submit was attempted. `confirmLegacyDraftRecovery: true` is
+required and asserts separately documented evidence of a pre-submit interruption,
+such as the proven 1.0.69 READY_FOR_REVIEW guard failure. The draft's state alone
+does not establish that history. This evidence assertion does not expand the
+user's existing authorization. Ambiguous or unrelated drafts and uncertain
+final-submit responses remain blocked.
+
+Programmatic status remains read-only regardless of resumability. A successful
+read is not permission to submit, and a historical completed submission cannot
+establish success for a newly prepared draft. Apple must confirm the same draft
+and version in an actual review state.
+
+### Authentication capabilities
+
+The browser and CLI share the pinned ASC implementation. Browser import validates
+the candidate separately and preserves a valid richer CLI session, without merging
+cookies from unrelated sessions. Its receipt distinguishes App Store Connect from
+Developer Portal access; neither is proof of accepted agreements. The normal login
+requires ASC access only. `asc_web_auth(requireDeveloperPortal: true)` additionally
+opens the Portal when that specific capability is needed. After login rerun the
+original scoped readiness check. Do not log out a healthy session or use manual
+session exports as routine recovery.
+
 ## Readiness diagnostics
 
 `validate` returns `validation.ready`, `blocking`, `warnings`, `unverified`,

@@ -22,6 +22,6 @@ TEST_OVERLAY="$(python3 "$ROOT_DIR/scripts/prepare-asc-test-overlay.py" \
     "$GO_BINARY" test -p "$TEST_JOBS" -parallel "$TEST_JOBS" -count=1 -timeout=5m \
         -overlay "$TEST_OVERLAY" ./internal/asc ./internal/helper ./internal/cli/validate ./cmd/ascd
     "$GO_BINARY" test -p "$TEST_JOBS" -parallel "$TEST_JOBS" -count=1 -timeout=2m \
-        -run '^TestBlitzReleaseTeam' ./internal/web
+        -run '^TestBlitz(ReleaseTeam|Session)' ./internal/web
 )
 python3 "$ROOT_DIR/scripts/verify-asc-helper.py" "$HELPER_PATH"

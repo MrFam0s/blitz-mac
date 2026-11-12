@@ -216,21 +216,23 @@ extension ASCManager {
         }
         // No time-based expiry — we trust the session until a 401 proves otherwise
         irisLog("ASCManager.loadIrisSession: loaded session with \(loaded.cookies.count) cookies, capturedAt=\(loaded.capturedAt)")
-        do {
-            try Self.storeWebSessionToKeychain(loaded)
-        } catch {
-            irisLog("ASCManager.loadIrisSession: asc-web-session backfill FAILED: \(error)")
-        }
+        // Reusing the native session must never overwrite the canonical ASC CLI
+        // session (or its Developer Portal cookies) from an older Keychain copy.
         irisSession = loaded
         irisService = IrisService(session: loaded)
         irisSessionState = .valid
         irisLog("ASCManager.loadIrisSession: session valid, irisService created")
     }
 
-    func requestWebAuthForMCP() async -> IrisSession? {
-        pendingWebAuthContinuation?.resume(returning: nil)
+    func openWebAuth(requireDeveloperPortal: Bool = false) {
+        webAuthRequiresDeveloperPortal = requireDeveloperPortal
         irisFeedbackError = nil
         showAppleIDLogin = true
+    }
+
+    func requestWebAuthForMCP(requireDeveloperPortal: Bool = false) async -> IrisSession? {
+        pendingWebAuthContinuation?.resume(returning: nil)
+        openWebAuth(requireDeveloperPortal: requireDeveloperPortal)
         return await withCheckedContinuation { continuation in
             pendingWebAuthContinuation = continuation
         }
@@ -238,11 +240,18 @@ extension ASCManager {
 
     func cancelPendingWebAuth() {
         showAppleIDLogin = false
+        webAuthRequiresDeveloperPortal = false
         pendingWebAuthContinuation?.resume(returning: nil)
         pendingWebAuthContinuation = nil
     }
 
     func setIrisSession(_ session: IrisSession) {
+        guard session.hasVerifiedImport(requireDeveloperPortal: webAuthRequiresDeveloperPortal) else {
+            irisFeedbackError = "Die angeforderte Apple-Sitzung wurde noch nicht eindeutig bestätigt."
+            pendingWebAuthContinuation?.resume(returning: nil)
+            pendingWebAuthContinuation = nil
+            return
+        }
         irisLog("ASCManager.setIrisSession: \(session.cookies.count) cookies")
         do {
             try session.save()
@@ -256,11 +265,12 @@ extension ASCManager {
             return
         }
 
-        // Also write the shared web session store (keychain + synced session file).
+        // Export this fresh native ASC session for the bundled legacy scripts.
+        // The independently verified canonical CLI session belongs to the helper.
         // If that write fails during an MCP-triggered login, keep the native session
         // but fail the MCP request instead of reporting a false success.
         do {
-            try Self.storeWebSessionToKeychain(session)
+            try Self.exportNativeWebSession(session)
         } catch {
             irisLog("ASCManager.setIrisSession: asc-web-session save FAILED: \(error)")
             irisFeedbackError = "Failed to save ASC web session: \(error.localizedDescription)"
@@ -287,7 +297,7 @@ extension ASCManager {
         irisLog("ASCManager.clearIrisSession")
         let currentSession = irisSession
         IrisSession.delete()
-        Self.deleteWebSessionFromKeychain(email: currentSession?.email)
+        Self.removeNativeWebSessionExport(email: currentSession?.email)
         irisSession = nil
         irisService = nil
         irisSessionState = .noSession
@@ -363,6 +373,17 @@ struct IrisSession: Codable, Sendable {
     var cookies: [IrisCookie]
     var email: String?
     var capturedAt: Date
+    var providerId: Int64? = nil
+    var publicProviderId: String? = nil
+    var providerName: String? = nil
+    var importEvidence: ASCWebSessionImportEvidence? = nil
+
+    func hasVerifiedImport(requireDeveloperPortal: Bool = false) -> Bool {
+        guard let email, let provider = publicProviderId, let evidence = importEvidence else { return false }
+        return evidence.satisfies(requireDeveloperPortal: requireDeveloperPortal)
+            && evidence.appleId.caseInsensitiveCompare(email.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+            && evidence.providerId == provider
+    }
 
     struct IrisCookie: Codable, Sendable {
         let name: String
@@ -393,16 +414,19 @@ struct IrisSession: Codable, Sendable {
 
     func save() throws {
         let data = try JSONEncoder().encode(self)
-        // Delete any existing item first
-        Self.delete()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.keychainService,
             kSecAttrAccount as String: Self.keychainAccount,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let updated = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updated == errSecSuccess { return }
+        // Preserve the old native session when an update is denied; never
+        // delete the only working copy before a replacement can be saved.
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        let status = updated == errSecItemNotFound ? SecItemAdd(add as CFDictionary, nil) : updated
         guard status == errSecSuccess else {
             throw NSError(domain: "IrisSession", code: Int(status),
                 userInfo: [NSLocalizedDescriptionKey: "Failed to save session to Keychain (status: \(status))"])

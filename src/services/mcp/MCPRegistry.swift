@@ -46,6 +46,8 @@ enum MCPRegistry {
             if name == "release_submit" {
                 properties["confirmationDigest"] = ["type": "string"]
                 properties["confirm"] = ["type": "boolean", "description": "True only when the user authorized this exact release and mode."]
+                properties["resumeSubmissionId"] = ["type": "string", "description": "Explicitly continue only the exact resumableSubmissionId freshly returned by release_status for this same authorized operation. Revalidates identity, content, build, release mode and readiness, then submits that existing draft without creating resources. Omit for a new submission. Never retry an uncertain final submit."]
+                properties["confirmLegacyDraftRecovery"] = ["type": "boolean", "description": "Only for a legacy record with requiresLegacyRecoveryConfirmation=true: assert that documented evidence proves the original run stopped before the final submit. A READY_FOR_REVIEW snapshot alone is insufficient. Preserve the original authorization, operation and exact draft. Never set this for an unknown historical final-submit outcome."]
                 required += ["confirmationDigest", "confirm"]
             }
             tools.append(tool(name: name, description: description, properties: properties, required: required))
@@ -391,8 +393,8 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "asc_web_auth",
-            description: "Open the Apple ID login window in Blitz Neo to authenticate a web session for App Store Connect. Use when the iris API returns 401 (session expired). The login captures cookies and syncs them to ~/.blitz/asc-agent/web-session.json for CLI skills. Requires user interaction (Apple ID + 2FA). Success renews the web session only; it does not confirm an app was created or authorize repeating a POST. For app-creation account_verification/401 with creationAttempted=false, keep the original operation, compare its complete appCreationSetup state after login, and follow the skill's guarded --resume-after-auth continuation.",
-            properties: [:],
+            description: "Open the Apple ID login window in Blitz Neo. Validates App Store Connect and preserves an existing valid CLI session instead of blindly overwriting it. Developer Portal capability is reported separately; request it only when needed. Requires user interaction (Apple ID + 2FA). Success renews authentication only; it does not confirm a Store write or authorize repeating a POST. For app-creation account_verification/401 with creationAttempted=false, keep the original operation, compare its complete appCreationSetup state after login, and follow the skill's guarded --resume-after-auth continuation.",
+            properties: ["requireDeveloperPortal": ["type": "boolean", "description": "Default false. Set true for a diagnosed Developer Portal session problem, such as an unverified program-license check. A successful login does not mean agreements are active; rerun the original read-only readiness check."]],
             required: []
         ))
 

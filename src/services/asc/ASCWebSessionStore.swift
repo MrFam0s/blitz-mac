@@ -11,12 +11,18 @@ struct ASCWebSessionStore: Codable {
         let updatedAt: Date
         let userEmail: String?
         let cookies: [String: [Cookie]]
+        var providerId: Int64? = nil
+        var publicProviderId: String? = nil
+        var providerName: String? = nil
 
         private enum CodingKeys: String, CodingKey {
             case version
             case updatedAt = "updated_at"
             case userEmail = "user_email"
             case cookies
+            case providerId = "provider_id"
+            case publicProviderId = "public_provider_id"
+            case providerName = "provider_name"
         }
     }
 
@@ -56,6 +62,7 @@ struct ASCWebSessionStore: Codable {
 
     private static let baseURLs = [
         "https://appstoreconnect.apple.com/",
+        "https://developer.apple.com/",
         "https://idmsa.apple.com/",
         "https://gsa.apple.com/",
     ]
@@ -71,7 +78,10 @@ struct ASCWebSessionStore: Codable {
             version: version,
             updatedAt: now ?? session.capturedAt,
             userEmail: normalizedEmail(session.email),
-            cookies: persistedCookies(from: session.cookies)
+            cookies: persistedCookies(from: session.cookies),
+            providerId: session.providerId,
+            publicProviderId: session.publicProviderId,
+            providerName: session.providerName
         )
         store.lastKey = key
         return try encode(store)

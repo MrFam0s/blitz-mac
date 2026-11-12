@@ -93,6 +93,7 @@ final class ASCManager {
     var isLoadingIrisFeedback = false
     var irisFeedbackError: String?
     var showAppleIDLogin = false
+    var webAuthRequiresDeveloperPortal = false
     var pendingWebAuthContinuation: CheckedContinuation<IrisSession?, Never>?
     var irisFetchTasksByAppId: [String: Task<Void, Never>] = [:]
     var irisFetchRequestIDsByAppId: [String: UUID] = [:]

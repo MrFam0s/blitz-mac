@@ -23,6 +23,19 @@ public enum BlitzReleaseCLI {
     never put credentials in request files. A timeout does not authorize a retry:
     use status with the saved operationId to reconcile the result first.
 
+    A status result can expose resumableSubmissionId for a uniquely verified
+    existing, unsubmitted draft. To continue that same authorized release, pass
+    it as resumeSubmissionId to submit with the unchanged operationId, accountKey,
+    confirmationDigest and confirm=true. This rechecks all release guards and
+    submits only that existing draft. It never creates another draft. If the final
+    submit has an uncertain outcome, only status is allowed; do not replay it.
+    Legacy records without write phases additionally report
+    requiresLegacyRecoveryConfirmation. Continue them with
+    confirmLegacyDraftRecovery=true only when documented evidence proves that
+    the previous run stopped before its final submit. The draft state alone
+    cannot prove this. No new user approval is needed for unchanged already
+    authorized scope, but an unknown old submit outcome must remain blocked.
+
     Preparation and validation do not authorize submission. Submission requires
     the user's instruction for the exact app, version, build and release mode.
     The underlying ASC CLI remains available for builds, uploads and metadata.
