@@ -2,6 +2,42 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.73 build 82 — public preview packaging
+
+The first public preview uses a signed drag-and-drop DMG. It does not run the
+legacy PKG scripts, switch Xcode, accept Xcode licenses or download simulator
+runtimes. Per-project simulator selection remains unchanged. Native ASC and
+macOS MCP/CLI provisioning still happens on app launch; optional iPhone MCP/idb
+setup on a fresh Mac remains separate. The existing installed app is not changed
+by the packaging command.
+
+The public-distribution audit found that CGO had inherited macOS 27.2 for the
+ASC executable even though the app declares macOS 14.0. The helper build now
+passes explicit deployment flags, and both bundling and public packaging reject
+any native component newer than the central deployment target. The binary is
+rebuilt with a macOS 14.0 load command. This is a binary compatibility check,
+not a claim of a completed runtime test on every older supported macOS version.
+
+The app now includes the original SwiftTerm license, the exact Go runtime
+license and notices for all 74 Go modules linked into ASC. Collection uses
+local build sources only and fails if a required license is missing.
+`npm run release` now prepares the DMG; the obsolete command that bumped,
+committed and pushed tags to upstream `origin master` has been removed.
+README, contribution guidance and public release instructions describe this
+fork, the download and its prerequisites. GitHub source hosting stays public;
+the description/homepage are corrected and Issues are enabled.
+
+Validation: 600 Swift tests, nine release metadata regressions, four ASC test
+overlay checks, ASC API/helper/validation tests (including the full CLI-surface
+comparison), targeted web-session tests and isolated protocol/CLI smoke checks
+pass locally. No live Store submission or device operation is used as a test.
+Apple accepted notarization of the signed DMG. The attached ticket validates
+with Apple's stapler, and Gatekeeper accepts it as Notarized Developer ID.
+ASC's post-staple identity check reported a conservative artifact-change error;
+the native independent validations confirm the ticket without repeating the
+mutation. Build/runtime checks ran on macOS 27.2.1; a clean Mac and macOS 14
+runtime test remain outside this preview's completed verification.
+
 ## 1.0.73 build 81 — selected purchases ready for joint review
 
 ASC reports `READY_TO_SUBMIT` as a generic IAP readiness warning. The joint

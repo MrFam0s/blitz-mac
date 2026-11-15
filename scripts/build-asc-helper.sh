@@ -6,6 +6,7 @@ SOURCE_DIR="$ROOT_DIR/deps/App-Store-Connect-CLI-helper"
 STAGE_DIR="$ROOT_DIR/.build/asc-source"
 OUTPUT_DIR="$ROOT_DIR/.build/ascd-helper"
 GO_BINARY="${GO:-go}"
+MACOS_MINIMUM="$(cat "$ROOT_DIR/config/macos-deployment-target.txt")"
 ASC_VERSION="6.6.1"
 ASC_COMMIT="d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b"
 
@@ -27,6 +28,13 @@ BUILD_DATE="$(git -C "$SOURCE_DIR" show -s --format=%cI "$ASC_COMMIT")"
 echo "Building ASC $ASC_VERSION with the Blitz protocol adapter..." >&2
 (
     cd "$STAGE_DIR"
+    # CGO otherwise inherits the host SDK's deployment target, even though the
+    # Swift app supports older macOS releases. Set this for every native object.
+    MACOSX_DEPLOYMENT_TARGET="$MACOS_MINIMUM" \
+    CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=$MACOS_MINIMUM" \
+    CGO_CXXFLAGS="${CGO_CXXFLAGS:--O2 -g} -mmacosx-version-min=$MACOS_MINIMUM" \
+    CGO_LDFLAGS="${CGO_LDFLAGS:--O2 -g} -mmacosx-version-min=$MACOS_MINIMUM" \
     "$GO_BINARY" build -trimpath -ldflags "-s -w -X main.version=$ASC_VERSION -X main.commit=$ASC_COMMIT -X main.date=$BUILD_DATE" -o "$OUTPUT_DIR/ascd" ./cmd/ascd
 )
+python3 "$ROOT_DIR/scripts/verify-macos-deployment.py" --maximum "$MACOS_MINIMUM" "$OUTPUT_DIR/ascd" >&2
 printf '%s\n' "$OUTPUT_DIR/ascd"

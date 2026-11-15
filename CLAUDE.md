@@ -22,7 +22,8 @@ git submodule update --init --recursive
 # Bundle as macOS .app (signs with Developer ID)
 bash scripts/bundle.sh release
 
-# Full release: bump version, bundle app, build pkg, deploy
+# Package an already signed app as a DMG; no version bump, push or upload.
+# See docs/public-release.md for notarization and explicit GitHub publication.
 npm run release
 
 # Run tests
@@ -31,7 +32,7 @@ swift test
 # Run a single test
 swift test --filter BlitzTests.SimctlClientTests/testParseDeviceList
 
-# Build installer pkg
+# Legacy installer (not used for public preview distribution)
 bash scripts/build-pkg.sh
 ```
 

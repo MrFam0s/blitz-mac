@@ -1,7 +1,7 @@
 {
   "name": "blitz-neo-macos",
   "version": "1.0.73",
-  "buildNumber": 81,
+  "buildNumber": 82,
   "type": "module",
   "private": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "build:app:debug": "killall Blitz 2>/dev/null; CODESIGN_TIMESTAMP=none bash scripts/bundle.sh debug && open \".build/Blitz Neo.app\"",
     "build:app:release": "killall Blitz 2>/dev/null; bash scripts/bundle.sh release && open \".build/Blitz Neo.app\"",
     "build:pkg": "bash scripts/build-pkg.sh",
-    "release": "npm version patch --no-git-tag-version && VERSION=$(node -p \"require('./package.json').version\") && git add package.json && git commit -m \"$VERSION\" && git tag \"v$VERSION\" && git push origin master --tags",
+    "release": "bash scripts/build-public-release.sh",
     "install:local": "npm run build:pkg && sudo pkill -f blitz-postinstall 2>/dev/null; sudo installer -pkg build/BlitzNeo-*.pkg -target / -verbose && open \"/Applications/Blitz Neo.app\""
   },
   "devDependencies": {

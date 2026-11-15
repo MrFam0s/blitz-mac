@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.73 — first Blitz Neo public preview
+
+- Share the maintained AmoSystems fork as an Apple Silicon download with its
+  own identity, interface, CLI/MCP release workflow and project-specific simulators.
+- Submit app versions together with explicitly selected in-app purchases,
+  subscriptions and subscription-group metadata, preserving exact selection and
+  recovery of existing review drafts.
+- Stabilize review-image fingerprints against Apple's rotating download tokens
+  and recognize fully verified selected purchases that are ready for submission.
+- Prepare a signed drag-and-drop DMG instead of running the legacy installer.
+  The download does not install simulator runtimes or change Xcode selection.
+- Enforce the declared minimum macOS version for bundled native binaries and
+  include dependency license notices in the application.
+- Refresh public documentation and contribution instructions. The detailed
+  changes between the earlier fork builds and this preview are in MAINTENANCE.md.
+
 ## 1.0.42 (maintenance fork)
 - Bundle a pinned, tested iPhone MCP maintenance package instead of installing npm latest.
 - Isolate simulator IDB connections, confirm completed inputs, bound failures and release helpers on disconnect.

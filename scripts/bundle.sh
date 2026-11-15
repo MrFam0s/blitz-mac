@@ -10,6 +10,7 @@ APP_EXECUTABLE="Blitz"
 BUNDLE_IDENTIFIER="org.amosystems.BlitzNeo"
 BUNDLE_DIR=".build/${APP_NAME}.app"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+MACOS_MINIMUM="$(cat "$ROOT_DIR/config/macos-deployment-target.txt")"
 
 # Load .env (existing env vars take precedence)
 [ -f "$ROOT_DIR/.env" ] && set -a && source "$ROOT_DIR/.env" && set +a
@@ -160,6 +161,13 @@ cp "$ROOT_DIR/helpers/asc-overlay/LICENSE" "$BUNDLE_DIR/Contents/Resources/ASC-L
 cp "$ROOT_DIR/helpers/asc-overlay/README.md" "$BUNDLE_DIR/Contents/Resources/ASC-PROVENANCE.md"
 cp "$ROOT_DIR/LICENSE" "$BUNDLE_DIR/Contents/Resources/LICENSE"
 cp "$ROOT_DIR/NOTICE" "$BUNDLE_DIR/Contents/Resources/NOTICE"
+python3 "$ROOT_DIR/scripts/verify-macos-deployment.py" --maximum "$MACOS_MINIMUM" \
+    "$BUNDLE_DIR/Contents/MacOS/$APP_EXECUTABLE" \
+    "$BUNDLE_DIR/Contents/Helpers/blitz-macos-mcp" \
+    "$BUNDLE_DIR/Contents/Helpers/ascd"
+python3 "$ROOT_DIR/scripts/collect-binary-notices.py" --root "$ROOT_DIR" \
+    --helper "$BUNDLE_DIR/Contents/Helpers/ascd" \
+    --output "$BUNDLE_DIR/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$ROOT_DIR/config/node-toolchain.json" "$BUNDLE_DIR/Contents/Resources/node-toolchain.json"
 
 # The Dock/Finder icon uses opaque full-bleed artwork and a compiled catalog.
@@ -234,7 +242,7 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
+    <string>$MACOS_MINIMUM</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSSupportsAutomaticTermination</key>

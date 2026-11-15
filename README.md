@@ -5,11 +5,16 @@
 Blitz Neo is an independently maintained macOS developer workspace by AmoSystems,
 based on [Blitz](https://github.com/blitzdotdev/blitz-mac). It combines App Store
 Connect management, an integrated coding terminal, MCP tools and simulator
-controls. This is a personal maintenance fork, not an official Blitz successor.
+controls. This is an independent maintenance fork, not an official Blitz successor.
 
-**In development. No public Blitz Neo download or Mac App Store release is
-currently offered.** The source repository is public; this does not mean a
-reviewed distribution build is available.
+**[Download the 1.0.73 preview](https://github.com/MrFam0s/blitz-mac/releases/tag/v1.0.73)**
+for Apple Silicon Macs. This is the first public preview of the maintenance fork,
+not a Mac App Store release. Read the release notes for the downloadable artifact,
+verification results and known limitations.
+
+[AmoSystems](https://amosystems.org/) ·
+[Contributing](CONTRIBUTING.md) ·
+[Release CLI and MCP](docs/release-workflow.md)
 
 ## Features
 
@@ -19,7 +24,42 @@ reviewed distribution build is available.
 - Project-specific simulator selection and device tooling.
 - Coding assistants through the terminal and compatible MCP tools.
 - Separate draft creation and an explicitly started publication workflow.
+- A shared release CLI and MCP backend for existing development chats, with
+  explicit app/platform/build selection and resumable submission records.
+- Joint review of an app version and explicitly selected in-app purchases,
+  subscriptions and subscription groups through that CLI/MCP workflow.
 - One pinned ASC implementation shared by the app and its CLI wrapper.
+
+## Install and connect
+
+The public preview targets **Apple Silicon (arm64), macOS 14 or later**. Intel
+builds are not included. Full Xcode and the appropriate simulator runtimes are
+needed for Apple app builds and simulator features. An internet connection is
+required for Apple services and downloading any additional development tools.
+
+1. Download the app from the [release page](https://github.com/MrFam0s/blitz-mac/releases/tag/v1.0.73),
+   open the download and drag **Blitz Neo.app** into **Applications**. Check that
+   page for signing and notarization details.
+2. Open `/Applications/Blitz Neo.app`, connect your own App Store Connect account
+   and import a project. Some Apple operations also require an interactive web
+   sign-in; the app cannot extend Apple's session lifetime.
+3. Use **Settings → Integrations** to inspect the local MCP/CLI connection and
+   copy configuration for your coding assistant. Your assistant needs its own
+   installation, account and permissions.
+
+Blitz Neo must be running for its release CLI and macOS MCP tools. The CLI is
+available at `~/.blitz/bin/blitz-neo`; see the
+[release workflow](docs/release-workflow.md) for requests and examples. A prepared
+release does not submit itself. Final submission requires explicit confirmation
+of the exact operation and passes the same checks through the UI, CLI and MCP.
+Apple still decides whether to approve and publish the app.
+
+The drag-and-drop preview installs the native ASC and macOS MCP/CLI helpers on
+launch. It does not install the optional iPhone MCP or `idb`, download simulator
+runtimes, or change your selected Xcode. Existing developer setups remain usable;
+a fresh Mac needs those optional device dependencies configured separately.
+Project-specific simulators and parallel development remain supported. Multiple
+simulators can share one installed runtime.
 
 ## Identity and existing installations
 
@@ -34,20 +74,28 @@ existing Neo preferences take precedence. Existing cache directories are retaine
 macOS sees the new bundle identifier as a new app. Screen Recording,
 Accessibility and Keychain access may require renewed user consent, and Apple's
 web login may need to be completed again. Permissions are not bypassed or reset.
-The package installer backs up the recognized native predecessor after installing
-the replacement; it does not remove projects or user data.
+Quit an existing Blitz Neo instance before replacing its app bundle. Keep your
+project folders and `~/.blitz` data when updating.
 
 ## Build and test
 
 See [MAINTENANCE.md](MAINTENANCE.md) for the exact pinned toolchain, helper
 provenance, validation history and platform-specific limitations.
 
+Source builds require Xcode with the macOS SDK and Swift tools, Python 3,
+**Go 1.27.3 or newer** as required by the pinned ASC `go.mod`, and the exact
+**Node 26.13.1 / npm 12.2.2** pair in
+[config/node-toolchain.json](config/node-toolchain.json). See
+[Node setup](docs/node-toolchain.md) for toolchain selection. `GO` can select a Go
+executable; `BLITZ_NODE_BIN` can select the Node/npm `bin` directory. The resolver
+checks these versions and does not install missing tools.
+
 ```bash
 git clone --branch maintenance/auth-and-tooling https://github.com/MrFam0s/blitz-mac.git
 cd blitz-mac
 git submodule update --init --recursive
 
-# Local compatibility workflow for this Mac / Xcode 27.
+# Verified compatibility workflow with Xcode 27.
 swift test --build-system native --jobs 4
 BLITZ_SWIFT_BUILD_SYSTEM=native BLITZ_BUILD_JOBS=4 bash scripts/bundle.sh release
 open ".build/Blitz Neo.app"
@@ -57,20 +105,32 @@ The native build engine is a local compatibility fallback. A normal SwiftPM
 build may be used with the appropriate Xcode toolchain components installed.
 The bundle is ad-hoc signed unless `APPLE_SIGNING_IDENTITY` selects your own
 Developer ID identity. Signing does not notarize or publish the app.
+Maintainers can prepare a signed DMG with `npm run release`; see
+[public release preparation](docs/public-release.md). That command does not bump
+versions, tag, push or publish anything.
 
 The ASC helper is built from the pinned official source with the protocol adapter
 in [helpers/asc-overlay](helpers/asc-overlay/README.md). Do not substitute an
 ordinary standalone ASC binary. The app and terminal share the same helper.
+The bundle script also builds and tests the maintained iPhone MCP from its pinned
+source; source builds download dependency packages as needed.
 
 GitHub Actions remain paused/manual for this fork. Local checks are the active
-validation route. Do not enable paid GitHub features or raise spending limits.
+validation route. Contributions do not require paid GitHub features or hosted
+macOS runners. See [CONTRIBUTING.md](CONTRIBUTING.md) for the review workflow.
 
 ## Data and privacy
 
-Projects and settings remain local under `~/.blitz`; Store data is requested from
-Apple for the selected account. The app includes credentials and session handling,
-so local state and verification logs must not be committed. Coding assistants
-use their own account, network and permission settings.
+Settings, registered-project links, tools, logs and release operation records are
+stored locally under `~/.blitz`. Imported project source stays in its original
+folder, with Blitz metadata in `.blitz/project.json`. The app also uses standard
+macOS preferences and cache directories. Registered projects receive managed
+assistant instructions and skills; see [release routing](docs/release-workflow.md).
+
+Store data is requested from Apple for the selected account. Authentication uses
+Keychain and private local credential/session files. These files, local state and
+verification logs must not be committed or included in public bug reports. Coding
+assistants use their own account, network and permission settings.
 
 Maintenance builds do not embed analytics configuration. The old community App
 Wall has been removed. Existing MCP transport names and local paths remain
@@ -80,7 +140,7 @@ unchanged to keep configured clients working.
 
 Blitz Neo modifies Blitz by Minjune Song and Palash Bansal. The original copyright
 and attribution notices are retained in [LICENSE](LICENSE) and [NOTICE](NOTICE).
-Blitz is licensed under Apache 2.0. Third-party helpers retain their own licenses;
+This repository is licensed under Apache 2.0. Third-party helpers retain their own licenses;
 see their respective source and overlay documentation.
 
 The new icon is an original generated concept adapted for this fork. Its production
