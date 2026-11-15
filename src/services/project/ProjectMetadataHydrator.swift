@@ -34,8 +34,18 @@ struct ProjectMetadataHydrator {
         let root = projectDirectory.resolvingSymlinksInPath()
         var candidates: [String] = []
 
-        candidates.append(contentsOf: discoverBundleIdentifiersInXcodeProjects(root: root))
-        candidates.append(contentsOf: discoverBundleIdentifiersInInfoPlists(root: root))
+        if !XcodeProjectDiscovery.projectURLs(in: root).isEmpty {
+            // Once a project describes target membership, only application targets
+            // may supply identity. A broad plist scan can otherwise import test,
+            // extension or framework IDs, even when the app ID is unresolved.
+            for configuration in XcodeProjectDiscovery.applicationConfigurations(in: root) {
+                if let bundleID = configuration.concreteBundleIdentifier {
+                    candidates.append(bundleID)
+                }
+            }
+        } else {
+            candidates.append(contentsOf: discoverBundleIdentifiersInInfoPlists(root: root))
+        }
 
         var seen: Set<String> = []
         var uniqueCandidates: [String] = []
@@ -48,42 +58,13 @@ struct ProjectMetadataHydrator {
         return uniqueCandidates
     }
 
-    private func discoverBundleIdentifiersInXcodeProjects(root: URL) -> [String] {
-        var bundleIdentifiers: [String] = []
-
-        for xcodeprojURL in findFiles(
-            named: nil,
-            withExtension: "xcodeproj",
-            under: root
-        ) {
-            let pbxprojURL = xcodeprojURL.appendingPathComponent("project.pbxproj")
-            guard fileManager.fileExists(atPath: pbxprojURL.path),
-                  let content = try? String(contentsOf: pbxprojURL, encoding: .utf8) else {
-                continue
-            }
-
-            let pattern = #"PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);"#
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
-            let range = NSRange(content.startIndex..., in: content)
-
-            for match in regex.matches(in: content, range: range) {
-                guard let candidateRange = Range(match.range(at: 1), in: content),
-                      let bundleIdentifier = normalizeBundleIdentifier(String(content[candidateRange])) else {
-                    continue
-                }
-                bundleIdentifiers.append(bundleIdentifier)
-            }
-        }
-
-        return bundleIdentifiers
-    }
-
     private func discoverBundleIdentifiersInInfoPlists(root: URL) -> [String] {
         var bundleIdentifiers: [String] = []
 
         for plistURL in findFiles(named: "Info.plist", withExtension: nil, under: root) {
             guard let data = fileManager.contents(atPath: plistURL.path),
                   let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+                  plist["CFBundlePackageType"] as? String == "APPL",
                   let rawBundleIdentifier = plist["CFBundleIdentifier"] as? String,
                   let bundleIdentifier = normalizeBundleIdentifier(rawBundleIdentifier) else {
                 continue
@@ -125,7 +106,7 @@ struct ProjectMetadataHydrator {
             }
         }
 
-        return matches
+        return matches.sorted { $0.path < $1.path }
     }
 
     private func normalizeBundleIdentifier(_ rawValue: String?) -> String? {

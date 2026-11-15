@@ -65,9 +65,25 @@ private func writeTestXcodeProject(at projectRoot: URL, bundleIdentifier: String
     let pbxproj = """
     // !$*UTF8*$!
     {
+        rootObject = PROJECT;
         objects = {
-            TEST = {
+            PROJECT = {
+                isa = PBXProject;
+                targets = (APP);
+            };
+            APP = {
+                isa = PBXNativeTarget;
+                name = Example;
+                productType = "com.apple.product-type.application";
+                buildConfigurationList = CONFIGURATIONS;
+            };
+            CONFIGURATIONS = {
+                buildConfigurations = (RELEASE);
+            };
+            RELEASE = {
+                name = Release;
                 buildSettings = {
+                    SDKROOT = iphoneos;
                     PRODUCT_BUNDLE_IDENTIFIER = \(bundleIdentifier);
                 };
             };

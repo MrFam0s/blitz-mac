@@ -2,6 +2,37 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 83 — modern Xcode project identities
+
+Import and release-target discovery now share an application-target reader for
+both `project.pbxproj` and Xcode's JSON5 `project.xcproj`. Unit tests, UI tests,
+frameworks, extensions and orphaned legacy target objects cannot supply the app
+identity. Exact bundle-ID case, target/configuration membership and project-level
+inheritance are preserved. A concrete app-linked Info.plist can supply a missing
+ID; an unrelated plist or unresolved build variable cannot override the target.
+Ambiguous app targets still require explicit selection. External xcconfig and
+SDK/architecture-dependent identities are not guessed.
+
+Build/signing target selection and transactional bundle-ID editing also accept
+the modern format. Narrow source-range edits preserve comments and unrelated
+targets; failed metadata writes restore the actual project file unless Xcode
+changed it concurrently. Xcode's new-format unconditional settings take precedence
+over sibling configuration entries. A single-configuration change therefore
+expands an unconditional value into explicit configuration values, retaining the
+previous effective values for all unselected configurations.
+
+Validation: 625 Swift tests pass, including old/new-format discovery, exact case,
+app/test separation, inheritance, multiple apps, malformed/ambiguous input,
+conditional settings and transactional rollback. All 48 offline app-creation,
+auth-recovery and migration checks and nine release-metadata checks pass. The
+unchanged ASC 6.6.1 helper passes isolated protocol/CLI verification. Read-only
+scans cover 16 registered projects, and a real modern project's identity matches
+Xcode's resolved Release settings. Xcode independently verifies a temporary copy's
+Release-only edit while Debug retains its original identity. No live app project
+or Apple Store record is changed by these integration checks. The signed native
+Release bundle passes deep/strict signature and macOS 14 deployment verification.
+A public release and notarization are separate from this local maintenance build.
+
 ## 1.0.73 build 82 — public preview packaging
 
 The first public preview uses a signed drag-and-drop DMG. It does not run the

@@ -12,7 +12,7 @@ enum ProjectBundleIDTransaction {
                        persistMetadata: () throws -> Void) throws {
         let editor = XcodeProjectIdentityEditor()
         let selection = try editor.select(projectPath: projectPath, scheme: scheme, configuration: configuration)
-        let file = selection.projectURL.appendingPathComponent("project.pbxproj")
+        let file = selection.fileURL
         let original = try Data(contentsOf: file)
         let written = try editor.update(projectPath: projectPath, bundleID: bundleID, scheme: scheme, configuration: configuration, expectedOriginal: original)
         do {

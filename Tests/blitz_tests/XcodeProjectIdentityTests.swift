@@ -32,7 +32,7 @@ private struct IdentityFixture {
                 OTHER_RELEASE = { isa = XCBuildConfiguration; name = Release; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = org.example.AnotherApp; }; };
                 PROJECT_RELEASE = { isa = XCBuildConfiguration; name = Release; buildSettings = { APP_ID = org.example.MainApp; DEVELOPMENT_TEAM = OLD_TEAM; }; };
                 PROJECT_CONFIGS = { isa = XCConfigurationList; buildConfigurations = ( PROJECT_RELEASE, ); };
-                PROJECT = { isa = PBXProject; targets = ( APP, WIDGET, TESTS, ); buildConfigurationList = PROJECT_CONFIGS; };
+                PROJECT = { isa = PBXProject; targets = ( APP, WIDGET, TESTS, \(secondApp ? "OTHER," : "") ); buildConfigurationList = PROJECT_CONFIGS; };
             };
             rootObject = PROJECT;
         }
