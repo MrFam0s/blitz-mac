@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct NewProjectSheet: View {
@@ -11,65 +12,75 @@ struct NewProjectSheet: View {
     @State private var isCreating = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("New Project")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("Neues Projekt", subtitle: "Erstelle ein lokales App-Projekt. Den Eintrag in App Store Connect richtest du anschließend separat ein.")
 
-            Form {
-                TextField("Project Name", text: $projectName)
+            Divider()
 
-                Picker("Platform", selection: $platform) {
-                    Text("iOS").tag(ProjectPlatform.iOS)
-                    Text("macOS").tag(ProjectPlatform.macOS)
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                BlitzSetupField("Projektname", hint: "Der öffentliche App-Store-Name wird später festgelegt.") {
+                    TextField("z. B. MeineApp", text: $projectName)
+                        .accessibilityLabel("Projektname")
                 }
-                .pickerStyle(.segmented)
-                .onChange(of: platform) { _, newPlatform in
-                    // macOS only supports Swift for now
-                    if newPlatform == .macOS {
-                        projectType = .swift
+                BlitzSetupField("Plattform") {
+                    Picker("Plattform", selection: $platform) {
+                        Text("iOS").tag(ProjectPlatform.iOS)
+                        Text("macOS").tag(ProjectPlatform.macOS)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityLabel("Plattform")
+                    .onChange(of: platform) { _, newPlatform in
+                        // macOS only supports Swift for now
+                        if newPlatform == .macOS {
+                            projectType = .swift
+                        }
                     }
                 }
-
-                if platform == .iOS {
-                    Picker("Type", selection: $projectType) {
-                        Text("React Native").tag(ProjectType.reactNative)
-                        Text("Swift").tag(ProjectType.swift)
+                BlitzSetupField("Projekttyp") {
+                    Picker("Projekttyp", selection: $projectType) {
+                        if platform == .iOS {
+                            Text("React Native").tag(ProjectType.reactNative)
+                            Text("Swift").tag(ProjectType.swift)
+                        } else {
+                            Text("Swift").tag(ProjectType.swift)
+                        }
                     }
-                } else {
-                    Picker("Type", selection: $projectType) {
-                        Text("Swift").tag(ProjectType.swift)
-                    }
+                    .accessibilityLabel("Projekttyp")
                 }
             }
-            .formStyle(.grouped)
+            .textFieldStyle(.roundedBorder)
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                Button("Cancel") { isPresented = false }
+            Divider()
+
+            HStack(spacing: BlitzLayout.fieldSpacing) {
+                Button("Abbrechen") { isPresented = false }
                     .keyboardShortcut(.cancelAction)
-
                 Spacer()
-
-                Button("Create") {
+                if isCreating { ProgressView().controlSize(.small) }
+                Button("Projekt anlegen") {
                     Task { await createProject() }
                 }
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(isCreating || (try? ProjectCreationReservation.projectID(for: projectName)) == nil)
             }
         }
-        .padding()
-        .frame(width: 400)
+        .font(.callout)
+        .padding(24)
+        .frame(width: 560)
     }
 
     private func createProject() async {
         guard !isCreating else { return }
         guard !appState.projectSetup.isSettingUp else {
-            errorMessage = "Another project is being created. Wait for it to finish."
+            errorMessage = "Ein anderes Projekt wird gerade angelegt. Warte, bis der Vorgang abgeschlossen ist."
             return
         }
         isCreating = true

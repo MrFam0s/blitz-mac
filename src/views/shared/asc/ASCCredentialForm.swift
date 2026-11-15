@@ -33,115 +33,85 @@ struct ASCCredentialForm: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "lock.shield")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
-                        Text("Connect to App Store Connect")
-                            .font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                BlitzSetupHeader("App Store Connect verbinden",
+                    subtitle: "Hinterlege deinen API-Schlüssel, um App-Daten aus App Store Connect zu laden.")
+
+                // Step-by-step instructions for first-time setup
+                VStack(alignment: .leading, spacing: 0) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showInstructions.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .rotationEffect(.degrees(showInstructions ? 90 : 0))
+                            Text("So erhältst du einen API-Schlüssel")
+                                .font(.callout.weight(.medium))
+                        }
+                        .foregroundStyle(.blue)
+                        .contentShape(Rectangle())
                     }
-                    Text("Enter your API credentials to access App Store data.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .buttonStyle(.plain)
 
-                    // Step-by-step instructions for first-time setup
-                    VStack(alignment: .leading, spacing: 0) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showInstructions.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2.weight(.semibold))
-                                    .rotationEffect(.degrees(showInstructions ? 90 : 0))
-                                Text("How to generate your API key")
-                                    .font(.callout.weight(.medium))
-                            }
-                            .foregroundStyle(.blue)
-                            .contentShape(Rectangle())
+                    if showInstructions {
+                        VStack(alignment: .leading, spacing: 8) {
+                            instructionStep(1, "Öffne **App Store Connect > Benutzer und Zugriff > Integrationen > App Store Connect API**.")
+                            instructionStep(2, "Wähle den Bereich **Teamschlüssel**.")
+                            instructionStep(3, "Klicke auf **+**, um einen Schlüssel anzulegen.")
+                            instructionStep(4, "Vergib einen Namen und wähle den Zugriff **Admin**.")
+                            instructionStep(5, "Klicke auf **Generieren**.")
+                            instructionStep(6, "Kopiere die **Issuer ID** oben auf der Seite.")
+                            instructionStep(7, "Lade die **.p8-Datei** des neuen Schlüssels herunter.")
+                            Text("Die .p8-Datei lässt sich nur einmal herunterladen. Bewahre sie sicher auf.")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .padding(.leading, 24)
                         }
-                        .buttonStyle(.plain)
-
-                        if showInstructions {
-                            VStack(alignment: .leading, spacing: 8) {
-                                instructionStep(1, "Go to **App Store Connect > Users and Access > Integrations > App Store Connect API**")
-                                instructionStep(2, "Select the **Team Keys** tab (not Individual Keys)")
-                                instructionStep(3, "Click the **+** button to generate a new key")
-                                instructionStep(4, "Set Access to **Admin** and give the key a name")
-                                instructionStep(5, "Click **Generate**")
-                                instructionStep(6, "Copy the **Issuer ID** shown at the top of the page")
-                                instructionStep(7, "Click the **Download** button on the new key row to save the .p8 file")
-                                Text("The .p8 file can only be downloaded once. Store it securely.")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
-                                    .padding(.leading, 24)
-                            }
-                            .padding(.top, 8)
-                        }
+                        .padding(.top, 8)
                     }
                 }
 
                 Divider()
 
-                // Fields
-                VStack(alignment: .leading, spacing: 16) {
-                    labeledField("Issuer ID", hint: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx") {
-                        TextField("Issuer ID", text: $issuerId)
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                    BlitzSetupField("Issuer ID", hint: "Die Kennung deines Teams aus App Store Connect.") {
+                        TextField("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", text: $issuerId)
                             .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
+                            .font(.system(.callout, design: .monospaced))
+                            .accessibilityLabel("Issuer ID")
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Private Key (.p8)")
-                            .font(.callout.weight(.medium))
+                    BlitzSetupField("Privater Schlüssel (.p8)",
+                        hint: "Wähle die von Apple heruntergeladene Originaldatei. Die Schlüssel-ID wird aus ihrem Dateinamen erkannt.") {
                         HStack(spacing: 8) {
                             Button {
                                 showFilePicker = true
                             } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "doc.badge.plus")
-                                    Text(privateKeyFileName ?? "Choose .p8 File…")
-                                }
+                                Label(privateKeyFileName ?? "Schlüsseldatei auswählen …", systemImage: "doc.badge.plus")
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
                             }
-                            .font(.callout)
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Private Schlüsseldatei auswählen")
+                            .accessibilityValue(privateKeyFileName ?? "Keine Datei ausgewählt")
+                            .help(privateKeyFileName ?? "Originaldatei im Format .p8 auswählen")
 
                             if privateKeyFileName != nil {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                    .font(.body)
+                                    .accessibilityLabel("Datei ausgewählt")
                             }
-
-                            Spacer()
-
-                            Button {
-                                save()
-                            } label: {
-                                if isSaving {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .padding(.horizontal, 8)
-                                } else {
-                                    Text("Save Credentials")
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(!isValid || isSaving)
                         }
-                        Text("Upload the original .p8 key file that Apple downloaded for you")
+                    }
+
+                    if privateKeyFileName != nil && resolvedKeyID == nil {
+                        Text("Verwende den ursprünglichen Dateinamen der .p8-Datei, damit Blitz Neo die Schlüssel-ID erkennen kann.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
-
-                        if privateKeyFileName != nil && resolvedKeyID == nil {
-                            Text("Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically.")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -159,8 +129,22 @@ struct ASCCredentialForm: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                HStack {
+                    Spacer(minLength: 0)
+                    if isSaving {
+                        ProgressView().controlSize(.small)
+                    }
+                    Button(isSaving ? "Wird gespeichert …" : "Zugangsdaten speichern") {
+                        save()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isValid || isSaving)
+                }
+
+                Divider()
+
                 // Action links
-                VStack(alignment: .leading, spacing: 6) {
+                BlitzFlowLayout(horizontalSpacing: 16, verticalSpacing: 8) {
                     Button {
                         let settings = SettingsService.shared
                         let agent = AIAgent(rawValue: settings.defaultAgentCLI) ?? .claudeCode
@@ -187,7 +171,7 @@ struct ASCCredentialForm: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                            Text("Setup with AI")
+                            Text("Mit KI einrichten")
                             Image(systemName: "arrow.right")
                                 .font(.caption)
                         }
@@ -199,7 +183,7 @@ struct ASCCredentialForm: View {
                     Link(destination: URL(string: "https://appstoreconnect.apple.com/access/integrations/api")!) {
                         HStack(spacing: 6) {
                             Image(systemName: "key")
-                            Text("Setup manually")
+                            Text("Schlüssel bei Apple verwalten")
                             Image(systemName: "arrow.right")
                                 .font(.caption)
                         }
@@ -207,9 +191,9 @@ struct ASCCredentialForm: View {
                     }
                 }
             }
-            .padding(28)
+            .padding(24)
+            .frame(maxWidth: 560, alignment: .leading)
         }
-        .frame(maxWidth: 540)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: ascManager.pendingCredentialValues) { _, pending in
             if let pending {
@@ -248,21 +232,9 @@ struct ASCCredentialForm: View {
         }
     }
 
-    @ViewBuilder
-    private func labeledField<F: View>(_ label: String, hint: String, @ViewBuilder field: () -> F) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.callout.weight(.medium))
-            field()
-            Text(hint)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
     private func save() {
         guard let resolvedKeyID else {
-            saveError = "Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically."
+            saveError = "Verwende den ursprünglichen Dateinamen der .p8-Datei, damit Blitz Neo die Schlüssel-ID erkennen kann."
             return
         }
         isSaving = true

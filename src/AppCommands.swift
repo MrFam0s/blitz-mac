@@ -7,17 +7,17 @@ struct AppCommands: Commands {
     var body: some Commands {
         // Replace File menu contents with Project items
         CommandGroup(replacing: .newItem) {
-            Button("New Project...") {
+            Button("Neues Projekt …") {
                 appState.showNewProjectSheet = true
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button("Open Project...") {
+            Button("Projekt öffnen …") {
                 openProjectFromMenu()
             }
             .keyboardShortcut("o", modifiers: .command)
 
-            Button("Import Project...") {
+            Button("Projekt importieren …") {
                 appState.showImportProjectSheet = true
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])

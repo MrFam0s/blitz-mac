@@ -131,7 +131,7 @@ struct ProjectBundleIDSelectorView: View {
             } else if standalone {
                 ScrollView {
                     content
-                        .padding(32)
+                        .padding(24)
                         .frame(maxWidth: 560, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,13 +153,16 @@ struct ProjectBundleIDSelectorView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(standalone ? .title2.weight(.semibold) : .headline)
-                Text(resolvedSubtitle)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if standalone {
+                BlitzSetupHeader(title, subtitle: resolvedSubtitle)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(.headline)
+                    Text(resolvedSubtitle)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Divider()

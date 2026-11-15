@@ -134,7 +134,7 @@ struct BundleIDSetupView: View {
                 ASCNoProjectSelectedView()
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
                         switch phase {
                         case .form:
                             formContent
@@ -146,8 +146,8 @@ struct BundleIDSetupView: View {
                             confirmingContent
                         }
                     }
-                    .padding(32)
-                    .frame(maxWidth: 540, alignment: .leading)
+                    .padding(24)
+                    .frame(maxWidth: 560, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onAppear { prefill(); applyFormRequest() }
@@ -156,11 +156,11 @@ struct BundleIDSetupView: View {
                 .onChange(of: DashboardSummaryStore.accountKey(for: asc.credentials)) { _, _ in resetForProjectChange() }
             }
         }
-        .alert("Action Required in Apple Developer", isPresented: $showProgramLicenseAlert) {
-            Button("Open Apple Developer Account") {
+        .alert("Aktion im Apple-Developer-Konto erforderlich", isPresented: $showProgramLicenseAlert) {
+            Button("Apple-Developer-Konto öffnen") {
                 NSWorkspace.shared.open(Self.appleDeveloperAccountURL)
             }
-            Button("Close", role: .cancel) {}
+            Button("Schließen", role: .cancel) {}
         } message: {
             Text(programLicenseAlertMessage)
         }
@@ -170,26 +170,7 @@ struct BundleIDSetupView: View {
 
     @ViewBuilder
     private var formContent: some View {
-        // Header
-        HStack(spacing: 10) {
-            Image(systemName: "info.circle")
-                .font(.title2)
-                .foregroundStyle(.blue)
-            Text("Register Your Bundle ID")
-                .font(.title2.weight(.semibold))
-        }
-        Text("Separaten Store-Eintrag für dieses Veröffentlichungsziel anlegen. Für eine weitere Plattform derselben App verwende „Veröffentlichungsziele verwalten“ und den bestehenden Store-Eintrag.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
-
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.caption)
-            Text("Bundle IDs cannot be changed once registered. Choose carefully.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        BlitzSetupHeader("Neue App einrichten", subtitle: "Bereite einen separaten Store-Eintrag für dieses Veröffentlichungsziel vor. Für eine weitere Plattform derselben App verwende die Veröffentlichungsziele und den bestehenden Store-Eintrag.")
 
         Divider()
 
@@ -200,28 +181,15 @@ struct BundleIDSetupView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
 
-        // Fields
-        VStack(alignment: .leading, spacing: 16) {
-            labeledField("Bundle ID", hint: "The complete technical identifier, preserving capitalization and every dot") {
-                TextField("org.example.MyApp", text: $bundleIdentifier)
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupField("Bundle-ID", hint: "Technische Kennung mit unveränderter Groß- und Kleinschreibung. Nach der Registrierung lässt sie sich nicht ändern.") {
+                TextField("org.beispiel.MeineApp", text: $bundleIdentifier)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-            }
-
-            HStack(spacing: 6) {
-                Text("Bundle ID:")
-                    .font(.callout.weight(.medium))
-                Text(bundleIdPreview)
                     .font(.system(.callout, design: .monospaced))
-                    .foregroundStyle(isFormValid ? .primary : .secondary)
+                    .accessibilityLabel("Bundle-ID")
             }
-        }
-
-        Divider()
-
-        VStack(alignment: .leading, spacing: 16) {
-            labeledField("Public app name", hint: "The App Store name, 2–30 characters; independent of the technical identifier") {
-                TextField("App Store name", text: Binding(
+            BlitzSetupField("App-Store-Name", hint: "Öffentlicher Name mit 2–30 Zeichen, unabhängig von der technischen Kennung.") {
+                TextField("Meine App", text: Binding(
                     get: { publicAppName },
                     set: { newValue in
                         let oldValue = publicAppName
@@ -232,19 +200,27 @@ struct BundleIDSetupView: View {
                     }
                 ))
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("App-Store-Name")
             }
-            labeledField("SKU", hint: "Permanent identifier: letters, numbers, periods, hyphens and underscores; no spaces") {
-                TextField("AppName-\(effectivePlatform.rawValue)", text: $sku)
+            BlitzSetupField("SKU", hint: "Dauerhafte interne Kennung: Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche; keine Leerzeichen.") {
+                TextField("MeineApp-\(effectivePlatform.rawValue)", text: $sku)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("SKU")
             }
-            labeledField("Primary language", hint: "Use the exact language code, for example de-DE or en-US") {
-                TextField("en-US", text: $primaryLocale)
+            BlitzSetupField("Hauptsprache", hint: "Exakter Sprachcode, zum Beispiel de-DE oder en-US.") {
+                TextField("de-DE", text: $primaryLocale)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Hauptsprache")
             }
-            Text("Platform: \(effectivePlatform.rawValue)")
-                .font(.callout).foregroundStyle(.secondary)
+            BlitzSetupField("Plattform") {
+                Text(effectivePlatform.rawValue)
+                    .font(.callout)
+            }
             if let validationMessage {
-                Text(validationMessage).font(.caption).foregroundStyle(.secondary)
+                Text(validationMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
 
@@ -252,13 +228,13 @@ struct BundleIDSetupView: View {
 
         // Capabilities
         VStack(alignment: .leading, spacing: 8) {
-            Text("Capabilities")
+            Text("App-Funktionen")
                 .font(.callout.weight(.medium))
-            Text("Select capabilities your app needs. You can add more later in the Apple Developer portal.")
+            Text("Wähle die benötigten Funktionen. Weitere lassen sich später im Apple-Developer-Portal aktivieren.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 6) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), alignment: .leading)], alignment: .leading, spacing: 8) {
                 ForEach(Self.capabilities, id: \.type) { cap in
                     Toggle(cap.name, isOn: Binding(
                         get: { selectedCapabilities.contains(cap.type) },
@@ -269,6 +245,7 @@ struct BundleIDSetupView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.top, 4)
@@ -279,7 +256,7 @@ struct BundleIDSetupView: View {
                 HStack(spacing: 4) {
                     Image(systemName: showAdditional ? "chevron.down" : "chevron.right")
                         .font(.caption2)
-                    Text("Additional Capabilities (\(Self.portalOnlyCapabilities.count))")
+                    Text("Weitere Funktionen (\(Self.portalOnlyCapabilities.count))")
                         .font(.caption)
                 }
                 .foregroundStyle(.secondary)
@@ -293,14 +270,14 @@ struct BundleIDSetupView: View {
                         Image(systemName: "info.circle")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text("These must be enabled manually in the ")
+                        Text("Diese Funktionen aktivierst du manuell im ")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        + Text("[Developer portal](https://developer.apple.com/account/resources/identifiers/list)")
+                        + Text("[Developer-Portal](https://developer.apple.com/account/resources/identifiers/list).")
                             .font(.caption)
                     }
 
-                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 6) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), alignment: .leading)], alignment: .leading, spacing: 8) {
                         ForEach(Self.portalOnlyCapabilities, id: \.self) { name in
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.square")
@@ -308,7 +285,8 @@ struct BundleIDSetupView: View {
                                     .foregroundStyle(.quaternary)
                                 Text(name)
                                     .font(.callout)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
@@ -324,7 +302,7 @@ struct BundleIDSetupView: View {
         // Submit button
         HStack {
             Spacer()
-            Button("Register Bundle ID") {
+            Button("Bundle-ID registrieren") {
                 registerBundleId()
             }
             .buttonStyle(.borderedProminent)
@@ -349,20 +327,28 @@ struct BundleIDSetupView: View {
 
     @ViewBuilder
     private var manualContent: some View {
-        // Success header
-        HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.green)
-            Text("Bundle ID Registered")
-                .font(.title2.weight(.semibold))
-        }
+        BlitzSetupHeader("Store-Eintrag anlegen", subtitle: "Die Bundle-ID ist registriert. Lege jetzt die App mit den bestätigten Angaben in App Store Connect an.")
 
-        VStack(alignment: .leading, spacing: 4) {
-            Text(createdBundleId)
-                .font(.system(.body, design: .monospaced))
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupField("Bundle-ID") {
+                Text(createdBundleId)
+                    .font(.system(.callout, design: .monospaced))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            if let identity = creationContext?.identity {
+                BlitzSetupField("App-Store-Name") {
+                    Text(identity.appName).textSelection(.enabled)
+                }
+                BlitzSetupField("SKU") {
+                    Text(identity.sku).textSelection(.enabled)
+                }
+                Text("\(identity.platform.rawValue) · \(identity.primaryLocale)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             if capabilitiesEnabled > 0 {
-                Text("\(capabilitiesEnabled) capability(ies) enabled")
+                Label("Aktivierte App-Funktionen: \(capabilitiesEnabled)", systemImage: "checkmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -370,31 +356,14 @@ struct BundleIDSetupView: View {
 
         if let canonicalIdentifierNotice {
             Label(canonicalIdentifierNotice, systemImage: "info.circle")
-                .font(.callout).foregroundStyle(.orange)
-        }
-        if let identity = creationContext?.identity {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("App Store name: \(identity.appName)")
-                Text("SKU: \(identity.sku)")
-                Text("\(identity.platform.rawValue) · \(identity.primaryLocale)")
-            }
-            .font(.callout).textSelection(.enabled)
+                .font(.callout)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         Divider()
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Now create your app in App Store Connect.")
-                .font(.callout)
-            Text("Make sure to select the bundle ID you just registered:")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Text(createdBundleId)
-                .font(.system(.callout, design: .monospaced).weight(.medium))
-                .padding(8)
-                .background(.background.secondary)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-
             VStack(alignment: .leading, spacing: 6) {
                 Button {
                     launchClaudeCodeForAppCreate(bundleId: createdBundleId, inExistingChat: true)
@@ -426,7 +395,7 @@ struct BundleIDSetupView: View {
                 Link(destination: URL(string: "https://appstoreconnect.apple.com/apps")!) {
                     HStack(spacing: 6) {
                         Image(systemName: "key")
-                        Text("Setup manually")
+                        Text("App Store Connect öffnen")
                         Image(systemName: "arrow.right")
                             .font(.caption)
                     }
@@ -444,7 +413,7 @@ struct BundleIDSetupView: View {
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.semibold))
                                 .rotationEffect(.degrees(showCreateInstructions ? 90 : 0))
-                            Text("How to create your app")
+                            Text("Anleitung zur manuellen Einrichtung")
                                 .font(.callout.weight(.medium))
                         }
                         .foregroundStyle(.blue)
@@ -454,12 +423,12 @@ struct BundleIDSetupView: View {
 
                     if showCreateInstructions {
                         VStack(alignment: .leading, spacing: 8) {
-                            createInstructionStep(1, "Go to **[App Store Connect](https://appstoreconnect.apple.com/apps)** and click the **+** button")
-                            createInstructionStep(2, "Select **New App**")
-                            createInstructionStep(3, "Choose **\(creationContext?.identity.platform.rawValue ?? "")** and primary language **\(creationContext?.identity.primaryLocale ?? "")**")
-                            createInstructionStep(4, "Enter the app name **\(createdAppName)** and select the **Bundle ID** you just registered: **\(createdBundleId)**")
-                            createInstructionStep(5, "Use the confirmed **SKU**: **\(creationContext?.identity.sku ?? "")**")
-                            createInstructionStep(6, "Click **Create**")
+                            createInstructionStep(1, "Öffne **[App Store Connect](https://appstoreconnect.apple.com/apps)** und klicke auf **+**.")
+                            createInstructionStep(2, "Wähle **Neue App**.")
+                            createInstructionStep(3, "Wähle Plattform und Hauptsprache wie oben bestätigt.")
+                            createInstructionStep(4, "Übernimm den bestätigten App-Store-Namen und wähle die registrierte Bundle-ID.")
+                            createInstructionStep(5, "Übernimm die bestätigte **SKU**.")
+                            createInstructionStep(6, "Klicke auf **Erstellen**.")
                         }
                         .padding(.top, 8)
                     }
@@ -470,7 +439,7 @@ struct BundleIDSetupView: View {
         Divider()
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Did you create your app?")
+            Text("Store-Eintrag bereits angelegt?")
                 .font(.callout.weight(.medium))
 
             if let error {
@@ -480,15 +449,13 @@ struct BundleIDSetupView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                Button("Back") {
+            BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+                Button("Angaben bearbeiten") {
                     goBackToBundleRegistrationForm()
                 }
                 .buttonStyle(.bordered)
 
-                Spacer()
-
-                Button("Confirm") {
+                Button("Store-Eintrag prüfen") {
                     confirmAppCreated()
                 }
                 .buttonStyle(.borderedProminent)
@@ -502,7 +469,7 @@ struct BundleIDSetupView: View {
     private var confirmingContent: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text("Checking App Store Connect\u{2026}")
+            Text("Store-Eintrag wird geprüft …")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -577,7 +544,7 @@ struct BundleIDSetupView: View {
         let caps = Array(selectedCapabilities).sorted()
         error = nil
         phase = .creating
-        progressMessage = "Registering bundle ID and selected capabilities…"
+        progressMessage = "Bundle-ID und ausgewählte App-Funktionen werden registriert …"
         Task {
             do {
                 guard viewOperationId == operation, asc.loadedProjectId == originalProjectId,
@@ -701,20 +668,8 @@ struct BundleIDSetupView: View {
         }
     }
 
-    @ViewBuilder
-    private func labeledField<F: View>(_ label: String, hint: String, @ViewBuilder field: () -> F) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.callout.weight(.medium))
-            field()
-            Text(hint)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
     private func presentProgramLicenseAgreementAlert(_ error: ASCError) {
-        programLicenseAlertMessage = error.programLicenseAgreementMessage + "\n\nOpen https://developer.apple.com/account and accept the latest agreement, then retry."
+        programLicenseAlertMessage = error.programLicenseAgreementMessage + "\n\nÖffne https://developer.apple.com/account und bestätige dort die aktuelle Vereinbarung. Versuche es anschließend erneut."
         showProgramLicenseAlert = true
     }
 

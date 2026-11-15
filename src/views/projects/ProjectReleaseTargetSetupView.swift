@@ -32,57 +32,115 @@ struct ProjectReleaseTargetSetupView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(releaseTargetId == nil ? "Veröffentlichungsziel hinzufügen" : "Store-Zuordnung prüfen").font(.title2.weight(.semibold))
-            Text("Ein Projekt kann mehrere native App-Ziele haben. Wähle bewusst, ob sie denselben Store-Eintrag oder getrennte Einträge verwenden.")
-                .font(.callout).foregroundStyle(.secondary)
-            Form {
-                Picker("Store-Zuordnung", selection: $mode) {
-                    Text("Bestehenden Store-Eintrag verwenden").tag(Mode.existingStore)
-                    Text("Separaten Store-Eintrag vorbereiten").tag(Mode.separateStore)
-                }
-                .disabled(releaseTargetId != nil)
-                Picker("Native Plattform", selection: $platform) {
-                    ForEach(ProjectPlatform.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.disabled(releaseTargetId != nil)
-                if platform == .macOS {
-                    Toggle("Mac-Catalyst-Build", isOn: $isMacCatalyst).disabled(releaseTargetId != nil)
-                }
-                TextField("Zielname (optional)", text: $targetName).disabled(releaseTargetId != nil)
-                TextField("Xcode-Scheme", text: $scheme).disabled(releaseTargetId != nil)
-                TextField("Konfiguration", text: $configuration).disabled(releaseTargetId != nil)
-                if mode == .existingStore {
-                    Picker("Store-App", selection: $selectedAppID) {
-                        Text("App auswählen").tag("")
-                        ForEach(apps) { Text("\($0.name) · \($0.bundleId)").tag($0.id) }
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader(releaseTargetId == nil ? "Veröffentlichungsziel hinzufügen" : "Store-Zuordnung prüfen",
+                subtitle: "Verbinde ein natives App-Ziel mit einem bestehenden Store-Eintrag oder bereite einen separaten Eintrag vor.")
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                    BlitzSetupField("Store-Zuordnung") {
+                        Picker("Store-Zuordnung", selection: $mode) {
+                            Text("Bestehenden Store-Eintrag verwenden").tag(Mode.existingStore)
+                            Text("Separaten Store-Eintrag vorbereiten").tag(Mode.separateStore)
+                        }
+                        .accessibilityLabel("Store-Zuordnung")
+                        .disabled(releaseTargetId != nil)
                     }
-                    if let app = selectedApp {
-                        Text("App-ID \(app.id) · SKU \(app.attributes.sku ?? "unbekannt")\nBundle-ID \(app.bundleId)")
-                            .font(.caption).textSelection(.enabled)
+                    BlitzSetupField("Plattform", hint: "Eine iPhone-/iPad-App auf einem Mac mit Apple-Chip bleibt ein iOS-Ziel. macOS ist für einen eigenen Mac-Build vorgesehen.") {
+                        Picker("Plattform", selection: $platform) {
+                            ForEach(ProjectPlatform.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Plattform")
+                        .disabled(releaseTargetId != nil)
                     }
-                } else {
-                    TextField("Exakte Release-Bundle-ID", text: $bundleID)
-                    Text("Eine separate Store-App benötigt eine eigene Bundle-ID und SKU. Nach dem Speichern bestätigst du Name, Bundle-ID und SKU im normalen Anlegeformular.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if platform == .macOS {
+                        Toggle("Mac-Catalyst-Build", isOn: $isMacCatalyst)
+                            .disabled(releaseTargetId != nil)
+                    }
+                    BlitzSetupField("Zielname", hint: "Optionaler Name für die Auswahl in Blitz Neo.") {
+                        TextField("Zum Beispiel: Mac-App", text: $targetName)
+                            .accessibilityLabel("Zielname")
+                            .disabled(releaseTargetId != nil)
+                    }
+                    BlitzSetupField("Xcode-Scheme") {
+                        TextField("Name des App-Schemes", text: $scheme)
+                            .accessibilityLabel("Xcode-Scheme")
+                            .disabled(releaseTargetId != nil)
+                    }
+                    BlitzSetupField("Konfiguration") {
+                        TextField("Release", text: $configuration)
+                            .accessibilityLabel("Konfiguration")
+                            .disabled(releaseTargetId != nil)
+                    }
+
+                    Divider()
+
+                    if mode == .existingStore {
+                        BlitzSetupField("Store-App") {
+                            Picker("Store-App", selection: $selectedAppID) {
+                                Text("App auswählen").tag("")
+                                ForEach(apps) { Text($0.name).tag($0.id) }
+                            }
+                            .accessibilityLabel("Store-App")
+                        }
+                        if let app = selectedApp {
+                            BlitzSetupField("Bundle-ID") {
+                                Text(app.bundleId)
+                                    .font(.system(.callout, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Text("App-ID: \(app.id)\nSKU: \(app.attributes.sku ?? "unbekannt")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text("App-ID, Bundle-ID und SKU bleiben erhalten. Fehlt die Plattform bei Apple noch, lege nach dem Speichern einen Versionsentwurf für dieses Ziel an.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        BlitzSetupField("Bundle-ID", hint: "Eine separate Store-App benötigt eine eigene Bundle-ID und SKU. Name und Kennungen bestätigst du anschließend im Anlegeformular.") {
+                            TextField("org.beispiel.MeineApp", text: $bundleID)
+                                .font(.system(.callout, design: .monospaced))
+                                .accessibilityLabel("Bundle-ID")
+                        }
+                    }
+                    Text("Hier wird nur die lokale Zuordnung gespeichert. Bei Apple wird noch keine App angelegt oder eingereicht.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(2)
             }
-            .formStyle(.grouped)
-            if mode == .existingStore {
-                Text("Die bestehende App-ID, Bundle-ID und SKU bleiben erhalten. Falls die Plattform bei Apple noch fehlt, lege anschließend ausdrücklich einen „Versionsentwurf“ für dieses Ziel an. Hier wird noch nichts bei Apple erstellt oder eingereicht.")
-                    .font(.caption).foregroundStyle(.secondary)
+            .frame(maxHeight: 470)
+
+            if let error {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Eine iPhone-/iPad-App auf einem Mac mit Apple-Chip bleibt ein iOS-Ziel. Wähle macOS nur für einen eigenen nativen Mac-/Mac-Catalyst-Build.")
-                .font(.caption).foregroundStyle(.secondary)
-            if let error { Text(error).font(.callout).foregroundStyle(.orange).textSelection(.enabled) }
+            Divider()
             HStack {
-                Button("Abbrechen") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Abbrechen") { dismiss() }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                 Spacer()
                 if busy { ProgressView().controlSize(.small) }
                 Button("Ziel speichern") { Task { await save() } }
-                    .buttonStyle(.borderedProminent).disabled(!canSave)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSave)
             }
         }
-        .padding(24).frame(width: 600)
+        .font(.callout)
+        .padding(24)
+        .frame(width: 560)
         .task { await load() }
     }
 

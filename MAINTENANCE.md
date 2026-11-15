@@ -2,6 +2,37 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 85 — consistent import and app setup dialogs
+
+Project import, local creation, release-target setup, Store identity registration
+and the API-connection form now share headings, persistent field labels, spacing
+and German action wording. Controls keep accessible names while their redundant
+visual labels are hidden. The registration form no longer repeats the same
+Bundle-ID as a second preview. File selection and saving credentials are separate
+actions, and long forms scroll without losing their footer actions.
+
+The import picker includes the actual selected saved identity even when it is
+absent from the current project sources, avoiding an incorrect displayed ID after
+switching targets. A valid selection cannot be cleared through a placeholder.
+Release-target details keep long Bundle-IDs fully readable and selectable.
+Local project actions in the Dashboard and File menu use matching wording;
+Store creation remains a separate, explicitly confirmed operation.
+
+An interactive check exposed a pre-existing freeze when typing an absolute path:
+each keystroke could recursively scan the filesystem starting at `/`. Detection
+now runs only after explicit path confirmation or folder selection. Editing a
+path invalidates the old result and disables import; Return in the path field
+checks the folder without importing. Invalid/root paths fail before traversal.
+
+Validation: 625 Swift tests pass. Independent code reviews cover the setup views
+and path/identity handling. The signed native Release bundle is verified with
+deep/strict codesign. UI checks cover local creation, Store setup with a side
+terminal, release-target details, import typing/Return/folder selection, invalid
+paths and a saved target absent from the discovered IDs. No project import or
+Apple mutation is performed; fixture and existing project identity files remain
+unchanged. Credential and post-registration presentation is reviewed in source;
+the existing sign-in is preserved and no live registration is used for testing.
+
 ## 1.0.74 build 84 — clearer app identity selection
 
 The Bundle-ID selector shows a single labeled identity. A sole value is readable

@@ -253,7 +253,7 @@ struct DashboardView: View {
                     Button {
                         appState.showNewProjectSheet = true
                     } label: {
-                        Label("Create App", systemImage: "plus")
+                        Label("Neues Projekt", systemImage: "plus")
                             .font(.body.weight(.medium))
                     }
                     .buttonStyle(.borderedProminent)
@@ -262,7 +262,7 @@ struct DashboardView: View {
                     Button {
                         appState.showImportProjectSheet = true
                     } label: {
-                        Label("Import App", systemImage: "square.and.arrow.down")
+                        Label("Projekt importieren", systemImage: "square.and.arrow.down")
                             .font(.body.weight(.medium))
                     }
                     .buttonStyle(.bordered)
