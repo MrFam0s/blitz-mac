@@ -68,7 +68,7 @@ fingerprint, bundle ID and SKU). This is local configuration, not a fresh Apple
 readiness check or permission to create/submit an app.
 
 `release_prepare` requires `projectId`, canonical `projectPath`, `appId`, exact
-`bundleId`, `platform` (`IOS`/`MAC_OS`), nonsecret `accountKey` (`issuerId:keyId`),
+`bundleId`, `platform` (`IOS`/`MAC_OS`/`TV_OS`/`VISION_OS`), nonsecret `accountKey` (`issuerId:keyId`),
 `versionId`, `buildId`, and `releaseMode` (`MANUAL`/`AFTER_APPROVAL`). Include the
 discovered `releaseTargetId`; it is required when several targets exist. There is no
 fallback to the UI selection or newest build. The exact valid build must already
@@ -88,6 +88,57 @@ CLI output is JSON. Protocol errors, malformed replies, blocked validation and
 unconfirmed submission exit nonzero. A successful `status` query can describe an
 unresolved operation and exit zero: callers must inspect `state`/`appleState`.
 `submitted` does not mean published or currently sold on the App Store.
+
+## Joint app, purchase and subscription review
+
+Starting with 1.0.73, `prepare` accepts optional `reviewItems`, the exact additional
+metadata versions to submit with the app version. Each entry has only `type` and
+`id`; accepted resource types are `inAppPurchaseVersions`, `subscriptionVersions`
+and `subscriptionGroupVersions`. These IDs belong to reviewable metadata versions,
+not parent purchase/subscription/group resources or product identifier strings.
+For example, add this member to the complete preparation request:
+
+```json
+"reviewItems": [
+  {"type": "inAppPurchaseVersions", "id": "purchase-version-id"},
+  {"type": "subscriptionGroupVersions", "id": "group-version-id"},
+  {"type": "subscriptionVersions", "id": "subscription-version-id"}
+]
+```
+
+Omission or `[]` retains the app-only workflow. At most 199 distinct additional
+versions accompany the one app version. No product is selected automatically.
+The canonical selection appears in the returned `target` and is immutable for
+that operation. `validate`, `status` and `submit` reject replacement identity or
+selection fields instead of silently ignoring them. Changing the selection before
+submission requires a newly prepared and validated operation. A pending write
+must first be reconciled; new preparation cannot bypass it.
+
+Use the `asc-iap-attach` skill to discover the exact versions through the installed
+ASC CLI and prepare their metadata. Apple's first purchase of each type needs an
+app version in the same submission. A new subscription requires its unapproved
+group in that draft too; a new group must include a subscription. See
+[Apple's submission rules](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase).
+Blitz verifies ownership and required dependencies and binds selected product
+metadata and review images into the prepared fingerprint. Pricing and availability
+remain preparation tasks; final submission does not modify them. The backend uses
+the [public metadata-version review API](https://developer.apple.com/documentation/appstoreconnectapi/migrating-in-app-purchase-metadata-to-v2),
+not browser-cookie scripts or the legacy `submitWithNextAppStoreVersion` flag.
+
+`prepare` and `validate` do not attach products or otherwise write to Apple.
+`submit` creates one draft, adds only the prepared app/product versions, verifies
+its exact complete contents, and submits once. A partial draft is resumable only
+when it belongs to the persisted operation and contains no foreign items. Explicit
+continuation can add missing selected items, without creating another submission
+or duplicating confirmed items. A changed product/review image, unknown item,
+wrong app or ambiguous draft stops the workflow. A lost final-submit response
+never authorizes repeating that request. Legacy app-only journals remain readable.
+
+The Overview product row is selection guidance, not attachment evidence. It no
+longer reads a private web-session flag or instructs agents to use Iris. Complete
+readiness and the exact selected set are checked by the guarded release workflow.
+The existing manual app-only submission preview does not implicitly include products;
+use CLI/MCP with an explicit selection for a joint release.
 
 ## Projects with more than one release target
 
@@ -159,8 +210,10 @@ unambiguous existing draft whose final submit has not been attempted, it can ret
 `resumableSubmissionId`. To continue the same authorized release, call `submit`
 with the unchanged `operationId`, `accountKey`, `confirmationDigest`, `confirm: true`
 and `resumeSubmissionId` equal to that result. Identity, content, media order, build,
-release mode and readiness are rechecked; only the existing submission is sent.
-No new submission/item, metadata edit, release-mode change or journal reset occurs.
+release mode and readiness are rechecked. Continuation fills only missing saved
+app/product items in that exact owned draft before verifying and sending the
+complete set. No new submission, unselected item, metadata edit, release-mode
+change or journal reset occurs.
 Legacy incomplete operations additionally expose
 `requiresLegacyRecoveryConfirmation: true`: their old journal cannot establish
 whether the final submit was attempted. `confirmLegacyDraftRecovery: true` is
@@ -173,7 +226,7 @@ final-submit responses remain blocked.
 Programmatic status remains read-only regardless of resumability. A successful
 read is not permission to submit, and a historical completed submission cannot
 establish success for a newly prepared draft. Apple must confirm the same draft
-and version in an actual review state.
+and the complete selected app/product set in an actual review state.
 
 ### Authentication capabilities
 

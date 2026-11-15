@@ -4,6 +4,7 @@ extension MCPExecutor {
     /// No UI navigation or selected-version fallback is involved in these calls.
     /// CLI and MCP invoke this same durable, account-bound release backend.
     func executeReleaseWorkflow(name: String, arguments: [String: Any]) async throws -> [String: Any] {
+        try ReleaseWorkflowArguments.validateKeys(name: name, arguments: arguments)
         func string(_ key: String) throws -> String {
             guard let value = arguments[key] as? String, !value.isEmpty,
                   value == value.trimmingCharacters(in: .whitespacesAndNewlines) else {
@@ -42,7 +43,7 @@ extension MCPExecutor {
             let target = ReleaseWorkflowTarget(projectID: projectID, projectPath: try string("projectPath"),
                 appID: appID, bundleID: bundleID, platform: platform,
                 accountKey: accountKey, versionID: try string("versionId"), buildID: try string("buildId"),
-                releaseTargetID: configured.id)
+                releaseTargetID: configured.id, reviewItems: try ReleaseWorkflowArguments.reviewItems(arguments))
             guard let mode = ReleaseWorkflowMode(rawValue: try string("releaseMode")) else {
                 throw MCPServerService.MCPError.invalidToolArgs
             }
@@ -109,5 +110,40 @@ extension MCPExecutor {
         guard FileManager.default.fileExists(atPath: target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw ReleaseWorkflowError.invalidTarget
         }
+    }
+}
+
+/// Both the CLI and MCP pass through this boundary. Unknown identity fields on
+/// later commands must fail rather than look as if they changed a saved release.
+enum ReleaseWorkflowArguments {
+    static func validateKeys(name: String, arguments: [String: Any]) throws {
+        let allowed: Set<String>
+        switch name {
+        case "release_prepare":
+            allowed = ["projectId", "projectPath", "releaseTargetId", "appId", "bundleId", "platform",
+                       "accountKey", "versionId", "buildId", "releaseMode", "reviewItems"]
+        case "release_validate", "release_status":
+            allowed = ["operationId", "accountKey", "releaseTargetId"]
+        case "release_submit":
+            allowed = ["operationId", "accountKey", "releaseTargetId", "confirmationDigest", "confirm",
+                       "resumeSubmissionId", "confirmLegacyDraftRecovery"]
+        default: throw MCPServerService.MCPError.invalidToolArgs
+        }
+        guard Set(arguments.keys).isSubset(of: allowed) else { throw MCPServerService.MCPError.invalidToolArgs }
+    }
+
+    static func reviewItems(_ arguments: [String: Any]) throws -> [ReleaseReviewItem] {
+        guard let value = arguments["reviewItems"] else { return [] }
+        guard let objects = value as? [[String: Any]], objects.count <= 199,
+              objects.allSatisfy({ Set($0.keys) == ["type", "id"] }) else {
+            throw MCPServerService.MCPError.invalidToolArgs
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: objects),
+              let items = try? JSONDecoder().decode([ReleaseReviewItem].self, from: data),
+              items.allSatisfy({ ReleaseWorkflowTarget.validID($0.id) }),
+              Set(items.map(\.key)).count == items.count else {
+            throw MCPServerService.MCPError.invalidToolArgs
+        }
+        return items.sorted { $0.key < $1.key }
     }
 }

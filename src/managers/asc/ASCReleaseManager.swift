@@ -34,6 +34,11 @@ struct ASCManualReleaseRequest {
     let target: ReleaseWorkflowTarget
     let mode: ReleaseWorkflowMode
 
+    static func requireAppOnlyScope(previous: ReleaseWorkflowRecord?) throws {
+        guard let previous, previous.state != .submitted, !previous.target.reviewItems.isEmpty else { return }
+        throw ASCError.notFound("Für diese App ist bereits die gemeinsame Einreichung mit Kaufprodukten vorbereitet (Vorgang \(previous.operationID)). Bitte diesen Vorgang über die Blitz-Neo-CLI oder MCP prüfen und fortsetzen. Diese Vorschau für die App-Einreichung darf die gespeicherte Produktauswahl nicht ersetzen.")
+    }
+
     init(project: Project, captured: ASCReleaseOperationTarget, version: ASCAppStoreVersion, build: ASCBuild) throws {
         guard let accountKey = captured.accountKey, !accountKey.isEmpty,
               project.id == captured.projectId,
@@ -537,7 +542,9 @@ extension ASCManager {
         })
         let workflow = ReleaseWorkflowService(directory: BlitzPaths.root.appendingPathComponent("release-operations"), api: api)
         do {
-            if let previous = try await workflow.activeOperation(target: request.target),
+            let previous = try await workflow.activeOperation(target: request.target)
+            try ASCManualReleaseRequest.requireAppOnlyScope(previous: previous)
+            if let previous,
                previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
                 let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
                 try target.check(self)
@@ -551,13 +558,13 @@ extension ASCManager {
             }
             let prepared: ReleaseWorkflowRecord
             if attachBuild {
-                prepared = try await workflow.prepareAfterAttachingBuild(target: request.target, mode: request.mode) {
+                prepared = try await workflow.prepareAfterAttachingBuild(target: request.target, mode: request.mode, preserveReviewSelection: true) {
                     try await MainActor.run { try target.check(self) }
                     try await service.attachBuild(versionId: version.id, buildId: build.id)
                     try await MainActor.run { try target.check(self) }
                 }
             } else {
-                prepared = try await workflow.prepare(target: request.target, mode: request.mode)
+                prepared = try await workflow.prepare(target: request.target, mode: request.mode, preserveReviewSelection: true)
             }
             try target.check(self)
             selectedVersionBuild = build

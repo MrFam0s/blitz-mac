@@ -23,7 +23,7 @@ enum MCPRegistry {
         ))
         tools.append(tool(
             name: "release_prepare",
-            description: "Prepare a durable release operation for exact project/account/app/platform/version/build IDs, independently of the selected UI app. Apple reads only. The build must already be attached and valid. Records a content fingerprint without changing metadata, assets or submission state. Local tests and source/artifact provenance must be established separately in the project release dossier.",
+            description: "Prepare a durable release operation for exact project/account/app/platform/version/build IDs and optional explicitly selected IAP/subscription/group versions, independently of the selected UI app. Apple reads only. The build must already be attached and valid. Records the exact selected resource versions and a content/media fingerprint without changing Apple state. No products are selected implicitly. Local tests and source/artifact provenance must be established separately in the project release dossier.",
             properties: [
                 "projectId": ["type": "string"], "projectPath": ["type": "string"],
                 "releaseTargetId": ["type": "string", "description": "Exact configured target from get_release_targets. Required when several targets exist; UI selection is never adopted."],
@@ -31,22 +31,28 @@ enum MCPRegistry {
                 "platform": ["type": "string", "enum": ProjectPlatform.allCases.map(\.ascPlatformValue)],
                 "accountKey": ["type": "string", "description": "Expected nonsecret issuerId:keyId fingerprint."],
                 "versionId": ["type": "string"], "buildId": ["type": "string"],
-                "releaseMode": ["type": "string", "enum": ["MANUAL", "AFTER_APPROVAL"]]
+                "releaseMode": ["type": "string", "enum": ["MANUAL", "AFTER_APPROVAL"]],
+                "reviewItems": ["type": "array", "maxItems": 199, "uniqueItems": true,
+                    "description": "Exact additional product metadata versions authorized for this same submission. Omit or [] for app-only. Use version resource IDs, never parent product IDs or productId strings. Include a new subscription group's version with its selected subscription version(s).",
+                    "items": ["type": "object", "additionalProperties": false,
+                        "properties": ["type": ["type": "string", "enum": ["inAppPurchaseVersions", "subscriptionVersions", "subscriptionGroupVersions"]],
+                                       "id": ["type": "string", "minLength": 1, "maxLength": 128]],
+                        "required": ["type", "id"]]]
             ],
             required: ["projectId", "projectPath", "appId", "bundleId", "platform", "accountKey", "versionId", "buildId", "releaseMode"]
         ))
         for (name, description) in [
             ("release_status", "Read and reconcile a durable operation with Apple. Never replays an upload or submission. Use after a timeout or restart before any retry."),
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
-            ("release_submit", "Submit the exact validated operation after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets only the prepared release mode, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
+            ("release_submit", "Submit the exact validated operation, including only its saved IAP/subscription/group versions, after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets the prepared release mode, assembles the one exact review draft, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
         ] {
             var properties: [String: Any] = ["operationId": ["type": "string"], "accountKey": ["type": "string"],
                 "releaseTargetId": ["type": "string", "description": "Optional assertion of the saved operation's immutable target ID; cannot change it."]]
             var required = ["operationId", "accountKey"]
             if name == "release_submit" {
                 properties["confirmationDigest"] = ["type": "string"]
-                properties["confirm"] = ["type": "boolean", "description": "True only when the user authorized this exact release and mode."]
-                properties["resumeSubmissionId"] = ["type": "string", "description": "Explicitly continue only the exact resumableSubmissionId freshly returned by release_status for this same authorized operation. Revalidates identity, content, build, release mode and readiness, then submits that existing draft without creating resources. Omit for a new submission. Never retry an uncertain final submit."]
+                properties["confirm"] = ["type": "boolean", "description": "True only when the user authorized this exact app release, selected product versions and mode."]
+                properties["resumeSubmissionId"] = ["type": "string", "description": "Explicitly continue only the exact resumableSubmissionId freshly returned by release_status for this same authorized operation. Revalidates identity, content, build, release mode and readiness, adds only missing saved items to that owned draft, then submits the exact complete set. Never creates a replacement draft or retries an uncertain final submit. Omit for a new submission."]
                 properties["confirmLegacyDraftRecovery"] = ["type": "boolean", "description": "Only for a legacy record with requiresLegacyRecoveryConfirmation=true: assert that documented evidence proves the original run stopped before the final submit. A READY_FOR_REVIEW snapshot alone is insufficient. Preserve the original authorization, operation and exact draft. Never set this for an unknown historical final-submit outcome."]
                 required += ["confirmationDigest", "confirm"]
             }
@@ -558,6 +564,9 @@ enum MCPRegistry {
         ]
         if !required.isEmpty {
             schema["required"] = required
+        }
+        if ["release_prepare", "release_validate", "release_status", "release_submit"].contains(name) {
+            schema["additionalProperties"] = false
         }
         return [
             "name": name,

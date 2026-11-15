@@ -195,7 +195,10 @@ rules above. Check required descriptions, URLs, screenshots for supported device
 review contact/demo access, age rating, content rights, privacy declarations and
 encryption/export compliance. Reuse documented facts only: do not fabricate legal,
 privacy, encryption or login answers. Missing facts require a targeted question.
-Do not change price, territories, availability, IAPs or TestFlight tester groups.
+Do not change price, territories, availability or TestFlight tester groups.
+Only include IAPs/subscriptions when they belong to the user's explicit release
+scope. Read asc-iap-attach to resolve their exact metadata-version IDs and any
+required new subscription-group version; never auto-select all pending products.
 
 Set releaseType to AFTER_APPROVAL for this version and verify the server response.
 This means Apple publishes after approval, not immediate publication or bypassing
@@ -212,6 +215,11 @@ releaseType is AFTER_APPROVAL and no conflicting submission exists.
 Prepare a guarded Blitz release operation with `release_prepare`: exact projectId,
 canonical projectPath, appId, case-sensitive bundleId, platform (`IOS`/`MAC_OS`),
 original accountKey, versionId, attached buildId and releaseMode=AFTER_APPROVAL.
+For an authorized joint release, include the exact selected resource-version pairs
+in reviewItems (inAppPurchaseVersions, subscriptionVersions,
+subscriptionGroupVersions). Parent product IDs are not version IDs. Omit the field
+or use [] for app-only. Product metadata and review screenshots must already be
+complete; preparation binds that content and selection to the same operation.
 This is a read-only Apple check plus private local state, not a submission. Keep
 the returned operationId with the report. Call `release_validate` with operationId
 and accountKey; inspect its fresh readiness result and current confirmationDigest.
@@ -231,7 +239,9 @@ version after an error; do not delete/recreate Store records.
 If status exposes resumableSubmissionId, compare it with the saved draft evidence.
 For this same authorized release, pass that exact ID as resumeSubmissionId to
 release_submit with the unchanged operationId, accountKey, confirmationDigest and
-confirm=true. The backend rechecks every guard and submits only the existing draft.
+confirm=true. The backend rechecks every guard, adds only missing saved app/product
+items to that exact owned draft and submits its complete selected set. It never
+creates a replacement draft or adds unselected products.
 For requiresLegacyRecoveryConfirmation=true, confirmLegacyDraftRecovery=true also
 requires documented proof that the old run stopped before final submission; the
 current draft state alone is insufficient. Unknown historical outcomes stay blocked.

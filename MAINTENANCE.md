@@ -2,6 +2,46 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.73 — joint app and commerce review
+
+The shared release backend now accepts an explicit set of IAP, subscription and
+subscription-group metadata versions through CLI and MCP `reviewItems`. The
+account/app/platform/build binding, selected resource versions and protected
+product metadata, review media, pricing and availability participate in the
+immutable preparation. Product discovery never implicitly selects every pending
+product. The public version APIs replace the former Iris attachment guidance.
+
+Fresh validation checks product ownership, complete version histories, group
+requirements and uploaded assets. Only the exact legacy first-of-type attachment
+findings can be replaced by verified evidence for the prepared selection; other
+blockers and unknown findings remain. Product lifecycle transitions are separate
+from protected content. Final verification also checks current media readiness.
+
+One journaled draft contains the app and exact selected product set. Every item
+boundary and confirmed ID is durable. Recovery adds only missing authorized
+items to the known draft; unknown item writes require reconciliation and an
+uncertain final submit is never replayed. Extra, foreign, missing or replaced
+items prevent submission. Existing app-only journals remain compatible, and the
+manual app-only preview cannot silently replace a prepared joint selection.
+
+The release and commerce-selection skills, CLI help, MCP schema, project routing
+and handoff templates describe the same flow. Startup synchronizes both managed
+skills for registered projects; upstream skill refresh cannot overwrite them.
+The Overview now offers selection guidance for both initial and later releases,
+without private web-session attachment polling.
+
+Validation: all 594 Swift tests pass, including synthetic end-to-end joint
+submissions, each product-write interruption, lost replies, altered content and
+item identity, unknown final outcomes, legacy journals, CLI/MCP input validation
+and managed skill distribution. No real Store submission or mutation is used
+for these tests. ASC remains at 6.6.1 and Node/npm pins remain unchanged.
+The signed native arm64 bundle passes deep/strict verification and is installed
+as build 79 under Applications. The installed MCP reports 1.0.73 with 44 tools;
+its product-selection schema, read-only state and CLI/MCP rejection of retargeting
+were checked. Both skills match the bundle in 56 copies across 14 registered
+projects. Dashboard and Overview were inspected in the running app; build 78 is
+retained for rollback. No paid GitHub workflow or global configuration change.
+
 ## 1.0.72 — truthful settings and integration status
 
 Settings now distinguish the local MCP listener from agent configuration. Manual

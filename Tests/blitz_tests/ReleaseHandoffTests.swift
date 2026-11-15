@@ -97,6 +97,9 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
     let updated = "---\nname: blitz-release\ndescription: Scoped release workflow.\n---\nUse fixed app IDs.\n"
     try updated.write(to: source.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+    let productSkill = source.deletingLastPathComponent().appendingPathComponent("asc-iap-attach")
+    try FileManager.default.createDirectory(at: productSkill, withIntermediateDirectories: true)
+    try "Joint version selection".write(to: productSkill.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
     let project = root.appendingPathComponent("project")
     let service = ProjectAgentConfigService(baseDirectory: root)
     for agent in [".agents", ".claude"] {
@@ -107,6 +110,7 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try service.prepareBundledReleaseSkill(projectDir: project, sourceSkillsDirectory: source.deletingLastPathComponent())
     for agent in [".agents", ".claude"] {
         #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == updated)
+        #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/asc-iap-attach/SKILL.md"), encoding: .utf8) == "Joint version selection")
     }
 }
 
@@ -119,6 +123,9 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
     let skill = "---\nname: blitz-release\ndescription: Verified release workflow.\n---\nKeep exact IDs.\n"
     try skill.write(to: source.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+    let productSkill = source.deletingLastPathComponent().appendingPathComponent("asc-iap-attach")
+    try FileManager.default.createDirectory(at: productSkill, withIntermediateDirectories: true)
+    try "Joint version selection".write(to: productSkill.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
     let creation = source.deletingLastPathComponent().appendingPathComponent("asc-app-create-ui")
     try FileManager.default.createDirectory(at: creation.appendingPathComponent("scripts"), withIntermediateDirectories: true)
     try "Creation instructions".write(to: creation.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
@@ -150,6 +157,8 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
         #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
         #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
         #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/asc-app-create-ui/scripts/create_app.py"), encoding: .utf8) == "Creation script")
+        #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/asc-iap-attach/SKILL.md"), encoding: .utf8) == "Joint version selection")
+        #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/asc-iap-attach/SKILL.md"), encoding: .utf8) == "Joint version selection")
     }
     #expect(try String(contentsOf: authored, encoding: .utf8) == BlitzWorkflowInstructions.updatedDocument("Authored instructions stay unchanged.\n", body: body))
     #expect(try String(contentsOf: imported.appendingPathComponent("AGENTS.md"), encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.beginMarker))

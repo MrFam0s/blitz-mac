@@ -19,7 +19,11 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
   `AFTER_APPROVAL`, sofern der Nutzer oder eine ausdrücklich festgelegte
   Release-Vorgabe nichts anderes bestimmt. Vorbereitete Texte/Medien und exakte
   App-, Versions- und Build-Zuordnungen bewahren. Bei unklarem Ergebnis nur den
-  bestehenden Vorgang abgleichen, nicht erneut einreichen.
+  bestehenden Vorgang abgleichen, nicht erneut einreichen. Gehören In-App-Käufe
+  oder Abos zum beauftragten Release, zusätzlich den Skill `asc-iap-attach` lesen
+  und ihre exakten Metadaten-Versionen samt nötiger neuer Abo-Gruppen als
+  `reviewItems` in denselben Blitz-Vorgang aufnehmen. Keine automatische Auswahl
+  aller offenen Produkte und keine getrennte direkte Einreichung.
 - **„App im App Store neu erstellen“** (auch „App im AppStore neu erstellen“):
   Lies `.agents/skills/asc-app-create-ui/SKILL.md`. Prüfe zuerst lesend, ob der
   passende App-Datensatz bereits existiert. Falls nicht, nutze das Blitz-

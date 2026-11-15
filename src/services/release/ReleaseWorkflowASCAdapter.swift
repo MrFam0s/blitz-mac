@@ -112,6 +112,12 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             protected["review"] = Self.semantic(review)
             protected["reviewAttachments"] = try await all("/v1/appStoreReviewDetails/\(Self.id(review))/appStoreReviewAttachments").map(Self.semantic)
         }
+        var reviewProductsReady = true
+        if !target.reviewItems.isEmpty {
+            let products = try await productSelection(target)
+            protected["jointReviewProducts"] = products.protectedContent
+            reviewProductsReady = products.diagnostics.isEmpty
+        }
         let fingerprints = try Self.fingerprints(protected)
         let submission = try await submissionContext(target)
         // Protected values (including demo credentials) are hashed in memory only.
@@ -123,7 +129,9 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             releaseType: attrs["releaseType"] as? String, contentDigest: fingerprints.current,
             submissionID: submission.id, hasSubmissionConflict: submission.conflict,
             submissionState: submission.state, canResumeSubmission: submission.canResume, submissionItemID: submission.itemID,
-            legacyContentDigests: fingerprints.legacy)
+            legacyContentDigests: fingerprints.legacy,
+            submissionItemsComplete: submission.complete, reviewItemIDs: submission.reviewItemIDs,
+            reviewProductsReady: reviewProductsReady)
     }
 
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
@@ -150,9 +158,10 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         let versions = try await all("/v1/apps/\(target.appID)/appStoreVersions")
         let firstPublication = try ReleaseReadinessPolicy.isFirstPublication(versions: versions, target: target)
         let localizations = try await all("/v1/appStoreVersions/\(target.versionID)/appStoreVersionLocalizations")
+        let products = target.reviewItems.isEmpty ? nil : try await productSelection(target)
         return try ReleaseReadinessPolicy.normalize(report: object, exitCode: payload.exitCode, target: target,
             firstPublication: firstPublication, localizations: localizations, web: payload.web,
-            webBindingStable: payload.web.matches(payload.web, target: target))
+            webBindingStable: payload.web.matches(payload.web, target: target), products: products)
     }
 
     func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws {
@@ -160,48 +169,89 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             "type": "appStoreVersions", "id": target.versionID, "attributes": ["releaseType": mode.rawValue]]])
     }
 
+    private func productSelection(_ target: ReleaseWorkflowTarget) async throws -> ReleaseProductSelection.Result {
+        try await ReleaseProductSelection.inspect(target: target,
+            single: { try await self.optionalSingle($0) }, all: { try await self.all($0, query: $1) })
+    }
+
     func submit(_ target: ReleaseWorkflowTarget, expectedContentDigest: String,
                 expectedFingerprintVersion: Int? = 2,
                 expectedReleaseMode: ReleaseWorkflowMode = .manual,
                 resumingSubmissionID: String? = nil,
                 progress: @escaping @Sendable (ReleaseSubmissionProgress) async throws -> Void = { _ in }) async throws -> String? {
-        // The outer engine persists a consumed boundary before any of these calls.
-        // An interrupted partial submission is reconciled by read-only status, never recreated.
+        try target.validate()
+        // The service has journaled intent and revalidated the entire selected
+        // set. Re-read content before creating or extending any Apple draft.
+        let before = try await snapshot(target)
+        try before.check(target)
+        guard before.matchesContentDigest(expectedContentDigest, fingerprintVersion: expectedFingerprintVersion) else {
+            throw ReleaseWorkflowError.contentChanged
+        }
+        guard before.releaseType == expectedReleaseMode.rawValue else { throw ReleaseWorkflowError.uncertainOutcome }
         try await progress(.init(phase: resumingSubmissionID == nil ? .checkingExisting : .verifyingContent, submissionID: resumingSubmissionID))
         let existing = try await submissionContext(target)
         let submissionID: String
-        let itemID: String
         if let resumingSubmissionID {
             guard existing.id == resumingSubmissionID, existing.canResume else { throw ReleaseWorkflowError.uncertainOutcome }
             submissionID = resumingSubmissionID
-            guard let id = existing.itemID else { throw ReleaseWorkflowAPIError.invalidResponse }
-            itemID = id
         } else {
-            guard !existing.conflict else { throw ReleaseWorkflowError.uncertainOutcome }
+            guard !existing.conflict, ASCReleaseStatus.isEditable(before.appleState) else { throw ReleaseWorkflowError.uncertainOutcome }
             try await progress(.init(phase: .creatingSubmission))
             let created = try await request("POST", "/v1/reviewSubmissions", body: ["data": [
                 "type": "reviewSubmissions", "attributes": ["platform": target.platform],
                 "relationships": ["app": ["data": ["type": "apps", "id": target.appID]]]]])
-            guard let submission = created["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
+            guard let submission = created["data"] as? [String: Any],
+                  submission["type"] as? String == "reviewSubmissions" else { throw ReleaseWorkflowAPIError.invalidResponse }
             submissionID = try Self.id(submission)
             try await progress(.init(phase: .submissionCreated, submissionID: submissionID))
+        }
+
+        // A partial draft is resumable only through its journaled ID. Reconcile
+        // before each missing item; never retry a POST in this invocation after
+        // an uncertain response. The next invocation must first read status.
+        var current = try await submissionContext(target)
+        guard current.id == submissionID, current.canResume else { throw ReleaseWorkflowError.uncertainOutcome }
+        var itemID = current.itemID
+        var expectedReviewItemIDs = current.reviewItemIDs
+        if itemID == nil {
             try await progress(.init(phase: .addingVersion, submissionID: submissionID))
-            let added = try await request("POST", "/v1/reviewSubmissionItems", body: ["data": [
-                "type": "reviewSubmissionItems", "relationships": [
-                    "reviewSubmission": ["data": ["type": "reviewSubmissions", "id": submissionID]],
-                    "appStoreVersion": ["data": ["type": "appStoreVersions", "id": target.versionID]]]]])
-            guard let item = added["data"] as? [String: Any] else { throw ReleaseWorkflowAPIError.invalidResponse }
-            itemID = try Self.id(item)
+            itemID = try await addItem(submissionID: submissionID, relationship: "appStoreVersion",
+                                       type: "appStoreVersions", id: target.versionID)
             try await progress(.init(phase: .versionAdded, submissionID: submissionID, submissionItemID: itemID))
+        }
+        for selected in target.reviewItems {
+            current = try await submissionContext(target)
+            guard current.id == submissionID, current.canResume, current.itemID == itemID,
+                  expectedReviewItemIDs.allSatisfy({ current.reviewItemIDs[$0.key] == $0.value }) else {
+                throw ReleaseWorkflowError.uncertainOutcome
+            }
+            if let knownID = current.reviewItemIDs[selected.key] {
+                guard expectedReviewItemIDs[selected.key] == nil || expectedReviewItemIDs[selected.key] == knownID else {
+                    throw ReleaseWorkflowError.uncertainOutcome
+                }
+                expectedReviewItemIDs[selected.key] = knownID
+                // Include reconciled IDs in the durable journal as well.
+                try await progress(.init(phase: .reviewItemAdded, submissionID: submissionID, submissionItemID: itemID,
+                                         reviewItem: selected, reviewItemID: knownID))
+                continue
+            }
+            try await progress(.init(phase: .addingReviewItem, submissionID: submissionID, submissionItemID: itemID,
+                                     reviewItem: selected))
+            let addedID = try await addItem(submissionID: submissionID, relationship: selected.relationshipName,
+                                           type: selected.type.rawValue, id: selected.id)
+            expectedReviewItemIDs[selected.key] = addedID
+            try await progress(.init(phase: .reviewItemAdded, submissionID: submissionID, submissionItemID: itemID,
+                                     reviewItem: selected, reviewItemID: addedID))
         }
         try await progress(.init(phase: .verifyingContent, submissionID: submissionID, submissionItemID: itemID))
         let finalSnapshot = try await snapshot(target)
         try finalSnapshot.check(target)
         guard finalSnapshot.matchesContentDigest(expectedContentDigest, fingerprintVersion: expectedFingerprintVersion) else { throw ReleaseWorkflowError.contentChanged }
-        // Adding the version to this exact submission legitimately transitions it
-        // to READY_FOR_REVIEW. That is submission eligibility, not UI editability.
         guard finalSnapshot.submissionID == submissionID, finalSnapshot.submissionItemID == itemID,
-              finalSnapshot.canResumeSubmission, finalSnapshot.releaseType == expectedReleaseMode.rawValue,
+              finalSnapshot.submissionItemsComplete, finalSnapshot.canResumeSubmission,
+              finalSnapshot.reviewProductsReady,
+              finalSnapshot.reviewItemIDs == expectedReviewItemIDs,
+              finalSnapshot.releaseType == expectedReleaseMode.rawValue,
               ASCReleaseStatus.isEditable(finalSnapshot.appleState) || ASCReleaseStatus.normalize(finalSnapshot.appleState) == "READY_FOR_REVIEW" else {
             throw ReleaseWorkflowError.uncertainOutcome
         }
@@ -214,9 +264,30 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         return submissionID
     }
 
-    private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> (id: String?, state: String?, conflict: Bool, canResume: Bool, itemID: String?) {
+    private func addItem(submissionID: String, relationship: String, type: String, id: String) async throws -> String {
+        let added = try await request("POST", "/v1/reviewSubmissionItems", body: ["data": [
+            "type": "reviewSubmissionItems", "relationships": [
+                "reviewSubmission": ["data": ["type": "reviewSubmissions", "id": submissionID]],
+                relationship: ["data": ["type": type, "id": id]]]]])
+        guard let item = added["data"] as? [String: Any], item["type"] as? String == "reviewSubmissionItems" else {
+            throw ReleaseWorkflowAPIError.invalidResponse
+        }
+        return try Self.id(item)
+    }
+
+    private struct SubmissionContext {
+        var id: String?
+        var state: String?
+        var conflict = false
+        var canResume = false
+        var itemID: String?
+        var complete = false
+        var reviewItemIDs: [String: String] = [:]
+    }
+
+    private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> SubmissionContext {
         let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app"])
-        var matches: [(id: String, state: String, date: String, exactDraft: Bool, itemID: String?)] = []
+        var matches: [(id: String, state: String, date: String, draft: Bool, contents: ReleaseSubmissionContents)] = []
         var activeCount = 0
         for submission in submissions {
             guard let attributes = submission["attributes"] as? [String: Any],
@@ -225,36 +296,28 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             if let app = Self.relationshipID(submission, "app"), app != target.appID { throw ReleaseWorkflowError.identityChanged }
             guard platform == target.platform else { continue }
             let id = try Self.id(submission)
-            // Incomplete/draft submissions also block a fresh POST, even if another
-            // client has not attached its version item yet. Never adopt that draft.
             if state != "COMPLETE" { activeCount += 1 }
-            let items = try await all("/v1/reviewSubmissions/\(id)/items", query: ["include": "appStoreVersion"])
-            if Self.relationshipID(submission, "appStoreVersionForReview") == target.versionID ||
-                items.contains(where: { Self.relationshipID($0, "appStoreVersion") == target.versionID }) {
-                let submittedDate = attributes["submittedDate"] as? String ?? ""
-                let exactItem = items.count == 1 && Self.relationshipID(items[0], "appStoreVersion") == target.versionID &&
-                    Self.hasOnlyVersionContent(items[0]) &&
-                    (Self.relationshipID(submission, "appStoreVersionForReview") == nil || Self.relationshipID(submission, "appStoreVersionForReview") == target.versionID)
-                let itemReady = exactItem && (items[0]["attributes"] as? [String: Any])?["state"] as? String == "READY_FOR_REVIEW"
-                matches.append((id, state, submittedDate, state == "READY_FOR_REVIEW" && submittedDate.isEmpty && itemReady,
-                                exactItem ? try Self.id(items[0]) : nil))
-            }
+            let includes = target.reviewItems.isEmpty ? "appStoreVersion" :
+                "appStoreVersion,inAppPurchaseVersion,subscriptionVersion,subscriptionGroupVersion"
+            let items = try await all("/v1/reviewSubmissions/\(id)/items", query: ["include": includes])
+            let contents = ReleaseSubmissionContents(items: items, target: target, submissionID: id)
+            let forReview = Self.relationshipID(submission, "appStoreVersionForReview")
+            let matchingVersion = forReview == target.versionID || contents.referencesAppVersion
+            // A unique subset (including an empty draft) may be reported, but the
+            // service requires the saved create acknowledgement to adopt it.
+            let possiblePartial = state != "COMPLETE" && contents.validSelection && (forReview == nil || forReview == target.versionID)
+            guard matchingVersion || possiblePartial else { continue }
+            let submittedDate = attributes["submittedDate"] as? String ?? ""
+            let draft = state == "READY_FOR_REVIEW" && submittedDate.isEmpty && contents.ready &&
+                (forReview == nil || forReview == target.versionID)
+            matches.append((id, state, submittedDate, draft, contents))
         }
         let active = matches.filter { $0.state != "COMPLETE" }
-        // A current draft with no submittedDate is newer than completed history.
-        // Multiple active matches are ambiguous and must never be selected by ID.
         guard active.count <= 1 else { throw ReleaseWorkflowAPIError.invalidResponse }
         let chosen = active.first ?? matches.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date > $1.date }.first
-        return (chosen?.id, chosen?.state, activeCount > 0, activeCount == 1 && chosen?.exactDraft == true, chosen?.itemID)
-    }
-
-    private static func hasOnlyVersionContent(_ resource: [String: Any]) -> Bool {
-        guard let relationships = resource["relationships"] as? [String: [String: Any]] else { return false }
-        // The item may link back to its submission. Any other non-null content
-        // would publish more than this operation's single reviewed app version.
-        return relationships.allSatisfy { name, relation in
-            ["appStoreVersion", "reviewSubmission"].contains(name) || relation["data"] is NSNull
-        }
+        return SubmissionContext(id: chosen?.id, state: chosen?.state, conflict: activeCount > 0,
+            canResume: activeCount == 1 && chosen?.draft == true, itemID: chosen?.contents.appItemID,
+            complete: chosen?.contents.complete == true, reviewItemIDs: chosen?.contents.reviewItemIDs ?? [:])
     }
 
     /// V2 excludes only Apple's app-info lifecycle state. Old journals remain

@@ -646,6 +646,8 @@ struct ProjectAgentConfigService {
         try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: body)
         try prepareBundledSkill("blitz-release", requiredFiles: ["SKILL.md"],
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
+        try prepareBundledSkill("asc-iap-attach", requiredFiles: ["SKILL.md"],
+            projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
         try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: body)
     }
 
@@ -729,7 +731,7 @@ struct ProjectAgentConfigService {
             }
 
             let repoSkillsDir = repoDir.appendingPathComponent("skills")
-            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui", "blitz-release"])
+            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui", "blitz-release", "asc-iap-attach"])
 
             if let bundledSkillsDir = Self.bundledProjectSkillsDirectory() {
                 Self.syncSkillDirectories(from: bundledSkillsDir, into: skillDirectories, using: fm)

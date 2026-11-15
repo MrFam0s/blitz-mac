@@ -3,6 +3,26 @@ import Testing
 import BlitzMCPCommon
 
 struct BlitzReleaseCLITests {
+    @Test func jointReleaseRequestAndResultPreserveExactVersionSelection() throws {
+        let invocation = try BlitzReleaseCLI.parse(["release", "prepare", "--request", "-"])
+        let selected: [[String: String]] = [
+            ["type": "subscriptionGroupVersions", "id": "group-version"],
+            ["type": "subscriptionVersions", "id": "subscription-version"],
+            ["type": "inAppPurchaseVersions", "id": "purchase-version"]]
+        let data = try JSONSerialization.data(withJSONObject: ["appId": "app", "reviewItems": selected])
+        let payload = try BlitzReleaseCLI.request(invocation, data: data, id: "joint")
+        let envelope = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+        let args = try #require((envelope["params"] as? [String: Any])?["arguments"] as? [String: Any])
+        #expect(args["reviewItems"] as? [[String: String]] == selected)
+        let record: [String: Any] = ["operationId": "joint", "target": ["reviewItems": selected], "state": "prepared"]
+        let response = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": "joint", "result": ["content": [
+            ["type": "text", "text": String(decoding: JSONSerialization.data(withJSONObject: record), as: UTF8.self)]]]])
+        let result = try BlitzReleaseCLI.output(response: String(decoding: response, as: UTF8.self), id: "joint", tool: "release_prepare")
+        let decoded = try #require(JSONSerialization.jsonObject(with: Data(result.json.utf8)) as? [String: Any])
+        #expect(!result.failed)
+        #expect((decoded["target"] as? [String: Any])?["reviewItems"] as? [[String: String]] == selected)
+    }
+
     @Test func draftContinuationKeepsExactSavedOperationAndDoesNotClaimSubmission() throws {
         let invocation = try BlitzReleaseCLI.parse(["release", "submit", "--request", "-"])
         let request: [String: Any] = ["operationId": "saved-operation", "accountKey": "issuer:key",

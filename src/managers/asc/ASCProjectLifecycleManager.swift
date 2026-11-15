@@ -40,7 +40,6 @@ extension ASCManager {
         let reviewSubmissionItemsBySubmissionId: [String: [ASCReviewSubmissionItem]]
         let latestSubmissionItems: [ASCReviewSubmissionItem]
         let submissionHistoryEvents: [ASCSubmissionHistoryEvent]
-        let attachedSubmissionItemIDs: Set<String>
         let resolutionCenterThreads: [IrisResolutionCenterThread]
         let irisFeedbackCycles: [IrisFeedbackCycle]
         let trackSlots: [String: [TrackSlot?]]
@@ -100,7 +99,6 @@ extension ASCManager {
             reviewSubmissionItemsBySubmissionId = manager.reviewSubmissionItemsBySubmissionId
             latestSubmissionItems = manager.latestSubmissionItems
             submissionHistoryEvents = manager.submissionHistoryEvents
-            attachedSubmissionItemIDs = manager.attachedSubmissionItemIDs
             resolutionCenterThreads = manager.resolutionCenterThreads
             irisFeedbackCycles = manager.irisFeedbackCycles
             trackSlots = manager.trackSlots
@@ -153,7 +151,6 @@ extension ASCManager {
             manager.reviewSubmissionItemsBySubmissionId = reviewSubmissionItemsBySubmissionId
             manager.latestSubmissionItems = latestSubmissionItems
             manager.submissionHistoryEvents = submissionHistoryEvents
-            manager.attachedSubmissionItemIDs = attachedSubmissionItemIDs
             manager.resolutionCenterThreads = resolutionCenterThreads
             manager.irisFeedbackCycles = irisFeedbackCycles
             manager.trackSlots = trackSlots
@@ -456,7 +453,6 @@ extension ASCManager {
         submissionHistoryEvents = []
         appIconStatus = nil
         monetizationStatus = nil
-        attachedSubmissionItemIDs = []
         trackSlots = [:]
         savedTrackState = [:]
         screenshotImageCache = [:]

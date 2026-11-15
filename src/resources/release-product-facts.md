@@ -31,6 +31,14 @@ Quellen für Screenshots/Videos und Hinweise für Apples Prüfung festhalten.
 Bestehende Store-Texte und Medien sind eigenständige Inhalte und werden nicht
 automatisch durch dieses Dokument ersetzt.
 
+## In-App-Käufe und Abos
+
+Falls vorhanden: verifizierte Produkt-IDs, Kaufart, Abo-Gruppen, enthaltene
+Funktionen, Preise und Verfügbarkeit dokumentieren. Vor jedem gemeinsamen Release
+zusätzlich die ausdrücklich ausgewählten Metadaten-Versionen und ihre Prüfbilder
+im privaten Release-Auftrag festhalten. Offene Produkte sind keine automatische
+Einreichungsauswahl; keine Zugangsdaten oder Demo-Passwörter hier ablegen.
+
 ## Build und Tests
 
 Noch nicht dokumentiert. Projekt, Schema, Build-/Testkommandos, erforderliche Prüfungen

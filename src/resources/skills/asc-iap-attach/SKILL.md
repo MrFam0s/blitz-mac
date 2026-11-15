@@ -1,268 +1,87 @@
 ---
 name: asc-iap-attach
-description: Attach in-app purchases and subscriptions to an app version for App Store review. Use when the user has IAPs or subscriptions in "Ready to Submit" state that need to be included with a first-time version submission. Works for both first-time and subsequent submissions.
+description: Select exact In-App Purchase, subscription and subscription-group metadata versions for a joint app submission through Blitz Neo. Use when products must accompany an app release; product creation and metadata editing remain separate preparation steps.
 ---
 
-<!-- Modified for the AmoSystems Blitz Neo maintenance fork (2026). -->
+# Include purchases and subscriptions in a Blitz release
 
-# asc iap attach
+Use the `blitz-release` skill for the enclosing app release. This skill defines
+its explicit product selection, not a second submission path. Preparing or listing
+products does not authorize their publication. Preserve the user's authorized
+app, platform, products, release mode and existing operation.
 
-Use this skill to attach in-app purchases and/or subscriptions to an app version for App Store review. This is the equivalent of checking the boxes in the "Add In-App Purchases or Subscriptions" modal on the version page in App Store Connect.
+Apple's first product of each purchase type must accompany an app version. A new
+subscription also needs its group in the same submission if that group has not
+been approved; each new group needs a selected subscription. Blitz uses the public
+version-based review API for that single draft. It does not read browser cookies
+or set the old `submitWithNextAppStoreVersion` flag.
 
-## When to use
+## Identify the exact metadata versions
 
-- User is preparing an app version for submission and has IAPs or subscriptions to include
-- User says "attach IAPs", "add subscriptions to version", "include in-app purchases for review", "select in-app purchases"
-- The app version page in ASC shows an "In-App Purchases and Subscriptions" section with items to select
-- IAPs/subscriptions have been created and are in "Ready to Submit" state
-
-## Background
-
-Apple's official App Store Connect API (`POST /v1/subscriptionSubmissions`, `POST /v1/inAppPurchaseSubmissions`) returns `FIRST_SUBSCRIPTION_MUST_BE_SUBMITTED_ON_VERSION` for first-time IAP/subscription submissions. The `reviewSubmissionItems` API also does not support `subscription` or `inAppPurchase` relationship types.
-
-This skill uses Apple's internal iris API (`/iris/v1/subscriptionSubmissions`) via cached web session cookies, which supports the `submitWithNextAppStoreVersion` attribute that the public API lacks. This is the same mechanism the ASC web UI uses when you check the checkbox in the modal.
-
-## Preconditions
-
-- Web session file available at `~/.blitz/asc-agent/web-session.json`. If no session exists or it has expired (401), call the `asc_web_auth` MCP tool first — this opens the Apple ID login window in Blitz Neo and captures the session automatically.
-- Know your app ID.
-- IAPs and/or subscriptions already exist and are in **Ready to Submit** state.
-- A build is uploaded and attached to the current app version.
-
-## Workflow
-
-### 1. Check for an existing web session
+Read the installed ASC command help and the project's product facts. List products
+for the intended app and resolve only the authorized products, using their stable
+product ID/name and app relationship. Then list their metadata versions with the
+read-only commands supported by the bundled ASC:
 
 ```bash
-test -f ~/.blitz/asc-agent/web-session.json && echo "SESSION_EXISTS" || echo "NO_SESSION"
+asc iap versions list --iap-id "PARENT_IAP_ID" --paginate
+asc subscriptions versions list --subscription-id "PARENT_SUBSCRIPTION_ID" --paginate
+asc subscriptions groups versions list --group-id "PARENT_GROUP_ID" --paginate
 ```
 
-- If `NO_SESSION`: call the `asc_web_auth` MCP tool first. Wait for it to complete before proceeding.
-- If `SESSION_EXISTS`: proceed to the next step.
+Use the returned **version resource ID** and type, never a parent product ID,
+product identifier string, guessed newest item or a version from another app.
+Check version state, localizations and images, the product's review screenshot,
+pricing/availability and required group membership. Complete missing metadata
+within the user's scope through the documented ASC preparation commands before
+preparing the release. Read each command's help rather than inventing options.
+Unrelated ready products are not automatically included. If the requested product
+scope cannot be established, clarify that selection only.
 
-### 2. List subscriptions and IAPs to identify items to attach
+## Bind the set to the app release
 
-Use the iris API to list subscription groups (with subscriptions) and in-app purchases. Replace `APP_ID` with the actual app ID.
+Add the selected versions to the ordinary `release prepare` request:
 
-```bash
-python3 -c "
-import json, os, urllib.request, sys, gzip
-
-def read_body(r):
-    # iris may gzip responses even unasked; urllib does not decompress
-    b = r.read()
-    return (gzip.decompress(b) if b[:2] == bytes([31, 139]) else b).decode()
-
-APP_ID = 'APP_ID_HERE'
-
-session_path = os.path.expanduser('~/.blitz/asc-agent/web-session.json')
-if not os.path.isfile(session_path):
-    print('ERROR: No web session found. Call asc_web_auth MCP tool first.')
-    sys.exit(1)
-with open(session_path) as f:
-    raw = f.read()
-
-store = json.loads(raw)
-session = store['sessions'][store['last_key']]
-cookie_str = '; '.join(
-    f'{c[\"name\"]}={c[\"value\"]}'
-    for cl in session['cookies'].values() for c in cl
-    if c.get('name') and c.get('value')
-)
-
-headers = {
-    'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Origin': 'https://appstoreconnect.apple.com',
-    'Referer': 'https://appstoreconnect.apple.com/',
-    'Cookie': cookie_str
-}
-
-def iris_get(path):
-    url = f'https://appstoreconnect.apple.com/iris/v1/{path}'
-    req = urllib.request.Request(url, method='GET', headers=headers)
-    try:
-        resp = urllib.request.urlopen(req)
-        return json.loads(read_body(resp))
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            print('ERROR: Session expired. Call asc_web_auth MCP tool to re-authenticate.')
-            sys.exit(1)
-        print(f'ERROR: HTTP {e.code} — {read_body(e)[:200]}')
-        sys.exit(1)
-
-# List subscription groups with subscriptions included
-print('=== Subscription Groups ===')
-sg = iris_get(f'apps/{APP_ID}/subscriptionGroups?include=subscriptions&limit=300&fields%5Bsubscriptions%5D=productId,name,state,submitWithNextAppStoreVersion')
-for group in sg.get('data', []):
-    print(f'Group: {group[\"attributes\"][\"referenceName\"]} (id={group[\"id\"]})')
-for sub in sg.get('included', []):
-    if sub['type'] == 'subscriptions':
-        a = sub['attributes']
-        attached = a.get('submitWithNextAppStoreVersion', False)
-        print(f'  Subscription: {a.get(\"name\",\"?\")} | productId={a.get(\"productId\",\"?\")} | state={a.get(\"state\",\"?\")} | attached={attached} | id={sub[\"id\"]}')
-
-# List in-app purchases
-print()
-print('=== In-App Purchases ===')
-iaps = iris_get(f'apps/{APP_ID}/inAppPurchasesV2?limit=300&fields%5BinAppPurchases%5D=productId,name,state,submitWithNextAppStoreVersion')
-for iap in iaps.get('data', []):
-    a = iap['attributes']
-    attached = a.get('submitWithNextAppStoreVersion', False)
-    print(f'IAP: {a.get(\"name\",\"?\")} | productId={a.get(\"productId\",\"?\")} | state={a.get(\"state\",\"?\")} | attached={attached} | id={iap[\"id\"]}')
-"
+```json
+"reviewItems": [
+  {"type": "inAppPurchaseVersions", "id": "IAP_VERSION_ID"},
+  {"type": "subscriptionGroupVersions", "id": "GROUP_VERSION_ID"},
+  {"type": "subscriptionVersions", "id": "SUBSCRIPTION_VERSION_ID"}
+]
 ```
 
-Look for items with `state=READY_TO_SUBMIT` and `attached=False`. Note their IDs.
+This is a fragment of the request, not a complete request file. Keep the exact
+project/account/app/platform/version/build/release-mode fields required by
+`blitz-release`. Include only the applicable entries, at most 199 unique product
+versions alongside the app. An omitted/empty array means app-only. Review the
+returned `target.reviewItems` and retain its operation ID and confirmation digest.
+The equivalent MCP input is `release_prepare.reviewItems`.
 
-### 3. Attach subscriptions via iris API
+`prepare` and `validate` only read Apple. Blitz verifies ownership, required group
+and first-of-type dependencies, selected content and review media. A missing
+attachment that this exact plan will create is checked against that selection;
+it is not a reason to ignore other validation failures. No raw product metadata
+or review credentials are placed in the journal.
 
-Use the following script to attach subscriptions. **Do not print or log the cookies** — they contain sensitive session tokens.
+For an authorized release, use the same Blitz `submit` operation. It adds the app
+and the saved selected versions to one review draft, verifies the complete set,
+and sends that draft once. Never pre-attach products through `asc review items add`,
+raw review APIs, the former Iris scripts or a separate IAP/subscription submit as
+an alternative route around Blitz's journal or checks.
 
-```bash
-python3 -c "
-import json, os, urllib.request, sys, gzip
+## Interruption and changes
 
-def read_body(r):
-    # iris may gzip responses even unasked; urllib does not decompress
-    b = r.read()
-    return (gzip.decompress(b) if b[:2] == bytes([31, 139]) else b).decode()
+Use `release status` after an interruption. If it returns `resumableSubmissionId`,
+continue only that exact owned draft with the original operation, digest and
+selection. Continuation can add its missing saved items; it cannot add a different
+product or create another draft. An uncertain final submit permits read-only
+reconciliation only. A conflict is not success, and a draft is not submitted.
 
-session_path = os.path.expanduser('~/.blitz/asc-agent/web-session.json')
-if not os.path.isfile(session_path):
-    print('ERROR: No web session found. Call asc_web_auth MCP tool first.')
-    sys.exit(1)
-with open(session_path) as f:
-    raw = f.read()
+Changes to the selected set, product texts, images or review screenshots require
+fresh preparation before any submission has begun. Do not reset an incomplete
+operation, edit its journal or create a replacement to bypass uncertainty.
+Report the app version/build, each selected resource version and Apple's verified
+submission state. Approval of one item does not prove that all items are approved.
 
-store = json.loads(raw)
-session = store['sessions'][store['last_key']]
-cookie_str = '; '.join(
-    f'{c[\"name\"]}={c[\"value\"]}'
-    for cl in session['cookies'].values() for c in cl
-    if c.get('name') and c.get('value')
-)
-
-def iris_attach_subscription(sub_id):
-    body = json.dumps({'data': {
-        'type': 'subscriptionSubmissions',
-        'attributes': {'submitWithNextAppStoreVersion': True},
-        'relationships': {'subscription': {'data': {'type': 'subscriptions', 'id': sub_id}}}
-    }}).encode()
-    req = urllib.request.Request(
-        'https://appstoreconnect.apple.com/iris/v1/subscriptionSubmissions',
-        data=body, method='POST',
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Origin': 'https://appstoreconnect.apple.com',
-            'Referer': 'https://appstoreconnect.apple.com/',
-            'Cookie': cookie_str
-        })
-    try:
-        resp = urllib.request.urlopen(req)
-        print(f'Attached subscription {sub_id}: HTTP {resp.status}')
-    except urllib.error.HTTPError as e:
-        body = read_body(e)
-        if 'already set to submit' in body:
-            print(f'Subscription {sub_id} already attached (OK)')
-        elif e.code == 401:
-            print(f'ERROR: Session expired. Call asc_web_auth MCP tool to re-authenticate.')
-        else:
-            print(f'ERROR attaching {sub_id}: HTTP {e.code} — {body[:200]}')
-
-# Replace with actual subscription IDs:
-iris_attach_subscription('SUB_ID_1')
-iris_attach_subscription('SUB_ID_2')
-"
-```
-
-For in-app purchases (non-subscription), change the type and relationship:
-
-```bash
-python3 -c "
-import json, os, urllib.request, sys, gzip
-
-def read_body(r):
-    # iris may gzip responses even unasked; urllib does not decompress
-    b = r.read()
-    return (gzip.decompress(b) if b[:2] == bytes([31, 139]) else b).decode()
-
-session_path = os.path.expanduser('~/.blitz/asc-agent/web-session.json')
-if not os.path.isfile(session_path):
-    print('ERROR: No web session found. Call asc_web_auth MCP tool first.')
-    sys.exit(1)
-with open(session_path) as f:
-    raw = f.read()
-
-store = json.loads(raw)
-session = store['sessions'][store['last_key']]
-cookie_str = '; '.join(
-    f'{c[\"name\"]}={c[\"value\"]}'
-    for cl in session['cookies'].values() for c in cl
-    if c.get('name') and c.get('value')
-)
-
-def iris_attach_iap(iap_id):
-    body = json.dumps({'data': {
-        'type': 'inAppPurchaseSubmissions',
-        'attributes': {'submitWithNextAppStoreVersion': True},
-        'relationships': {'inAppPurchaseV2': {'data': {'type': 'inAppPurchases', 'id': iap_id}}}
-    }}).encode()
-    req = urllib.request.Request(
-        'https://appstoreconnect.apple.com/iris/v1/inAppPurchaseSubmissions',
-        data=body, method='POST',
-        headers={
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Origin': 'https://appstoreconnect.apple.com',
-            'Referer': 'https://appstoreconnect.apple.com/',
-            'Cookie': cookie_str
-        })
-    try:
-        resp = urllib.request.urlopen(req)
-        print(f'Attached IAP {iap_id}: HTTP {resp.status}')
-    except urllib.error.HTTPError as e:
-        body = read_body(e)
-        if 'already set to submit' in body:
-            print(f'IAP {iap_id} already attached (OK)')
-        elif e.code == 401:
-            print(f'ERROR: Session expired. Call asc_web_auth MCP tool to re-authenticate.')
-        else:
-            print(f'ERROR attaching {iap_id}: HTTP {e.code} — {body[:200]}')
-
-# Replace with actual IAP IDs:
-iris_attach_iap('IAP_ID')
-"
-```
-
-### 4. Verify attachments
-
-After attachment, call `get_tab_state` for `ascOverview` to refresh the submission readiness checklist. The MCP tool auto-refreshes monetization data and will reflect the updated attachment state.
-
-## Common Errors
-
-### "Subscription is already set to submit with next AppStoreVersion"
-The subscription is already attached — this is safe to ignore. HTTP 409 with this message means the item was previously attached.
-
-### 401 Not Authorized (iris API)
-The web session has expired. Call the `asc_web_auth` MCP tool to open the Apple ID login window in Blitz Neo — this captures a fresh session and refreshes `~/.blitz/asc-agent/web-session.json` automatically. The user will need to complete Apple ID login + 2FA in the popup. After the tool returns success, retry the iris API calls.
-
-## Agent Behavior
-
-- Always list IAPs and subscriptions first (using Step 2) to identify which are in `READY_TO_SUBMIT` state.
-- If the user specifies particular items, match by reference name or product ID.
-- If the user says "all", attach every item in `READY_TO_SUBMIT` state.
-- **NEVER print, log, or echo session cookies.** The python scripts handle cookies internally without exposing them.
-- Use the self-contained python scripts above — do NOT extract cookies separately or pass them as shell variables.
-- If iris API returns 409 "already set to submit", treat as success.
-- If iris API returns 401, call the `asc_web_auth` MCP tool to open the login window in Blitz Neo, then retry.
-- After attachment, call `get_tab_state` for `ascOverview` to refresh the submission readiness checklist.
-
-## Notes
-
-- This skill handles the "attach to version" step only.
-- The iris API (`/iris/v1`) mirrors the official ASC API resource types (same JSON:API format) but supports additional attributes like `submitWithNextAppStoreVersion` that the public API lacks.
-- The iris API is rate-limited; keep a minimum 350ms interval between requests.
+Sources: [Apple's submission rules](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/submit-an-in-app-purchase),
+[version-based metadata and review API](https://developer.apple.com/documentation/appstoreconnectapi/migrating-in-app-purchase-metadata-to-v2).

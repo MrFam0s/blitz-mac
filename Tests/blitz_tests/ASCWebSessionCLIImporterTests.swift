@@ -174,18 +174,6 @@ private func importFixture() -> IrisSession {
     #expect(!session.hasVerifiedImport())
 }
 
-@MainActor @Test func iapReaderUsesNativeSessionAndRejectsMismatchedImportEvidence() {
-    let manager = ASCManager()
-    var session = importFixture()
-    session.importEvidence = .init(outcome: "imported", reason: "ok", appleId: "test@example.com", providerId: "provider-test",
-        asc: .init(status: .verified, reason: "ok"), developerPortal: .init(status: .unverified, reason: "missing"))
-    manager.irisSession = session
-    #expect(manager.ascWebSessionCookieHeader()?.contains("myacinfo=test-cookie") == true)
-    session.publicProviderId = "another-provider"
-    manager.irisSession = session
-    #expect(manager.ascWebSessionCookieHeader() == nil)
-}
-
 @Test func portalReceiptNeedsAnExplicitVerifiedTeam() {
     var receipt = ASCWebSessionImportEvidence(outcome: "existingPreserved", reason: "ok",
         appleId: "test@example.com", providerId: "provider-test",

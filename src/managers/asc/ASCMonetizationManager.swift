@@ -636,27 +636,6 @@ extension ASCManager {
         }
     }
 
-    func refreshAttachedSubmissionItemIDs() async {
-        let target = ASCTabReadTarget(self)
-        guard let appId = app?.id else {
-            attachedSubmissionItemIDs = []
-            return
-        }
-        guard let cookieHeader = ascWebSessionCookieHeader() else {
-            attachedSubmissionItemIDs = []
-            return
-        }
-
-        let subscriptionURL = "https://appstoreconnect.apple.com/iris/v1/apps/\(appId)/subscriptionGroups?include=subscriptions&limit=300&fields%5Bsubscriptions%5D=productId,name,state,submitWithNextAppStoreVersion"
-        let iapURL = "https://appstoreconnect.apple.com/iris/v1/apps/\(appId)/inAppPurchasesV2?limit=300&fields%5BinAppPurchases%5D=productId,name,state,submitWithNextAppStoreVersion"
-
-        let attachedSubscriptions = await fetchAttachedSubmissionItemIDs(urlString: subscriptionURL, cookieHeader: cookieHeader)
-        guard target.matches(self), !Task.isCancelled else { return }
-        let attachedIAPs = await fetchAttachedSubmissionItemIDs(urlString: iapURL, cookieHeader: cookieHeader)
-        guard target.matches(self), !Task.isCancelled else { return }
-        attachedSubmissionItemIDs = attachedSubscriptions.union(attachedIAPs)
-    }
-
     // MARK: - Polling
 
     private func pollRefreshIAPs(service: AppStoreConnectService, appId: String) async throws {
@@ -712,47 +691,4 @@ extension ASCManager {
         })
     }
 
-    // MARK: - Web Session Helpers (for IAP attachment queries)
-
-    func ascWebSessionCookieHeader() -> String? {
-        // Read the native session just accepted for Iris, never an unrelated
-        // last-account entry from ASC's independently managed Keychain store.
-        guard let session = irisSession ?? IrisSession.load() else { return nil }
-        if session.importEvidence != nil && !session.hasVerifiedImport() { return nil }
-        let cookieHeader = ASCWebAuthentication.cookieHeader(
-            from: session.cookies, for: URL(string: "https://appstoreconnect.apple.com/iris/v1/")!
-        )
-
-        return cookieHeader.isEmpty ? nil : cookieHeader
-    }
-
-    func fetchAttachedSubmissionItemIDs(urlString: String, cookieHeader: String) async -> Set<String> {
-        guard let url = URL(string: urlString) else { return [] }
-
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
-        request.setValue("https://appstoreconnect.apple.com", forHTTPHeaderField: "Origin")
-        request.setValue("https://appstoreconnect.apple.com/", forHTTPHeaderField: "Referer")
-        request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
-        request.timeoutInterval = 10
-
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200,
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return []
-        }
-
-        let resources = (json["data"] as? [[String: Any]] ?? [])
-            + (json["included"] as? [[String: Any]] ?? [])
-
-        return Set(resources.compactMap { item in
-            guard let attrs = item["attributes"] as? [String: Any],
-                  let id = item["id"] as? String,
-                  let submitWithNext = attrs["submitWithNextAppStoreVersion"] as? Bool,
-                  submitWithNext else { return nil }
-            return id
-        })
-    }
 }

@@ -143,40 +143,27 @@ extension ASCManager {
             readinessField(label: "Build", value: selectedVersionBuild?.attributes.version),
         ])
 
-        let hasApprovedVersion = releaseVersions.contains {
-            ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.effectiveState))
-        }
-        let isFirstVersion = !hasApprovedVersion
-        if isFirstVersion {
-            let productField = "In-App Purchases & Subscriptions"
-            if overviewReadinessLoadingFields.contains(productField) || overviewFailedFields.contains(productField) {
-                fields.append(readinessField(label: productField, value: nil))
-            }
-            let readyIAPs = inAppPurchases.filter {
-                $0.attributes.state == "READY_TO_SUBMIT" && !attachedSubmissionItemIDs.contains($0.id)
-            }
-            let readySubscriptions = subscriptionsPerGroup.values.flatMap { $0 }
-                .filter {
-                    $0.attributes.state == "READY_TO_SUBMIT" && !attachedSubmissionItemIDs.contains($0.id)
-                }
-            let readyCount = readyIAPs.count + readySubscriptions.count
-            if readyCount > 0 && !overviewReadinessLoadingFields.contains(productField) && !overviewFailedFields.contains(productField) {
-                let names = (readyIAPs.map { $0.attributes.name ?? $0.attributes.productId ?? $0.id }
-                    + readySubscriptions.map { $0.attributes.name ?? $0.attributes.productId ?? $0.id })
-                    .joined(separator: ", ")
-                let iapUrl: String? = app.map {
-                    "https://appstoreconnect.apple.com/apps/\($0.id)/appstore"
-                }
+        let productField = "In-App Purchases & Subscriptions"
+        if overviewReadinessLoadingFields.contains(productField) || overviewFailedFields.contains(productField) {
+            fields.append(readinessField(label: productField, value: nil))
+        } else {
+            let purchaseNames: [String] = inAppPurchases.filter { $0.attributes.state == "READY_TO_SUBMIT" }
+                .map { $0.attributes.name ?? $0.attributes.productId ?? $0.id }
+            let subscriptions = subscriptionsPerGroup.values.flatMap { $0 }
+            let subscriptionNames: [String] = subscriptions.filter { $0.attributes.state == "READY_TO_SUBMIT" }
+                .map { $0.attributes.name ?? $0.attributes.productId ?? $0.id }
+            let candidates = purchaseNames + subscriptionNames
+            if !candidates.isEmpty {
                 fields.append(readinessField(
-                    label: "In-App Purchases & Subscriptions",
+                    label: productField,
                     value: nil,
-                    required: true,
-                    actionUrl: iapUrl,
-                    hint: "\(readyCount) item(s) in Ready to Submit state (\(names)) must be attached to this version before submission. "
-                        + "Use the asc-iap-attach skill to attach them via the iris API (asc web session). "
-                        + "The public API does not support first-time IAP/subscription attachment - "
-                        + "run: asc web auth login, then POST to /iris/v1/subscriptionSubmissions or /iris/v1/inAppPurchaseSubmissions "
-                        + "with submitWithNextAppStoreVersion:true for each item."
+                    required: false,
+                    actionUrl: app.map { "https://appstoreconnect.apple.com/apps/\($0.id)/appstore" },
+                    hint: "\(candidates.count) product(s) are ready for selection (\(candidates.sorted().joined(separator: ", "))). "
+                        + "Use the asc-iap-attach and blitz-release skills to select the authorized exact IAP, subscription "
+                        + "and required group version IDs in release_prepare.reviewItems. The guarded workflow assembles "
+                        + "and submits one shared review draft. This overview does not prove product readiness or attachment; "
+                        + "release_validate checks the selected versions and first-of-type requirements. Do not include unrelated products."
                 ))
             }
         }

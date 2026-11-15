@@ -1,6 +1,6 @@
 ---
 name: blitz-release
-description: Prepare, verify and submit updates of existing App Store apps through the Blitz Neo CLI, especially for "Update einreichen" or a release handoff in the app's development chat. App-record creation and TestFlight-only tasks use their separate workflows.
+description: Prepare, verify and submit App Store app releases, including selected In-App Purchases and subscriptions, through the Blitz Neo CLI. Use for "Update einreichen" or a release handoff; app-record creation and TestFlight-only tasks use separate workflows.
 ---
 
 # Release an app with Blitz Neo
@@ -111,6 +111,17 @@ sources, allowed changes and blockers, never credentials or demo passwords.
 Coordinate one release per app/platform using the existing exclusive release lock;
 reconcile a pending or uncertain operation instead of starting another one.
 
+## Include purchases and subscriptions when in scope
+
+If this release includes purchases or subscriptions, read the bundled
+`asc-iap-attach` skill. Establish the exact authorized metadata-version resources,
+including any required new subscription-group version. Parent product IDs are not
+review-version IDs. An app update does not implicitly include every pending
+product. Prepare product metadata, review screenshots, pricing and availability
+within the authorized scope before the final workflow. Keep a list of selected
+resource types/IDs and their parent product identities in the private release
+report; the CLI requires only the exact version type/ID pairs.
+
 ## Final guarded workflow
 
 Once the build is attached and the Store content is ready:
@@ -118,9 +129,13 @@ Once the build is attached and the Store content is ready:
 1. Run `~/.blitz/bin/blitz-neo release prepare --request <JSON-file>` with explicit `projectId`, canonical `projectPath`, `appId`,
    `releaseTargetId`, exact `bundleId`, the target's supported `platform` (`IOS` or `MAC_OS`), the original nonsecret `accountKey`
    (`issuerId:keyId`), `versionId`, `buildId` and the requested `releaseMode`
-   (`MANUAL` or `AFTER_APPROVAL`). This reads Apple
+   (`MANUAL` or `AFTER_APPROVAL`). For a joint release, also pass explicit
+   `reviewItems: [{"type":"inAppPurchaseVersions","id":"VERSION_ID"}]`, using
+   `subscriptionVersions` and `subscriptionGroupVersions` for the other kinds.
+   Omit it or use `[]` for app-only; the app version is always implicit. At most
+   199 unique additional versions fit one operation. This reads Apple
    state and creates a private operation; it does not submit. Preserve its operation
-   ID, immutable target and confirmation digest in the private release report.
+   ID, immutable target (including its exact `reviewItems`) and confirmation digest in the private release report.
 2. Run `~/.blitz/bin/blitz-neo release validate --request <JSON-file>` with its `operationId` and original `accountKey`. It checks fresh scoped Store readiness
    and the saved content snapshot. These checks supplement, not replace, functional
    app tests and the reviewed product facts. Resolve blockers within the user's
@@ -143,8 +158,9 @@ evidence. For this already authorized, unchanged release, use the same `submit`
 request with **`resumeSubmissionId` set to that exact ID**, keeping `operationId`,
 `accountKey`, `confirmationDigest` and `confirm: true`. This is the explicit
 continuation path: the backend rechecks target, content, build, release mode and
-readiness, then sends only the existing draft. It does not create a new submission
-or reset the journal. Without a resumable ID, or after an uncertain final submit,
+readiness, adds only missing saved app/product items to that same owned draft,
+then sends its exact complete set. It does not create a new submission, add
+unselected products or reset the journal. Without a resumable ID, or after an uncertain final submit,
 stop at read-only reconciliation. Never hand-edit a journal or guess a draft ID.
 Old journals without write phases additionally report
 `requiresLegacyRecoveryConfirmation: true`. Supply `confirmLegacyDraftRecovery: true`
@@ -153,7 +169,7 @@ its final submit. A current draft state alone is insufficient. This assertion
 confirms that documented evidence was checked; it is not a new release authorization. The original authorization
 still applies to unchanged scope. With an unknown old final-submit outcome, stop.
 `READY_FOR_REVIEW` means a draft exists but has not been submitted; require the
-same draft and version to reach `WAITING_FOR_REVIEW` or a later review state before
+same draft, app version and exact selected product versions to reach a submitted review state before
 reporting submission. A historical `COMPLETE` submission is not proof that the
 current draft was sent.
 

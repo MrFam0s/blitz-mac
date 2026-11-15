@@ -98,7 +98,6 @@ final class ASCManager {
     var irisFetchTasksByAppId: [String: Task<Void, Never>] = [:]
     var irisFetchRequestIDsByAppId: [String: UUID] = [:]
     var irisLastFetchedAtByAppId: [String: Date] = [:]
-    var attachedSubmissionItemIDs: Set<String> = []  // IAP/subscription IDs attached via iris API
     var resolutionCenterThreads: [IrisResolutionCenterThread] = []
     var irisFeedbackCycles: [IrisFeedbackCycle] = []
 

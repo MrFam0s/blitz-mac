@@ -4,14 +4,19 @@ import Foundation
 /// user-authored metadata belong in this journal.
 enum ReleaseSubmissionPhase: String, Codable, Sendable {
     case settingReleaseMode, checkingExisting, creatingSubmission, submissionCreated
-    case addingVersion, versionAdded, verifyingContent, submitting, acknowledged
+    case addingVersion, versionAdded, addingReviewItem, reviewItemAdded, verifyingContent, submitting, acknowledged
 }
 
 struct ReleaseSubmissionProgress: Codable, Equatable, Sendable {
     let phase: ReleaseSubmissionPhase
     var submissionID: String? = nil
     var submissionItemID: String? = nil
-    enum CodingKeys: String, CodingKey { case phase, submissionID = "submissionId", submissionItemID = "submissionItemId" }
+    var reviewItem: ReleaseReviewItem? = nil
+    var reviewItemID: String? = nil
+    enum CodingKeys: String, CodingKey {
+        case phase, submissionID = "submissionId", submissionItemID = "submissionItemId"
+        case reviewItem, reviewItemID = "reviewItemId"
+    }
 }
 
 struct ReleaseAppleError: Codable, Equatable, Sendable {

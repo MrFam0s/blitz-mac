@@ -75,7 +75,8 @@ enum ReleaseReadinessPolicy {
 
     static func normalize(report: [String: Any], exitCode: Int, target: ReleaseWorkflowTarget,
                           firstPublication: Bool, localizations: [[String: Any]],
-                          web: ReleaseWebEvidence, webBindingStable: Bool) throws -> ReleaseWorkflowValidation {
+                          web: ReleaseWebEvidence, webBindingStable: Bool,
+                          products: ReleaseProductSelection.Result? = nil) throws -> ReleaseWorkflowValidation {
         guard report["appId"] as? String == target.appID, report["versionId"] as? String == target.versionID,
               report["platform"] as? String == target.platform,
               let summary = report["summary"] as? [String: Any],
@@ -100,6 +101,18 @@ enum ReleaseReadinessPolicy {
 
         var normalized = checks.filter { !($0["id"] as? String == "metadata.required.whats_new" && $0["severity"] as? String == "warning") }
         var diagnostics: [ReleaseReadinessDiagnostic] = []
+        // The selected version set is a durable plan for this exact submission.
+        // Fresh, complete public product evidence can replace only the legacy
+        // first-of-type attachment checks, which otherwise demand that the
+        // mutation already happened before preparation. Other findings stay.
+        if let products {
+            normalized.removeAll { products.replacesAttachmentFinding($0["id"] as? String ?? "") }
+            diagnostics.append(contentsOf: products.diagnostics)
+            for id in products.attachmentEvidence.keys.sorted() {
+                diagnostics.append(.init(id: id, status: "passed", source: "publicApi",
+                    reason: products.attachmentEvidence[id]!))
+            }
+        }
         if firstPublication {
             diagnostics.append(.init(id: "metadata.required.whats_new", status: "notApplicable", source: "publicApi",
                 reason: "first_publication_verified_from_complete_platform_history"))
@@ -118,7 +131,10 @@ enum ReleaseReadinessPolicy {
         // Replace only the generic *unknown* agreement finding. Known pending or
         // alert errors are preserved even if another endpoint appears healthy.
         normalized.removeAll { $0["id"] as? String == "deep.agreements.active.unverified" }
-        let observedDeep = deepChecks.filter { $0["id"] as? String != "agreements.active" || $0["status"] as? String == "blocked" }
+        let observedDeep = deepChecks.filter {
+            ($0["id"] as? String != "agreements.active" || $0["status"] as? String == "blocked") &&
+                products?.attachmentEvidence[$0["id"] as? String ?? ""] == nil
+        }
         var effectiveDeep = observedDeep
         let evidenceChecks: [(String, ReleaseWebEvidence.Check)] = [
             ("agreements.program_license", web.programLicense), ("agreements.business.free", web.businessFree),
@@ -152,7 +168,8 @@ enum ReleaseReadinessPolicy {
         }
         let effectiveWarnings = normalized.filter { $0["severity"] as? String == "warning" }.count
         let flatBlocking = normalized.filter { ["error", "warning"].contains($0["severity"] as? String ?? "") }.count
-        let unknown = effectiveDeep.filter { $0["status"] as? String == "unverified" }.count
+        let unknown = effectiveDeep.filter { $0["status"] as? String == "unverified" }.count +
+            (products?.diagnostics.filter { $0.status == "unverified" }.count ?? 0)
         // Upstream deep checks duplicate base findings; count only independent
         // deep blockers instead of adding the complete deep summary twice.
         let duplicatePrefixes = ["privacy.publish_state": "privacy.", "availability.configured": "availability.",
@@ -163,7 +180,7 @@ enum ReleaseReadinessPolicy {
             guard let prefix = duplicatePrefixes[check["id"] as? String ?? ""] else { return true }
             return !normalized.contains { ($0["id"] as? String)?.hasPrefix(prefix) == true && $0["severity"] as? String != "info" }
         }.count
-        let totalBlocking = flatBlocking + independentDeep
+        let totalBlocking = flatBlocking + independentDeep + (products?.diagnostics.filter { $0.status == "blocked" }.count ?? 0)
         return ReleaseWorkflowValidation(ready: totalBlocking == 0 && unknown == 0, blocking: totalBlocking,
             warnings: effectiveWarnings, unverified: unknown,
             checkIDs: diagnostics.map(\.id).sorted(), diagnostics: diagnostics)

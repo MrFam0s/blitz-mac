@@ -99,3 +99,24 @@ private func manualReleaseBuild(app: String = "app", version: String = "1.2", pl
     #expect(manager.submissionError?.contains("Veröffentlichungsart") == true)
     #expect(!manager.isSubmitting)
 }
+
+@Test func manualAppOnlySubmissionPreservesPendingJointSelection() throws {
+    let target = ReleaseWorkflowTarget(projectID: "project", projectPath: "/project",
+        appID: "app", bundleID: "org.example.App", platform: "IOS", accountKey: "issuer:key",
+        versionID: "version", buildID: "build", reviewItems: [.init(type: .inAppPurchaseVersions, id: "product-version")])
+    var record = ReleaseWorkflowRecord(operationID: UUID().uuidString.lowercased(), target: target,
+        mode: .automaticAfterApproval, versionString: "1.0", buildNumber: "1", contentDigest: "content",
+        confirmationDigest: "confirmed", preparedAt: Date(), updatedAt: Date(), state: .prepared)
+    for state: ReleaseWorkflowState in [.prepared, .validated, .needsPreparation, .attachmentPending, .releaseModePending, .submissionPending] {
+        record.state = state
+        do {
+            try ASCManualReleaseRequest.requireAppOnlyScope(previous: record)
+            Issue.record("App-only UI superseded a saved joint release in state \(state)")
+        } catch {
+            #expect(error.localizedDescription.contains(record.operationID))
+        }
+    }
+    record.state = .submitted
+    try ASCManualReleaseRequest.requireAppOnlyScope(previous: record)
+    try ASCManualReleaseRequest.requireAppOnlyScope(previous: nil)
+}

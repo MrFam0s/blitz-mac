@@ -134,7 +134,6 @@ extension ASCManager {
         guard projectRevision == revision, !Task.isCancelled else { return }
         await refreshMonetization()
         guard projectRevision == revision, !Task.isCancelled else { return }
-        await refreshAttachedSubmissionItemIDs()
     }
 
     func syncOverviewSubmissionReadiness(forceRefresh: Bool = false) async {

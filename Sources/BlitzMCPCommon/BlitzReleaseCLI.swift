@@ -12,7 +12,7 @@ public enum BlitzReleaseCLI {
     Commands:
       targets   List this explicitly named project's configured release targets.
       context   Read the explicitly requested project's current MCP target.
-      prepare   Record an exact app/version/already-attached build; no Apple writes.
+      prepare   Record an exact app/build and selected product versions; no Apple writes.
       validate  Refresh readiness and the prepared content fingerprint.
       status    Reconcile a saved operation with Apple; no Apple writes.
       submit    Submit only a validated, unchanged operation with its digest.
@@ -43,6 +43,20 @@ public enum BlitzReleaseCLI {
     Prepare accepts releaseTargetId; it is required for multiple configured targets.
     Select exactly one target. An omitted ID never adopts the UI selection, and no
     command submits all platforms. Later commands use the saved operation's target.
+
+    Joint app + In-App Purchase/subscription submission:
+    Prepare optionally accepts reviewItems, an array of exact metadata versions:
+      [{"type":"inAppPurchaseVersions","id":"IAP_VERSION_ID"},
+       {"type":"subscriptionGroupVersions","id":"GROUP_VERSION_ID"},
+       {"type":"subscriptionVersions","id":"SUBSCRIPTION_VERSION_ID"}]
+    IDs are version resource IDs, not parent product IDs or productId strings.
+    Include only authorized products and required new groups. At most 199 unique
+    additional versions are allowed; the app version is added separately. Omitted
+    or empty reviewItems keeps app-only behavior. Nothing is auto-selected.
+    Preparation binds this exact set, product metadata and review media into the
+    immutable operation. Later commands cannot change the set. After a pre-submit
+    interruption, explicit continuation may add only missing saved items to that
+    same owned draft. Unknown final submit outcomes still permit only status.
     """
 
     public struct Invocation {

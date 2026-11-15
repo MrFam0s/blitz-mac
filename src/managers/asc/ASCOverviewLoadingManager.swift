@@ -170,14 +170,8 @@ extension ASCManager {
 
     func loadOverviewProducts(service: AppStoreConnectService, appId: String, revision: UUID) async {
         let fields: Set<String> = ["In-App Purchases & Subscriptions"]
-        let approved: Set<String> = ["READY_FOR_SALE", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE",
-                                     "REPLACED_WITH_NEW_VERSION", "PROCESSING_FOR_APP_STORE"]
         guard projectRevision == revision, !Task.isCancelled else { return }
-        guard !appStoreVersions.contains(where: { approved.contains($0.attributes.appStoreState ?? "") }) else {
-            finishOverviewReadinessLoading(fields)
-            return
-        }
-        let success = await overviewRequest(fields: fields, revision: revision, operation: {
+        _ = await overviewRequest(fields: fields, revision: revision, operation: {
             async let iaps = service.fetchInAppPurchases(appId: appId)
             async let groups = service.fetchSubscriptionGroups(appId: appId)
             let fetchedGroups = try await groups
@@ -192,8 +186,5 @@ extension ASCManager {
             subscriptionGroups = groups
             subscriptionsPerGroup = subscriptions
         })
-        if success, projectRevision == revision, !Task.isCancelled {
-            await refreshAttachedSubmissionItemIDs()
-        }
     }
 }

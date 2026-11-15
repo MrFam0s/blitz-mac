@@ -2,6 +2,27 @@ import CryptoKit
 import Darwin
 import Foundation
 
+/// An explicit, reviewable product metadata version. Parent product IDs are not
+/// interchangeable with version IDs, and a release never adopts all pending products.
+struct ReleaseReviewItem: Codable, Hashable, Sendable {
+    enum ResourceType: String, Codable, CaseIterable, Sendable {
+        case inAppPurchaseVersions, subscriptionVersions, subscriptionGroupVersions
+
+        var relationshipName: String {
+            switch self {
+            case .inAppPurchaseVersions: return "inAppPurchaseVersion"
+            case .subscriptionVersions: return "subscriptionVersion"
+            case .subscriptionGroupVersions: return "subscriptionGroupVersion"
+            }
+        }
+    }
+    typealias Kind = ResourceType
+    let type: ResourceType
+    let id: String
+    var key: String { "\(type.rawValue):\(id)" }
+    var relationshipName: String { type.relationshipName }
+}
+
 /// A release belongs to this identity, never to the currently visible Blitz tab.
 struct ReleaseWorkflowTarget: Codable, Equatable, Sendable {
     let projectID: String
@@ -13,17 +34,42 @@ struct ReleaseWorkflowTarget: Codable, Equatable, Sendable {
     let versionID: String
     let buildID: String
     let releaseTargetID: String?
+    let reviewItems: [ReleaseReviewItem]
 
     init(projectID: String, projectPath: String, appID: String, bundleID: String, platform: String,
-         accountKey: String, versionID: String, buildID: String, releaseTargetID: String? = nil) {
+         accountKey: String, versionID: String, buildID: String, releaseTargetID: String? = nil,
+         reviewItems: [ReleaseReviewItem] = []) {
         self.projectID = projectID; self.projectPath = projectPath
         self.appID = appID; self.bundleID = bundleID; self.platform = platform
         self.accountKey = accountKey; self.versionID = versionID; self.buildID = buildID
         self.releaseTargetID = releaseTargetID
+        self.reviewItems = reviewItems.sorted { $0.key < $1.key }
     }
     enum CodingKeys: String, CodingKey {
         case projectID = "projectId", projectPath, appID = "appId", bundleID = "bundleId", platform, accountKey
-        case versionID = "versionId", buildID = "buildId", releaseTargetID = "releaseTargetId"
+        case versionID = "versionId", buildID = "buildId", releaseTargetID = "releaseTargetId", reviewItems
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(projectID: try c.decode(String.self, forKey: .projectID),
+            projectPath: try c.decode(String.self, forKey: .projectPath),
+            appID: try c.decode(String.self, forKey: .appID), bundleID: try c.decode(String.self, forKey: .bundleID),
+            platform: try c.decode(String.self, forKey: .platform), accountKey: try c.decode(String.self, forKey: .accountKey),
+            versionID: try c.decode(String.self, forKey: .versionID), buildID: try c.decode(String.self, forKey: .buildID),
+            releaseTargetID: try c.decodeIfPresent(String.self, forKey: .releaseTargetID),
+            reviewItems: try c.decodeIfPresent([ReleaseReviewItem].self, forKey: .reviewItems) ?? [])
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(projectID, forKey: .projectID); try c.encode(projectPath, forKey: .projectPath)
+        try c.encode(appID, forKey: .appID); try c.encode(bundleID, forKey: .bundleID)
+        try c.encode(platform, forKey: .platform); try c.encode(accountKey, forKey: .accountKey)
+        try c.encode(versionID, forKey: .versionID); try c.encode(buildID, forKey: .buildID)
+        try c.encodeIfPresent(releaseTargetID, forKey: .releaseTargetID)
+        // The exact bytes of existing app-only confirmation documents stay valid.
+        if !reviewItems.isEmpty { try c.encode(reviewItems, forKey: .reviewItems) }
     }
 
     func validate() throws {
@@ -31,6 +77,8 @@ struct ReleaseWorkflowTarget: Codable, Equatable, Sendable {
               releaseTargetID.map(Self.validID) ?? true,
               ["IOS", "MAC_OS", "TV_OS", "VISION_OS"].contains(platform),
               [appID, versionID, buildID].allSatisfy(Self.validID),
+              reviewItems.count <= 199, Set(reviewItems).count == reviewItems.count,
+              reviewItems.allSatisfy({ Self.validID($0.id) }),
               projectPath.hasPrefix("/"),
               URL(fileURLWithPath: projectPath).resolvingSymlinksInPath().path == projectPath else {
             throw ReleaseWorkflowError.invalidTarget
@@ -69,6 +117,11 @@ struct ReleaseWorkflowSnapshot: Equatable, Sendable {
     var canResumeSubmission: Bool = false
     var submissionItemID: String? = nil
     var legacyContentDigests: Set<String> = []
+    /// False for a proven subset/empty draft. Such drafts require a journaled
+    /// submission ID; they may never be adopted from a matching app alone.
+    var submissionItemsComplete: Bool = true
+    var reviewItemIDs: [String: String] = [:]
+    var reviewProductsReady: Bool = true
 
     func matchesContentDigest(_ digest: String, fingerprintVersion: Int?) -> Bool {
         if fingerprintVersion == 2 { return contentDigest == digest }
@@ -131,6 +184,9 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
     var submissionItemID: String? = nil
     var contentFingerprintVersion: Int? = nil
     var requiresLegacyRecoveryConfirmation: Bool? = nil
+    /// Resource key -> reviewSubmissionItem ID, persisted after every confirmed
+    /// add. Optional only for decoding journals written before joint submissions.
+    var reviewItemIDs: [String: String]? = nil
     enum CodingKeys: String, CodingKey {
         case operationID = "operationId", target, mode, versionString, buildNumber, contentDigest, confirmationDigest
         case preparedAt, updatedAt, state, validation, lastErrorCode, appleState, submissionID = "submissionId"
@@ -138,7 +194,7 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
         case resumableSubmissionID = "resumableSubmissionId"
         case submissionItemID = "submissionItemId"
         case contentFingerprintVersion
-        case requiresLegacyRecoveryConfirmation
+        case requiresLegacyRecoveryConfirmation, reviewItemIDs
     }
 }
 
@@ -185,24 +241,30 @@ actor ReleaseWorkflowService {
         return try activeRecord(target)
     }
 
-    func prepare(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode) async throws -> ReleaseWorkflowRecord {
-        try await prepareInternal(target: target, mode: mode, attach: nil)
+    func prepare(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode,
+                 preserveReviewSelection: Bool = false) async throws -> ReleaseWorkflowRecord {
+        try await prepareInternal(target: target, mode: mode, attach: nil, preserveReviewSelection: preserveReviewSelection)
     }
 
     /// Explicit UI action only. MCP/CLI `release_prepare` never attaches a build.
     /// The existing manager supplies its checked attachment operation; the same
     /// process lock and durable intent cover it before final preparation begins.
     func prepareAfterAttachingBuild(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode,
+                                   preserveReviewSelection: Bool = false,
                                    attach: @escaping () async throws -> Void) async throws -> ReleaseWorkflowRecord {
-        try await prepareInternal(target: target, mode: mode, attach: attach)
+        try await prepareInternal(target: target, mode: mode, attach: attach, preserveReviewSelection: preserveReviewSelection)
     }
 
     private func prepareInternal(target: ReleaseWorkflowTarget, mode: ReleaseWorkflowMode,
-                                 attach: (() async throws -> Void)?) async throws -> ReleaseWorkflowRecord {
+                                 attach: (() async throws -> Void)?, preserveReviewSelection: Bool) async throws -> ReleaseWorkflowRecord {
         try target.validate()
         try checkAccount(target.accountKey, target: target)
         let lock = try acquire(target); defer { release(lock) }
         let previous = try activeRecord(target)
+        // App-only UI entry points must not silently replace a jointly prepared
+        // selection. The check belongs under the same lock as the new journal.
+        if preserveReviewSelection, let previous, previous.state != .submitted,
+           previous.target.reviewItems != target.reviewItems { throw ReleaseWorkflowError.unsafeState }
         if let previous, previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
             // A new operation ID must not bypass a consumed mutation boundary.
             throw ReleaseWorkflowError.uncertainOutcome
@@ -253,7 +315,7 @@ actor ReleaseWorkflowService {
         try snapshot.check(record.target, requirePreparedBuild: false)
         record.appleState = snapshot.appleState
         if record.submissionProgress == nil || (record.submissionID == nil && record.submissionProgress?.phase == .creatingSubmission) {
-          if (record.state == .submissionPending && snapshot.submissionState != "COMPLETE") || Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
+          if snapshot.submissionItemsComplete && ((record.state == .submissionPending && snapshot.submissionState != "COMPLETE") || Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState))) {
             record.submissionID = snapshot.submissionID ?? record.submissionID
             record.submissionItemID = snapshot.submissionItemID ?? record.submissionItemID
           }
@@ -324,6 +386,7 @@ actor ReleaseWorkflowService {
             }
             record.submissionID = resumeSubmissionID
             record.submissionItemID = candidate.submissionItemID
+            if !candidate.reviewItemIDs.isEmpty { record.reviewItemIDs = candidate.reviewItemIDs }
             record.resumableSubmissionID = resumeSubmissionID
             try save(record)
         }
@@ -404,7 +467,27 @@ actor ReleaseWorkflowService {
         guard record.state == .submissionPending,
               progress.submissionID.map(ReleaseWorkflowTarget.validID) ?? true,
               progress.submissionItemID.map(ReleaseWorkflowTarget.validID) ?? true,
-              record.submissionID == nil || progress.submissionID == record.submissionID else {
+              progress.reviewItemID.map(ReleaseWorkflowTarget.validID) ?? true,
+              record.submissionID == nil || progress.submissionID == record.submissionID,
+              record.submissionItemID == nil || progress.submissionItemID == nil || record.submissionItemID == progress.submissionItemID else {
+            throw ReleaseWorkflowError.unsafeState
+        }
+        if progress.phase == .addingReviewItem || progress.phase == .reviewItemAdded {
+            guard let item = progress.reviewItem, record.target.reviewItems.contains(item),
+                  progress.submissionID != nil,
+                  (progress.phase == .addingReviewItem && progress.reviewItemID == nil) ||
+                    (progress.phase == .reviewItemAdded && progress.reviewItemID != nil) else {
+                throw ReleaseWorkflowError.unsafeState
+            }
+            if let itemID = progress.reviewItemID {
+                var itemIDs = record.reviewItemIDs ?? [:]
+                guard itemIDs[item.key] == nil || itemIDs[item.key] == itemID,
+                      !itemIDs.contains(where: { $0.key != item.key && $0.value == itemID }),
+                      itemID != record.submissionItemID else { throw ReleaseWorkflowError.unsafeState }
+                itemIDs[item.key] = itemID
+                record.reviewItemIDs = itemIDs
+            }
+        } else if progress.reviewItem != nil || progress.reviewItemID != nil {
             throw ReleaseWorkflowError.unsafeState
         }
         record.submissionProgress = progress
@@ -445,12 +528,24 @@ actor ReleaseWorkflowService {
         // Legacy journals have no phase; an explicit ID confirmation can recover
         // their unique unchanged draft. A known final PATCH intent is never replayed.
         guard let id = snapshot.submissionID, snapshot.canResumeSubmission,
-              snapshot.releaseType == record.mode.rawValue else { return false }
+              snapshot.releaseType == record.mode.rawValue,
+              knownSubmissionItemsMatch(snapshot, record: record) else { return false }
+        if !snapshot.submissionItemsComplete {
+            // An empty or partial draft cannot identify its owner. Only a saved
+            // successful create response proves that this operation owns it.
+            guard record.submissionID == id, record.submissionProgress != nil else { return false }
+        }
         if let progress = record.submissionProgress {
             switch progress.phase {
             case .creatingSubmission: break // The create reply may have been lost.
-            case .submissionCreated, .addingVersion, .versionAdded, .verifyingContent:
+            case .submissionCreated, .versionAdded, .reviewItemAdded, .verifyingContent:
                 guard record.submissionID != nil else { return false }
+            case .addingVersion:
+                guard record.submissionID != nil,
+                      snapshot.submissionItemID != nil || lastWriteWasRejected(record) else { return false }
+            case .addingReviewItem:
+                guard record.submissionID != nil, let item = progress.reviewItem,
+                      snapshot.reviewItemIDs[item.key] != nil || lastWriteWasRejected(record) else { return false }
             case .settingReleaseMode, .checkingExisting, .submitting, .acknowledged: return false
             }
             guard record.submissionID == nil || record.submissionID == id,
@@ -462,8 +557,31 @@ actor ReleaseWorkflowService {
 
     private func isConfirmedSubmission(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
         guard let id = record.submissionID, snapshot.submissionID == id,
+              snapshot.submissionItemsComplete,
+              record.target.reviewItems.isEmpty || snapshot.submissionItemID != nil,
+              Set(snapshot.reviewItemIDs.keys) == Set(record.target.reviewItems.map(\.key)),
+              knownSubmissionItemsMatch(snapshot, record: record),
               ["WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES", "COMPLETING", "COMPLETE"].contains(snapshot.submissionState ?? ""),
               record.submissionItemID == nil || snapshot.submissionItemID == record.submissionItemID else { return false }
+        return true
+    }
+
+    private func lastWriteWasRejected(_ record: ReleaseWorkflowRecord) -> Bool {
+        guard let diagnostic = record.lastDiagnostic, diagnostic.phase == record.submissionProgress?.phase,
+              diagnostic.category == "apple_request_rejected", let status = diagnostic.apple?.httpStatus else { return false }
+        // A timeout status is still an uncertain effect, even when represented
+        // as an HTTP client error. Missing items alone never prove failure.
+        return (400..<500).contains(status) && status != 408
+    }
+
+    private func knownSubmissionItemsMatch(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
+        let expected = Set(record.target.reviewItems.map(\.key))
+        guard Set(snapshot.reviewItemIDs.keys).isSubset(of: expected),
+              snapshot.reviewItemIDs.values.allSatisfy(ReleaseWorkflowTarget.validID),
+              Set(snapshot.reviewItemIDs.values).count == snapshot.reviewItemIDs.count,
+              !snapshot.reviewItemIDs.values.contains(where: { $0 == snapshot.submissionItemID }),
+              record.submissionItemID == nil || record.submissionItemID == snapshot.submissionItemID,
+              (record.reviewItemIDs ?? [:]).allSatisfy({ snapshot.reviewItemIDs[$0.key] == $0.value }) else { return false }
         return true
     }
 
@@ -476,6 +594,7 @@ actor ReleaseWorkflowService {
             throw ReleaseWorkflowError.contentChanged
         }
         guard !snapshot.hasSubmissionConflict || ownDraft else { throw ReleaseWorkflowError.uncertainOutcome }
+        if ownDraft && !knownSubmissionItemsMatch(snapshot, record: record) { throw ReleaseWorkflowError.uncertainOutcome }
     }
 
     private func checkAccount(_ account: String, target: ReleaseWorkflowTarget) throws {
@@ -527,6 +646,11 @@ actor ReleaseWorkflowService {
         let record = try JSONDecoder().decode(ReleaseWorkflowRecord.self, from: Data(contentsOf: url))
         guard record.operationID == id.lowercased() else { throw ReleaseWorkflowError.unsafeState }
         try record.target.validate()
+        let itemIDs = record.reviewItemIDs ?? [:]
+        guard Set(itemIDs.keys).isSubset(of: Set(record.target.reviewItems.map(\.key))),
+              itemIDs.values.allSatisfy(ReleaseWorkflowTarget.validID),
+              Set(itemIDs.values).count == itemIDs.count,
+              !itemIDs.values.contains(where: { $0 == record.submissionItemID }) else { throw ReleaseWorkflowError.unsafeState }
         guard record.contentFingerprintVersion == nil || record.contentFingerprintVersion == 2 else { throw ReleaseWorkflowError.unsafeState }
         let expected = try Self.digest(Confirmation(target: record.target, mode: record.mode, operationID: record.operationID,
             versionString: record.versionString, buildNumber: record.buildNumber, contentDigest: record.contentDigest,
