@@ -332,3 +332,78 @@ func jointProductFingerprintProtectsTokenWhenChecksumMissingOrBlank(path: String
             localizations: [], web: web, webBindingStable: true, products: products)
     }
 }
+
+private func readyIAPFinding(id: String = "iap1", state: String = "READY_TO_SUBMIT") -> [String: Any] {
+    ["id": "iap.review_readiness.needs_attention", "severity": "warning", "field": "state",
+     "resourceType": "inAppPurchaseV2", "resourceId": id, "message": "IAP \"Pro\" (org.example.pro) is \(state)"]
+}
+
+private func normalizedProductReadiness(_ checks: [[String: Any]], products: ReleaseProductSelection.Result?) throws -> ReleaseWorkflowValidation {
+    let warnings = checks.filter { $0["severity"] as? String == "warning" }.count
+    let blocking = checks.filter { ["warning", "error"].contains($0["severity"] as? String ?? "") }.count
+    let report: [String: Any] = ["appId": "app1", "versionId": "version1", "platform": "IOS", "checks": checks,
+        "summary": ["blocking": blocking, "warnings": warnings],
+        "deep": ["checks": [[String: Any]](), "summary": ["blocked": 0, "unverified": 0]]]
+    let check = ReleaseWebEvidence.Check(status: "passed", reason: "fixture")
+    let web = ReleaseWebEvidence(appId: "app1", bundleId: "org.example.App", bindingVerified: true, bindingReason: "fixture",
+        appleId: "test@example.invalid", providerId: "provider", programLicense: check, businessFree: check, businessPaid: check)
+    return try ReleaseReadinessPolicy.normalize(report: report, exitCode: blocking == 0 ? 0 : 1,
+        target: JointProductFixture().target(), firstPublication: true, localizations: [], web: web,
+        webBindingStable: true, products: products)
+}
+
+@Test func jointProductReadinessCoversOnlyVerifiedSelectedReadyIAPNotice() async throws {
+    var fixture = JointProductFixture()
+    fixture.lists["/v1/apps/app1/inAppPurchasesV2"]!.append(JointProductFixture.resource("inAppPurchases", "unselected",
+        attrs: ["name": "Other", "productId": "org.example.other", "inAppPurchaseType": "NON_CONSUMABLE", "state": "READY_TO_SUBMIT"]))
+    let products = try await fixture.inspect()
+    let ready = try normalizedProductReadiness([readyIAPFinding()], products: products)
+    #expect(ready.ready && ready.blocking == 0 && ready.warnings == 0)
+    #expect(ready.diagnostics?.contains { $0.id == "iap.review_readiness.needs_attention" && $0.status == "passed" &&
+        $0.reason == "selected_ready_to_submit_iap_verified_for_joint_review" } == true)
+
+    let unselected = try normalizedProductReadiness([readyIAPFinding(id: "unselected")], products: products)
+    #expect(!unselected.ready && unselected.blocking == 1 && unselected.warnings == 1)
+    let noProductEvidence = try normalizedProductReadiness([readyIAPFinding()], products: nil)
+    #expect(!noProductEvidence.ready && noProductEvidence.blocking == 1)
+}
+
+@Test func jointProductReadinessDoesNotNormalizeOtherOrMalformedFindings() async throws {
+    let products = try await JointProductFixture().inspect()
+    let mismatches: [(String, String?)] = [
+        ("id", "iap.readiness.unverified"), ("severity", "error"), ("field", "other"), ("field", nil),
+        ("resourceType", "subscription"), ("resourceType", nil), ("resourceId", "foreign"), ("resourceId", nil),
+        ("message", nil), ("message", "READY_TO_SUBMIT"), ("message", "IAP is UNKNOWN"),
+        ("message", "IAP \"Pro\" (org.example.pro) is MISSING_METADATA"),
+        ("message", "IAP \"Pro\" (org.example.pro) is WAITING_FOR_UPLOAD")]
+    for (key, value) in mismatches {
+        var finding = readyIAPFinding(); finding[key] = value
+        let result = try normalizedProductReadiness([finding], products: products)
+        #expect(!result.ready && result.blocking == 1)
+    }
+}
+
+@Test(arguments: ["MISSING_METADATA", "WAITING_FOR_UPLOAD", "PROCESSING_CONTENT", "DEVELOPER_ACTION_NEEDED", "UNKNOWN", "APPROVED"])
+func jointProductReadinessRequiresFreshReadyCatalogState(state: String) async throws {
+    var fixture = JointProductFixture()
+    var parent = fixture.lists["/v1/apps/app1/inAppPurchasesV2"]![0]
+    var attrs = parent["attributes"] as! [String: Any]; attrs["state"] = state
+    parent["attributes"] = attrs; fixture.lists["/v1/apps/app1/inAppPurchasesV2"]![0] = parent
+    // Even a stale READY_TO_SUBMIT diagnostic must not override the fresh state.
+    let products = try await fixture.inspect()
+    let result = try normalizedProductReadiness([readyIAPFinding()], products: products)
+    #expect(!result.ready && result.blocking >= 1)
+    #expect(result.diagnostics?.contains { $0.id == "iap.review_readiness.needs_attention" && $0.status == "blocked" } == true)
+}
+
+@Test(arguments: ["metadata", "reviewImage", "prices"])
+func jointProductReadinessDoesNotCoverReadyNoticeWithIncompleteEvidence(missing: String) async throws {
+    var fixture = JointProductFixture()
+    if missing == "metadata" { fixture.lists["/v1/inAppPurchaseVersions/iap-version/localizations"] = [] }
+    else if missing == "prices" { fixture.lists["/v1/inAppPurchasePriceSchedules/schedule1/manualPrices"] = [] }
+    else { fixture.singles.removeValue(forKey: "/v2/inAppPurchases/iap1/appStoreReviewScreenshot") }
+    let products = try await fixture.inspect()
+    let result = try normalizedProductReadiness([readyIAPFinding()], products: products)
+    #expect(!result.ready && result.blocking >= 1)
+    #expect(result.diagnostics?.contains { $0.id == "iap.review_readiness.needs_attention" && $0.status == "blocked" } == true)
+}

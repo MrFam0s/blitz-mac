@@ -12,6 +12,20 @@ enum ReleaseProductSelection {
         /// Whole-app evidence for the two precise attachment checks, not a waiver
         /// for arbitrary product, agreement, pricing or metadata findings.
         let attachmentEvidence: [String: String]
+        /// Parent IDs verified as ready within this explicit, fully checked plan.
+        let readyIAPIDs: Set<String>
+
+        func coversReadyToSubmitFinding(_ check: [String: Any]) -> Bool {
+            guard diagnostics.isEmpty, attachmentEvidence["iap.first_type_app_version_attachment"] != nil,
+                  check["id"] as? String == "iap.review_readiness.needs_attention",
+                  check["severity"] as? String == "warning", check["field"] as? String == "state",
+                  check["resourceType"] as? String == "inAppPurchaseV2",
+                  let id = check["resourceId"] as? String, readyIAPIDs.contains(id),
+                  let message = check["message"] as? String else { return false }
+            // ASC currently exposes this status in its diagnostic text, not a
+            // structured field. Unrecognised/changed messages remain blocking.
+            return message.hasPrefix("IAP ") && message.hasSuffix(" is READY_TO_SUBMIT")
+        }
 
         func replacesAttachmentFinding(_ id: String) -> Bool {
             if attachmentEvidence["iap.first_type_app_version_attachment"] != nil,
@@ -25,7 +39,7 @@ enum ReleaseProductSelection {
     static func inspect(target: ReleaseWorkflowTarget, single: @escaping Single,
                         all: @escaping All) async throws -> Result {
         try target.validate()
-        guard !target.reviewItems.isEmpty else { return .init(protectedContent: [], diagnostics: [], attachmentEvidence: [:]) }
+        guard !target.reviewItems.isEmpty else { return .init(protectedContent: [], diagnostics: [], attachmentEvidence: [:], readyIAPIDs: []) }
         return try await Reader(target: target, single: single, all: all).inspect()
     }
 
@@ -37,6 +51,7 @@ enum ReleaseProductSelection {
         var diagnostics: [ReleaseReadinessDiagnostic] = []
         var selectedParents: Set<String> = []
         var selectedIAPTypes: Set<String> = []
+        var readyIAPIDs: Set<String> = []
         var selectedSubscriptionGroups: Set<String> = []
         var selectedGroupIDs: Set<String> = []
         var groupHistory: [String: [[String: Any]]] = [:]
@@ -118,6 +133,7 @@ enum ReleaseProductSelection {
                         let kind = Self.text(attributes["inAppPurchaseType"])
                         guard Self.iapTypes.contains(kind) else { throw ReleaseWorkflowAPIError.invalidResponse }
                         selectedIAPTypes.insert(kind)
+                        if state == "READY_TO_SUBMIT" { readyIAPIDs.insert(parentID) }
                     } else {
                         guard let groupID = subscriptionGroups[parentID] else { throw ReleaseWorkflowError.identityChanged }
                         selectedSubscriptionGroups.insert(groupID)
@@ -165,7 +181,8 @@ enum ReleaseProductSelection {
                     evidence["subscriptions.first_type_app_version_attachment"] = "complete_catalog_and_explicit_version_selection_verified"
                 } else { issue("catalog", "subscription_attachment_coverage_unverified") }
             }
-            return .init(protectedContent: protected, diagnostics: diagnostics, attachmentEvidence: evidence)
+            return .init(protectedContent: protected, diagnostics: diagnostics, attachmentEvidence: evidence,
+                readyIAPIDs: diagnostics.isEmpty ? readyIAPIDs : [])
         }
 
         private func list(_ path: String, type: String, query: [String: String] = [:]) async throws -> [[String: Any]] {

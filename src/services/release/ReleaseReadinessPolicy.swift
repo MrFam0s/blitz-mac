@@ -102,11 +102,17 @@ enum ReleaseReadinessPolicy {
         var normalized = checks.filter { !($0["id"] as? String == "metadata.required.whats_new" && $0["severity"] as? String == "warning") }
         var diagnostics: [ReleaseReadinessDiagnostic] = []
         // The selected version set is a durable plan for this exact submission.
-        // Fresh, complete public product evidence can replace only the legacy
-        // first-of-type attachment checks, which otherwise demand that the
-        // mutation already happened before preparation. Other findings stay.
+        // Fresh, complete public product evidence covers the legacy attachment
+        // checks and exact READY_TO_SUBMIT notices for selected purchases. Other
+        // product states, incomplete evidence and unselected findings stay.
         if let products {
-            normalized.removeAll { products.replacesAttachmentFinding($0["id"] as? String ?? "") }
+            normalized.removeAll { check in
+                if products.replacesAttachmentFinding(check["id"] as? String ?? "") { return true }
+                guard products.coversReadyToSubmitFinding(check) else { return false }
+                diagnostics.append(.init(id: check["id"] as! String, status: "passed", source: "publicApi",
+                    reason: "selected_ready_to_submit_iap_verified_for_joint_review"))
+                return true
+            }
             diagnostics.append(contentsOf: products.diagnostics)
             for id in products.attachmentEvidence.keys.sorted() {
                 diagnostics.append(.init(id: id, status: "passed", source: "publicApi",

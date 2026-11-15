@@ -299,3 +299,14 @@ rotating token. A changed checksum or resource still requires fresh preparation.
 Assets without a usable checksum keep their token in the fingerprint so their
 content identity is not silently discarded. This does not relax delivery-state,
 product ownership, exact-selection or final-submit guards.
+
+### Selected IAP readiness notices (build 81)
+
+An explicitly selected, fully verified IAP in `READY_TO_SUBMIT` is expected
+before the joint draft is sent. Its exact `iap.review_readiness.needs_attention`
+warning can therefore be recorded as passed only when fresh product evidence
+and the warning's resource type, resource ID, state field, severity and status
+message all agree. This is not a global warning waiver: unselected products,
+missing product evidence, other or unknown lifecycle states and changed warning
+shapes remain blocking. The evidence is recalculated during validation and does
+not alter the content fingerprint or allow a changed selection.

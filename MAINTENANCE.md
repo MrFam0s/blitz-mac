@@ -2,6 +2,24 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.73 build 81 — selected purchases ready for joint review
+
+ASC reports `READY_TO_SUBMIT` as a generic IAP readiness warning. The joint
+release validator now recognizes that expected status only for an explicitly
+selected IAP with fresh, complete catalog, metadata, review-image, price and
+availability evidence. Warning ID, severity, resource type/ID, state field and
+status message must all match. Unselected products, unknown or changed statuses,
+incomplete evidence and all unrelated findings remain blocking. This adds no
+Store write and does not change protected content or an existing operation's
+digest; the same prepared operation can be revalidated.
+
+Validation: 69 focused release tests and all 600 Swift tests in 11 suites pass
+with the native build engine. Regressions cover the selected ready case, foreign
+and unselected IDs, malformed findings, fresh nonready states and missing
+metadata, media or prices. The signed native Release build passes deep/strict
+verification and is installed as build 81 under Applications; build 80 is kept
+for rollback. This remains a local maintenance build, not a public release.
+
 ## 1.0.73 build 80 — stable review screenshot fingerprints
 
 A real joint-release preparation exposed Apple's rotating IAP review-screenshot
