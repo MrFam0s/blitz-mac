@@ -6,13 +6,14 @@ struct ProjectBundleIDSelectorView: View {
     var asc: ASCManager
     var tab: AppTab
     var platform: ProjectPlatform = .iOS
-    var title: String = "Project Bundle ID"
+    var title: String = "App-Store-Zuordnung"
     var subtitle: String? = nil
     var standalone: Bool = false
 
     @State private var discoveredBundleIds: [String] = []
     @State private var selectedBundleId = ""
     @State private var manualBundleId = ""
+    @State private var showManualEntry = false
     @State private var isSaving = false
     @State private var isResolvingCandidates = false
     @State private var candidateResolutionID: UUID?
@@ -28,8 +29,12 @@ struct ProjectBundleIDSelectorView: View {
         normalized(appState.activeProject?.metadata.bundleIdentifier)
     }
 
+    private var usesManualEntry: Bool {
+        showManualEntry || !manualBundleId.isEmpty || selectionOptions.isEmpty
+    }
+
     private var effectiveBundleId: String? {
-        normalized(manualBundleId) ?? normalized(selectedBundleId)
+        usesManualEntry ? normalized(manualBundleId) : normalized(selectedBundleId)
     }
 
     private var isImportedProject: Bool {
@@ -64,40 +69,26 @@ struct ProjectBundleIDSelectorView: View {
         }
 
         if asc.app == nil {
-            if let currentBundleId {
-                return "No App Store Connect app was found for \(currentBundleId). Select or enter another bundle ID, or register a new one."
-            }
-
-            return "Choose or enter which bundle ID Blitz Neo should use for this project before loading App Store Connect data."
+            return "Für dieses Projekt wurde keine App in App Store Connect gefunden. Prüfe die Zuordnung oder starte die Einrichtung einer neuen App."
         }
 
-        return "Switch which bundle ID this project uses for App Store Connect. You can select a detected value or enter one manually."
+        return "Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt."
     }
 
     private var discoveryDescription: String {
         if isASCFilteredSelection {
-            switch discoveredBundleIds.count {
-            case 0:
-                return "No discovered bundle IDs have matching App Store Connect apps."
-            case 1:
-                return "1 discovered bundle ID has a matching App Store Connect app."
-            default:
-                return "\(discoveredBundleIds.count) discovered bundle IDs have matching App Store Connect apps."
-            }
+            return discoveredBundleIds.count == 1
+                ? "Passender App-Store-Eintrag gefunden."
+                : "\(discoveredBundleIds.count) Kennungen mit App-Store-Eintrag gefunden."
         }
-
-        switch discoveredBundleIds.count {
-        case 0:
-            return "No bundle IDs were discovered in this project."
-        case 1:
-            return "1 bundle ID was discovered in this project."
-        default:
-            return "\(discoveredBundleIds.count) bundle IDs were discovered in this project."
+        if selectionOptions.count == 1, let value = selectionOptions.first {
+            return discoveredBundleIds.contains(value) ? "Im Projekt erkannt." : "Für dieses Projekt gespeichert."
         }
+        return "Wähle die Kennung des gewünschten App-Ziels."
     }
 
     private var primaryButtonTitle: String {
-        asc.app == nil ? "Use Selected Bundle ID" : "Switch Bundle ID"
+        asc.app == nil ? "Kennung verwenden" : "Zuordnung übernehmen"
     }
 
     private var canSubmitSelection: Bool {
@@ -119,6 +110,7 @@ struct ProjectBundleIDSelectorView: View {
             appState.activeProjectId ?? "",
             currentProject?.path ?? "",
             currentBundleId ?? "",
+            currentProject?.metadata.selectedReleaseTargetId ?? "",
         ].joined(separator: "::")
     }
 
@@ -131,7 +123,7 @@ struct ProjectBundleIDSelectorView: View {
             } else if isResolvingCandidates {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Checking discovered bundle IDs in App Store Connect…")
+                    Text("App-Store-Zuordnung wird geprüft …")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -149,6 +141,10 @@ struct ProjectBundleIDSelectorView: View {
         }
         .onChange(of: asc.activeAppCreationFormRequest?.id) { _, requestID in
             if requestID != nil { showRegistrationFlow = true }
+        }
+        .onChange(of: discoveryTaskKey) { _, _ in
+            showManualEntry = false
+            manualBundleId = ""
         }
         .task(id: discoveryTaskKey) {
             await reloadDiscoveredBundleIds()
@@ -168,54 +164,61 @@ struct ProjectBundleIDSelectorView: View {
 
             Divider()
 
-            if selectionOptions.isEmpty {
-                Text("No saved or discovered bundle IDs are available yet. Enter one manually or register a new bundle ID to continue.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Bundle ID")
-                        .font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Bundle-ID")
+                    .font(.callout.weight(.medium))
 
-                    Picker("Bundle ID", selection: pickerSelection) {
-                        Text("Select a bundle ID").tag("")
+                if usesManualEntry {
+                    TextField("org.beispiel.MeineApp", text: $manualBundleId)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Bundle-ID manuell eingeben")
+
+                    Text(selectionOptions.isEmpty
+                        ? "Keine Kennung erkannt. Gib die Bundle-ID des App-Ziels ein."
+                        : "Die eingegebene Kennung wird für diese Zuordnung verwendet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if selectionOptions.count == 1, let bundleID = selectionOptions.first {
+                    Text(bundleID)
+                        .font(.system(.callout, design: .monospaced))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                    Text(discoveryDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("Bundle-ID", selection: pickerSelection) {
+                        if selectedBundleId.isEmpty { Text("App-Kennung auswählen").tag("") }
                         ForEach(selectionOptions, id: \.self) { bundleId in
                             Text(bundleId).tag(bundleId)
                         }
                     }
                     .pickerStyle(.menu)
-
+                    .labelsHidden()
+                    .accessibilityLabel("Bundle-ID auswählen")
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Text(discoveryDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(selectionOptions.isEmpty ? "Bundle ID" : "Custom Bundle ID")
-                    .font(.callout.weight(.medium))
-
-                TextField("com.example.app", text: $manualBundleId)
-                    .textFieldStyle(.roundedBorder)
-
-                Text(selectionOptions.isEmpty
-                    ? "Enter a bundle ID manually if Blitz Neo cannot detect one from the project."
-                    : "Manual entry overrides the picker when filled in.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let currentBundleId,
-               asc.app == nil {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("Current project bundle ID: \(currentBundleId)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                if !selectionOptions.isEmpty {
+                    Button(usesManualEntry ? "Zur Projektauswahl zurück" : "Andere Bundle-ID eingeben") {
+                        if usesManualEntry {
+                            manualBundleId = ""
+                            showManualEntry = false
+                        } else {
+                            showManualEntry = true
+                        }
+                    }
+                    .buttonStyle(.link)
+                    .font(.callout)
                 }
             }
+            .disabled(isSaving)
 
             if let error {
                 Text(error)
@@ -224,26 +227,29 @@ struct ProjectBundleIDSelectorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
+            BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
                 Button(primaryButtonTitle) {
                     Task { await applySelectedBundleId() }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canSubmitSelection)
 
-                Button("Refresh Detected IDs") {
+                Button("Neu erkennen") {
                     Task { await reloadDiscoveredBundleIds() }
                 }
                 .buttonStyle(.bordered)
+                .help("Bundle-IDs erneut aus dem Projekt lesen")
                 .disabled(isResolvingCandidates || isSaving)
-
-                Spacer()
-
-                Button("Register New Bundle ID") {
-                    showRegistrationFlow = true
-                }
-                .buttonStyle(.borderless)
             }
+
+            Button("Neue App einrichten …") {
+                showRegistrationFlow = true
+            }
+            .buttonStyle(.link)
+            .font(.callout)
+            .help("Öffnet die separate Einrichtung. Die Angaben werden dort bestätigt.")
+            .disabled(isSaving)
+
         }
         .padding(standalone ? 0 : 16)
         .background {
@@ -282,7 +288,7 @@ struct ProjectBundleIDSelectorView: View {
 
         // Fallback mode only: when app lookup failed and multiple targets were discovered,
         // keep only bundle IDs that already map to ASC apps before deciding the next UI.
-        if standalone, asc.app == nil, candidates.count > 1 {
+        if standalone, asc.app == nil, candidates.count > 1, !showManualEntry, manualBundleId.isEmpty {
             showRegistrationFlow = false
             await resolveFallbackCandidates(candidates)
             return
@@ -297,12 +303,12 @@ struct ProjectBundleIDSelectorView: View {
     private func applySelectedBundleId(ifCurrent: (() -> Bool)? = nil) async {
         guard ifCurrent?() != false else { return }
         guard let projectId = appState.activeProjectId else {
-            error = "No active project is selected."
+            error = "Kein Projekt ausgewählt."
             return
         }
 
         guard let bundleId = effectiveBundleId else {
-            error = "Select or enter a bundle ID before continuing."
+            error = "Wähle eine Bundle-ID aus oder gib sie ein."
             return
         }
 

@@ -48,7 +48,7 @@ struct ASCTabContent<Content: View>: View {
                 asc: asc,
                 tab: tab,
                 platform: platform,
-                title: "Select Project Bundle ID",
+                title: "App-Store-Zuordnung",
                 standalone: true
                 )
             }

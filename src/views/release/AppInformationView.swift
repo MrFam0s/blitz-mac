@@ -451,7 +451,7 @@ struct AppInformationView: View {
                             asc: asc,
                             tab: .appInformation,
                             platform: project.platform,
-                            subtitle: "Change which local bundle ID this project uses when loading App Store Connect data.",
+                            subtitle: "Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt.",
                             standalone: false
                         )
                     }

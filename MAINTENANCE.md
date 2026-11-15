@@ -2,6 +2,23 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 84 — clearer app identity selection
+
+The Bundle-ID selector shows a single labeled identity. A sole value is readable
+and selectable as text; multiple app identities use an unlabeled picker under
+the same heading. Detected and previously saved values have distinct captions.
+Manual entry is explicit, with no hidden override or fallback when the field is
+blank; returning to the project selection clears it. Refresh does not auto-apply
+an ASC match while a manual identity is being edited. Project/target changes
+reset the manual mode.
+
+German copy distinguishes using a local identity from opening the separate new
+app setup. The repeated current-ID warning and stale guidance about selecting
+test/extension identities are removed. Actions wrap in narrow panes. All 625
+existing Swift tests pass; this presentation change adds no Apple mutation.
+The signed release bundle was installed and checked in the UI, including blank
+manual input, entering a value, and returning to the unchanged project identity.
+
 ## 1.0.74 build 83 — modern Xcode project identities
 
 Import and release-target discovery now share an application-target reader for

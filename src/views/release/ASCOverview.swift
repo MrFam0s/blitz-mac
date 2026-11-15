@@ -161,7 +161,7 @@ struct ASCOverview: View {
                                     asc: asc,
                                     tab: .app,
                                     platform: appState.activeProject?.platform ?? .iOS,
-                                    subtitle: "Switch which bundle ID this project uses for App Store Connect. This is useful for multi-target projects that ship different app, extension, or test bundle identifiers.",
+                                    subtitle: "Wähle die Kennung des App-Ziels, dessen App-Store-Daten du hier verwalten möchtest.",
                                     standalone: false
                                 )
                                 .frame(width: 480)
