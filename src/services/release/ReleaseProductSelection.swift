@@ -346,7 +346,12 @@ enum ReleaseProductSelection {
             // Upload URLs/headers and expiring delivery URLs are neither content
             // identity nor journal material. The completed source checksum is.
             var result = semantic(value)
-            result["attributes"] = attributes(value).filter { !["uploadOperations", "imageAsset", "assetDeliveryState"].contains($0.key) }
+            var attrs = attributes(value)
+            // Apple may rotate review screenshot tokens on each read. When a
+            // source checksum exists, it identifies the content instead. Keep
+            // tokens when the checksum is missing or blank.
+            if !text(attrs["sourceFileChecksum"]).isEmpty { attrs.removeValue(forKey: "assetToken") }
+            result["attributes"] = attrs.filter { !["uploadOperations", "imageAsset", "assetDeliveryState"].contains($0.key) }
             return result
         }
     }

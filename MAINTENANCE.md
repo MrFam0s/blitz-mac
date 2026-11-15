@@ -2,6 +2,25 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.73 build 80 — stable review screenshot fingerprints
+
+A real joint-release preparation exposed Apple's rotating IAP review-screenshot
+`assetToken`: successive reads changed the token while resource ID, source
+checksum, file size, other attributes and all prices remained unchanged. The
+fingerprint now excludes that token only when a nonempty source checksum exists.
+Checksum, resource and size changes remain protected; assets without a usable
+checksum keep their token identity and fail readiness if no identity is present.
+No submission, recovery, ownership or exact-product-selection guard is bypassed.
+
+Validation: 59 focused release tests and all 596 Swift tests in 11 suites pass
+using the documented native build system. New parameterized regressions cover
+IAP/subscription screenshots, token rotation, real replacement, and missing,
+empty or whitespace checksums. ASC, Node/npm and product-selection scope are
+unchanged. This is a local maintenance build, not a public Blitz release.
+The signed Release bundle passes deep/strict verification and is installed
+as build 80 under Applications. Build 79 is retained under `.build/rollback/`;
+startup and the read-only release-target command pass with the replacement.
+
 ## 1.0.73 — joint app and commerce review
 
 The shared release backend now accepts an explicit set of IAP, subscription and

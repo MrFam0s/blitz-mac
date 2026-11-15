@@ -222,6 +222,60 @@ struct JointProductFixture {
     #expect(!String(decoding: data, as: UTF8.self).contains("PRIVATE_TEST_VALUE"))
 }
 
+@Test(arguments: ["/v2/inAppPurchases/iap1/appStoreReviewScreenshot", "/v1/subscriptions/sub1/appStoreReviewScreenshot"])
+func jointProductFingerprintAllowsRotatingTokensOnlyWithSourceChecksum(path: String) async throws {
+    var fixture = JointProductFixture()
+    var screenshot = fixture.singles[path]!
+    var attrs = screenshot["attributes"] as! [String: Any]
+    attrs["assetToken"] = "first-delivery-token"
+    screenshot["attributes"] = attrs; fixture.singles[path] = screenshot
+    let before = try await fixture.inspect()
+    #expect(before.diagnostics.isEmpty)
+    let initial = try JointProductFixture.digest(before)
+
+    attrs["assetToken"] = "rotated-delivery-token"
+    screenshot["attributes"] = attrs; fixture.singles[path] = screenshot
+    let after = try await fixture.inspect()
+    #expect(after.diagnostics.isEmpty)
+    #expect(try JointProductFixture.digest(after) == initial)
+
+    // Content identity remains protected even when delivery tokens are ignored.
+    for field in ["sourceFileChecksum", "fileSize", "id"] {
+        var changed = fixture, replacement = screenshot, changedAttributes = attrs
+        if field == "id" { replacement["id"] = "replacement-review-image" }
+        else if field == "fileSize" { changedAttributes[field] = 101 }
+        else { changedAttributes[field] = "replacement-checksum" }
+        replacement["attributes"] = changedAttributes; changed.singles[path] = replacement
+        #expect(try JointProductFixture.digest(await changed.inspect()) != initial)
+    }
+}
+
+@Test(arguments: ["/v2/inAppPurchases/iap1/appStoreReviewScreenshot", "/v1/subscriptions/sub1/appStoreReviewScreenshot"])
+func jointProductFingerprintProtectsTokenWhenChecksumMissingOrBlank(path: String) async throws {
+    for checksum in [nil, "", " \t\n"] as [String?] {
+        var fixture = JointProductFixture()
+        var screenshot = fixture.singles[path]!
+        var attrs = screenshot["attributes"] as! [String: Any]
+        attrs["sourceFileChecksum"] = checksum
+        attrs["assetToken"] = "first-content-token"
+        screenshot["attributes"] = attrs; fixture.singles[path] = screenshot
+        let before = try await fixture.inspect()
+        #expect(before.diagnostics.isEmpty)
+        let initial = try JointProductFixture.digest(before)
+
+        attrs["assetToken"] = "replacement-content-token"
+        screenshot["attributes"] = attrs; fixture.singles[path] = screenshot
+        #expect(try JointProductFixture.digest(await fixture.inspect()) != initial)
+
+        // Missing/whitespace checksums cannot certify an image without a token.
+        attrs["assetToken"] = " \t\n"
+        screenshot["attributes"] = attrs; fixture.singles[path] = screenshot
+        let unverifiable = try await fixture.inspect()
+        #expect(unverifiable.diagnostics.contains { $0.reason == "review_screenshot_content_unverified" })
+        #expect(unverifiable.attachmentEvidence.isEmpty)
+    }
+}
+
 @Test func jointProductSelectionAcceptsCompletedV2ImagesWithAssetTokenWithoutChecksum() async throws {
     var fixture = JointProductFixture()
     fixture.lists["/v1/inAppPurchaseVersions/iap-version/images"] = [JointProductFixture.resource("inAppPurchaseImages", "promo-iap",

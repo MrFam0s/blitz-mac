@@ -288,3 +288,14 @@ suites, and the signed native bundle build. The suite includes actual Unix-socke
 tests for reply loss and a saturated connection queue, injected Apple transport
 tests, wrong-target/build checks, content changes, persisted recovery and exact
 handoff identities. No live Store mutation is necessary to test these paths.
+
+### Stable purchase review-image identity (build 80)
+
+Apple can rotate the `assetToken` returned for an unchanged completed IAP or
+subscription review screenshot. When `sourceFileChecksum` contains a verified
+nonempty checksum, the release fingerprint uses that checksum and retains the
+resource ID, file size and remaining semantic attributes, but excludes the
+rotating token. A changed checksum or resource still requires fresh preparation.
+Assets without a usable checksum keep their token in the fingerprint so their
+content identity is not silently discarded. This does not relax delivery-state,
+product ownership, exact-selection or final-submit guards.
