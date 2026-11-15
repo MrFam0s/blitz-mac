@@ -49,3 +49,80 @@ import Testing
     #expect(created.contains("project_doc_fallback_filenames"))
     #expect(!created.contains("mcp_servers"))
 }
+
+@Test func claudePermissionToggleRevokesManagedToolsAndPreservesUserRules() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("settings.local.json")
+    let existing: [String: Any] = [
+        "model": "user-model",
+        "enabledMcpjsonServers": ["user-server", "blitz-ios"],
+        "permissions": [
+            "allow": ["Bash(git status:*)", "mcp__user-server__lookup", "mcp__blitz-ios__tap"],
+            "deny": ["Bash(rm:*)"],
+            "ask": ["Bash(git push:*)"],
+        ],
+    ]
+    try JSONSerialization.data(withJSONObject: existing).write(to: file)
+    let minimal = ["mcp__blitz-macos__app_get_state"]
+
+    ProjectAgentConfigService.updateClaudeSettings(at: file, whitelistBlitzMCP: true,
+        allowASCCLICalls: true, initialAllow: [], minimalBlitzAllow: minimal)
+    let enabled = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    let enabledPermissions = try #require(enabled["permissions"] as? [String: Any])
+    let enabledAllow = try #require(enabledPermissions["allow"] as? [String])
+    #expect(enabledAllow.contains("mcp__blitz-macos__asc_fill_form"))
+    #expect(enabledAllow.contains("mcp__blitz-iphone__device_action"))
+    #expect(enabledAllow.contains("Bash(asc:*)"))
+
+    ProjectAgentConfigService.updateClaudeSettings(at: file, whitelistBlitzMCP: false,
+        allowASCCLICalls: false, initialAllow: [], minimalBlitzAllow: minimal)
+    let disabled = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    let disabledPermissions = try #require(disabled["permissions"] as? [String: Any])
+    let disabledAllow = try #require(disabledPermissions["allow"] as? [String])
+    #expect(Set(disabledAllow) == Set(["Bash(git status:*)", "mcp__user-server__lookup"] + minimal))
+    #expect(disabledPermissions["deny"] as? [String] == ["Bash(rm:*)"])
+    #expect(disabledPermissions["ask"] as? [String] == ["Bash(git push:*)"])
+    #expect(disabled["model"] as? String == "user-model")
+    #expect(disabled["enabledMcpjsonServers"] as? [String] == ["user-server", "blitz-macos", "blitz-iphone"])
+}
+
+@Test func claudePermissionToggleCreatesMissingAllowList() throws {
+    for existing in [[:], ["permissions": ["deny": ["Bash(rm:*)"]]]] as [[String: Any]] {
+        let updated = ProjectAgentConfigService.reconciledClaudeSettings(existing,
+            whitelistBlitzMCP: true, allowASCCLICalls: true,
+            initialAllow: [], minimalBlitzAllow: [])
+        let permissions = try #require(updated["permissions"] as? [String: Any])
+        let allow = try #require(permissions["allow"] as? [String])
+        #expect(allow.contains("Bash(asc:*)"))
+        #expect(allow.contains("mcp__blitz-iphone__device_action"))
+        if existing["permissions"] != nil {
+            #expect(permissions["deny"] as? [String] == ["Bash(rm:*)"])
+        }
+    }
+}
+
+@Test func claudeGlobalPermissionToggleRetainsOnlySetupExceptionsWhenDisabled() throws {
+    let minimal = ["mcp__blitz-macos__asc_set_credentials", "mcp__blitz-macos__asc_web_auth"]
+    let enabled = ProjectAgentConfigService.reconciledClaudeSettings([:],
+        whitelistBlitzMCP: true, allowASCCLICalls: false,
+        initialAllow: ["Bash(python3:*)"], minimalBlitzAllow: minimal)
+    let disabled = ProjectAgentConfigService.reconciledClaudeSettings(enabled,
+        whitelistBlitzMCP: false, allowASCCLICalls: false,
+        initialAllow: ["Bash(python3:*)"], minimalBlitzAllow: minimal)
+    let permissions = try #require(disabled["permissions"] as? [String: Any])
+    #expect(Set(permissions["allow"] as? [String] ?? []) == Set(["Bash(python3:*)"] + minimal))
+}
+
+@Test func claudePermissionUpdatePreservesMalformedExistingFile() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("settings.local.json")
+    let original = "{ user-edited unfinished configuration"
+    try original.write(to: file, atomically: true, encoding: .utf8)
+    ProjectAgentConfigService.updateClaudeSettings(at: file, whitelistBlitzMCP: true,
+        allowASCCLICalls: true, initialAllow: [], minimalBlitzAllow: [])
+    #expect(try String(contentsOf: file, encoding: .utf8) == original)
+}

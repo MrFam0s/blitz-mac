@@ -2,6 +2,45 @@ import Foundation
 import Testing
 @testable import Blitz
 
+@Test @MainActor func releaseCheckDistinguishesNoReleaseFromErrors() throws {
+    let missing = try AutoUpdateManager.evaluateRelease(data: Data(), statusCode: 404, currentVersion: "1.0.71")
+    guard case .unavailable = missing else { Issue.record("404 must explain the missing release"); return }
+    for status in [401, 403, 429, 500] {
+        #expect(throws: (any Error).self) {
+            try AutoUpdateManager.evaluateRelease(data: Data(), statusCode: status, currentVersion: "1.0.71")
+        }
+    }
+    #expect(throws: (any Error).self) {
+        try AutoUpdateManager.evaluateRelease(data: Data("{}".utf8), statusCode: 200, currentVersion: "1.0.71")
+    }
+}
+
+@Test @MainActor func releaseCheckOnlyOffersStableNewerInstallableVersions() throws {
+    func response(_ version: String, assets: [[String: String]] = [], prerelease: Bool = false) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["tag_name": version, "assets": assets, "prerelease": prerelease])
+    }
+    // An older release does not need downloadable assets to establish freshness.
+    #expect(try AutoUpdateManager.evaluateRelease(data: response("v1.0.70"), statusCode: 200, currentVersion: "1.0.71") == .upToDate)
+    let unavailable = try AutoUpdateManager.evaluateRelease(data: response("v1.0.72"), statusCode: 200, currentVersion: "1.0.71")
+    guard case .unavailable = unavailable else { Issue.record("Missing assets need an explanation"); return }
+    let assets = [["name": "BlitzNeo.app.zip", "browser_download_url": "https://github.com/MrFam0s/blitz-mac/releases/download/v1.0.72/BlitzNeo.app.zip"]]
+    let available = try AutoUpdateManager.evaluateRelease(data: response("v1.0.72", assets: assets), statusCode: 200, currentVersion: "1.0.71")
+    #expect(available == .available(.init(version: "1.0.72", downloadURL: assets[0]["browser_download_url"]!, filename: "BlitzNeo.app.zip")))
+    let prerelease = try AutoUpdateManager.evaluateRelease(data: response("v1.0.72", assets: assets, prerelease: true), statusCode: 200, currentVersion: "1.0.71")
+    guard case .unavailable = prerelease else { Issue.record("Prereleases must not be offered"); return }
+    #expect(throws: (any Error).self) {
+        try AutoUpdateManager.evaluateRelease(data: response("v1.0.broken"), statusCode: 200, currentVersion: "1.0.71")
+    }
+}
+
+@Test @MainActor func updateCheckResultsDoNotBlockTheApp() {
+    let manager = AutoUpdateManager()
+    manager.state = .unavailable("No public release")
+    #expect(!manager.showsFullScreenOverlay)
+    manager.state = .checkFailed("Offline")
+    #expect(!manager.showsFullScreenOverlay)
+}
+
 @Test @MainActor func testAppUpdateInstallScriptKeepsBundleGuardsAndFailsOnScriptErrors() {
     let zipPath = URL(fileURLWithPath: "/tmp/Blitz.app.zip")
     let script = AutoUpdateManager.appUpdateInstallScript(zipPath: zipPath)

@@ -1,80 +1,92 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
-/// Shared Blitz MCP status plus optional manual Claude Code configuration.
 struct MCPSetupSection: View {
     let mcpServer: MCPServerService?
+    var agent: AIAgent = .codex
 
-    @State private var serverRunning: Bool = false
+    @State private var serverRunning: Bool?
+    @State private var configuration: MCPIntegrationConfiguration?
     @State private var copied = false
+    @State private var showManualSetup = false
+    @State private var copyError = false
 
     var body: some View {
         Section("Blitz-Neo-Werkzeuge (MCP)") {
             HStack {
-                Text("Verbindung")
+                Text("Lokaler Dienst")
                 Spacer()
-                if serverRunning {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: 8, height: 8)
-                        Text("Bereit")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 8, height: 8)
-                        Text("Nicht verbunden")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            Button {
-                copyConfigToClipboard()
-            } label: {
-                HStack {
-                    Text(copied ? "Kopiert" : "Konfiguration für Claude Code kopieren")
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(serverRunning == true ? Color.green : Color.secondary)
+                        .frame(width: 7, height: 7)
+                    Text(serverRunning.map { $0 ? "Bereit" : "Nicht gestartet" } ?? "Wird geprüft …")
                         .foregroundStyle(.secondary)
                 }
             }
-            .buttonStyle(.plain)
-
-            Text("Für die manuelle Einrichtung in Claude Code: JSON unter \"mcpServers\" in ~/.claude.json einfügen.")
+            Text("Stellt Chats die Werkzeuge der laufenden Blitz-Neo-App bereit. Die Einrichtung im Agenten wird separat geprüft.")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(.secondary)
+
+            if let configuration {
+                LabeledContent("\(agent.displayName) · Blitz-App", value: configuration.app.label)
+                LabeledContent("\(agent.displayName) · iPhone & Simulator", value: configuration.iphone.label)
+
+                if configuration.app == .restricted || configuration.iphone == .restricted {
+                    Text("Die globale Werkzeugauswahl gilt weiterhin. Neue Werkzeuge werden dort nicht automatisch ergänzt; die Freigaben des Agenten gelten zusätzlich.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                DisclosureGroup("Manuelle Einrichtung", isExpanded: $showManualSetup) {
+                    Text(manualInstructions(configuration))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    if configuration.app == .missing {
+                        Button(copied ? "Kopiert" : "Blitz-App-Konfiguration für \(agent.displayName) kopieren",
+                               systemImage: copied ? "checkmark" : "doc.on.doc") {
+                            let snippet = MCPIntegrationConfiguration.manualSnippet(agent: agent, helperPath: BlitzPaths.mcpHelper.path)
+                            NSPasteboard.general.clearContents()
+                            copied = NSPasteboard.general.setString(snippet, forType: .string)
+                            copyError = !copied
+                        }
+                        .buttonStyle(.plain)
+                    } else if configuration.app != .unreadable {
+                        Button("Konfigurationsdatei öffnen", systemImage: "doc.text") {
+                            NSWorkspace.shared.open(configuration.file)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if copyError {
+                        Text("Die Konfiguration konnte nicht kopiert werden.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
         }
-        .task {
-            await refreshStatus()
+        .task(id: agent.rawValue) { await refreshStatus() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshStatus() }
         }
     }
 
     private func refreshStatus() async {
-        guard let server = mcpServer else { return }
-        serverRunning = await server.isRunning
+        serverRunning = await mcpServer?.isRunning ?? false
+        configuration = MCPIntegrationConfiguration.load(agent: agent)
+        copied = false
+        copyError = false
     }
 
-    private func copyConfigToClipboard() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let config = """
-        {
-          "blitz-macos": {
-            "command": "\(home)/.blitz/blitz-macos-mcp"
-          }
+    private func manualInstructions(_ configuration: MCPIntegrationConfiguration) -> String {
+        if configuration.app == .unreadable {
+            return "Die globale Konfiguration konnte nicht gelesen werden. Bitte in \(agent.displayName) prüfen. Es wurde nichts geändert."
         }
-        """
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(config, forType: .string)
-
-        copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            copied = false
+        if configuration.app != .missing {
+            return "Der globale Blitz-Eintrag ist bereits vorhanden. Bitte keinen zweiten Eintrag anlegen. Änderungen und die Werkzeugauswahl verwaltest du in \(configuration.file.path)."
         }
+        let target = agent == .codex ? "als eigenen Abschnitt" : "unter \"\(agent == .claudeCode ? "mcpServers" : "mcp")\""
+        return "Nur für die manuelle Einrichtung der Blitz-App: \(target) in \(configuration.file.path) einfügen. Vorher vorhandene Projekt- oder Plugin-Konfigurationen prüfen, damit kein zweiter Eintrag entsteht. Blitz-Projekte können die Werkzeuge bereits bereitstellen."
     }
 }

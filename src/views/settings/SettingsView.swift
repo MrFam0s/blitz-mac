@@ -12,7 +12,6 @@ struct SettingsView: View {
     @State private var showSkipPermsDetail = false
     @State private var showAskAIDetail = false
     @State private var terminalResetWarning: String?
-    @State private var shellIntegrationError: String?
 
     private enum SettingsSection: String, CaseIterable, Identifiable {
         case general = "Allgemein"
@@ -67,10 +66,9 @@ struct SettingsView: View {
                 switch selectedSection {
                 case .general:
                     generalSection
-                    simulatorSection
                 case .integrations:
-                    MCPSetupSection(mcpServer: mcpServer)
-                    shellSection
+                    MCPSetupSection(mcpServer: mcpServer, agent: currentAgent)
+                    TerminalToolsSection(settings: settings)
                 case .permissions:
                     agentPermissionsSection
                     blitzPermissionsSection
@@ -238,91 +236,51 @@ struct SettingsView: View {
                 }
             }
 
-            Toggle("Bei Werkzeugaufrufen zum passenden Tab wechseln", isOn: $settings.autoNavEnabled)
-                .onChange(of: settings.autoNavEnabled) { _, _ in settings.save() }
-        }
-    }
-
-    private var simulatorSection: some View {
-        Section("Simulator") {
-            Toggle("Berührungen im Simulator anzeigen", isOn: $settings.showCursor)
-                .onChange(of: settings.showCursor) { _, _ in settings.save() }
-            if settings.showCursor {
-                HStack {
-                    Text("Zeigergröße")
-                    Slider(value: $settings.cursorSize, in: 10...40, step: 2)
-                        .accessibilityLabel("Zeigergröße")
-                    Text("\(Int(settings.cursorSize)) px")
-                        .monospacedDigit()
-                        .frame(width: 45, alignment: .trailing)
-                }
-                .onChange(of: settings.cursorSize) { _, _ in settings.save() }
-            }
-        }
-    }
-
-    private var shellSection: some View {
-        Section("ASC im externen Terminal") {
-            VStack(alignment: .leading, spacing: 4) {
-                let shellIntegration = ShellIntegrationService()
-
-                Toggle("ASC für externe Terminals bereitstellen", isOn: Binding(
-                    get: { settings.enableASCShellIntegration },
-                    set: { newValue in
-                        shellIntegrationError = nil
-                        do {
-                            try settings.setASCShellIntegrationEnabled(newValue)
-                        } catch {
-                            shellIntegrationError = error.localizedDescription
-                        }
-                    }
-                ))
-                .disabled(!shellIntegration.isSupported && !settings.enableASCShellIntegration)
-
-                if shellIntegration.isSupported {
-                    Text("Stellt `asc` auch in separat geöffneten Terminals bereit. Dafür verwaltet Blitz Neo einen Eintrag in \(shellIntegration.targetRCFileLabel).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Die automatische Einrichtung unterstützt zsh und bash. Erkannt: \(shellIntegration.shellKind.displayName).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let shellIntegrationError {
-                    Text(shellIntegrationError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
         }
     }
 
     private var agentPermissionsSection: some View {
-        Section("KI-Agent") {
-            // Whitelist Blitz MCP tools
-            Toggle("Blitz-Neo-Werkzeuge im Agenten automatisch erlauben", isOn: Binding(
-                get: { settings.whitelistBlitzMCPTools },
-                set: { newValue in
-                    settings.whitelistBlitzMCPTools = newValue
-                    settings.save()
-                    refreshAgentPermissionFiles()
-                }
-            ))
+        Section("Agent-Freigaben") {
+            if currentAgent == .codex {
+                Text("MCP-Werkzeugauswahl und MCP-Freigaben werden in Codex verwaltet. Die Einrichtung prüfst du unter Integrationen.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Toggle("Blitz-Werkzeuge automatisch erlauben", isOn: Binding(
+                    get: { settings.whitelistBlitzMCPTools },
+                    set: { newValue in
+                        settings.whitelistBlitzMCPTools = newValue
+                        settings.save()
+                        refreshAgentPermissionFiles()
+                    }
+                ))
 
-            Toggle("ASC-Befehle im Agenten automatisch erlauben", isOn: Binding(
-                get: { settings.allowASCCLICalls },
-                set: { newValue in
-                    settings.allowASCCLICalls = newValue
-                    settings.save()
-                    refreshAgentPermissionFiles()
-                }
-            ))
+                Text("Gilt gemeinsam für die von Blitz Neo eingerichteten Claude-Code- und OpenCode-Konfigurationen. Eigene Regeln können zusätzlich gelten.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Toggle("ASC-Befehle automatisch erlauben", isOn: Binding(
+                    get: { settings.allowASCCLICalls },
+                    set: { newValue in
+                        settings.allowASCCLICalls = newValue
+                        settings.save()
+                        refreshAgentPermissionFiles()
+                    }
+                ))
+            Text("Gilt agentenübergreifend für die von Blitz Neo eingerichteten Projekte.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if currentAgent == .codex {
+                Text("Legt ASC-Freigaberegeln für Blitz-Projekte an. Codex lädt sie in vertrauenswürdigen Projekten; weitere Codex-Regeln gelten zusätzlich.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             // Skip permissions toggle (only for agents that support it)
             if currentAgent.skipPermissionsFlag != nil {
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Rückfragen des Agenten überspringen", isOn: Binding(
+                    Toggle("Neue Agent-Sitzungen ohne Bestätigungen starten", isOn: Binding(
                         get: { settings.skipAgentPermissions },
                         set: { newValue in
                             settings.skipAgentPermissions = newValue
@@ -341,7 +299,7 @@ struct SettingsView: View {
 
     private var blitzPermissionsSection: some View {
         Section {
-            Text("Aktivierte Aktionen führt Blitz Neo ohne zusätzliche Rückfrage aus.")
+            Text("Aktivierte Aktionen benötigen in Blitz Neo keine zusätzliche Rückfrage. Prüfungen für App, Version und Einreichung bleiben bestehen.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Toggle("Alle Blitz-Neo-Aktionen automatisch erlauben", isOn: Binding(
@@ -381,7 +339,7 @@ struct SettingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Zugangsdaten")
+                    Text("API-Schlüssel")
                     Spacer()
                     if appState.ascManager.credentials != nil {
                         Text("Eingerichtet")
@@ -394,12 +352,12 @@ struct SettingsView: View {
                     }
                 }
 
-                Button("Zugangsdaten entfernen", role: .destructive) {
+                Button("API-Schlüssel entfernen", role: .destructive) {
                     showClearCredentialsConfirm = true
                 }
                 .disabled(appState.ascManager.credentials == nil)
 
-                Text("Entfernt den gespeicherten API-Schlüssel samt Kennungen. Danach ist für App Store Connect eine erneute Einrichtung nötig.")
+                Text("Entfernt den gespeicherten API-Schlüssel samt Kennungen. Die separate Apple-Webanmeldung bleibt erhalten.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -407,11 +365,11 @@ struct SettingsView: View {
             Text("App Store Connect")
         }
         .confirmationDialog(
-            "App-Store-Connect-Zugangsdaten entfernen?",
+            "App-Store-Connect-API-Schlüssel entfernen?",
             isPresented: $showClearCredentialsConfirm,
             titleVisibility: .visible
         ) {
-            Button("Zugangsdaten entfernen", role: .destructive) {
+            Button("API-Schlüssel entfernen", role: .destructive) {
                 appState.ascManager.deleteCredentials()
             }
         } message: {

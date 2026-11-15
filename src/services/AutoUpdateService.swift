@@ -12,6 +12,8 @@ final class AutoUpdateManager {
         case idle
         case checking
         case upToDate
+        case unavailable(String)
+        case checkFailed(String)
         case available(version: String, releaseNotes: String)
         case downloading(percent: Int)
         case installing
@@ -28,7 +30,7 @@ final class AutoUpdateManager {
     /// True when the update UI should cover the entire welcome window.
     var showsFullScreenOverlay: Bool {
         switch state {
-        case .idle, .checking, .upToDate: return false
+        case .idle, .checking, .upToDate, .unavailable, .checkFailed: return false
         default: return true
         }
     }
@@ -47,59 +49,84 @@ final class AutoUpdateManager {
 
     // MARK: - Check
 
+    struct PublishedUpdate: Equatable {
+        let version: String
+        let downloadURL: String
+        let filename: String
+    }
+
+    enum ReleaseCheck: Equatable {
+        case upToDate
+        case unavailable(String)
+        case available(PublishedUpdate)
+    }
+
+    /// A missing public release is not a successful freshness check. Keep it
+    /// separate from network/API errors and from a failed installation.
+    static func evaluateRelease(data: Data, statusCode: Int, currentVersion: String) throws -> ReleaseCheck {
+        if statusCode == 404 {
+            return .unavailable("Im Wartungsfork ist noch kein öffentliches Update veröffentlicht. Lokale Wartungsbuilds werden separat installiert.")
+        }
+        guard (200..<300).contains(statusCode) else {
+            throw UpdateError(message: "Update-Prüfung nicht möglich (HTTP \(statusCode)). Bitte später erneut versuchen.")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let tag = json["tag_name"] as? String else {
+            throw UpdateError(message: "Der Wartungsfork hat keine lesbaren Release-Daten geliefert.")
+        }
+        guard json["draft"] as? Bool != true, json["prerelease"] as? Bool != true else {
+            return .unavailable("Es ist kein stabiles Update veröffentlicht.")
+        }
+        let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        let parts = version.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) && Int($0) != nil }) else {
+            throw UpdateError(message: "Die Versionsnummer des veröffentlichten Updates ist ungültig.")
+        }
+        guard isNewer(remote: version, current: currentVersion) else { return .upToDate }
+        let assets = json["assets"] as? [[String: Any]] ?? []
+        let zip = assets.first { ($0["name"] as? String)?.hasSuffix(".app.zip") == true }
+        let pkg = assets.first { ($0["name"] as? String)?.hasSuffix(".pkg") == true }
+        guard let asset = zip ?? pkg,
+              let url = asset["browser_download_url"] as? String,
+              let parsedURL = URL(string: url), parsedURL.scheme == "https", parsedURL.host != nil,
+              let filename = asset["name"] as? String else {
+            return .unavailable("Version \(version) ist veröffentlicht, enthält aber kein installierbares App-Paket.")
+        }
+        return .available(PublishedUpdate(version: version, downloadURL: url, filename: filename))
+    }
+
     func checkForUpdate() async {
+        guard state != .checking else { return }
+        switch state {
+        case .downloading, .installing: return
+        default: break
+        }
         state = .checking
-
-        // TODO - remove before release: DEBUG use local zip instead of fetching from GitHub
-        // let debugLocalZip = "SET_TO_YOUR_LOCAL_PATH/Blitz.app.zip"
-        // latestVersion = "1.0.30"
-        // downloadURL = "file://\(debugLocalZip)"
-        // downloadFilename = "Blitz.app.zip"
-        // state = .available(version: "1.0.30", releaseNotes: "Debug test update")
-        // return
-        // END DEBUG
-
+        latestVersion = nil
+        downloadURL = nil
+        downloadFilename = nil
         do {
             var request = URLRequest(url: URL(string: Self.releasesURL)!)
+            request.timeoutInterval = 30
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tagName = json["tag_name"] as? String,
-                  let assets = json["assets"] as? [[String: Any]] else {
-                state = .idle
-                return
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw UpdateError(message: "Die Update-Quelle hat keine gültige Antwort geliefert.")
             }
-
-            let remoteVersion = tagName.replacingOccurrences(of: "v", with: "")
-
-            // Prefer .app.zip for auto-updates (no admin password prompt);
-            // fall back to .pkg if zip isn't available
-            let zipAsset = assets.first { ($0["name"] as? String)?.hasSuffix(".app.zip") == true }
-            let pkgAsset = assets.first { ($0["name"] as? String)?.hasSuffix(".pkg") == true }
-            guard let asset = zipAsset ?? pkgAsset,
-                  let downloadUrl = asset["browser_download_url"] as? String,
-                  let filename = asset["name"] as? String else {
-                state = .idle
-                return
-            }
-
-            guard Self.isNewer(remote: remoteVersion, current: currentVersion) else {
-                print("[AutoUpdate] Up to date (current: \(currentVersion), remote: \(remoteVersion))")
+            switch try Self.evaluateRelease(data: data, statusCode: http.statusCode, currentVersion: currentVersion) {
+            case .upToDate:
                 state = .upToDate
-                return
+            case .unavailable(let message):
+                state = .unavailable(message)
+            case .available(let release):
+                latestVersion = release.version
+                downloadURL = release.downloadURL
+                downloadFilename = release.filename
+                let notes = await Self.fetchChangelogNotes(for: release.version)
+                state = .available(version: release.version, releaseNotes: notes)
             }
-
-            print("[AutoUpdate] Update available: \(currentVersion) -> \(remoteVersion)")
-            latestVersion = remoteVersion
-            downloadURL = downloadUrl
-            downloadFilename = filename
-
-            let notes = await Self.fetchChangelogNotes(for: remoteVersion)
-            state = .available(version: remoteVersion, releaseNotes: notes)
         } catch {
-            print("[AutoUpdate] Check failed: \(error)")
-            state = .idle
+            state = .checkFailed(error.localizedDescription)
         }
     }
 

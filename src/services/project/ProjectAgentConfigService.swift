@@ -155,24 +155,16 @@ struct ProjectAgentConfigService {
         let claudeDir = mcpsDir.appendingPathComponent(".claude")
         let settingsFile = claudeDir.appendingPathComponent("settings.local.json")
         try? fm.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-        var allowList: [String] = [
-            "mcp__blitz-macos__asc_set_credentials",
-            "mcp__blitz-macos__asc_web_auth",
-            "Bash(python3:*)",
-        ]
-        if whitelistBlitzMCP {
-            allowList = Self.allBlitzMCPToolPermissions()
-        }
-        if allowASCCLICalls {
-            Self.ensureAllowPermission("Bash(asc:*)", in: &allowList)
-        }
-        let settings: [String: Any] = [
-            "enabledMcpjsonServers": ["blitz-macos", "blitz-iphone"],
-            "permissions": ["allow": allowList]
-        ]
-        if let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: settingsFile)
-        }
+        Self.updateClaudeSettings(
+            at: settingsFile,
+            whitelistBlitzMCP: whitelistBlitzMCP,
+            allowASCCLICalls: allowASCCLICalls,
+            initialAllow: ["Bash(python3:*)"],
+            minimalBlitzAllow: [
+                "mcp__blitz-macos__asc_set_credentials",
+                "mcp__blitz-macos__asc_web_auth",
+            ]
+        )
 
         let claudeMd = mcpsDir.appendingPathComponent("CLAUDE.md")
         let claudeMdContent = """
@@ -486,55 +478,17 @@ struct ProjectAgentConfigService {
 
         let settingsFile = claudeDir.appendingPathComponent("settings.local.json")
         try? fm.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-        let correctServers = ["blitz-macos", "blitz-iphone"]
-        var settings: [String: Any]
-        if fm.fileExists(atPath: settingsFile.path),
-           let data = try? Data(contentsOf: settingsFile),
-           var existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            existing["enabledMcpjsonServers"] = correctServers
-            if var perms = existing["permissions"] as? [String: Any],
-               var allow = perms["allow"] as? [String] {
-                allow.removeAll { $0.contains("blitz-ios") }
-                if whitelistBlitzMCP {
-                    let blitzTools = Self.allBlitzMCPToolPermissions()
-                    for tool in blitzTools where !allow.contains(tool) {
-                        allow.append(tool)
-                    }
-                }
-                if allowASCCLICalls {
-                    Self.ensureAllowPermission("Bash(asc:*)", in: &allow)
-                } else {
-                    allow.removeAll { $0 == "Bash(asc:*)" }
-                }
-                perms["allow"] = allow
-                existing["permissions"] = perms
-            }
-            settings = existing
-        } else {
-            var defaultAllow: [String] = [
+        Self.updateClaudeSettings(
+            at: settingsFile,
+            whitelistBlitzMCP: whitelistBlitzMCP,
+            allowASCCLICalls: allowASCCLICalls,
+            initialAllow: [
                 "Bash(curl:*)",
                 "Bash(xcrun simctl terminate:*)",
                 "Bash(xcrun simctl launch:*)",
-                "mcp__blitz-macos__app_get_state",
-            ]
-            if whitelistBlitzMCP {
-                defaultAllow = Self.allBlitzMCPToolPermissions() + [
-                    "Bash(curl:*)",
-                    "Bash(xcrun simctl terminate:*)",
-                    "Bash(xcrun simctl launch:*)",
-                ]
-            }
-            if allowASCCLICalls {
-                Self.ensureAllowPermission("Bash(asc:*)", in: &defaultAllow)
-            }
-            settings = [
-                "permissions": ["allow": defaultAllow],
-                "enabledMcpjsonServers": correctServers,
-            ]
-        }
-        if let data = try? JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys]) {
-            try? data.write(to: settingsFile)
-        }
+            ],
+            minimalBlitzAllow: ["mcp__blitz-macos__app_get_state"]
+        )
 
         let claudeMdFile = projectDir.appendingPathComponent("CLAUDE.md")
         if !fm.fileExists(atPath: claudeMdFile.path) {
@@ -565,6 +519,74 @@ struct ProjectAgentConfigService {
 
         ensureReviewerAgent(projectDir: projectDir)
         ensureProjectSkills(projectDir: projectDir)
+    }
+
+    /// Updates only the permissions managed by Blitz, preserving unrelated user settings.
+    static func updateClaudeSettings(
+        at settingsFile: URL,
+        whitelistBlitzMCP: Bool,
+        allowASCCLICalls: Bool,
+        initialAllow: [String],
+        minimalBlitzAllow: [String]
+    ) {
+        do {
+            let existing: [String: Any]
+            if FileManager.default.fileExists(atPath: settingsFile.path) {
+                let data = try Data(contentsOf: settingsFile)
+                guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    print("[ProjectAgentConfigService] Claude settings are not an object; preserving existing file")
+                    return
+                }
+                existing = decoded
+            } else {
+                existing = [:]
+            }
+            let settings = reconciledClaudeSettings(
+                existing,
+                whitelistBlitzMCP: whitelistBlitzMCP,
+                allowASCCLICalls: allowASCCLICalls,
+                initialAllow: initialAllow,
+                minimalBlitzAllow: minimalBlitzAllow
+            )
+            let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: settingsFile, options: .atomic)
+        } catch {
+            print("[ProjectAgentConfigService] Failed to update Claude permissions: \(error)")
+        }
+    }
+
+    static func reconciledClaudeSettings(
+        _ existing: [String: Any],
+        whitelistBlitzMCP: Bool,
+        allowASCCLICalls: Bool,
+        initialAllow: [String],
+        minimalBlitzAllow: [String]
+    ) -> [String: Any] {
+        var settings = existing
+        var servers = settings["enabledMcpjsonServers"] as? [String] ?? []
+        servers.removeAll { $0 == "blitz-ios" }
+        for server in ["blitz-macos", "blitz-iphone"] where !servers.contains(server) {
+            servers.append(server)
+        }
+        settings["enabledMcpjsonServers"] = servers
+
+        var permissions = settings["permissions"] as? [String: Any] ?? [:]
+        var allow = permissions["allow"] as? [String] ?? initialAllow
+        let managedBlitzPermissions = Set(allBlitzMCPToolPermissions())
+        allow.removeAll {
+            managedBlitzPermissions.contains($0)
+                || $0.hasPrefix("mcp__blitz-ios__")
+                || $0 == "Bash(asc:*)"
+        }
+        for permission in whitelistBlitzMCP ? allBlitzMCPToolPermissions() : minimalBlitzAllow {
+            ensureAllowPermission(permission, in: &allow)
+        }
+        if allowASCCLICalls {
+            ensureAllowPermission("Bash(asc:*)", in: &allow)
+        }
+        permissions["allow"] = allow
+        settings["permissions"] = permissions
+        return settings
     }
 
     func ensureReviewerAgent(projectDir: URL) {

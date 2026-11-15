@@ -2,6 +2,34 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.72 — truthful settings and integration status
+
+Settings now distinguish the local MCP listener from agent configuration. Manual
+setup follows the selected agent; existing global entries are never duplicated
+or rewritten. Codex tool selection is identified separately from approvals.
+The misleading external-ASC toggle is replaced by installation status for ASC
+and the Blitz Neo release CLI, with exact command copying. Optional shell setup
+remains available separately and can be repaired or removed.
+
+The unused cursor/size and automatic-tab-navigation controls are removed from
+the UI; stored legacy fields are retained for compatibility. Terminal selection,
+Codex resume and effective action permissions remain. Claude permission updates
+now support both directions and preserve unrelated settings. The API-key removal
+label explicitly distinguishes it from the separate Apple web session.
+
+The update check now explains absent public fork releases, missing installation
+assets and network/API failures instead of silently returning to idle. Check
+errors no longer open a blocking installation overlay; update labels are German.
+
+Validation: all 560 Swift tests pass, including 20 added regressions. The signed
+native arm64 release build and strict bundle signature verification pass. The
+installed MCP reports 1.0.72 with 44 tools; a read-only app-state request and ASC
+6.6.1 version/protocol probes pass. All four Settings sections were checked in
+the installed app, including half-width layout and the absent-public-release
+message. No Store mutations, authentication changes or GitHub Actions runs.
+Build 78 is installed; build 77 is retained for rollback. Global Codex MCP
+configuration and the user's existing permission choices remain unchanged.
+
 ## 1.0.71 — centrally pinned Node LTS and locked MCP packaging
 
 `config/node-toolchain.json` now defines the tested Node 26.13.1/npm 12.2.2 pair

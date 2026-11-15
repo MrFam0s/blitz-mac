@@ -37,7 +37,7 @@ bash scripts/build-pkg.sh
 
 ## Architecture
 
-**Blitz** is a native macOS SwiftUI app (requires macOS 14+) for iOS development. It provides simulator management, screen capture, App Store Connect integration, and an MCP server for Claude Code integration. Built with Swift Package Manager (no Xcode project). Source bundling also depends on the pinned ASC helper submodule in `deps/App-Store-Connect-CLI-helper` and a local Go toolchain.
+**Blitz** is a native macOS SwiftUI app (requires macOS 14+) for iOS development. It provides simulator management, screen capture, App Store Connect integration, and a shared MCP/CLI backend for Codex, Claude Code and OpenCode integration. Built with Swift Package Manager (no Xcode project). Source bundling also depends on the pinned ASC helper submodule in `deps/App-Store-Connect-CLI-helper` and a local Go toolchain.
 
 ### Single-target structure
 
@@ -56,16 +56,18 @@ Single `AppState` (`@Observable`) object at `AppState.swift` holds all app state
 
 `AppTab` enum defines all tabs, grouped into Build (simulator, tests, assets), Release (ASC tabs), Insights, TestFlight, and Settings. `ContentView` uses `NavigationSplitView` with `SidebarView` + `DetailView` that switches on `appState.activeTab`.
 
-### MCP Server (Claude Code Integration)
+### MCP and release CLI
 
 ```
-Claude Code ←stdio→ Bridge Script (~/.blitz/blitz-mcp-bridge.sh) ←HTTP→ MCPServerService (Swift actor)
+Agent ←stdio→ ~/.blitz/blitz-macos-mcp ←Unix socket→ MCPServerService (Swift actor)
 ```
 
-- `MCPServerService` — Raw TCP HTTP server on a dynamic port. Writes port to `~/.blitz/mcp-port`. Handles JSON-RPC requests at `/mcp`.
-- `MCPToolRegistry` — Static definitions of all MCP tools (~35 tools covering navigation, projects, simulator, settings, device interaction, ASC forms, build pipeline).
-- `MCPToolExecutor` — Executes tool calls. Read-only tools execute immediately; mutating tools go through an approval flow (continuation-based) that shows a native macOS alert.
-- `ApprovalRequest` — Model with `ToolCategory` enum that determines whether user approval is required.
+- `MCPServerService` serves the local socket; a running listener does not prove an agent is connected.
+- `MCPToolRegistry` defines the available tools. Agent configuration can restrict this list independently.
+- `MCPToolExecutor` executes tool calls. Mutations retain Blitz's own approval and release checks.
+- `~/.blitz/bin/blitz-neo release` uses the same helper and release journal. See `docs/release-workflow.md`.
+- App and `asc` share the pinned bundled helper; the optional shell entry only adds command lookup paths.
+- Settings inspect integrations without rewriting global client configuration. Codex tool allowlists and approvals are separate concepts.
 
 ### Device Interaction
 
