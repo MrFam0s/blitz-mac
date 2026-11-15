@@ -60,7 +60,7 @@ final class SimulatorManager {
             }
         } catch {
             guard token == revision, !Task.isCancelled else { return }
-            errorMessage = "Could not load simulators. Check that Xcode is installed and try again."
+            errorMessage = "Simulatoren konnten nicht geladen werden. Prüfe, ob Xcode installiert ist, und versuche es erneut."
         }
     }
 
@@ -69,7 +69,7 @@ final class SimulatorManager {
     func selectDevice(_ udid: String, for project: Project?) async -> Bool {
         activate(project: project)
         guard let project, project.platform == .iOS else {
-            errorMessage = "Select an iOS project before choosing a simulator."
+            errorMessage = "Wähle zuerst ein iOS-Projekt und anschließend einen Simulator."
             return false
         }
         guard !isBooting else { return false }
@@ -81,13 +81,13 @@ final class SimulatorManager {
         guard token == revision, !Task.isCancelled, errorMessage == nil else { return false }
         guard let device = simulators.first(where: { $0.udid == udid }),
               SimulatorConfigDatabase.isSupported(device.displayName) else {
-            errorMessage = "This simulator is unavailable or unsupported. Choose another device."
+            errorMessage = "Dieser Simulator ist nicht verfügbar oder wird nicht unterstützt. Wähle ein anderes Gerät."
             return false
         }
         do {
             try saveSelection(project, udid)
         } catch {
-            errorMessage = "Could not save this project's simulator: \(error.localizedDescription)"
+            errorMessage = "Der Simulator für dieses Projekt konnte nicht gespeichert werden: \(error.localizedDescription)"
             return false
         }
         savedSelections[project.id] = udid
@@ -100,7 +100,7 @@ final class SimulatorManager {
     func startSelectedDevice(for project: Project?) async -> Bool {
         activate(project: project)
         guard let project, project.platform == .iOS else {
-            errorMessage = "Select an iOS project to use a simulator."
+            errorMessage = "Wähle ein iOS-Projekt, um einen Simulator zu verwenden."
             return false
         }
         guard !isBooting else { return false }
@@ -115,7 +115,7 @@ final class SimulatorManager {
         guard let selectedDeviceID else { return false }
         guard let device = simulators.first(where: { $0.udid == selectedDeviceID }),
               SimulatorConfigDatabase.isSupported(device.displayName) else {
-            errorMessage = "The saved simulator is unavailable. Choose another device for this project."
+            errorMessage = "Der gespeicherte Simulator ist nicht verfügbar. Wähle ein anderes Gerät für dieses Projekt."
             return false
         }
         bootingDeviceName = device.name
@@ -125,13 +125,13 @@ final class SimulatorManager {
             await loadSimulators()
             guard token == revision, !Task.isCancelled else { return false }
             guard bootedDeviceId == device.udid else {
-                errorMessage = "The simulator did not finish starting. Try again."
+                errorMessage = "Der Simulator konnte nicht vollständig gestartet werden. Versuche es erneut."
                 return false
             }
             return true
         } catch {
             guard token == revision, !Task.isCancelled else { return false }
-            errorMessage = "Could not start \(device.name): \(error.localizedDescription)"
+            errorMessage = "\(device.name) konnte nicht gestartet werden: \(error.localizedDescription)"
             return false
         }
     }
@@ -139,5 +139,5 @@ final class SimulatorManager {
 
 enum SimulatorSelectionError: LocalizedError {
     case projectUnavailable
-    var errorDescription: String? { "The project folder could not be read." }
+    var errorDescription: String? { "Der Projektordner konnte nicht gelesen werden." }
 }

@@ -245,7 +245,7 @@ enum ShellIntegrationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedShell(let shellName):
-            return "Automatic shell integration only supports zsh and bash. Detected \(shellName)."
+            return "Die automatische Shell-Einrichtung unterstützt nur zsh und bash. Erkannt wurde \(shellName)."
         }
     }
 }

@@ -11,6 +11,14 @@ struct AnalyticsView: View {
         case last7Days = "7 Days"
         case last30Days = "30 Days"
         case last90Days = "90 Days"
+
+        var displayName: String {
+            switch self {
+            case .last7Days: "7 Tage"
+            case .last30Days: "30 Tage"
+            case .last90Days: "90 Tage"
+            }
+        }
     }
 
     var body: some View {
@@ -36,19 +44,19 @@ struct AnalyticsView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Analytics")
+                    Text("Statistiken")
                         .font(BlitzLayout.pageTitle)
                     Spacer()
-                    ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: "Refresh analytics tab")
+                    ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: "Statistiken aktualisieren")
                 }
-                Picker("Range", selection: $dateRange) {
+                Picker("Zeitraum", selection: $dateRange) {
                     ForEach(DateRange.allCases, id: \.self) {
-                        Text($0.rawValue).tag($0)
+                        Text($0.displayName).tag($0)
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .accessibilityLabel("Date range")
+                .accessibilityLabel("Zeitraum")
                 .frame(maxWidth: 300, alignment: .leading)
             }
             .blitzToolbar()
@@ -66,18 +74,18 @@ struct AnalyticsView: View {
 
                     // Placeholder chart with mock data to illustrate layout
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Downloads (sample)")
+                        Text("Downloads (Beispieldaten)")
                             .font(BlitzLayout.sectionTitle)
 
                         Chart(mockDownloadData(for: dateRange)) { point in
                             LineMark(
-                                x: .value("Date", point.date),
+                                x: .value("Datum", point.date),
                                 y: .value("Downloads", point.value)
                             )
                             .foregroundStyle(.blue)
 
                             AreaMark(
-                                x: .value("Date", point.date),
+                                x: .value("Datum", point.date),
                                 y: .value("Downloads", point.value)
                             )
                             .foregroundStyle(.blue.opacity(0.1))
@@ -95,7 +103,7 @@ struct AnalyticsView: View {
                         }
                         .frame(height: 200)
 
-                        Text("Sample data only — connect sales reports for live data")
+                        Text("Nur Beispieldaten – für echte Daten werden Verkaufsberichte benötigt.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -115,9 +123,9 @@ struct AnalyticsView: View {
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Sales Reports Require Vendor Number")
+                Text("Für Verkaufsberichte ist die Anbieternummer erforderlich")
                     .font(BlitzLayout.sectionTitle)
-                Text("Your app's vendor number is not available. This is typically shown on the Payments and Financial Reports page in App Store Connect.")
+                Text("Die Anbieternummer dieser App ist nicht verfügbar. Sie steht normalerweise unter „Zahlungen und Finanzberichte“ in App Store Connect.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -135,9 +143,9 @@ struct AnalyticsView: View {
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Live Sales Data Coming Soon")
+                Text("Verkaufsdaten noch nicht verfügbar")
                     .font(BlitzLayout.sectionTitle)
-                Text("Sales report fetching via the ASC API is in development. The chart below shows sample data.")
+                Text("Der Abruf von Verkaufsberichten über die ASC-API ist noch in Entwicklung. Das Diagramm zeigt Beispieldaten.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

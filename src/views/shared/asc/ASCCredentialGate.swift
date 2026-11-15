@@ -14,7 +14,7 @@ struct ASCCredentialGate<Content: View>: View {
         if ascManager.isLoadingCredentials {
             VStack(spacing: 12) {
                 ProgressView()
-                Text("Checking credentials…")
+                Text("Zugangsdaten werden geprüft …")
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }

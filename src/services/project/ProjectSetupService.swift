@@ -30,7 +30,7 @@ struct ProjectSetupService {
     ) async throws {
         let spec = ProjectTemplateSpec(
             templateName: "rn-notes-template",
-            missingTemplateMessage: "Bundled RN template not found",
+            missingTemplateMessage: "Die mitgelieferte React-Native-Vorlage wurde nicht gefunden.",
             replacements: [:],
             cleanupPaths: [],
             logPrefix: "setup",

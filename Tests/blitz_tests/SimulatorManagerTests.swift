@@ -37,7 +37,7 @@ import Testing
     #expect(manager.selectedDeviceID == nil)
     #expect(await manager.startSelectedDevice(for: simProject("missing", selected: "deleted")) == false)
     #expect(manager.selectedDeviceID == "deleted")
-    #expect(manager.errorMessage?.contains("unavailable") == true)
+    #expect(manager.errorMessage?.contains("nicht verfügbar") == true)
     #expect(await driver.bootCalls.isEmpty)
 }
 

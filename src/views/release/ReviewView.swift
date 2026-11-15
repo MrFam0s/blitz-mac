@@ -107,7 +107,7 @@ struct ReviewView: View {
                     selection: selectedVersionBinding,
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/reviewsubmissions") },
                     refreshTab: .review,
-                    refreshHelpText: "Refresh review data"
+                    refreshHelpText: "Prüfungsdaten aktualisieren"
                 )
                 .blitzToolbar()
             }
@@ -125,7 +125,7 @@ struct ReviewView: View {
                             ASCVersionStatusBadges(asc: asc, version: version)
                         }
                         if let date = version.attributes.createdDate {
-                            Text("Created \(ascShortDate(date))")
+                            Text("Erstellt am \(ascShortDate(date))")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
@@ -139,7 +139,7 @@ struct ReviewView: View {
                     if let rejectionCardVersion,
                        rejectionCardVersion.id == version.id {
                         RejectionCardView(asc: asc, version: rejectionCardVersion) {
-                            Text("Update your review info below and re-submit when ready.")
+                            Text("Aktualisiere die Prüfungsangaben unten und reiche die Version anschließend erneut ein.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -156,11 +156,11 @@ struct ReviewView: View {
                                 .font(.caption.weight(.semibold))
                                 .rotationEffect(.degrees(ageRatingExpanded ? 90 : 0))
                                 .animation(.easeInOut(duration: 0.15), value: ageRatingExpanded)
-                            Text("Age Rating")
+                            Text("Altersfreigabe")
                                 .font(BlitzLayout.sectionTitle)
                             Spacer()
                             if asc.ageRatingDeclaration != nil {
-                                Text("Configured")
+                                Text("Eingerichtet")
                                     .font(.caption)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
@@ -170,12 +170,12 @@ struct ReviewView: View {
                             } else if isLoading {
                                 HStack(spacing: 6) {
                                     ProgressView().controlSize(.small)
-                                    Text("Loading…")
+                                    Text("Wird geladen …")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             } else {
-                                Text("Not set")
+                                Text("Nicht festgelegt")
                                     .font(.caption)
                                     .foregroundStyle(.orange)
                             }
@@ -204,7 +204,7 @@ struct ReviewView: View {
                                 .rotationEffect(.degrees(contactExpanded ? 90 : 0))
                                 .animation(.easeInOut(duration: 0.15), value: contactExpanded)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Review Contact")
+                                Text("Kontakt für die App-Prüfung")
                                     .font(BlitzLayout.sectionTitle)
                                 if let rd = asc.reviewDetail,
                                    rd.attributes.contactFirstName != nil {
@@ -215,12 +215,12 @@ struct ReviewView: View {
                                 } else if isLoading {
                                     HStack(spacing: 6) {
                                         ProgressView().controlSize(.small)
-                                        Text("Loading…")
+                                        Text("Wird geladen …")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
                                 } else {
-                                    Text("Not configured")
+                                    Text("Nicht eingerichtet")
                                         .font(.caption)
                                         .foregroundStyle(.orange)
                                 }
@@ -242,32 +242,32 @@ struct ReviewView: View {
 
                 // Build & Compliance
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Build & Compliance")
+                    Text("Build und Exportbestimmungen")
                         .font(BlitzLayout.sectionTitle)
 
                     if asc.builds.isEmpty {
                         if isLoading {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text("Loading builds and review history…")
+                                Text("Builds und Prüfungsverlauf werden geladen …")
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
                         } else {
-                            Text("No builds available. Upload a build via Xcode or Transporter.")
+                            Text("Keine Builds verfügbar. Lade einen Build über Xcode oder Transporter hoch.")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }
                     } else {
                         Picker("Build", selection: $selectedBuild) {
-                            Text("Select a build…").tag("")
+                            Text("Build auswählen …").tag("")
                             ForEach(asc.builds.filter { $0.attributes.processingState == "VALID" }) { build in
                                 Text("\(build.attributes.version) (\(ascShortDate(build.attributes.uploadedDate ?? "")))")
                                     .tag(build.id)
                             }
                         }
 
-                        Toggle("Uses non-exempt encryption", isOn: $usesEncryption)
+                        Toggle("Verwendet nicht ausgenommene Verschlüsselung", isOn: $usesEncryption)
                             .onChange(of: usesEncryption) { _, newValue in
                                 guard !selectedBuild.isEmpty else { return }
                                 Task {
@@ -286,7 +286,7 @@ struct ReviewView: View {
 
                 // All versions
                 if asc.releaseVersions.count > 1 {
-                    Text("All Versions")
+                    Text("Alle Versionen")
                         .font(BlitzLayout.sectionTitle)
 
                     VStack(spacing: 0) {
@@ -297,7 +297,7 @@ struct ReviewView: View {
                                 ASCVersionStatusBadges(asc: asc, version: version)
                                 if ASCReleaseStatus.normalize(version.attributes.effectiveState) != "REJECTED",
                                    wasVersionPreviouslyRejected(version) {
-                                    Text("Previously Rejected")
+                                    Text("Zuvor abgelehnt")
                                         .font(.caption2.weight(.medium))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
@@ -339,7 +339,7 @@ struct ReviewView: View {
         .onChange(of: asc.selectedVersionBuild?.id) { _, _ in syncSelectedBuild() }
         .onChange(of: contactFocused) { _, _ in
             // Don't auto-save contact — requires all required fields.
-            // User saves explicitly via the "Save Contact" button.
+            // User saves explicitly via the "Kontakt speichern" button.
         }
     }
 
@@ -353,43 +353,43 @@ struct ReviewView: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Group {
-                Text("Boolean Fields").font(.callout.weight(.medium)).padding(.top, 8)
-                Toggle("Gambling", isOn: $arGambling)
-                Toggle("Messaging & Chat", isOn: $arMessaging)
-                Toggle("Unrestricted Web Access", isOn: $arWebAccess)
-                Toggle("User Generated Content", isOn: $arUGC)
-                Toggle("Advertising", isOn: $arAdvertising)
-                Toggle("Loot Box", isOn: $arLootBox)
-                Toggle("Health or Wellness Topics", isOn: $arHealth)
-                Toggle("Parental Controls", isOn: $arParental)
-                Toggle("Age Assurance", isOn: $arAgeAssurance)
+                Text("Enthaltene Funktionen").font(.callout.weight(.medium)).padding(.top, 8)
+                Toggle("Glücksspiel", isOn: $arGambling)
+                Toggle("Nachrichten und Chat", isOn: $arMessaging)
+                Toggle("Uneingeschränkter Internetzugang", isOn: $arWebAccess)
+                Toggle("Nutzergenerierte Inhalte", isOn: $arUGC)
+                Toggle("Werbung", isOn: $arAdvertising)
+                Toggle("Lootboxen", isOn: $arLootBox)
+                Toggle("Gesundheits- und Wellnessthemen", isOn: $arHealth)
+                Toggle("Kindersicherung", isOn: $arParental)
+                Toggle("Altersüberprüfung", isOn: $arAgeAssurance)
             }
 
             Divider()
 
             Group {
-                Text("Frequency Fields").font(.callout.weight(.medium))
-                threeLevelPicker("Alcohol/Tobacco/Drug Use", selection: $arAlcohol)
-                threeLevelPicker("Contests", selection: $arContests)
-                threeLevelPicker("Simulated Gambling", selection: $arGamblingSim)
-                threeLevelPicker("Guns or Other Weapons", selection: $arGuns)
-                threeLevelPicker("Horror or Fear Themes", selection: $arHorror)
-                threeLevelPicker("Mature or Suggestive Themes", selection: $arMature)
-                threeLevelPicker("Medical or Treatment Info", selection: $arMedical)
-                threeLevelPicker("Profanity or Crude Humor", selection: $arProfanity)
+                Text("Häufigkeit der Inhalte").font(.callout.weight(.medium))
+                threeLevelPicker("Alkohol-, Tabak- oder Drogenkonsum", selection: $arAlcohol)
+                threeLevelPicker("Wettbewerbe", selection: $arContests)
+                threeLevelPicker("Simuliertes Glücksspiel", selection: $arGamblingSim)
+                threeLevelPicker("Schusswaffen oder andere Waffen", selection: $arGuns)
+                threeLevelPicker("Horror- oder Angstthemen", selection: $arHorror)
+                threeLevelPicker("Erwachsenen- oder anzügliche Themen", selection: $arMature)
+                threeLevelPicker("Medizinische oder Behandlungsinformationen", selection: $arMedical)
+                threeLevelPicker("Vulgäre Sprache oder derber Humor", selection: $arProfanity)
             }
 
             Group {
-                threeLevelPicker("Sexual Content (Graphic/Nudity)", selection: $arSexGraphic)
-                threeLevelPicker("Sexual Content or Nudity", selection: $arSex)
-                threeLevelPicker("Violence (Cartoon/Fantasy)", selection: $arViolenceCartoon)
-                threeLevelPicker("Violence (Realistic)", selection: $arViolenceRealistic)
-                threeLevelPicker("Violence (Prolonged/Graphic/Sadistic)", selection: $arViolenceProlonged)
+                threeLevelPicker("Explizite sexuelle Inhalte und Nacktheit", selection: $arSexGraphic)
+                threeLevelPicker("Sexuelle Inhalte oder Nacktheit", selection: $arSex)
+                threeLevelPicker("Gewalt in Zeichentrick oder Fantasy", selection: $arViolenceCartoon)
+                threeLevelPicker("Realistische Gewalt", selection: $arViolenceRealistic)
+                threeLevelPicker("Anhaltende, explizite oder sadistische Gewalt", selection: $arViolenceProlonged)
             }
 
             HStack {
                 Spacer()
-                Button("Save Age Rating") {
+                Button("Altersfreigabe speichern") {
                     Task { await saveAgeRating() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -424,10 +424,10 @@ struct ReviewView: View {
     }
 
     private func frequencyPicker(selection: Binding<String>) -> some View {
-        Picker("Frequency", selection: selection) {
-            Text("None").tag("NONE")
-            Text("Infrequent or Mild").tag("INFREQUENT_OR_MILD")
-            Text("Frequent or Intense").tag("FREQUENT_OR_INTENSE")
+        Picker("Häufigkeit", selection: selection) {
+            Text("Keine").tag("NONE")
+            Text("Selten oder schwach").tag("INFREQUENT_OR_MILD")
+            Text("Häufig oder intensiv").tag("FREQUENT_OR_INTENSE")
         }
         .labelsHidden()
     }
@@ -439,35 +439,35 @@ struct ReviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("First Name").font(.callout.weight(.medium)).foregroundStyle(.secondary)
-                    TextField("First Name", text: $contactFirstName)
+                    Text("Vorname").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                    TextField("Vorname", text: $contactFirstName)
                         .textFieldStyle(.roundedBorder)
                         .focused($contactFocused, equals: "firstName")
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Last Name").font(.callout.weight(.medium)).foregroundStyle(.secondary)
-                    TextField("Last Name", text: $contactLastName)
+                    Text("Nachname").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                    TextField("Nachname", text: $contactLastName)
                         .textFieldStyle(.roundedBorder)
                         .focused($contactFocused, equals: "lastName")
                 }
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Email").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                Text("E-Mail").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextField("email@example.com", text: $contactEmail)
                     .textFieldStyle(.roundedBorder)
                     .focused($contactFocused, equals: "email")
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Phone").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                Text("Telefon").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextField("+1 650 555 0100", text: $contactPhone)
                     .textFieldStyle(.roundedBorder)
                     .focused($contactFocused, equals: "phone")
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Notes").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                Text("Hinweise").font(.callout.weight(.medium)).foregroundStyle(.secondary)
                 TextEditor(text: $contactNotes)
                     .font(.body)
                     .frame(minHeight: 60, maxHeight: 120)
@@ -479,19 +479,19 @@ struct ReviewView: View {
                     .focused($contactFocused, equals: "notes")
             }
 
-            Toggle("Demo account required", isOn: $demoRequired)
+            Toggle("Demokonto erforderlich", isOn: $demoRequired)
 
             if demoRequired {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Username").font(.callout.weight(.medium)).foregroundStyle(.secondary)
-                        TextField("Demo username", text: $demoName)
+                        Text("Benutzername").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                        TextField("Demo-Benutzername", text: $demoName)
                             .textFieldStyle(.roundedBorder)
                             .focused($contactFocused, equals: "demoName")
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Password").font(.callout.weight(.medium)).foregroundStyle(.secondary)
-                        SecureField("Demo password", text: $demoPassword)
+                        Text("Passwort").font(.callout.weight(.medium)).foregroundStyle(.secondary)
+                        SecureField("Demo-Passwort", text: $demoPassword)
                             .textFieldStyle(.roundedBorder)
                             .focused($contactFocused, equals: "demoPassword")
                     }
@@ -512,11 +512,11 @@ struct ReviewView: View {
                 if isSavingContact {
                     HStack(spacing: 4) {
                         ProgressView().controlSize(.mini)
-                        Text("Saving…").font(.caption).foregroundStyle(.secondary)
+                        Text("Wird gespeichert …").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Button("Save Contact") {
+                Button("Kontakt speichern") {
                     Task { await saveContact() }
                 }
                 .buttonStyle(.borderedProminent)

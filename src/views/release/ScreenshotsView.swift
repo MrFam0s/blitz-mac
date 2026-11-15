@@ -28,7 +28,7 @@ private enum ScreenshotDeviceType: String, CaseIterable, Identifiable {
     }
 
     var dimensionLabel: String {
-        ASCManager.screenshotDimensionSummary(displayType: ascDisplayType) ?? "Unsupported size"
+        ASCManager.screenshotDimensionSummary(displayType: ascDisplayType) ?? "Nicht unterstützte Größe"
     }
 
     var placeholderAspectRatio: CGFloat {
@@ -518,18 +518,18 @@ struct ScreenshotsView: View {
                             selection: selectedVersionBinding,
                             appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                             refreshTab: .screenshots,
-                            refreshHelpText: "Refresh screenshots"
+                            refreshHelpText: "Screenshots aktualisieren"
                         ) {
                             if !asc.localizations.isEmpty {
-                                Picker("Locale", selection: selectedLocaleBinding) {
+                                Picker("Sprache", selection: selectedLocaleBinding) {
                                     ForEach(asc.localizations) { localization in
                                         Text(localization.attributes.locale).tag(localization.attributes.locale)
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
-                                .accessibilityLabel("Locale")
-                                .help("Language of the store listing")
+                                .accessibilityLabel("Sprache")
+                                .help("Sprache des Store-Eintrags")
                                 .frame(width: 110, alignment: .leading)
                             }
                         }
@@ -580,7 +580,7 @@ struct ScreenshotsView: View {
                     ?? slot.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Screenshot")
             }
         }
-        .alert("Import Error", isPresented: Binding(
+        .alert("Importfehler", isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
         )) {
@@ -612,7 +612,7 @@ struct ScreenshotsView: View {
     @ViewBuilder
     private var devicePicker: some View {
         if availableDeviceTypes.count > 1 {
-            Picker("Device", selection: $selectedDevice) {
+            Picker("Gerät", selection: $selectedDevice) {
                 ForEach(availableDeviceTypes) { device in
                     Text(device.label).tag(device)
                 }
@@ -628,12 +628,12 @@ struct ScreenshotsView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
                     Label {
-                        Text("Synced")
+                        Text("Synchronisiert")
                     } icon: {
                         Circle().fill(.green).frame(width: 8, height: 8)
                     }
                     Label {
-                        Text("Changed")
+                        Text("Geändert")
                     } icon: {
                         Circle().fill(.orange).frame(width: 8, height: 8)
                     }
@@ -644,17 +644,17 @@ struct ScreenshotsView: View {
             Text("\(filledSlotCount)/10")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize()
-                .help("\(filledSlotCount) of 10 screenshot slots used")
+                .help("\(filledSlotCount) von 10 Screenshot-Plätzen belegt")
             Button {
                 Task { await save() }
             } label: {
                 if asc.isSyncing {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text("Saving...")
+                        Text("Wird gespeichert …")
                     }
                 } else {
-                    Label("Save", systemImage: "arrow.up.circle")
+                    Label("Speichern", systemImage: "arrow.up.circle")
                 }
             }
             .fixedSize()
@@ -693,9 +693,9 @@ struct ScreenshotsView: View {
 
             if trackItems.isEmpty {
                 ContentUnavailableView(
-                    "No Screenshots",
+                    "Keine Screenshots",
                     systemImage: "photo.on.rectangle",
-                    description: Text("No screenshots for this language and device.")
+                    description: Text("Keine Screenshots für diese Sprache und dieses Gerät.")
                 )
             }
 
@@ -932,7 +932,7 @@ struct ScreenshotsView: View {
             VStack(spacing: 6) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title2)
-                Text(asc.canEditField("screenshots") ? "Upload" : "Leer")
+                Text(asc.canEditField("screenshots") ? "Hochladen" : "Leer")
                     .font(.caption)
             }
             .foregroundStyle(.secondary)
@@ -1010,7 +1010,7 @@ struct ScreenshotsView: View {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Select a screenshot to add"
+        panel.message = "Screenshot zum Hinzufügen auswählen"
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         importFileToSlot(url: url, slotIndex: index)
@@ -1019,7 +1019,7 @@ struct ScreenshotsView: View {
     private func importFileToSlot(url: URL, slotIndex: Int) {
         guard asc.canEditField("screenshots"), !asc.isSyncing else { return }
         guard let projectId = appState.activeProjectId else {
-            importError = "No active project"
+            importError = "Kein aktives Projekt"
             return
         }
 
@@ -1042,7 +1042,7 @@ struct ScreenshotsView: View {
             }
         } else {
             guard let image = loadImage(from: url) else {
-                importError = "\(url.lastPathComponent): unsupported format or could not load image"
+                importError = "\(url.lastPathComponent): Nicht unterstütztes Format oder Bild nicht lesbar"
                 return
             }
             let pngName = url.deletingPathExtension().lastPathComponent + ".png"
@@ -1051,7 +1051,7 @@ struct ScreenshotsView: View {
                 guard let tiff = image.tiffRepresentation,
                       let bitmap = NSBitmapImageRep(data: tiff),
                       let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                    importError = "\(url.lastPathComponent): failed to convert to PNG"
+                    importError = "\(url.lastPathComponent): Umwandlung in PNG fehlgeschlagen"
                     return
                 }
                 if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
@@ -1105,7 +1105,7 @@ struct ScreenshotsView: View {
                     Task { @MainActor in
                         guard self.asc.projectRevision == revision else { return }
                         guard let slotIndex = self.currentTrack.firstIndex(where: { $0 == nil }) else {
-                            self.importError = "All 10 slots are full"
+                            self.importError = "Alle 10 Plätze sind belegt"
                             return
                         }
                         self.importFileToSlot(url: url, slotIndex: slotIndex)

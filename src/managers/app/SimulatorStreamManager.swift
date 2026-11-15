@@ -39,7 +39,7 @@ final class SimulatorStreamManager {
         do {
             renderer = try MetalRenderer()
         } catch {
-            errorMessage = "Metal init failed: \(error.localizedDescription)"
+            errorMessage = "Metal konnte nicht initialisiert werden: \(error.localizedDescription)"
         }
     }
 
@@ -58,7 +58,7 @@ final class SimulatorStreamManager {
         isPaused = false
         ensureRenderer()
 
-        statusMessage = "Opening Simulator.app..."
+        statusMessage = "Simulator wird geöffnet …"
         let service = SimulatorService()
         do {
             let devices = try await service.listDevices()
@@ -70,7 +70,7 @@ final class SimulatorStreamManager {
             }
             try await service.openSimulatorApp(udid: bootedDeviceId)
             try Task.checkCancellation()
-            statusMessage = "Connecting to \(device.name)..."
+            statusMessage = "Verbindung mit \(device.name) wird hergestellt …"
             try await captureService.startCapture(deviceName: device.name, retryForWindow: true)
             try Task.checkCancellation()
         } catch {

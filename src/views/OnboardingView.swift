@@ -23,20 +23,20 @@ enum TerminalApp: Hashable {
 
     var displayName: String {
         switch self {
-        case .builtIn: return "Terminal (built-in)"
-        case .terminal: return "Terminal (external)"
-        case .ghostty: return "Ghostty (external)"
-        case .iterm: return "iTerm (external)"
+        case .builtIn: return "Terminal (integriert)"
+        case .terminal: return "Terminal (extern)"
+        case .ghostty: return "Ghostty (extern)"
+        case .iterm: return "iTerm (extern)"
         case .custom(let path):
             let name = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
-            return "\(name) (external)"
+            return "\(name) (extern)"
         }
     }
 
     /// Name without the "(external)" suffix — used in onboarding disclosure.
     var shortDisplayName: String {
         switch self {
-        case .builtIn: return "Built-in Terminal"
+        case .builtIn: return "Integriertes Terminal"
         case .terminal: return "Terminal"
         case .ghostty: return "Ghostty"
         case .iterm: return "iTerm"
@@ -236,12 +236,15 @@ struct OnboardingView: View {
                 }
 
                 VStack(spacing: 4) {
-                    Text("Welcome to Blitz Neo")
+                    Text("Willkommen bei Blitz Neo")
                         .font(.system(size: 24, weight: .bold))
-                    Text("Let's get you set up")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Richte Blitz Neo ein")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
 
                 Spacer()
             }
@@ -253,7 +256,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // Agent CLI selection (first — most users care about this)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Default AI Agent")
+                    Text("Standard-KI-Assistent")
                         .font(.headline)
 
                     VStack(spacing: 2) {
@@ -267,9 +270,9 @@ struct OnboardingView: View {
                 if selectedAgent.skipPermissionsFlag != nil {
                     Toggle(isOn: $skipAgentPermissions) {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Skip agent permissions")
+                            Text("Freigabeabfragen des Assistenten überspringen")
                                 .font(.callout)
-                            Text("Launch with \(selectedAgent.skipPermissionsFlag ?? "")")
+                            Text("Starten mit \(selectedAgent.skipPermissionsFlag ?? "")")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -287,7 +290,7 @@ struct OnboardingView: View {
                         .font(.headline)
 
                     // Built-in (recommended) — always shown
-                    terminalRow(.builtIn, label: "Built-in Terminal (recommended)")
+                    terminalRow(.builtIn, label: "Integriertes Terminal (empfohlen)")
 
                     // External terminals — collapsed under clickable header
                     VStack(alignment: .leading, spacing: 2) {
@@ -300,7 +303,7 @@ struct OnboardingView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2.weight(.semibold))
                                     .rotationEffect(.degrees(showExternalTerminals ? 90 : 0))
-                                Text("Use external terminal")
+                                Text("Externes Terminal verwenden")
                                     .font(.callout)
                             }
                             .foregroundStyle(.secondary)
@@ -321,7 +324,7 @@ struct OnboardingView: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "folder")
                                         .frame(width: 20)
-                                    Text("Choose Custom...")
+                                    Text("Anderes Terminal auswählen …")
                                     Spacer()
                                 }
                                 .padding(.vertical, 4)
@@ -460,7 +463,7 @@ struct OnboardingView: View {
                         .font(.system(size: 20, weight: .bold))
 
                     Text(
-                        "Connect your API key to continue using Blitz Neo. Your key is saved locally and never leaves your machine."
+                        "Verbinde deinen API-Schlüssel, um Blitz Neo zu nutzen. Der Schlüssel wird lokal gespeichert und bleibt auf deinem Mac."
                     )
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -471,15 +474,16 @@ struct OnboardingView: View {
                 // Form fields
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Issuer ID")
+                        Text("Issuer-ID")
                             .font(.callout.weight(.medium))
                         TextField("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", text: $ascIssuerId)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
+                            .accessibilityLabel("Issuer-ID")
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Private Key (.p8)")
+                        Text("Privater Schlüssel (.p8)")
                             .font(.callout.weight(.medium))
                         HStack(spacing: 8) {
                             Button {
@@ -487,7 +491,7 @@ struct OnboardingView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "doc.badge.plus")
-                                    Text(ascPrivateKeyFileName ?? "Choose .p8 File…")
+                                    Text(ascPrivateKeyFileName ?? ".p8-Datei auswählen …")
                                 }
                             }
                             .font(.callout)
@@ -499,12 +503,12 @@ struct OnboardingView: View {
                             }
                         }
 
-                        Text("Blitz Neo validates and saves this key when you press Next.")
+                        Text("Mit „Weiter“ prüft und speichert Blitz Neo diesen Schlüssel.")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
 
                         if ascPrivateKeyFileName != nil && resolvedASCKeyID == nil {
-                            Text("Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically.")
+                            Text("Behalte den ursprünglichen Namen der heruntergeladenen .p8-Datei bei, damit Blitz Neo die Schlüssel-ID automatisch erkennt.")
                                 .font(.caption2)
                                 .foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -527,7 +531,7 @@ struct OnboardingView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "sparkles")
-                            Text("Setup with AI")
+                            Text("Mit KI einrichten")
                             Image(systemName: "arrow.right")
                                 .font(.caption)
                         }
@@ -539,7 +543,7 @@ struct OnboardingView: View {
                     Link(destination: URL(string: "https://appstoreconnect.apple.com/access/integrations/api")!) {
                         HStack(spacing: 6) {
                             Image(systemName: "key")
-                            Text("Setup manually")
+                            Text("Manuell einrichten")
                             Image(systemName: "arrow.right")
                                 .font(.caption)
                         }
@@ -557,7 +561,7 @@ struct OnboardingView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.caption2.weight(.semibold))
                                     .rotationEffect(.degrees(ascShowInstructions ? 90 : 0))
-                                Text("How to generate your API key")
+                                Text("So erstellst du deinen API-Schlüssel")
                                     .font(.caption.weight(.medium))
                             }
                             .foregroundStyle(.blue)
@@ -567,14 +571,14 @@ struct OnboardingView: View {
 
                         if ascShowInstructions {
                             VStack(alignment: .leading, spacing: 6) {
-                                ascInstructionStep(1, "Go to **App Store Connect > Users and Access > Integrations > App Store Connect API**")
-                                ascInstructionStep(2, "Select the **Team Keys** tab (not Individual Keys)")
-                                ascInstructionStep(3, "Click the **+** button to generate a new key")
-                                ascInstructionStep(4, "Set Access to **Admin** and give the key a name")
-                                ascInstructionStep(5, "Click **Generate**")
-                                ascInstructionStep(6, "Copy the **Issuer ID** shown at the top of the page")
-                                ascInstructionStep(7, "Click **Download** to save the .p8 file")
-                                Text("The .p8 file can only be downloaded once. Store it securely.")
+                                ascInstructionStep(1, "Öffne **App Store Connect > Benutzer und Zugriff > Integrationen > App Store Connect API**.")
+                                ascInstructionStep(2, "Wähle den Tab **Teamschlüssel** statt „Individuelle Schlüssel“.")
+                                ascInstructionStep(3, "Klicke auf **+**, um einen neuen Schlüssel zu erstellen.")
+                                ascInstructionStep(4, "Wähle **Admin** als Zugriffsrecht und gib dem Schlüssel einen Namen.")
+                                ascInstructionStep(5, "Klicke auf **Generieren**.")
+                                ascInstructionStep(6, "Kopiere die **Issuer-ID** oben auf der Seite.")
+                                ascInstructionStep(7, "Klicke auf **Laden**, um die .p8-Datei zu speichern.")
+                                Text("Die .p8-Datei kann nur einmal heruntergeladen werden. Bewahre sie sicher auf.")
                                     .font(.caption2)
                                     .foregroundStyle(.orange)
                                     .padding(.leading, 20)
@@ -618,7 +622,7 @@ struct OnboardingView: View {
 
     private func validateAndSaveASCCredentials() {
         guard let resolvedASCKeyID else {
-            ascSaveError = "Use the original downloaded .p8 filename so Blitz Neo can detect the Apple key automatically."
+            ascSaveError = "Behalte den ursprünglichen Namen der heruntergeladenen .p8-Datei bei, damit Blitz Neo die Schlüssel-ID automatisch erkennt."
             return
         }
         ascIsSaving = true
@@ -675,7 +679,7 @@ struct OnboardingView: View {
     private func launchASCSetupWithAI() {
         let agent = selectedAgent
         let terminal = onboardingTerminal
-        let prompt = "Use the /asc-team-key-create skill to create a new App Store Connect API key, then call the asc_set_credentials MCP tool to fill the form so I can verify and save."
+        let prompt = "Erstelle mit dem Skill /asc-team-key-create einen neuen API-Schlüssel für App Store Connect. Fülle anschließend mit dem MCP-Werkzeug asc_set_credentials das Formular aus, damit ich die Angaben prüfen und speichern kann."
         TerminalLauncher.launch(
             projectPath: BlitzPaths.mcps.path,
             agent: agent,
@@ -713,8 +717,8 @@ struct OnboardingView: View {
     private var slideAskAI: some View {
         VStack(spacing: 6) {
             slideHeader(
-                title: "Open \(selectedAgent.displayName) in Blitz Neo",
-                subtitle: "Click the terminal icon anywhere to launch \(selectedAgent.displayName). Select one of your imported apps in the dashboard and ask it to submit your app to the App Store."
+                title: "\(selectedAgent.displayName) in Blitz Neo öffnen",
+                subtitle: "Über das Terminal-Symbol öffnest du \(selectedAgent.displayName). Wähle in der Übersicht eine importierte App aus und bitte den Assistenten, sie im App Store einzureichen."
             )
 
             // Demo video — transparent background, aspect fit
@@ -740,7 +744,7 @@ struct OnboardingView: View {
     private var bottomBar: some View {
         HStack {
             if currentStep > 0 {
-                Button("Back") {
+                Button("Zurück") {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         currentStep -= 1
                     }
@@ -776,14 +780,14 @@ struct OnboardingView: View {
                             .controlSize(.small)
                             .padding(.horizontal, 8)
                     } else {
-                        Text("Next")
+                        Text("Weiter")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
                 .disabled(currentSlide == .ascSetup && (!ascIsValid || ascIsSaving))
             } else {
-                Button("Get Started") {
+                Button("Loslegen") {
                     finishOnboarding()
                 }
                 .buttonStyle(.borderedProminent)

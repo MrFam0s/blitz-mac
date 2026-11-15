@@ -10,10 +10,10 @@ protocol ASCTestFlightService {
 }
 extension ASCTestFlightService {
     func fetchTestFlightBuildDetail(appId: String, buildId: String) async throws -> ASCTestFlightBuildDetail {
-        throw ASCError.notFound("Build distribution details are unavailable.")
+        throw ASCError.notFound("Die Verteilungsdetails des Builds sind nicht verfügbar.")
     }
     func fetchTestFlightGroupDetail(appId: String, groupId: String) async throws -> ASCTestFlightGroupDetail {
-        throw ASCError.notFound("Group details are unavailable.")
+        throw ASCError.notFound("Die Gruppendetails sind nicht verfügbar.")
     }
 }
 extension AppStoreConnectService: ASCTestFlightService {}
@@ -52,7 +52,7 @@ extension ASCManager {
             }
             if let buildId = selectedBuildId {
                 guard await refreshBetaFeedback(buildId: buildId, using: service) else {
-                    throw ASCError.notFound(tabError[.feedback] ?? "Could not refresh tester feedback")
+                    throw ASCError.notFound(tabError[.feedback] ?? "Rückmeldungen der Tester konnten nicht aktualisiert werden")
                 }
             }
         default: break
@@ -81,7 +81,7 @@ extension ASCManager {
         return await testFlightBuildDetailCache.refresh(id: buildId, force: force, isCurrent: isCurrent) {
             let detail = try await service.fetchTestFlightBuildDetail(appId: appId, buildId: buildId)
             guard detail.build.id == buildId, detail.build.appId == appId else {
-                throw ASCError.notFound("The returned build does not belong to this app.")
+                throw ASCError.notFound("Der empfangene Build gehört nicht zu dieser App.")
             }
             return detail
         }
@@ -95,7 +95,7 @@ extension ASCManager {
             let detail = try await service.fetchTestFlightGroupDetail(appId: appId, groupId: groupId)
             guard detail.group.id == groupId, detail.group.appId == appId,
                   detail.builds.allSatisfy({ $0.appId == appId }) else {
-                throw ASCError.notFound("The returned group does not match the selected group.")
+                throw ASCError.notFound("Die empfangene Gruppe stimmt nicht mit der ausgewählten Gruppe überein.")
             }
             return detail
         }

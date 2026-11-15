@@ -9,9 +9,9 @@ enum ASCError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid URL"
+            return "Ungültige URL"
         case .notFound(let what):
-            return "\(what) not found"
+            return "Nicht gefunden: \(what)"
         case .httpError(let code, let body):
             return "HTTP \(code): \(Self.parseErrorMessages(body))"
         }
@@ -36,7 +36,7 @@ enum ASCError: LocalizedError {
     }
 
     var programLicenseAgreementMessage: String {
-        "Your team's Account Holder must accept the latest Apple Developer Program License Agreement before Blitz Neo can continue this App Store Connect action."
+        "Der Accountinhaber deines Teams muss die aktuelle Apple-Developer-Programmvereinbarung akzeptieren, bevor Blitz Neo diese Aktion in App Store Connect fortsetzen kann."
     }
 
     private static func parseErrorMessages(_ body: String) -> String {

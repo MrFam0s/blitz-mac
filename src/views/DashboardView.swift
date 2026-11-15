@@ -39,7 +39,7 @@ struct DashboardView: View {
             myAppsContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .alert("Couldn’t update Dashboard", isPresented: Binding(
+        .alert("Dashboard konnte nicht aktualisiert werden", isPresented: Binding(
             get: { visibilityError != nil },
             set: { if !$0 { visibilityError = nil } }
         )) {
@@ -71,7 +71,7 @@ struct DashboardView: View {
     }
 
     private var dashboardTitle: some View {
-        Label("My Apps", systemImage: "folder")
+        Label("Meine Apps", systemImage: "folder")
             .font(BlitzLayout.pageTitle)
             .fixedSize()
     }
@@ -80,17 +80,17 @@ struct DashboardView: View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search apps", text: $searchText)
+            TextField("Apps suchen", text: $searchText)
                 .textFieldStyle(.plain)
-                .accessibilityLabel("Search apps by name or bundle ID")
+                .accessibilityLabel("Apps nach Name oder Bundle-ID suchen")
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-                .help("Clear search")
+                .accessibilityLabel("Suche leeren")
+                .help("Suche leeren")
             }
         }
         .font(.system(size: 12))
@@ -109,12 +109,12 @@ struct DashboardView: View {
             Button {
                 showsHiddenApps.toggle()
             } label: {
-                Label(showsHiddenApps ? "Back to My Apps" : "Hidden Apps (\(hiddenAppCount))",
+                Label(showsHiddenApps ? "Zurück zu meinen Apps" : "Ausgeblendete Apps (\(hiddenAppCount))",
                       systemImage: showsHiddenApps ? "square.grid.2x2" : "eye.slash")
             }
             .buttonStyle(.borderless)
             .fixedSize()
-            .help("View and restore apps removed from this dashboard")
+            .help("Ausgeblendete Apps anzeigen und wieder einblenden")
 
             Button {
                 forceRefreshApps()
@@ -151,14 +151,14 @@ struct DashboardView: View {
         dashboardSummary.isLoadingSummary && !dashboardSummary.hasLoadedSummary
     }
     private var summaryLoadingStatusText: String {
-        dashboardSummary.loadingSummaryStatusText ?? "Loading apps…"
+        dashboardSummary.loadingSummaryStatusText ?? "Apps werden geladen …"
     }
     private var isRefreshingApps: Bool {
         dashboardSummary.isLoading(for: summaryHydrationKey)
     }
     private var refreshButtonHelpText: String {
-        guard let date = dashboardSummary.refreshedAt else { return "Refresh My Apps" }
-        return "Refresh My Apps · Last updated \(date.formatted(date: .abbreviated, time: .shortened))"
+        guard let date = dashboardSummary.refreshedAt else { return "Apps aktualisieren" }
+        return "Apps aktualisieren · Zuletzt aktualisiert \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private var myAppsContent: some View {
@@ -171,19 +171,19 @@ struct DashboardView: View {
                 if !showsHiddenApps {
                     BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                         statCard(
-                            title: "Live on Store",
+                            title: "Im App Store",
                             value: statValue(visibleSummary.liveCount),
                             color: .green,
                             icon: "checkmark.seal.fill"
                         )
                         statCard(
-                            title: "Pending Review",
+                            title: "In Prüfung",
                             value: statValue(visibleSummary.pendingCount),
                             color: .orange,
                             icon: "clock.fill"
                         )
                         statCard(
-                            title: "Rejected Apps",
+                            title: "Abgelehnt",
                             value: statValue(visibleSummary.rejectedCount),
                             color: .red,
                             icon: "xmark.seal.fill"
@@ -192,7 +192,7 @@ struct DashboardView: View {
                 }
 
                 if showsHiddenApps {
-                    Text("Hidden apps stay in App Store Connect and on disk. Restore them here whenever you need them.")
+                    Text("Ausgeblendete Apps bleiben in App Store Connect und auf dem Mac erhalten. Du kannst sie hier wieder einblenden.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -236,16 +236,16 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let lastHiddenApp {
                     HStack(alignment: .top, spacing: 8) {
-                        Text("\(lastHiddenApp.name) removed from Dashboard.")
+                        Text("\(lastHiddenApp.name) wurde im Dashboard ausgeblendet.")
                             .font(.callout)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
-                        Button("Undo") { setHidden(false, for: lastHiddenApp) }
+                        Button("Rückgängig") { setHidden(false, for: lastHiddenApp) }
                         Button { self.lastHiddenApp = nil } label: {
                             Image(systemName: "xmark")
                         }
                         .buttonStyle(.plain)
-                        .help("Dismiss")
+                        .help("Schließen")
                     }
                 }
                 HStack(spacing: 12) {
@@ -297,13 +297,13 @@ struct DashboardView: View {
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
             Text(!searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                 ? "No matching apps" : (showsHiddenApps ? "No hidden apps" : "No apps to show"))
+                 ? "Keine passenden Apps" : (showsHiddenApps ? "Keine ausgeblendeten Apps" : "Keine Apps vorhanden"))
                 .font(.headline)
             Text(!searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                 ? "Try another name or bundle ID."
-                 : (showsHiddenApps ? "Apps you remove from the dashboard will appear here."
-                    : (hiddenAppCount > 0 ? "Restore an app from Hidden Apps, or import another project."
-                       : "Create a new app or import an existing project to get started.")))
+                 ? "Versuche einen anderen Namen oder eine andere Bundle-ID."
+                 : (showsHiddenApps ? "Hier erscheinen Apps, die du im Dashboard ausblendest."
+                    : (hiddenAppCount > 0 ? "Blende eine App wieder ein oder importiere ein weiteres Projekt."
+                       : "Erstelle ein neues Projekt oder importiere ein vorhandenes.")))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -348,7 +348,7 @@ struct DashboardView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open \(row.name)")
+        .accessibilityLabel("\(row.name) öffnen")
         .contextMenu {
             if let links = row.projectLinks, links.count > 1 {
                 ForEach(links) { link in
@@ -439,11 +439,11 @@ struct DashboardView: View {
     private func visibilityAction(for row: DashboardAppRow) -> some View {
         if visibility.isHidden(row) {
             Button { setHidden(false, for: row) } label: {
-                Label("Restore to Dashboard", systemImage: "eye")
+                Label("Im Dashboard einblenden", systemImage: "eye")
             }
         } else {
             Button { setHidden(true, for: row) } label: {
-                Label("Remove from Dashboard", systemImage: "eye.slash")
+                Label("Im Dashboard ausblenden", systemImage: "eye.slash")
             }
         }
     }
@@ -530,9 +530,9 @@ struct DashboardView: View {
     }
 
     private func statusCaption(for row: DashboardAppRow) -> String? {
-        if row.source == .localOnly { return "Local only" }
+        if row.source == .localOnly { return "Nur lokal" }
         if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) { return nil }
-        return row.status?.isUnavailableOnStore == true ? "Not on the App Store" : nil
+        return row.status?.isUnavailableOnStore == true ? "Nicht im App Store" : nil
     }
 
     @ViewBuilder
@@ -540,7 +540,7 @@ struct DashboardView: View {
         if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) {
             Image(systemName: "questionmark.circle.fill")
                 .foregroundStyle(.orange)
-                .help("Status could not be refreshed")
+                .help("Status konnte nicht aktualisiert werden")
         } else if let status = row.status {
             if status.isRejected {
                 Image(systemName: "xmark.circle.fill")
@@ -554,7 +554,7 @@ struct DashboardView: View {
             } else if status.isUnavailableOnStore {
                 Image(systemName: "minus.circle.fill")
                     .foregroundStyle(.secondary)
-                    .help("Not available in any App Store territory")
+                    .help("In keinem App-Store-Gebiet verfügbar")
             } else {
                 Image(systemName: "pencil.circle.fill")
                     .foregroundStyle(.secondary)

@@ -417,7 +417,7 @@ struct ProjectBundleIDSelectorView: View {
             discoveredBundleIds = candidates
             applyDefaultSelection(candidates)
             isASCFilteredSelection = false
-            self.error = "Could not verify discovered bundle IDs in App Store Connect: \(error.localizedDescription)"
+            self.error = "Die erkannten Bundle-IDs konnten in App Store Connect nicht geprüft werden: \(error.localizedDescription)"
         }
     }
 

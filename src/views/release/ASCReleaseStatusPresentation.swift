@@ -13,48 +13,48 @@ struct ASCStatusPresentation: Equatable {
 enum ASCReleaseStatusPresentation {
     static func version(_ version: ASCAppStoreVersion?, distributionReadyVersionID: String?) -> ASCStatusPresentation {
         guard let version else {
-            return .init(label: "Unknown", symbol: "questionmark.circle", tone: .neutral, help: "Version status is not available.")
+            return .init(label: "Unbekannt", symbol: "questionmark.circle", tone: .neutral, help: "Der Versionsstatus ist nicht verfügbar.")
         }
         let state = ASCReleaseStatus.normalize(version.attributes.effectiveState)
         if ASCReleaseStatus.isLive(state) {
             if version.id == distributionReadyVersionID {
-                return .init(label: "Approved for distribution", symbol: "checkmark.seal", tone: .neutral,
-                             help: "Apple has approved this version. Store availability is checked separately.")
+                return .init(label: "Zur Verteilung freigegeben", symbol: "checkmark.seal", tone: .neutral,
+                             help: "Apple hat diese Version freigegeben. Die Verfügbarkeit im Store wird separat geprüft.")
             }
-            return .init(label: "Previously released", symbol: "clock.arrow.circlepath", tone: .neutral,
-                         help: "This is a previous release, not the current App Store version.")
+            return .init(label: "Früher veröffentlicht", symbol: "clock.arrow.circlepath", tone: .neutral,
+                         help: "Dies ist eine frühere Veröffentlichung, nicht die aktuelle App-Store-Version.")
         }
         let label: String
         let symbol: String
         let tone: ASCStatusPresentation.Tone
         switch state {
         case "REPLACED_WITH_NEW_VERSION":
-            label = "Previously released"; symbol = "clock.arrow.circlepath"; tone = .neutral
+            label = "Früher veröffentlicht"; symbol = "clock.arrow.circlepath"; tone = .neutral
         case "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE":
-            label = "Removed from distribution"; symbol = "minus.circle"; tone = .neutral
+            label = "Nicht mehr im Verkauf"; symbol = "minus.circle"; tone = .neutral
         case "PREPARE_FOR_SUBMISSION":
-            label = "Draft"; symbol = "doc.text"; tone = .warning
+            label = "Entwurf"; symbol = "doc.text"; tone = .warning
         case "DEVELOPER_REJECTED":
-            label = "Developer Rejected"; symbol = "arrow.uturn.backward.circle"; tone = .warning
+            label = "Zurückgezogen"; symbol = "arrow.uturn.backward.circle"; tone = .warning
         case "INVALID_BINARY":
-            label = "Submission Error"; symbol = "exclamationmark.circle"; tone = .rejected
+            label = "Einreichungsfehler"; symbol = "exclamationmark.circle"; tone = .rejected
         case "REJECTED", "METADATA_REJECTED":
-            label = state == "REJECTED" ? "Rejected" : "Metadata Rejected"
+            label = state == "REJECTED" ? "Abgelehnt" : "Metadaten abgelehnt"
             symbol = "xmark.circle"; tone = .rejected
         case "IN_REVIEW":
-            label = "In Review"; symbol = "eye"; tone = .review
+            label = "In Prüfung"; symbol = "eye"; tone = .review
         case "WAITING_FOR_REVIEW":
-            label = "Waiting for Review"; symbol = "clock"; tone = .review
+            label = "Wartet auf Prüfung"; symbol = "clock"; tone = .review
         case "ACCEPTED", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE":
-            label = state == "ACCEPTED" ? "Accepted" : "Pending Release"
+            label = state == "ACCEPTED" ? "Akzeptiert" : "Veröffentlichung ausstehend"
             symbol = "clock.badge.checkmark"; tone = .review
         case "PROCESSING", "PROCESSING_FOR_APP_STORE", "PROCESSING_FOR_DISTRIBUTION":
-            label = "Processing"; symbol = "hourglass"; tone = .review
+            label = "In Verarbeitung"; symbol = "hourglass"; tone = .review
         default:
-            label = state.isEmpty ? "Unknown" : state.replacingOccurrences(of: "_", with: " ").capitalized
+            label = BlitzDisplayText.status(state)
             symbol = "info.circle"; tone = .neutral
         }
-        return .init(label: label, symbol: symbol, tone: tone, help: "Apple version status: \(state.isEmpty ? "unknown" : state)")
+        return .init(label: label, symbol: symbol, tone: tone, help: "Apple-Versionsstatus: \(BlitzDisplayText.status(state))")
     }
 
     static func store(
@@ -65,27 +65,27 @@ enum ASCReleaseStatusPresentation {
         failed: Bool
     ) -> ASCStatusPresentation {
         if isLoading {
-            return .init(label: "Checking availability…", symbol: "clock", tone: .neutral,
-                         help: "Checking current App Store availability.")
+            return .init(label: "Verfügbarkeit wird geprüft …", symbol: "clock", tone: .neutral,
+                         help: "Die aktuelle Verfügbarkeit im App Store wird geprüft.")
         }
         if failed {
-            return .init(label: "Availability unknown", symbol: "questionmark.circle", tone: .neutral,
-                         help: "Store availability could not be checked. Refresh this tab to try again.")
+            return .init(label: "Verfügbarkeit unbekannt", symbol: "questionmark.circle", tone: .neutral,
+                         help: "Die Store-Verfügbarkeit konnte nicht geprüft werden. Aktualisiere diese Rubrik, um es erneut zu versuchen.")
         }
         if availability == .unavailable {
-            return .init(label: "Not on the App Store", symbol: "minus.circle", tone: .neutral,
-                         help: "This app is currently unavailable on the App Store.")
+            return .init(label: "Nicht im App Store", symbol: "minus.circle", tone: .neutral,
+                         help: "Diese App ist aktuell nicht im App Store verfügbar.")
         }
         if availability == .available, let liveVersionID, liveVersionID == distributionReadyVersionID {
-            return .init(label: "Live on the App Store", symbol: "checkmark.seal.fill", tone: .positive,
-                         help: "Current App Store availability is confirmed for this release.")
+            return .init(label: "Im App Store verfügbar", symbol: "checkmark.seal.fill", tone: .positive,
+                         help: "Die aktuelle App-Store-Verfügbarkeit dieser Version ist bestätigt.")
         }
         if availability == nil {
-            return .init(label: "Availability unknown", symbol: "questionmark.circle", tone: .neutral,
-                         help: "Current App Store availability has not been confirmed.")
+            return .init(label: "Verfügbarkeit unbekannt", symbol: "questionmark.circle", tone: .neutral,
+                         help: "Die aktuelle App-Store-Verfügbarkeit wurde noch nicht bestätigt.")
         }
-        return .init(label: "No live version", symbol: "minus.circle", tone: .neutral,
-                     help: "No current released version is available for this platform.")
+        return .init(label: "Keine veröffentlichte Version", symbol: "minus.circle", tone: .neutral,
+                     help: "Für diese Plattform ist keine aktuelle veröffentlichte Version verfügbar.")
     }
 }
 

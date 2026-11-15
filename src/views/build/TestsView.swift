@@ -21,24 +21,24 @@ struct TestsView: View {
                 hero
                 statusBadge
                 ExampleCard(
-                    title: "Add and Test a Feature",
+                    title: "Funktion ergänzen und testen",
                     icon: "person.badge.plus",
-                    prompt: "Add user signup and login, then test the full flow on the simulator.",
-                    preview: "Agent builds the feature, then walks through the entire UX flow on the simulator — tapping, typing, and verifying each screen.",
+                    prompt: "Ergänze Registrierung und Anmeldung und teste anschließend den gesamten Ablauf im Simulator.",
+                    preview: "Der Agent entwickelt die Funktion und prüft anschließend den gesamten Ablauf im Simulator: Er tippt, gibt Daten ein und kontrolliert jede Ansicht.",
                     detail: detailSignup
                 )
                 ExampleCard(
-                    title: "Take App Store Screenshots",
+                    title: "App-Store-Screenshots aufnehmen",
                     icon: "camera.viewfinder",
-                    prompt: "Take 10 App Store screenshots in diverse UI states and upload them.",
-                    preview: "Agent navigates the app into different states, captures screenshots, and uploads them to App Store Connect.",
+                    prompt: "Erstelle zehn App-Store-Screenshots in unterschiedlichen Ansichten der App und lade sie hoch.",
+                    preview: "Der Agent öffnet verschiedene Ansichten der App, nimmt Screenshots auf und lädt sie in App Store Connect hoch.",
                     detail: detailScreenshots
                 )
                 ExampleCard(
-                    title: "Set Up and Test Subscriptions",
+                    title: "Abos einrichten und testen",
                     icon: "creditcard",
-                    prompt: "Create a subscription, add a paywall, and test the purchase flow.",
-                    preview: "Agent creates a subscription in ASC, adds a paywall to your codebase, and tests the purchase flow on a device.",
+                    prompt: "Erstelle ein Abo, ergänze eine Kaufansicht und teste den Kaufablauf.",
+                    preview: "Der Agent erstellt ein Abo in App Store Connect, ergänzt eine Kaufansicht im Projekt und testet den Kaufablauf auf einem Gerät.",
                     detail: detailSubscriptions
                 )
             }
@@ -52,11 +52,11 @@ struct TestsView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Automate Testing with AI Agents", systemImage: "sparkles")
+            Label("Tests mit KI-Agenten automatisieren", systemImage: "sparkles")
                 .font(BlitzLayout.pageTitle)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("In a Blitz Neo project directory, you can ask agents to use iPhones to test features and find bugs. Using Blitz Neo's **iPhone-MCP**, your agent can tap, swipe, and type in both simulated and physical iPhone devices.")
+            Text("Im Projektordner von Blitz Neo kannst du Agenten beauftragen, Funktionen auf iPhones zu testen und Fehler zu finden. Über das **iPhone-MCP** von Blitz Neo kann dein Agent tippen, wischen und Text eingeben – sowohl im Simulator als auch auf einem echten iPhone.")
                 .font(BlitzLayout.bodyFont)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -71,8 +71,8 @@ struct TestsView: View {
                 .fill(iphoneMCPConfigured ? .green : .orange)
                 .frame(width: 8, height: 8)
             Text(iphoneMCPConfigured
-                 ? "iPhone-MCP configured in this project"
-                 : "iPhone-MCP not found — open a project to get started")
+                 ? "iPhone-MCP ist für dieses Projekt eingerichtet"
+                 : "iPhone-MCP nicht gefunden – öffne ein Projekt, um zu beginnen")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -82,39 +82,39 @@ struct TestsView: View {
     // MARK: - Details
 
     private let detailSignup = """
-    The agent generates the screens, hooks them up to your backend, then uses **iPhone-MCP** to walk through the flow:
+    Der Agent erstellt die Ansichten, verbindet sie mit deinem Backend und prüft den Ablauf über **iPhone-MCP**:
 
-    1. Launch the app and navigate to the signup screen
-    2. Type a test email and password using `device_action`
-    3. Tap "Sign Up" and verify the home screen loads
-    4. Tap "Sign Out" and confirm it returns to login
-    5. Sign back in with the same credentials
-    6. Use `describe_screen` to verify the user is logged in
+    1. App starten und die Registrierung öffnen
+    2. Test-E-Mail-Adresse und Passwort mit `device_action` eingeben
+    3. Auf „Registrieren“ tippen und prüfen, ob die Startansicht geladen wird
+    4. Auf „Abmelden“ tippen und die Rückkehr zur Anmeldung prüfen
+    5. Mit denselben Zugangsdaten erneut anmelden
+    6. Mit `describe_screen` prüfen, ob die Anmeldung erfolgreich war
 
-    If any step fails, the agent sees the actual screen and can debug immediately.
+    Schlägt ein Schritt fehl, sieht der Agent den tatsächlichen Bildschirm und kann den Fehler direkt untersuchen.
     """
 
     private let detailScreenshots = """
-    The agent uses **iPhone-MCP** to put the app in exactly the right state before each capture:
+    Der Agent bereitet die App vor jeder Aufnahme über **iPhone-MCP** vor:
 
-    1. Navigate to each screen and configure the UI — scroll, tap into views, fill in data
-    2. Call `get_screenshot` to capture each state at full resolution
-    3. Use `screenshots_switch_localization` → `screenshots_put_track_slot` / `screenshots_remove_track_slot` / `screenshots_reorder_track` → `screenshots_save` to upload to App Store Connect
+    1. Die gewünschte Ansicht öffnen, scrollen und passende Daten eingeben
+    2. Mit `get_screenshot` jede Ansicht in voller Auflösung aufnehmen
+    3. Mit `screenshots_switch_localization` → `screenshots_put_track_slot` / `screenshots_remove_track_slot` / `screenshots_reorder_track` → `screenshots_save` die Screenshots in App Store Connect hochladen
 
-    You get pixel-perfect, context-rich screenshots without touching the simulator.
+    So erhältst du aussagekräftige Screenshots, ohne den Simulator selbst bedienen zu müssen.
     """
 
     private let detailSubscriptions = """
-    The agent handles the full lifecycle — from App Store Connect to on-device testing:
+    Der Agent begleitet den gesamten Ablauf – von App Store Connect bis zum Test auf dem Gerät:
 
-    1. Call `asc_create_subscription` to create a subscription group and pricing plan
-    2. Add a paywall screen in your codebase triggered by the appropriate user action
-    3. Build and deploy to a **physical device** with a sandbox Apple ID
-    4. Use **iPhone-MCP** to navigate through the app until the paywall appears
-    5. Tap "Subscribe" to trigger the sandbox Apple Pay flow
-    6. Confirm the premium content unlocks after purchase
+    1. Mit `asc_create_subscription` eine Abo-Gruppe und die Preise einrichten
+    2. Eine Kaufansicht im Projekt ergänzen, die bei der passenden Benutzeraktion erscheint
+    3. Die App erstellen und auf einem **echten Gerät** mit einem Sandbox-Apple-Account installieren
+    4. Über **iPhone-MCP** zur Kaufansicht navigieren
+    5. Auf „Abonnieren“ tippen, um den Testkauf in der Sandbox zu starten
+    6. Prüfen, ob die Premium-Inhalte nach dem Kauf freigeschaltet sind
 
-    **Note:** Create a Sandbox Apple Account in App Store Connect → Users and Access → Sandbox, and sign into it on the test device. The agent handles everything else.
+    **Hinweis:** Erstelle einen Sandbox-Apple-Account unter App Store Connect → Benutzer und Zugriffsrechte → Sandbox und melde dich damit auf dem Testgerät an. Der Agent übernimmt die weiteren Schritte.
     """
 }
 
@@ -154,7 +154,7 @@ private struct ExampleCard: View {
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 }
-                .help("Copy prompt")
+                .help("Anfrage kopieren")
             }
 
             // Preview text
@@ -168,7 +168,7 @@ private struct ExampleCard: View {
                 withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 4) {
-                    Text(expanded ? "Hide details" : "How it works")
+                    Text(expanded ? "Details ausblenden" : "So funktioniert es")
                         .font(.callout.weight(.medium))
                     Image(systemName: "chevron.right")
                         .font(.caption)

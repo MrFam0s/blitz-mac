@@ -25,13 +25,13 @@ struct AppCommands: Commands {
             Divider()
 
             // Open Recent submenu
-            Menu("Open Recent") {
+            Menu("Zuletzt geöffnet") {
                 let sorted = appState.projectManager.projects.sorted {
                     ($0.metadata.lastOpenedAt ?? .distantPast) > ($1.metadata.lastOpenedAt ?? .distantPast)
                 }
 
                 if sorted.isEmpty {
-                    Text("No Recent Projects")
+                    Text("Keine zuletzt geöffneten Projekte")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sorted) { project in
@@ -46,7 +46,7 @@ struct AppCommands: Commands {
 
                     Divider()
 
-                    Button("Clear Recent Projects") {
+                    Button("Liste leeren") {
                         let storage = ProjectStorage()
                         storage.clearRecentProjects()
                         Task {
@@ -58,7 +58,7 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button("Close Project") {
+            Button("Projekt schließen") {
                 appState.activeProjectId = nil
                 appState.activeTab = .dashboard
             }
@@ -84,7 +84,7 @@ struct AppCommands: Commands {
 
         // View > Terminal toggle
         CommandGroup(after: .sidebar) {
-            Button(appState.showTerminal ? "Hide Terminal" : "Show Terminal") {
+            Button(appState.showTerminal ? "Terminal ausblenden" : "Terminal einblenden") {
                 appState.showTerminal.toggle()
                 if appState.showTerminal && appState.terminalManager.sessions.isEmpty {
                     appState.terminalManager.createSession(projectPath: appState.activeProject?.path)
@@ -95,7 +95,7 @@ struct AppCommands: Commands {
 
         // Build menu
         CommandMenu("Build") {
-            Button("Run") {
+            Button("Starten") {
                 guard appState.activeProject != nil else { return }
                 Task {
                     await appState.startProjectSimulator()
@@ -104,7 +104,7 @@ struct AppCommands: Commands {
             .keyboardShortcut("r", modifiers: .command)
             .disabled(appState.activeProjectId == nil)
 
-            Button("Stop") {
+            Button("Stoppen") {
                 Task { await appState.stopProjectSimulator() }
             }
             .keyboardShortcut(".", modifiers: .command)
@@ -117,7 +117,7 @@ struct AppCommands: Commands {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Select a Blitz Neo project folder"
+        panel.message = "Wähle einen Blitz-Neo-Projektordner aus."
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
@@ -130,7 +130,7 @@ struct AppCommands: Commands {
             }
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Cannot Open Project"
+            alert.messageText = "Projekt konnte nicht geöffnet werden"
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .warning
             alert.runModal()

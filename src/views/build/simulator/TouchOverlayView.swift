@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 // MARK: - Touch Overlay Skin
@@ -14,10 +15,10 @@ enum TouchOverlaySkin: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .laser: "Laser"
-        case .ripple: "Ripple"
-        case .aurora: "Aurora"
-        case .spark: "Spark"
-        case .ghost: "Ghost"
+        case .ripple: "Wellen"
+        case .aurora: "Polarlicht"
+        case .spark: "Funken"
+        case .ghost: "Geist"
         }
     }
 

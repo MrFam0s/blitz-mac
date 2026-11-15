@@ -74,11 +74,11 @@ extension ASCManager {
 
         var errorDescription: String? {
             switch self {
-            case .ascServiceNotConfigured: return "ASC service not configured"
-            case .missingBundleId: return "No confirmed app-creation operation is open. Return to bundle-ID setup first."
-            case .staleOperation: return "The project, account or app-creation operation changed. Return to the original project and restart setup."
-            case .identityMismatch: return "The supplied app identity does not match the confirmed creation operation. No app was assigned."
-            case .projectUnavailable: return "The original project is no longer available. No project metadata was updated."
+            case .ascServiceNotConfigured: return "App Store Connect ist nicht eingerichtet."
+            case .missingBundleId: return "Es ist kein bestätigter Vorgang zum Anlegen einer App geöffnet. Kehre zuerst zur Einrichtung der Bundle-ID zurück."
+            case .staleOperation: return "Das Projekt, das Konto oder der Vorgang zum Anlegen der App hat sich geändert. Kehre zum ursprünglichen Projekt zurück und starte die Einrichtung erneut."
+            case .identityMismatch: return "Die angegebenen App-Kenndaten stimmen nicht mit dem bestätigten Vorgang überein. Es wurde keine App zugeordnet."
+            case .projectUnavailable: return "Das ursprüngliche Projekt ist nicht mehr verfügbar. Es wurden keine Projektmetadaten aktualisiert."
             }
         }
     }
@@ -169,7 +169,7 @@ extension ASCManager {
         pendingBundleIDSetup = context
         completed = true
         return BundleIDRegistrationResult(context: context, capabilitiesEnabled: enabled,
-            canonicalIdentifierNotice: canonical == identity.bundleId ? nil : "Apple already registered this identifier as ‘\(canonical)’. This exact spelling will be used below.")
+            canonicalIdentifierNotice: canonical == identity.bundleId ? nil : "Apple hat diese Kennung bereits als „\(canonical)“ registriert. Diese genaue Schreibweise wird im Folgenden verwendet.")
     }
 
     func confirmBundleIDSetupAppCreated(

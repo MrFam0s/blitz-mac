@@ -7,7 +7,7 @@ struct ASCVersionPickerBar<Content: View>: View {
     var onPublishUpdate: (() -> Void)? = nil
     var appStoreURL: URL? = nil
     var refreshTab: AppTab? = nil
-    var refreshHelpText: String = "Refresh this tab"
+    var refreshHelpText: String = "Diese Rubrik aktualisieren"
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -43,8 +43,8 @@ struct ASCVersionPickerBar<Content: View>: View {
                             .font(.system(size: 12, weight: .medium))
                             .frame(width: 20, height: 24)
                     }
-                    .accessibilityLabel("Open in App Store Connect")
-                    .help("Open in App Store Connect")
+                    .accessibilityLabel("In App Store Connect öffnen")
+                    .help("In App Store Connect öffnen")
                 }
                 if let refreshTab {
                     ASCTabRefreshButton(asc: asc, tab: refreshTab, helpText: refreshHelpText)
@@ -112,7 +112,7 @@ extension ASCVersionPickerBar where Content == EmptyView {
         onPublishUpdate: (() -> Void)? = nil,
         appStoreURL: URL? = nil,
         refreshTab: AppTab? = nil,
-        refreshHelpText: String = "Refresh this tab"
+        refreshHelpText: String = "Diese Rubrik aktualisieren"
     ) {
         self.asc = asc
         self.selection = selection

@@ -73,33 +73,33 @@ struct AppInformationView: View {
     }
 
     private static let categories: [(String, String)] = [
-        ("GAMES", "Games"),
-        ("UTILITIES", "Utilities"),
-        ("PRODUCTIVITY", "Productivity"),
-        ("SOCIAL_NETWORKING", "Social Networking"),
-        ("PHOTO_AND_VIDEO", "Photo & Video"),
-        ("MUSIC", "Music"),
-        ("TRAVEL", "Travel"),
-        ("SPORTS", "Sports"),
-        ("HEALTH_AND_FITNESS", "Health & Fitness"),
-        ("EDUCATION", "Education"),
-        ("BUSINESS", "Business"),
-        ("FINANCE", "Finance"),
-        ("NEWS", "News"),
-        ("FOOD_AND_DRINK", "Food & Drink"),
+        ("GAMES", "Spiele"),
+        ("UTILITIES", "Dienstprogramme"),
+        ("PRODUCTIVITY", "Produktivität"),
+        ("SOCIAL_NETWORKING", "Soziale Netze"),
+        ("PHOTO_AND_VIDEO", "Foto und Video"),
+        ("MUSIC", "Musik"),
+        ("TRAVEL", "Reisen"),
+        ("SPORTS", "Sport"),
+        ("HEALTH_AND_FITNESS", "Gesundheit und Fitness"),
+        ("EDUCATION", "Bildung"),
+        ("BUSINESS", "Wirtschaft"),
+        ("FINANCE", "Finanzen"),
+        ("NEWS", "Nachrichten"),
+        ("FOOD_AND_DRINK", "Essen und Trinken"),
         ("LIFESTYLE", "Lifestyle"),
         ("SHOPPING", "Shopping"),
-        ("ENTERTAINMENT", "Entertainment"),
-        ("REFERENCE", "Reference"),
-        ("MEDICAL", "Medical"),
+        ("ENTERTAINMENT", "Unterhaltung"),
+        ("REFERENCE", "Nachschlagewerke"),
+        ("MEDICAL", "Medizin"),
         ("NAVIGATION", "Navigation"),
-        ("WEATHER", "Weather"),
-        ("DEVELOPER_TOOLS", "Developer Tools"),
+        ("WEATHER", "Wetter"),
+        ("DEVELOPER_TOOLS", "Entwicklerwerkzeuge"),
     ]
 
     private static let contentRightsOptions: [(String, String)] = [
-        ("DOES_NOT_USE_THIRD_PARTY_CONTENT", "Does Not Use Third-Party Content"),
-        ("USES_THIRD_PARTY_CONTENT", "Uses Third-Party Content"),
+        ("DOES_NOT_USE_THIRD_PARTY_CONTENT", "Keine Inhalte Dritter"),
+        ("USES_THIRD_PARTY_CONTENT", "Inhalte Dritter mit Nutzungsrechten"),
     ]
 
     var body: some View {
@@ -158,24 +158,24 @@ struct AppInformationView: View {
                     selection: selectedVersionBinding,
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                     refreshTab: .appInformation,
-                    refreshHelpText: "Refresh app information"
+                    refreshHelpText: "App-Informationen aktualisieren"
                 ) {
                     if !locales.isEmpty {
-                        Picker("Locale", selection: selectedLocaleBinding) {
+                        Picker("Sprache", selection: selectedLocaleBinding) {
                             ForEach(locales) { loc in
                                 Text(loc.attributes.locale).tag(loc.attributes.locale)
                             }
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
-                        .accessibilityLabel("Locale")
-                        .help("Language of the store listing")
+                        .accessibilityLabel("Sprache")
+                        .help("Sprache des Store-Eintrags")
                         .frame(width: 110, alignment: .leading)
                     }
                     if isSaving {
                         HStack(spacing: 4) {
                             ProgressView().controlSize(.mini)
-                            Text("Saving…").font(.caption).foregroundStyle(.secondary)
+                            Text("Wird gespeichert …").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -223,14 +223,14 @@ struct AppInformationView: View {
             } else if asc.localizations.isEmpty {
                 if isLoading {
                     ASCTabLoadingPlaceholder(
-                        title: "Loading App Information",
-                        message: "Fetching localizations and app metadata."
+                        title: "App-Informationen werden geladen …",
+                        message: "Sprachfassungen und App-Angaben werden abgerufen."
                     )
                 } else {
                     ContentUnavailableView(
-                        "No Localizations",
+                        "Keine Sprachfassungen",
                         systemImage: "text.page",
-                        description: Text("No localizations found for the latest version.")
+                        description: Text("Für die aktuelle Version wurden keine Sprachfassungen gefunden.")
                     )
                     .padding(.top, 60)
                 }
@@ -260,35 +260,36 @@ struct AppInformationView: View {
 
     private var localizedContentFields: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            Text("Store Listing")
+            Text("Store-Eintrag")
                 .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             editableField("Name", text: $title, fieldKey: "title", maxChars: 30)
-            editableField("Subtitle", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
-            editableMultilineField("Description", text: $descriptionText, fieldKey: "description", maxChars: 4000)
-            editableField("Keywords", text: $keywords, fieldKey: "keywords", maxChars: 100)
-            editableMultilineField("Promotional Text", text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
-            editableMultilineField("What's New", text: $whatsNew, fieldKey: "whatsNew")
+            editableField("Untertitel", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
+            editableMultilineField("Beschreibung", text: $descriptionText, fieldKey: "description", maxChars: 4000)
+            editableField("Schlüsselwörter", text: $keywords, fieldKey: "keywords", maxChars: 100)
+            editableMultilineField("Werbetext", text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
+            editableMultilineField("Neuigkeiten", text: $whatsNew, fieldKey: "whatsNew")
         }
     }
 
     private var categoryAndLinks: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            Text("Category & Links")
+            Text("Kategorie und Links")
                 .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             // Primary Category
             VStack(alignment: .leading, spacing: 6) {
-                Text("Primary Category")
+                Text("Hauptkategorie")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
                 Picker("", selection: $primaryCategory) {
-                    Text("Select…").tag("")
+                    Text("Bitte auswählen …").tag("")
                     ForEach(Self.categories, id: \.0) { id, label in
                         Text(label).tag(id)
                     }
                 }
                 .labelsHidden()
+                .accessibilityLabel("Hauptkategorie")
                 .disabled(!asc.canEditField("primaryCategory"))
                 .onChange(of: primaryCategory) { _, newValue in
                     guard !suppressAutomaticWrites, isCurrentForm else { return }
@@ -305,16 +306,17 @@ struct AppInformationView: View {
 
             // Content Rights
             VStack(alignment: .leading, spacing: 6) {
-                Text("Content Rights")
+                Text("Inhaltsrechte")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
                 Picker("", selection: $contentRights) {
-                    Text("Select…").tag("")
+                    Text("Bitte auswählen …").tag("")
                     ForEach(Self.contentRightsOptions, id: \.0) { id, label in
                         Text(label).tag(id)
                     }
                 }
                 .labelsHidden()
+                .accessibilityLabel("Inhaltsrechte")
                 .disabled(!asc.canEditField("contentRightsDeclaration"))
                 .onChange(of: contentRights) { _, newValue in
                     guard !suppressAutomaticWrites, isCurrentForm else { return }
@@ -334,9 +336,9 @@ struct AppInformationView: View {
 
             Divider()
 
-            editableField("Privacy Policy URL", text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
-            editableField("Support URL", text: $supportUrl, fieldKey: "supportUrl")
-            editableField("Marketing URL", text: $marketingUrl, fieldKey: "marketingUrl")
+            editableField("Datenschutz-URL", text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
+            editableField("Support-URL", text: $supportUrl, fieldKey: "supportUrl")
+            editableField("Marketing-URL", text: $marketingUrl, fieldKey: "marketingUrl")
         }
     }
 
@@ -354,7 +356,7 @@ struct AppInformationView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(showAdvanced ? 90 : 0))
-                    Text("Advanced")
+                    Text("Erweitert")
                         .font(.callout.weight(.medium))
                     Spacer()
                 }
@@ -367,40 +369,40 @@ struct AppInformationView: View {
             if showAdvanced {
                 VStack(alignment: .leading, spacing: 0) {
                     // App Identity (read-only details)
-                    advancedSectionHeader("App Identity")
+                    advancedSectionHeader("App-Identität")
 
                     if let app = asc.app {
                         Group {
-                            InfoRow(label: "App ID", value: app.id)
+                            InfoRow(label: "App-ID", value: app.id)
                             Divider().opacity(0.5)
-                            InfoRow(label: "Bundle ID", value: app.bundleId)
+                            InfoRow(label: "Bundle-ID", value: app.bundleId)
                             if let locale = app.primaryLocale {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Primary Locale", value: locale)
+                                InfoRow(label: "Hauptsprache", value: locale)
                             }
                             if let vendor = app.vendorNumber {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Vendor Number", value: vendor)
+                                InfoRow(label: "Anbieternummer", value: vendor)
                             }
                         }
                         .foregroundStyle(.secondary)
                     }
 
                     // Version Information
-                    advancedSectionHeader("Version Information")
+                    advancedSectionHeader("Versionsinformationen")
                         .padding(.top, 16)
 
                     if asc.releaseVersions.isEmpty {
                         if isLoading {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text("Loading version information…")
+                                Text("Versionsinformationen werden geladen …")
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 8)
                         } else {
-                            Text("No versions found")
+                            Text("Keine Versionen gefunden")
                                 .font(.callout)
                                 .foregroundStyle(.tertiary)
                                 .padding(.vertical, 8)
@@ -412,7 +414,7 @@ struct AppInformationView: View {
                                     .font(.callout.weight(.medium))
                                     .foregroundStyle(.secondary)
                                     .fixedSize()
-                                Text(version.attributes.releaseType ?? "—")
+                                Text(version.attributes.releaseType.map(BlitzDisplayText.status) ?? "—")
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                                     .fixedSize()
@@ -431,17 +433,17 @@ struct AppInformationView: View {
                     }
 
                     // Project Settings
-                    advancedSectionHeader("Project Settings")
+                    advancedSectionHeader("Projekteinstellungen")
                         .padding(.top, 16)
 
                     if let project = appState.activeProject {
                         Group {
-                            InfoRow(label: "Project Name", value: project.name)
+                            InfoRow(label: "Projektname", value: project.name)
                             Divider().opacity(0.5)
-                            InfoRow(label: "Project Type", value: project.type.rawValue)
+                            InfoRow(label: "Projekttyp", value: project.type.rawValue)
                             if let bid = project.metadata.bundleIdentifier {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Bundle ID (local)", value: bid)
+                                InfoRow(label: "Bundle-ID (lokal)", value: bid)
                             }
                         }
                         .foregroundStyle(.secondary)
@@ -457,15 +459,15 @@ struct AppInformationView: View {
                     }
 
                     // Build Signing
-                    advancedSectionHeader("Build Signing")
+                    advancedSectionHeader("Build-Signierung")
                         .padding(.top, 16)
 
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Team ID")
+                            Text("Team-ID")
                                 .font(.callout.weight(.medium))
                                 .foregroundStyle(.tertiary)
-                            TextField("e.g. 4GS43493GL", text: $teamId)
+                            TextField("z. B. 4GS43493GL", text: $teamId)
                                 .textFieldStyle(.roundedBorder)
                                 .focused($focusedField, equals: "teamId")
                                 .fontDesign(.monospaced)
@@ -480,7 +482,7 @@ struct AppInformationView: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundStyle(.green.opacity(0.6))
                                                 .font(.callout)
-                                            Text("Distribution Certificate")
+                                            Text("Verteilungszertifikat")
                                                 .font(.callout)
                                                 .foregroundStyle(.secondary)
                                             Spacer()
@@ -496,7 +498,7 @@ struct AppInformationView: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundStyle(.green.opacity(0.6))
                                                 .font(.callout)
-                                            Text("Provisioning Profile")
+                                            Text("Bereitstellungsprofil")
                                                 .font(.callout)
                                                 .foregroundStyle(.secondary)
                                             Spacer()
@@ -509,7 +511,7 @@ struct AppInformationView: View {
                                     }
                                 }
                             } else {
-                                Text("No signing configured. Run app_store_setup_signing or set a Team ID above.")
+                                Text("Die Signierung ist noch nicht eingerichtet. Führe app_store_setup_signing aus oder trage oben eine Team-ID ein.")
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                             }

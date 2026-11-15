@@ -365,7 +365,7 @@ struct ASCScreenshot: Codable, Identifiable {
             return errors.compactMap { $0.description }.joined(separator: "\n")
         }
         let state = attributes.assetDeliveryState?.state ?? ""
-        if state == "FAILED" { return "Upload failed" }
+        if state == "FAILED" { return "Upload fehlgeschlagen" }
         return nil
     }
 }

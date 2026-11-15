@@ -32,14 +32,14 @@ struct FeedbackView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Feedback")
+                    Text("Rückmeldungen")
                         .font(BlitzLayout.pageTitle)
                     Spacer()
                     if isLoadingFeedback {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Refresh feedback tab")
+                    ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Rückmeldungen aktualisieren")
                 }
 
                 if !builds.isEmpty {
@@ -66,38 +66,38 @@ struct FeedbackView: View {
             if builds.isEmpty {
                 if asc.isTabLoading(.feedback) {
                     ASCTabLoadingPlaceholder(
-                        title: "Loading Feedback",
-                        message: "Fetching builds and the latest tester feedback."
+                        title: "Rückmeldungen werden geladen",
+                        message: "Builds und aktuelle Rückmeldungen der Tester werden geladen."
                     )
                 } else {
                     ContentUnavailableView(
-                        "No Builds",
+                        "Keine Builds",
                         systemImage: "hammer",
-                        description: Text("Upload a TestFlight build to receive tester feedback.")
+                        description: Text("Lade einen TestFlight-Build hoch, um Rückmeldungen von Testern zu erhalten.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if feedback.isEmpty {
                 if isLoadingFeedback {
                     ASCTabLoadingPlaceholder(
-                        title: "Loading Feedback",
-                        message: "Fetching tester comments and screenshots for this build."
+                        title: "Rückmeldungen werden geladen",
+                        message: "Kommentare und Screenshots der Tester zu diesem Build werden geladen."
                     )
                 } else if let error = asc.tabError[.feedback] {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("Feedback could not be loaded", systemImage: "exclamationmark.triangle")
+                        Label("Rückmeldungen konnten nicht geladen werden", systemImage: "exclamationmark.triangle")
                         Text(error).font(.caption).foregroundStyle(.secondary)
-                        Button("Retry") {
+                        Button("Erneut versuchen") {
                             Task { await asc.refreshBetaFeedback(buildId: effectiveBuildId) }
                         }.buttonStyle(.bordered)
                     }.frame(maxWidth: .infinity, maxHeight: .infinity).blitzPagePadding()
                 } else if asc.betaFeedback[effectiveBuildId] == nil {
-                    ASCTabLoadingPlaceholder(title: "Loading Feedback", message: "Fetching tester comments and screenshots for this build.")
+                    ASCTabLoadingPlaceholder(title: "Rückmeldungen werden geladen", message: "Kommentare und Screenshots der Tester zu diesem Build werden geladen.")
                 } else {
                     ContentUnavailableView(
-                        "No Feedback",
+                        "Keine Rückmeldungen",
                         systemImage: "exclamationmark.bubble",
-                        description: Text("No tester feedback for this build yet.")
+                        description: Text("Für diesen Build gibt es noch keine Rückmeldungen von Testern.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -125,7 +125,7 @@ struct FeedbackView: View {
     private func feedbackRow(_ item: ASCBetaFeedback) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
-                Label(item.attributes.emailAddress ?? "Anonymous", systemImage: "person.circle")
+                Label(item.attributes.emailAddress ?? "Anonym", systemImage: "person.circle")
                     .font(BlitzLayout.bodyFont.weight(.medium))
                     .fixedSize(horizontal: false, vertical: true)
                 if let ts = item.attributes.timestamp {

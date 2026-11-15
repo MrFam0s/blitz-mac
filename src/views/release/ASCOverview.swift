@@ -74,7 +74,7 @@ struct ASCOverview: View {
                     onPublishUpdate: { asc.showReleaseAutomationSheet = true },
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                     refreshTab: .app,
-                    refreshHelpText: "Refresh overview data"
+                    refreshHelpText: "Übersicht aktualisieren"
                 )
                 .blitzToolbar()
             }
@@ -108,7 +108,7 @@ struct ASCOverview: View {
         if asc.isTabLoading(.app) {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
-                Text(asc.overviewCacheDate == nil ? "Loading app data…" : "Updating saved data…")
+                Text(asc.overviewCacheDate == nil ? "App-Daten werden geladen …" : "Gespeicherte Daten werden aktualisiert …")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -154,7 +154,7 @@ struct ASCOverview: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .help("Change project bundle ID")
+                            .help("Bundle-ID des Projekts ändern")
                             .popover(isPresented: $showBundleIDSelector, arrowEdge: .bottom) {
                                 ProjectBundleIDSelectorView(
                                     appState: appState,
@@ -216,7 +216,7 @@ struct ASCOverview: View {
         let subtitle = trimmed(infoLoc?.attributes.subtitle)
         let description = trimmed(versionLoc?.attributes.description)
         let keywords = trimmed(versionLoc?.attributes.keywords)
-        let category = trimmed(asc.appInfo?.primaryCategoryId)?.replacingOccurrences(of: "_", with: " ").capitalized
+        let category = trimmed(asc.appInfo?.primaryCategoryId).map(BlitzDisplayText.category)
         let privacyPolicy = trimmed(infoLoc?.attributes.privacyPolicyUrl)
         let ageRating = asc.ageRatingDeclaration != nil ? "Set" : nil
 
@@ -277,7 +277,7 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundStyle(.blue)
-                Text("Listing Health")
+                Text("Qualität des Store-Eintrags")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Text(listingHealthSummaryText)
@@ -307,11 +307,11 @@ struct ASCOverview: View {
         let missing = rows.filter { $0.kind == .missing }.count
         let short = rows.filter { $0.kind == .short }.count
         if missing == 0 && short == 0 {
-            return "All set"
+            return "Vollständig"
         }
         var parts: [String] = []
-        if missing > 0 { parts.append("\(missing) missing") }
-        if short > 0 { parts.append("\(short) short") }
+        if missing > 0 { parts.append("\(missing) fehlen") }
+        if short > 0 { parts.append("\(short) kurz") }
         return parts.joined(separator: ", ")
     }
 
@@ -320,10 +320,10 @@ struct ASCOverview: View {
         HStack {
             listingHealthIcon(for: row.kind)
                 .font(.callout)
-            Text(row.label)
+            Text(BlitzDisplayText.fieldLabel(row.label))
                 .font(.callout)
             Spacer()
-            Text(row.value.map { truncate($0, limit: 40) } ?? listingHealthPlaceholder(for: row.kind))
+            Text(row.value.map { truncate(BlitzDisplayText.readinessValue($0, field: row.label), limit: 40) } ?? listingHealthPlaceholder(for: row.kind))
                 .font(.callout)
                 .foregroundStyle(row.kind == .missing ? .red : .secondary)
                 .lineLimit(1)
@@ -348,10 +348,10 @@ struct ASCOverview: View {
 
     private func listingHealthPlaceholder(for kind: ListingHealthKind) -> String {
         switch kind {
-        case .missing: return "Not set"
-        case .short: return "Short"
-        case .complete: return "Complete"
-        case .optimized: return "Optimized"
+        case .missing: return "Nicht festgelegt"
+        case .short: return "Kurz"
+        case .complete: return "Vollständig"
+        case .optimized: return "Optimiert"
         }
     }
 
@@ -377,28 +377,29 @@ struct ASCOverview: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .help(submissionReadinessHelp(field))
     }
 
     private func submissionReadinessLabel(_ field: SubmissionReadiness.FieldStatus) -> some View {
         HStack(alignment: .top, spacing: 8) {
             if field.label == "Build" && asc.buildPipelinePhase != .idle {
                 ProgressView().controlSize(.small)
-                Text(field.label).font(.callout).foregroundStyle(.orange)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout).foregroundStyle(.orange)
             } else if field.loadFailed {
                 Image(systemName: "arrow.clockwise.circle").foregroundStyle(.orange)
-                Text(field.label).font(.callout).foregroundStyle(.secondary)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout).foregroundStyle(.secondary)
             } else if field.isLoading {
                 ProgressView().controlSize(.small)
-                Text(field.label).font(.callout).foregroundStyle(.secondary)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout).foregroundStyle(.secondary)
             } else if field.required && (field.value == nil || field.value!.isEmpty) {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).font(.callout)
-                Text(field.label).font(.callout).foregroundStyle(.red)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout).foregroundStyle(.red)
             } else if !field.required && (field.value == nil || field.value!.isEmpty) {
                 Image(systemName: "arrow.up.right.circle").foregroundStyle(.orange).font(.callout)
-                Text(field.label).font(.callout).foregroundStyle(.orange)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout).foregroundStyle(.orange)
             } else {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
-                Text(field.label).font(.callout)
+                Text(BlitzDisplayText.fieldLabel(field.label)).font(.callout)
             }
         }
     }
@@ -407,7 +408,7 @@ struct ASCOverview: View {
         HStack(spacing: 6) {
             if field.label == "Build" && asc.buildPipelinePhase != .idle {
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(asc.buildPipelinePhase.rawValue)
+                    Text(BlitzDisplayText.buildPhase(asc.buildPipelinePhase.rawValue))
                         .font(.callout)
                         .foregroundStyle(.orange)
                     ProgressView(value: buildProgress)
@@ -422,10 +423,10 @@ struct ASCOverview: View {
                     }
                 }
             } else if field.loadFailed {
-                Text(field.value.map { truncate($0, limit: 70) + " · Saved" } ?? "Could not load")
+                Text(field.value.map { truncate(BlitzDisplayText.readinessValue($0, field: field.label), limit: 70) + " · Gespeichert" } ?? "Nicht geladen")
                     .font(.callout).foregroundStyle(.secondary).lineLimit(1)
             } else if field.isLoading {
-                Text("Loading…").font(.callout).foregroundStyle(.secondary)
+                Text("Wird geladen …").font(.callout).foregroundStyle(.secondary)
             } else if let url = field.actionUrl, let nsUrl = URL(string: url) {
                 if field.label != "Privacy Nutrition Labels" {
                     Button {
@@ -433,13 +434,13 @@ struct ASCOverview: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "sparkles")
-                            Text("Fix")
+                            Text("Ergänzen")
                         }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
-                Button("Open in Web") {
+                Button("Im Browser öffnen") {
                     NSWorkspace.shared.open(nsUrl)
                 }
                 .buttonStyle(.bordered)
@@ -450,19 +451,31 @@ struct ASCOverview: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
-                        Text("Fix")
+                        Text("Ergänzen")
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             } else {
-                Text(field.value ?? "—")
+                Text(field.value.map { BlitzDisplayText.readinessValue($0, field: field.label) } ?? "—")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
-        .help(field.value ?? field.label)
+        .help(submissionReadinessHelp(field))
+    }
+
+    private func submissionReadinessHelp(_ field: SubmissionReadiness.FieldStatus) -> String {
+        if field.loadFailed {
+            return "Dieser Wert konnte nicht aktualisiert werden. Lade die Übersicht erneut."
+        }
+        if field.isLoading { return "Dieser Wert wird geprüft …" }
+        if field.hint != nil, let hint = BlitzDisplayText.readinessHint(field: field.label) {
+            return hint
+        }
+        return field.value.map { BlitzDisplayText.readinessValue($0, field: field.label) }
+            ?? BlitzDisplayText.fieldLabel(field.label)
     }
 
     // MARK: - Compact version summary
@@ -484,7 +497,7 @@ struct ASCOverview: View {
             RejectionCardView(asc: asc, version: rejectionCardVersion) {
                 HStack {
                     Spacer()
-                    Button("Prepare Re-submission") {
+                    Button("Erneute Einreichung vorbereiten") {
                         showPreview = true
                     }
                     .buttonStyle(.borderedProminent)
@@ -512,15 +525,15 @@ struct ASCOverview: View {
         )
         .help(store.help)
         versionMetric(
-            title: "Pending", value: pending?.attributes.versionString ?? "—",
+            title: "In Vorbereitung", value: pending?.attributes.versionString ?? "—",
             subtitle: pending.map { stateLabel($0.attributes.effectiveState ?? "") },
             color: pending != nil ? .orange : .secondary, icon: "clock.fill"
         )
         versionMetric(
-            title: "Versions", value: "\(asc.releaseVersions.count)",
+            title: "Versionen", value: "\(asc.releaseVersions.count)",
             subtitle: nil, color: .secondary, icon: "list.number"
         )
-        .help("Total versions · All time")
+        .help("Alle Versionen seit Beginn")
     }
 
     // MARK: - Submission Readiness (original standalone list)
@@ -529,14 +542,14 @@ struct ASCOverview: View {
         VStack(alignment: .leading, spacing: 12) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
-                    Text("Submission Readiness")
+                    Text("Einreichungsprüfung")
                         .font(BlitzLayout.sectionTitle)
                         .fixedSize()
                     Spacer(minLength: 0)
                     submissionReadinessAction.fixedSize()
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Submission Readiness").font(BlitzLayout.sectionTitle)
+                    Text("Einreichungsprüfung").font(BlitzLayout.sectionTitle)
                     submissionReadinessAction
                 }
             }
@@ -557,7 +570,7 @@ struct ASCOverview: View {
         let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
         let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
         if !asc.canCreateUpdate {
-            Button(showStatus ? "View Status" : "Submit for Review") {
+            Button(showStatus ? "Status anzeigen" : "Zur Prüfung einreichen") {
                 showPreview = true
             }
             .buttonStyle(.borderedProminent)
@@ -576,13 +589,13 @@ struct ASCOverview: View {
                 Text("Screenshots")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
-                Button("Generate new screenshots") {
+                Button("Neue Screenshots erstellen") {
                     // Slot for the sibling screenshot-generation workstream.
                     appState.activeTab = .screenshots
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                Button("Manage") {
+                Button("Verwalten") {
                     appState.activeTab = .screenshots
                 }
                 .buttonStyle(.bordered)
@@ -591,7 +604,7 @@ struct ASCOverview: View {
 
             let screenshots = screenshotsForPreview
             if screenshots.isEmpty {
-                Text("No screenshots uploaded yet for the primary locale.")
+                Text("Für die Hauptsprache wurden noch keine Screenshots hochgeladen.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -660,13 +673,13 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(.teal)
-                Text("Activity")
+                Text("Aktivität")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
 
             if asc.submissionHistoryEvents.isEmpty {
-                Text("No recent submission activity.")
+                Text("Keine aktuellen Einreichungsaktivitäten.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -697,7 +710,7 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "folder.fill.badge.gearshape")
                     .foregroundStyle(.orange)
-                Text("Local Source")
+                Text("Lokales Projekt")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
@@ -723,12 +736,12 @@ struct ASCOverview: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let latestBuild = latestLocalBuildLabel {
-                        Text("Latest build: \(latestBuild)")
+                        Text("Letzter Build: \(latestBuild)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     HStack(spacing: 8) {
-                        Button("Open in Finder") {
+                        Button("Im Finder öffnen") {
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.path)
                         }
                         .buttonStyle(.bordered)
@@ -738,13 +751,13 @@ struct ASCOverview: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("No local project is linked to this app yet.")
+                    Text("Mit dieser App ist noch kein lokales Projekt verknüpft.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button {
                         appState.showImportProjectSheet = true
                     } label: {
-                        Label("Link project…", systemImage: "square.and.arrow.down")
+                        Label("Projekt verknüpfen …", systemImage: "square.and.arrow.down")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -861,29 +874,29 @@ struct ASCOverview: View {
     }
 
     private func stateLabel(_ state: String) -> String {
-        state.replacingOccurrences(of: "_", with: " ").capitalized
+        BlitzDisplayText.status(state)
     }
 
     private func submissionEventStyle(_ eventType: ASCSubmissionHistoryEventType) -> (String, Color) {
         switch eventType {
         case .submitted:
-            return ("Submitted", .blue)
+            return ("Eingereicht", .blue)
         case .submissionError:
-            return ("Submission Error", .red)
+            return ("Einreichungsfehler", .red)
         case .inReview:
-            return ("In Review", .blue)
+            return ("In Prüfung", .blue)
         case .processing:
-            return ("Processing", .orange)
+            return ("In Verarbeitung", .orange)
         case .accepted:
-            return ("Accepted", .green)
+            return ("Akzeptiert", .green)
         case .live:
-            return ("Released", .green)
+            return ("Veröffentlicht", .green)
         case .rejected:
-            return ("Rejected", .red)
+            return ("Abgelehnt", .red)
         case .withdrawn:
-            return ("Withdrawn", .orange)
+            return ("Zurückgezogen", .orange)
         case .removed:
-            return ("Removed", .secondary)
+            return ("Entfernt", .secondary)
         }
     }
 }

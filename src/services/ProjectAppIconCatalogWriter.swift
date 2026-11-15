@@ -117,12 +117,12 @@ enum ProjectAppIconCatalogWriter {
 
         var errorDescription: String? {
             switch self {
-            case .invalidCatalog: return "The app icon catalog has invalid contents."
-            case .outsideProject: return "The app icon catalog points outside this project."
-            case .unsafeFilename: return "The app icon catalog contains an unsafe image filename."
-            case .sharedAppearanceFilename: return "Default and appearance-specific app icons must use separate image files."
-            case .invalidDimensions: return "The app icon catalog contains an invalid image size."
-            case .cannotRender: return "Could not render an app icon image."
+            case .invalidCatalog: return "Der App-Icon-Katalog enthält ungültige Daten."
+            case .outsideProject: return "Der App-Icon-Katalog verweist auf einen Pfad außerhalb dieses Projekts."
+            case .unsafeFilename: return "Der App-Icon-Katalog enthält einen unzulässigen Bilddateinamen."
+            case .sharedAppearanceFilename: return "Standard-Icons und Icons für bestimmte Darstellungen müssen separate Bilddateien verwenden."
+            case .invalidDimensions: return "Der App-Icon-Katalog enthält eine ungültige Bildgröße."
+            case .cannotRender: return "Das App-Icon konnte nicht gerendert werden."
             }
         }
     }

@@ -113,7 +113,7 @@ import Testing
 
     #expect(manager.newVersionCreationBlocker?.id == "draft")
     #expect(manager.newVersionCreationBlockerMessage(desiredVersionString: "1.0.2")?
-        .contains("version 1.0.1 in Prepare For Submission") == true)
+        .contains("Version 1.0.1 mit dem Status „Entwurf“") == true)
 }
 
 @MainActor

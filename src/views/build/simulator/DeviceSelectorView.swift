@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct DeviceSelectorView: View {
@@ -11,7 +12,7 @@ struct DeviceSelectorView: View {
 
     var body: some View {
         Menu {
-            Section("Simulators") {
+            Section("Simulatoren") {
                 ForEach(supportedSimulators) { sim in
                     Button(action: {
                         Task { await selectSimulator(sim) }
@@ -27,14 +28,14 @@ struct DeviceSelectorView: View {
                 }
 
                 if supportedSimulators.isEmpty {
-                    Text("No supported simulators found")
+                    Text("Keine unterstützten Simulatoren gefunden")
                         .foregroundStyle(.secondary)
                 }
             }
 
             Divider()
 
-            Button("Refresh Devices") {
+            Button("Geräteliste aktualisieren") {
                 Task { await appState.simulatorManager.loadSimulators() }
             }
         } label: {
@@ -45,7 +46,7 @@ struct DeviceSelectorView: View {
                     Text(sim.name)
                         .font(.system(size: 11))
                 } else {
-                    Text("Select Device")
+                    Text("Gerät auswählen")
                         .font(.system(size: 11))
                 }
                 if appState.simulatorManager.isBooting {
@@ -56,7 +57,7 @@ struct DeviceSelectorView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Choose and remember a simulator for this project")
+        .help("Simulator für dieses Projekt auswählen und merken")
     }
 
     private func selectSimulator(_ sim: SimulatorInfo) async {

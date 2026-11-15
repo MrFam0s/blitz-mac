@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct TerminalPanelView: View {
@@ -63,7 +64,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help("New terminal")
+            .help("Neues Terminal")
+            .accessibilityLabel("Neues Terminal")
 
             Button {
                 let settings = appState.settingsStore
@@ -76,7 +78,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help(isRight ? "Move to bottom" : "Move to right")
+            .help(isRight ? "Terminal unten anzeigen" : "Terminal rechts anzeigen")
+            .accessibilityLabel(isRight ? "Terminal unten anzeigen" : "Terminal rechts anzeigen")
 
             Button {
                 appState.showTerminal = false
@@ -87,7 +90,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help("Hide terminal panel")
+            .help("Terminal ausblenden")
+            .accessibilityLabel("Terminal ausblenden")
             .padding(.trailing, 8)
         }
     }
@@ -116,6 +120,8 @@ struct TerminalPanelView: View {
                     .frame(width: 14, height: 14)
             }
             .buttonStyle(.plain)
+            .help("Terminal-Sitzung schließen")
+            .accessibilityLabel("Terminal-Sitzung schließen")
             .opacity(isActive ? 1 : 0)
         }
         .padding(.horizontal, 10)
@@ -148,10 +154,10 @@ struct TerminalPanelView: View {
     private var terminalContent: some View {
         if manager.sessions.isEmpty {
             VStack(spacing: 8) {
-                Text("No terminal sessions")
+                Text("Keine Terminal-Sitzungen")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("New Terminal") {
+                Button("Neues Terminal") {
                     manager.createSession(projectPath: appState.activeProject?.path)
                 }
                 .buttonStyle(.bordered)

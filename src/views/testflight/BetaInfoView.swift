@@ -67,15 +67,15 @@ struct BetaInfoView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Beta Info")
+                    Text("Beta-Informationen")
                         .font(BlitzLayout.pageTitle)
                     Spacer()
-                    ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Refresh beta info")
+                    ASCTabRefreshButton(asc: asc, tab: .betaInfo, helpText: "Beta-Informationen aktualisieren")
                 }
 
                 if !locs.isEmpty {
                     HStack(spacing: 10) {
-                        Picker("Locale", selection: $selectedLocId) {
+                        Picker("Sprache", selection: $selectedLocId) {
                             ForEach(locs) { loc in
                                 Text(loc.attributes.locale).tag(loc.id)
                             }
@@ -83,7 +83,7 @@ struct BetaInfoView: View {
                         .pickerStyle(.menu)
                         .disabled(isSaving)
                         .labelsHidden()
-                        .accessibilityLabel("Locale")
+                        .accessibilityLabel("Sprache")
                         .frame(width: 110)
                         .onChange(of: locs.count) { _, _ in
                             if selectedLocId.isEmpty, let first = asc.betaLocalizations.first {
@@ -105,7 +105,7 @@ struct BetaInfoView: View {
 
                         Spacer(minLength: 0)
                         if saveSuccess {
-                            Label("Saved", systemImage: "checkmark.circle.fill")
+                            Label("Gespeichert", systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                                 .fixedSize()
                         }
@@ -115,7 +115,7 @@ struct BetaInfoView: View {
                             if isSaving {
                                 ProgressView().controlSize(.small)
                             } else {
-                                Text("Save")
+                                Text("Speichern")
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -135,39 +135,39 @@ struct BetaInfoView: View {
             Divider()
 
             if current == nil && !locs.isEmpty {
-                ContentUnavailableView("Select a locale", systemImage: "doc.text")
+                ContentUnavailableView("Sprache auswählen", systemImage: "doc.text")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if locs.isEmpty {
                 if asc.isTabLoading(.betaInfo) {
                     ASCTabLoadingPlaceholder(
-                        title: "Loading Beta Info",
-                        message: "Fetching beta app localizations and tester-facing copy."
+                        title: "Beta-Informationen werden geladen",
+                        message: "Sprachversionen und Texte für Tester werden geladen."
                     )
                 } else {
                     ContentUnavailableView(
-                        "No Localizations",
+                        "Keine Sprachversionen",
                         systemImage: "doc.text",
-                        description: Text("No beta app localizations found.")
+                        description: Text("Es wurden keine Sprachversionen für den Betatest gefunden.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                        editField("Beta Description",
+                        editField("Beta-Beschreibung",
                                   text: $editDescription,
-                                  hint: "Describe what testers should focus on",
+                                  hint: "Beschreiben, worauf Tester achten sollen",
                                   multiline: true)
 
-                        editField("Feedback Email",
+                        editField("E-Mail für Rückmeldungen",
                                   text: $editFeedbackEmail,
-                                  hint: "Email for tester feedback")
+                                  hint: "E-Mail-Adresse für Rückmeldungen der Tester")
 
-                        editField("Marketing URL",
+                        editField("Marketing-URL",
                                   text: $editMarketingUrl,
                                   hint: "https://example.com")
 
-                        editField("Privacy Policy URL",
+                        editField("URL der Datenschutzerklärung",
                                   text: $editPrivacyUrl,
                                   hint: "https://example.com/privacy")
                     }
@@ -184,6 +184,7 @@ struct BetaInfoView: View {
             if multiline {
                 TextEditor(text: text)
                     .font(BlitzLayout.bodyFont)
+                    .accessibilityLabel(label)
                     .frame(minHeight: 140)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
@@ -193,6 +194,7 @@ struct BetaInfoView: View {
                 TextField(hint, text: text)
                     .font(BlitzLayout.bodyFont)
                     .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel(label)
             }
         }
     }

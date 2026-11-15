@@ -249,7 +249,7 @@ struct SubmitPreviewSheet: View {
                         Image(systemName: "exclamationmark.circle.fill")
                             .foregroundStyle(.red)
                             .font(.caption)
-                        Text(field.label)
+                        Text(BlitzDisplayText.fieldLabel(field.label))
                             .font(.callout)
                     }
                 }
@@ -314,7 +314,7 @@ struct SubmitPreviewSheet: View {
                                 Image(systemName: item.attributes.state == "REJECTED" ? "xmark.circle.fill" : "checkmark.circle.fill")
                                     .foregroundStyle(item.attributes.state == "REJECTED" ? .red : .green)
                                     .font(.caption)
-                                Text(item.attributes.state?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Unbekannt")
+                                Text(BlitzDisplayText.status(item.attributes.state ?? ""))
                                     .font(.callout)
                             }
                         }

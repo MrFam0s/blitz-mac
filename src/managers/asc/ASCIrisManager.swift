@@ -258,7 +258,7 @@ extension ASCManager {
             irisLog("ASCManager.setIrisSession: saved to native keychain")
         } catch {
             irisLog("ASCManager.setIrisSession: save FAILED: \(error)")
-            irisFeedbackError = "Failed to save session: \(error.localizedDescription)"
+            irisFeedbackError = "Sitzung konnte nicht gespeichert werden: \(error.localizedDescription)"
             showAppleIDLogin = false
             pendingWebAuthContinuation?.resume(returning: nil)
             pendingWebAuthContinuation = nil
@@ -273,7 +273,7 @@ extension ASCManager {
             try Self.exportNativeWebSession(session)
         } catch {
             irisLog("ASCManager.setIrisSession: asc-web-session save FAILED: \(error)")
-            irisFeedbackError = "Failed to save ASC web session: \(error.localizedDescription)"
+            irisFeedbackError = "ASC-Websitzung konnte nicht gespeichert werden: \(error.localizedDescription)"
             if let continuation = pendingWebAuthContinuation {
                 pendingWebAuthContinuation = nil
                 continuation.resume(returning: nil)
@@ -429,7 +429,7 @@ struct IrisSession: Codable, Sendable {
         let status = updated == errSecItemNotFound ? SecItemAdd(add as CFDictionary, nil) : updated
         guard status == errSecSuccess else {
             throw NSError(domain: "IrisSession", code: Int(status),
-                userInfo: [NSLocalizedDescriptionKey: "Failed to save session to Keychain (status: \(status))"])
+                userInfo: [NSLocalizedDescriptionKey: "Sitzung konnte nicht im Schlüsselbund gespeichert werden (Status: \(status))"])
         }
     }
 

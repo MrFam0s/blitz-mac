@@ -133,12 +133,12 @@ private struct DetailFixture: ASCTestFlightService {
     mac.preReleaseVersion = detailDecode(#"{"id":"other","attributes":{"version":"3.0","platform":"MAC_OS"}}"#)
     #expect(TestFlightPresentation.buildLabel(ios) == "2.0 (7) · iOS")
     #expect(TestFlightPresentation.buildLabel(mac) == "3.0 (7) · macOS")
-    #expect(TestFlightPresentation.status(nil) == "Not available")
-    #expect(TestFlightPresentation.expiration(ios) == "Not available")
+    #expect(TestFlightPresentation.status(nil) == "Nicht verfügbar")
+    #expect(TestFlightPresentation.expiration(ios) == "Nicht verfügbar")
     let expired: ASCBuild = detailDecode(#"{"id":"old","attributes":{"version":"7","expired":false,"expirationDate":"2020-01-01T00:00:00Z"}}"#)
-    #expect(TestFlightPresentation.expiration(expired, now: Date(timeIntervalSince1970: 1_700_000_000)) == "Expired")
+    #expect(TestFlightPresentation.expiration(expired, now: Date(timeIntervalSince1970: 1_700_000_000)) == "Abgelaufen")
     let unknownGroup: ASCBetaGroup = detailDecode(#"{"id":"g","attributes":{"name":"Group"}}"#)
-    #expect(TestFlightPresentation.groupType(unknownGroup) == "Type unknown")
+    #expect(TestFlightPresentation.groupType(unknownGroup) == "Typ unbekannt")
 }
 
 @MainActor @Test func testFlightCachedFeedbackDoesNotDisplayAnotherBuildsFailure() async {

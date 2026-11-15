@@ -26,24 +26,24 @@ struct GroupsView: View {
     private var groupsContent: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Groups").font(BlitzLayout.pageTitle)
+                Text("Testgruppen").font(BlitzLayout.pageTitle)
                 Spacer()
                 TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
-                    .help("Refresh groups and selected group details")
+                    .help("Gruppen und ausgewählte Gruppendetails aktualisieren")
             }.blitzToolbar()
             Divider()
             if asc.betaGroups.isEmpty {
                 if asc.isTabLoading(.groups) {
-                    ASCTabLoadingPlaceholder(title: "Loading Beta Groups", message: "Fetching internal and external TestFlight groups.")
+                    ASCTabLoadingPlaceholder(title: "Testgruppen werden geladen", message: "Interne und externe TestFlight-Gruppen werden geladen.")
                 } else {
-                    ContentUnavailableView("No Beta Groups", systemImage: "person.3",
-                                           description: Text("No beta testing groups found for this app."))
+                    ContentUnavailableView("Keine Testgruppen", systemImage: "person.3",
+                                           description: Text("Für diese App wurden keine Testgruppen gefunden."))
                 }
             } else {
                 GeometryReader { geometry in
                     if geometry.size.width < 760 {
                         VStack(spacing: 0) {
-                            Picker("Group", selection: selection) {
+                            Picker("Gruppe", selection: selection) {
                                 ForEach(asc.betaGroups) { group in
                                     Text("\(group.attributes.name) · \(TestFlightPresentation.groupType(group))")
                                         .tag(Optional(group.id))
@@ -81,7 +81,7 @@ struct GroupsView: View {
                     await asc.refreshTestFlightGroupDetail(groupId: id, force: false)
                 }
         } else {
-            ContentUnavailableView("Select a Group", systemImage: "person.3")
+            ContentUnavailableView("Gruppe auswählen", systemImage: "person.3")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -95,48 +95,48 @@ struct GroupsView: View {
                 Text(group.attributes.name).font(BlitzLayout.pageTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(spacing: 0) {
-                    InfoRow(label: "Group Type", value: TestFlightPresentation.groupType(group))
+                    InfoRow(label: "Gruppentyp", value: TestFlightPresentation.groupType(group))
                     Divider()
-                    InfoRow(label: "All Builds", value: booleanLabel(group.attributes.hasAccessToAllBuilds))
+                    InfoRow(label: "Zugriff auf alle Builds", value: booleanLabel(group.attributes.hasAccessToAllBuilds))
                     Divider()
-                    InfoRow(label: "Public Link", value: booleanLabel(group.attributes.publicLinkEnabled))
+                    InfoRow(label: "Öffentlicher Link", value: booleanLabel(group.attributes.publicLinkEnabled))
                     Divider()
-                    InfoRow(label: "Feedback", value: booleanLabel(group.attributes.feedbackEnabled))
+                    InfoRow(label: "Rückmeldungen", value: booleanLabel(group.attributes.feedbackEnabled))
                     Divider()
-                    InfoRow(label: "Group ID", value: group.id)
+                    InfoRow(label: "Gruppen-ID", value: group.id)
                 }
                 HStack {
-                    Text("Group Details").font(BlitzLayout.sectionTitle)
+                    Text("Gruppendetails").font(BlitzLayout.sectionTitle)
                     Spacer()
                     TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
-                        .help("Refresh group builds and testers")
+                        .help("Builds und Tester der Gruppe aktualisieren")
                 }
                 TestFlightDetailStatus(isLoading: loading, error: asc.testFlightGroupErrors[group.id], hasData: detail != nil) {
                     refresh()
                 }
                 if let detail {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Assigned Builds (\(detail.builds.count))").font(.headline)
+                        Text("Zugeordnete Builds (\(detail.builds.count))").font(.headline)
                         if detail.builds.isEmpty {
-                            Text("No builds are assigned to this group.").foregroundStyle(.secondary)
+                            Text("Dieser Gruppe sind keine Builds zugeordnet.").foregroundStyle(.secondary)
                         } else {
                             ForEach(detail.builds) { build in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(TestFlightPresentation.buildLabel(build)).font(.callout.weight(.medium))
-                                    Text("Processing: \(TestFlightPresentation.status(build.attributes.processingState)) · \(TestFlightPresentation.expiration(build))")
+                                    Text("Verarbeitung: \(TestFlightPresentation.status(build.attributes.processingState)) · \(TestFlightPresentation.expiration(build))")
                                         .font(.caption).foregroundStyle(.secondary)
-                                    Text("Internal: \(TestFlightPresentation.status(build.buildBetaDetail?.attributes.internalBuildState)) · External: \(TestFlightPresentation.status(build.buildBetaDetail?.attributes.externalBuildState))")
+                                    Text("Intern: \(TestFlightPresentation.status(build.buildBetaDetail?.attributes.internalBuildState)) · Extern: \(TestFlightPresentation.status(build.buildBetaDetail?.attributes.externalBuildState))")
                                         .font(.caption).foregroundStyle(.secondary)
                                 }.fixedSize(horizontal: false, vertical: true).padding(.vertical, 6)
                             }
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Group Testers (\(detail.testers.count))").font(.headline)
-                        Text("Group membership does not confirm that a tester has installed an assigned build.")
+                        Text("Tester der Gruppe (\(detail.testers.count))").font(.headline)
+                        Text("Die Mitgliedschaft in einer Gruppe bestätigt nicht, dass ein Tester einen zugeordneten Build installiert hat.")
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if detail.testers.isEmpty {
-                            Text("No testers are members of this group.").foregroundStyle(.secondary)
+                            Text("Diese Gruppe hat keine Tester.").foregroundStyle(.secondary)
                         } else {
                             ForEach(detail.testers) { TestFlightTesterRow(tester: $0) }
                         }
@@ -144,7 +144,7 @@ struct GroupsView: View {
                 }
                 if let appId = asc.app?.id,
                    let url = URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/testflight/groups") {
-                    Link("Open Groups in App Store Connect", destination: url).font(.callout)
+                    Link("Gruppen in App Store Connect öffnen", destination: url).font(.callout)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).blitzPagePadding()
         }
@@ -152,9 +152,9 @@ struct GroupsView: View {
 
     private func booleanLabel(_ value: Bool?) -> String {
         switch value {
-        case true: "Enabled"
-        case false: "Disabled"
-        default: "Not available"
+        case true: "Aktiviert"
+        case false: "Deaktiviert"
+        default: "Nicht verfügbar"
         }
     }
 

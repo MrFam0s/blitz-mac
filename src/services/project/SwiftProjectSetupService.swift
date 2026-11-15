@@ -46,7 +46,7 @@ struct SwiftProjectSetupService {
         let bundleId = toBundleId(appName)
         let spec = ProjectTemplateSpec(
             templateName: "swift-hello-template",
-            missingTemplateMessage: "Bundled Swift template not found",
+            missingTemplateMessage: "Die mitgelieferte Swift-Vorlage wurde nicht gefunden.",
             replacements: [
                 "__APP_NAME__": appName,
                 "__BUNDLE_ID__": bundleId

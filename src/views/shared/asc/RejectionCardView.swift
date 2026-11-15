@@ -53,11 +53,11 @@ struct RejectionCardView<Footer: View>: View {
                 .font(.system(size: 15))
                 .foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Version \(version.attributes.versionString) Rejected")
+                Text("Version \(version.attributes.versionString) abgelehnt")
                     .font(BlitzLayout.sectionTitle)
                     .fixedSize(horizontal: false, vertical: true)
                 if let date = version.attributes.createdDate {
-                    Text("Submitted \(ascShortDate(date))")
+                    Text("Eingereicht am \(ascShortDate(date))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -73,7 +73,7 @@ struct RejectionCardView<Footer: View>: View {
         if !asc.reviewSubmissions.isEmpty {
             Divider()
             VStack(alignment: .leading, spacing: 8) {
-                Text("Review History")
+                Text("Prüfungsverlauf")
                     .font(BlitzLayout.sectionTitle)
 
                 ForEach(asc.reviewSubmissions.prefix(5)) { submission in
@@ -108,7 +108,7 @@ struct RejectionCardView<Footer: View>: View {
 
             if !rejected.isEmpty || !accepted.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Review Items")
+                    Text("Prüfungsbestandteile")
                         .font(BlitzLayout.sectionTitle)
 
                     ForEach(submissionItems) { item in
@@ -116,10 +116,10 @@ struct RejectionCardView<Footer: View>: View {
                             Image(systemName: item.attributes.state == "REJECTED" ? "xmark.circle.fill" : "checkmark.circle.fill")
                                 .foregroundStyle(item.attributes.state == "REJECTED" ? .red : .green)
                                 .font(.caption)
-                            Text(item.attributes.state?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown")
+                            Text(BlitzDisplayText.status(item.attributes.state ?? ""))
                                 .font(.callout)
                             if item.attributes.resolved == true {
-                                Text("Resolved")
+                                Text("Geklärt")
                                     .font(.caption2)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -140,12 +140,12 @@ struct RejectionCardView<Footer: View>: View {
     private var submittedReviewInfo: some View {
         if let rd = asc.reviewDetail {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Submitted Review Info")
+                Text("Eingereichte Prüfungsangaben")
                     .font(BlitzLayout.sectionTitle)
 
                 if let notes = rd.attributes.notes, !notes.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Your Notes to Apple")
+                        Text("Deine Hinweise an Apple")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(notes)
@@ -162,7 +162,7 @@ struct RejectionCardView<Footer: View>: View {
                         Image(systemName: "person.circle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("Demo account: \(rd.attributes.demoAccountName ?? "—")")
+                        Text("Demokonto: \(rd.attributes.demoAccountName ?? "—")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -173,7 +173,7 @@ struct RejectionCardView<Footer: View>: View {
                         Image(systemName: "envelope")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("Contact: \(rd.attributes.contactFirstName ?? "") \(rd.attributes.contactLastName ?? "") (\(contact))")
+                        Text("Kontakt: \(rd.attributes.contactFirstName ?? "") \(rd.attributes.contactLastName ?? "") (\(contact))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -191,13 +191,13 @@ struct RejectionCardView<Footer: View>: View {
         Divider()
 
         VStack(alignment: .leading, spacing: 10) {
-            Text("Apple's Feedback")
+            Text("Rückmeldung von Apple")
                 .font(BlitzLayout.sectionTitle)
 
             if asc.isLoadingIrisFeedback && cycles.isEmpty {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Loading feedback…")
+                    Text("Rückmeldung wird geladen …")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -224,19 +224,19 @@ struct RejectionCardView<Footer: View>: View {
         case .noSession, .unknown:
             signInCard(
                 icon: "person.badge.key",
-                message: "Sign in with your Apple ID to see Apple's detailed review feedback.",
-                buttonTitle: "Sign In",
+                message: "Melde dich mit deinem Apple-Account an, um die ausführliche Rückmeldung zur Prüfung zu sehen.",
+                buttonTitle: "Anmelden",
                 color: .secondary
             )
         case .expired:
             signInCard(
                 icon: "clock.badge.exclamationmark",
-                message: "Apple ID session expired.",
-                buttonTitle: "Sign In Again",
+                message: "Die Apple-Anmeldung ist abgelaufen.",
+                buttonTitle: "Erneut anmelden",
                 color: .orange
             )
         case .valid:
-            Text("No rejection feedback found in the Resolution Center.")
+            Text("Keine Rückmeldung zur Ablehnung im Resolution Center gefunden.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -302,7 +302,7 @@ struct RejectionCardView<Footer: View>: View {
                         .textSelection(.enabled)
                         .help(submissionId)
                 } else {
-                    Text("Archived Thread")
+                    Text("Archivierter Verlauf")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -320,7 +320,7 @@ struct RejectionCardView<Footer: View>: View {
             }
             if !cycle.messages.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Reviewer Messages")
+                    Text("Nachrichten des Prüfteams")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ForEach(cycle.messages) { msg in
@@ -392,11 +392,11 @@ struct RejectionCardView<Footer: View>: View {
 
     private func submissionStateLabel(_ state: String) -> String {
         switch state {
-        case "COMPLETE": return "Review Complete"
-        case "IN_PROGRESS": return "In Progress"
-        case "WAITING_FOR_REVIEW": return "Waiting for Review"
-        case "CANCELING": return "Canceling"
-        default: return state.replacingOccurrences(of: "_", with: " ").capitalized
+        case "COMPLETE": return "Prüfung abgeschlossen"
+        case "IN_PROGRESS": return "In Bearbeitung"
+        case "WAITING_FOR_REVIEW": return "Wartet auf Prüfung"
+        case "CANCELING": return "Wird zurückgezogen"
+        default: return BlitzDisplayText.status(state)
         }
     }
 }

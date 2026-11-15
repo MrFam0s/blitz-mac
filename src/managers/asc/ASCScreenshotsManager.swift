@@ -76,7 +76,7 @@ extension ASCManager {
             await ensureScreenshotLocalizationsLoaded(service: service)
             guard projectRevision == revision, !Task.isCancelled else { return false }
             guard let loc = localizations.first(where: { $0.attributes.locale == locale }) else {
-                tabError[.screenshots] = "No localization found for \(locale)."
+                tabError[.screenshots] = "Keine Lokalisierung für \(locale) gefunden."
                 return false
             }
             do {
@@ -419,7 +419,7 @@ extension ASCManager {
                         domain: "ASCManager",
                         code: 5,
                         userInfo: [
-                            NSLocalizedDescriptionKey: "Local screenshot file is missing at \(localPath). Re-add it and save again."
+                            NSLocalizedDescriptionKey: "Die lokale Screenshot-Datei fehlt unter \(localPath). Füge sie erneut hinzu und speichere nochmals."
                         ]
                     )
                 }
@@ -442,7 +442,7 @@ extension ASCManager {
                 domain: "ASCManager",
                 code: 1,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Could not download the original screenshot for '\(screenshot.attributes.fileName ?? screenshot.id)'. Re-add it locally and save again."
+                    NSLocalizedDescriptionKey: "Der Original-Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht geladen werden. Füge ihn erneut lokal hinzu und speichere nochmals."
                 ]
             )
         }
@@ -463,7 +463,7 @@ extension ASCManager {
                 domain: "ASCManager",
                 code: 3,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Downloaded screenshot '\(screenshot.attributes.fileName ?? screenshot.id)' was unreadable."
+                    NSLocalizedDescriptionKey: "Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht gelesen werden."
                 ]
             )
         }
@@ -476,7 +476,7 @@ extension ASCManager {
                     domain: "ASCManager",
                     code: 4,
                     userInfo: [
-                        NSLocalizedDescriptionKey: "Downloaded screenshot '\(screenshot.attributes.fileName ?? screenshot.id)' had unexpected dimensions \(actualSize.width)x\(actualSize.height); expected \(expectedWidth)x\(expectedHeight)."
+                        NSLocalizedDescriptionKey: "Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ hat die unerwartete Größe \(actualSize.width)×\(actualSize.height); erwartet wurde \(expectedWidth)×\(expectedHeight)."
                     ]
                 )
             }
@@ -498,7 +498,7 @@ extension ASCManager {
             return
         }
         guard let service else {
-            writeError = "ASC service not configured"
+            writeError = "App Store Connect ist nicht eingerichtet."
             return
         }
 
@@ -511,7 +511,7 @@ extension ASCManager {
         guard revision == projectRevision, !Task.isCancelled else { return }
         guard let loc = localizations.first(where: { $0.attributes.locale == locale })
                 else {
-            writeError = "No localizations found for locale '\(locale)'."
+            writeError = "Keine Lokalisierungen für die Sprache '\(locale)'."
             return
         }
 
@@ -523,7 +523,7 @@ extension ASCManager {
             // Refresh the remote baseline before diffing so stale cached ASC IDs
             // don't survive server-side edits made outside Blitz.
             guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
-                throw ASCError.notFound(tabError[.screenshots] ?? "Could not verify current screenshots")
+                throw ASCError.notFound(tabError[.screenshots] ?? "Die aktuellen Screenshots konnten nicht geprüft werden")
             }
             try checkWriteTarget(target)
             invalidateStaleTrackSnapshots(displayType: displayType, locale: loc.attributes.locale)
@@ -590,7 +590,7 @@ extension ASCManager {
     // MARK: - Screenshot Deletion
 
     func deleteScreenshot(screenshotId: String) async throws {
-        guard let service else { throw ASCError.notFound("ASC service not configured") }
+        guard let service else { throw ASCError.notFound("App Store Connect ist nicht eingerichtet.") }
         _ = try await validateWrite(fields: ["screenshots"], using: service)
         guard localizations.contains(where: { loc in screenshotsForLocale(loc.attributes.locale).values.joined().contains { $0.id == screenshotId } }) else {
             throw ASCError.notFound("Der Screenshot gehört nicht zur geladenen Version.")

@@ -6,25 +6,25 @@ enum DashboardLoadIssue: Equatable {
 
     var title: String {
         switch self {
-        case .offline: "Connection unavailable"
-        case .authentication, .missingCredentials: "App Store Connect sign-in required"
-        case .permissions: "App Store Connect access denied"
-        case .agreement: "Apple agreement needs attention"
-        case .rateLimited: "App Store Connect is busy"
-        case .unavailable: "Couldn’t refresh apps"
-        case .partialStatuses: "Some app statuses couldn’t be refreshed"
+        case .offline: "Keine Verbindung"
+        case .authentication, .missingCredentials: "App-Store-Connect-Zugang erforderlich"
+        case .permissions: "Zugriff auf App Store Connect verweigert"
+        case .agreement: "Apple-Vereinbarung prüfen"
+        case .rateLimited: "App Store Connect ist ausgelastet"
+        case .unavailable: "Apps konnten nicht aktualisiert werden"
+        case .partialStatuses: "Einige App-Status konnten nicht aktualisiert werden"
         }
     }
 
     var message: String {
         switch self {
-        case .offline: "Check your internet connection and try again."
-        case .authentication, .missingCredentials: "Check your App Store Connect API key in Settings, then retry."
-        case .permissions: "Check your API key permissions in App Store Connect."
-        case .agreement: "Your Account Holder needs to review the latest agreement in Apple Developer."
-        case .rateLimited: "Wait a moment before trying again."
-        case .unavailable: "App Store Connect or its local helper could not be reached. Try again."
-        case .partialStatuses(let count): "Status unavailable for \(count) app(s). Previous statuses are retained where available; totals may be outdated or incomplete."
+        case .offline: "Prüfe deine Internetverbindung und versuche es erneut."
+        case .authentication, .missingCredentials: "Prüfe deinen App-Store-Connect-API-Schlüssel in den Einstellungen und versuche es erneut."
+        case .permissions: "Prüfe die Berechtigungen deines API-Schlüssels in App Store Connect."
+        case .agreement: "Der Accountinhaber muss die aktuelle Vereinbarung bei Apple Developer prüfen."
+        case .rateLimited: "Warte einen Moment und versuche es erneut."
+        case .unavailable: "App Store Connect oder der lokale Hilfsdienst ist nicht erreichbar. Versuche es erneut."
+        case .partialStatuses(let count): "Für \(count) Apps fehlt der aktuelle Status. Vorhandene ältere Daten bleiben sichtbar; die Gesamtzahlen können veraltet oder unvollständig sein."
         }
     }
 

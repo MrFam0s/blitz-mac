@@ -2,6 +2,37 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 87 — German application interface
+
+Dashboard, navigation, menus, app information, review, screenshots, TestFlight,
+analytics, reviews, simulator controls, terminal controls and onboarding now use
+German interface text. Dialog actions, empty/loading states, accessibility labels,
+tooltips and locally generated setup/error messages follow the same terminology.
+The application bundle declares German for native macOS menus and file panels;
+permission explanations are German as well. German known-state labels retain the
+distinction between Apple's approval and confirmed Store availability.
+
+Display helpers translate only system-owned fields and values. App identities,
+Apple status codes, stored navigation values, release field keys, locale tags and
+user-authored Store content remain unchanged. Unknown Apple statuses and external
+Apple/CLI diagnostics keep their original content. Product-readiness tooltips
+explain the workflow without displaying internal skill/API instructions; those
+instructions remain available to agents. Embedded demonstration recordings retain
+their original footage. No account, Store record or release operation is changed.
+
+Validation: all 627 Swift tests in 12 suites and nine release-metadata checks pass.
+New regressions protect user-authored values that resemble system labels, unknown
+Apple states and stable navigation/readiness keys. Independent review finds no
+change to identity, approval or submission behavior. The native Release bundle
+passes deep/strict codesign verification and is installed under Applications.
+Rendered checks cover the Dashboard, overview, app information, screenshots,
+review, TestFlight builds/groups/beta information, analytics, feedback and settings
+with the side terminal open. System menus also display German. Isolated genuine
+UI components with synthetic data cover unknown states and loading/error layouts
+in narrow dark appearance. This exposed and fixed truncated error actions; they
+now wrap below the explanation. Embedded onboarding and live approval dialogs
+were reviewed in source, without resetting accounts or triggering a Store action.
+
 ## 1.0.74 build 86 — consistent release and utility dialogs
 
 Version drafts, release handoffs and submission previews now use the same

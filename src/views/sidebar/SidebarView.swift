@@ -29,14 +29,14 @@ struct SidebarView: View {
                 }
 
                 // Release group
-                Section("Release") {
+                Section("Veröffentlichung") {
                     ForEach(AppTab.Group.release.tabs) { tab in
                         navigationRow(tab)
                     }
                 }
 
                 // Insights group
-                Section("Insights") {
+                Section("Auswertung") {
                     ForEach(AppTab.Group.insights.tabs) { tab in
                         navigationRow(tab)
                     }

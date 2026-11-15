@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 import MetalKit
 import SwiftTerm
@@ -107,7 +108,7 @@ struct SimulatorView: View {
 
                     HStack(spacing: 8) {
                         if stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission {
-                            Button("Open System Settings") {
+                            Button("Systemeinstellungen öffnen") {
                                 if stream.needsScreenRecordingPermission {
                                     AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
                                 }
@@ -115,7 +116,7 @@ struct SimulatorView: View {
                                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
                             }
                         }
-                        Button("Retry") {
+                        Button("Erneut versuchen") {
                             Task {
                                 await appState.startProjectSimulator()
                             }
@@ -132,11 +133,11 @@ struct SimulatorView: View {
                     ProgressView()
                         .controlSize(.large)
                     if let name = appState.simulatorManager.bootingDeviceName {
-                        Text("Switching to \(name)...")
+                        Text("Wechsel zu \(name) …")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Booting simulator...")
+                        Text("Simulator wird gestartet …")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
@@ -158,14 +159,14 @@ struct SimulatorView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         Text(appState.simulatorManager.selectedDeviceID == nil
-                             ? "Choose a simulator for this project" : "Simulator ready to start")
+                             ? "Wähle einen Simulator für dieses Projekt" : "Simulator ist startbereit")
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
 
-                        Text("Your device choice is saved per project. Other running simulators stay open.")
+                        Text("Die Geräteauswahl wird pro Projekt gespeichert. Andere laufende Simulatoren bleiben geöffnet.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button("Start Simulator") {
+                        Button("Simulator starten") {
                             Task {
                                 await appState.startProjectSimulator()
                             }
@@ -205,7 +206,7 @@ struct SimulatorView: View {
                     Image(systemName: "house")
                         .padding(.horizontal, 4)
                 }
-                .help("Home button")
+                .help("Home-Taste")
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -223,7 +224,7 @@ struct SimulatorView: View {
                     Image(systemName: "paintbrush")
                         .padding(.horizontal, 4)
                 }
-                .help("Gesture overlay style")
+                .help("Darstellung der Gesten")
             }
 
         }

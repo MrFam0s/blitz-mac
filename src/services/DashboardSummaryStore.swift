@@ -137,7 +137,7 @@ final class DashboardSummaryStore {
         cacheKey = key
         loadedAccountKey = accountKey
         isLoadingSummary = true
-        loadingSummaryStatusText = "Loading apps from App Store Connect…"
+        loadingSummaryStatusText = "Apps aus App Store Connect werden geladen …"
     }
 
     func store(
@@ -254,7 +254,7 @@ final class DashboardSummaryStore {
         var nextStatuses: [String: ASCDashboardProjectStatus] = [:]
         var nextIconURLs = currentIconURLsByBundleId()
         var completedCount = 0
-        loadingSummaryStatusText = "Loading apps 0/\(allAscApps.count)…"
+        loadingSummaryStatusText = "Apps werden geladen: 0/\(allAscApps.count)…"
 
         let concurrencyLimit = 6
         var perAppStatuses: [String: ASCDashboardProjectStatus] = [:]
@@ -308,7 +308,7 @@ final class DashboardSummaryStore {
                     nextIconURLs[result.0] = iconURL
                 }
                 completedCount += 1
-                loadingSummaryStatusText = "Loading apps \(completedCount)/\(allAscApps.count)…"
+                loadingSummaryStatusText = "Apps werden geladen: \(completedCount)/\(allAscApps.count)…"
                 if Task.isCancelled { break }
                 enqueueNext()
             }

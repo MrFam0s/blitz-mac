@@ -320,17 +320,17 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .simulatorWindowNotFound:
-                return "Could not uniquely find the selected simulator window. Open that device in a compact Device Hub or Simulator window and try again."
+                return "Das ausgewählte Simulatorfenster konnte nicht eindeutig gefunden werden. Öffne dieses Gerät in einem kompakten Device-Hub- oder Simulatorfenster und versuche es erneut."
             case .ambiguousSimulatorName:
-                return "Multiple running simulators have the same name. Give your project simulator a unique name in Xcode, then retry."
+                return "Mehrere laufende Simulatoren haben denselben Namen. Gib dem Projektsimulator in Xcode einen eindeutigen Namen und versuche es erneut."
             case .screenRecordingDenied(let msg):
-                return "Screen recording permission denied. Grant access in System Settings → Privacy & Security → Screen Recording, then restart Blitz Neo. If the Quit & Restart popup does not appear after enabling the screen recording permission for Blitz Neo, reboot your Mac. (\(msg))"
+                return "Die Bildschirmaufnahme ist nicht erlaubt. Erteile die Freigabe unter Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme und starte Blitz Neo neu. Falls macOS danach keinen Neustart von Blitz Neo anbietet, starte den Mac neu. (\(msg))"
             case .captureStartFailed(let msg):
-                return "Failed to start capture: \(msg)"
+                return "Die Bildschirmaufnahme konnte nicht gestartet werden: \(msg)"
             case .accessibilityDenied:
-                return "Allow Blitz Neo in System Settings → Privacy & Security → Accessibility so it can locate the device screen inside Device Hub. Then retry."
+                return "Erlaube Blitz Neo unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen den Zugriff, damit es den Gerätebildschirm im Device Hub finden kann. Versuche es anschließend erneut."
             case .deviceScreenNotFound:
-                return "Could not locate the device screen inside Device Hub. Open the selected device in a compact window and retry."
+                return "Der Gerätebildschirm im Device Hub wurde nicht gefunden. Öffne das ausgewählte Gerät in einem kompakten Fenster und versuche es erneut."
             }
         }
     }

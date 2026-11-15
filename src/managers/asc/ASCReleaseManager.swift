@@ -197,18 +197,16 @@ extension ASCManager {
 
     func newVersionCreationBlockerMessage(desiredVersionString: String? = nil) -> String? {
         guard let blocker = newVersionCreationBlocker else { return nil }
-        let blockerState = ASCReleaseStatus.normalize(blocker.attributes.appStoreState)
-            .replacingOccurrences(of: "_", with: " ")
-            .capitalized
+        let blockerState = BlitzDisplayText.status(ASCReleaseStatus.normalize(blocker.attributes.appStoreState))
         let desiredSuffix: String
         if let desiredVersionString,
            !desiredVersionString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            desiredSuffix = " before creating \(desiredVersionString)"
+            desiredSuffix = " bevor du Version \(desiredVersionString) anlegst"
         } else {
             desiredSuffix = ""
         }
-        return "App Store Connect already has version \(blocker.attributes.versionString) in \(blockerState). "
-            + "Use that version or finish, submit, or remove it\(desiredSuffix)."
+        return "App Store Connect enthält bereits Version \(blocker.attributes.versionString) mit dem Status „\(blockerState)“. "
+            + "Verwende diese Version oder schließe sie ab, reiche sie ein oder entferne sie\(desiredSuffix)."
     }
 
     @discardableResult

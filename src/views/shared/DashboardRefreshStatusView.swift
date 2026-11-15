@@ -16,19 +16,24 @@ struct DashboardRefreshStatusView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let issueTitle {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(issueTitle).font(.callout.weight(.semibold))
-                        Text(issueMessage ?? "").font(.callout).foregroundStyle(.secondary)
-                        if isShowingSavedData {
-                            Text("Showing saved data; current status could not be checked.")
-                                .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(issueTitle).font(.callout.weight(.semibold))
+                            Text(issueMessage ?? "").font(.callout).foregroundStyle(.secondary)
+                            if isShowingSavedData {
+                                Text("Gespeicherte Daten werden angezeigt. Der aktuelle Status konnte nicht geprüft werden.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
+                        .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 8)
-                    if needsSettings { Button("Settings", action: openSettings) }
-                    Button("Retry", action: retry).disabled(isLoading)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { issueActions }.fixedSize()
+                        VStack(alignment: .leading, spacing: 8) { issueActions }
+                    }
                 }
                 .padding(12)
                 .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
@@ -44,4 +49,11 @@ struct DashboardRefreshStatusView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    @ViewBuilder
+    private var issueActions: some View {
+        if needsSettings { Button("Einstellungen", action: openSettings) }
+        Button("Erneut versuchen", action: retry).disabled(isLoading)
+    }
+
 }

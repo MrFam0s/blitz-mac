@@ -237,6 +237,10 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <string>$BUILD_NUMBER</string>
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>de</string>
+    <key>CFBundleLocalizations</key>
+    <array><string>de</string></array>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -250,9 +254,9 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>Blitz Neo needs screen recording access to capture the iOS Simulator display.</string>
+    <string>Blitz Neo benötigt die Bildschirmaufnahme, um den iOS-Simulator anzuzeigen.</string>
     <key>NSCameraUsageDescription</key>
-    <string>Blitz Neo needs camera access to capture physical iOS device screens via USB.</string>
+    <string>Blitz Neo benötigt Kamerazugriff, um die Bildschirme angeschlossener iOS-Geräte über USB anzuzeigen.</string>
 $ANALYTICS_PLIST_KEYS
 </dict>
 </plist>

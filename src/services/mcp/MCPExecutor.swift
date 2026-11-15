@@ -328,13 +328,13 @@ actor MCPExecutor {
             NSApp.activate(ignoringOtherApps: true)
 
             let alert = NSAlert()
-            alert.messageText = "AI Tool Request"
-            alert.informativeText = request.description
+            alert.messageText = "Anfrage des KI-Agenten"
+            alert.informativeText = "Werkzeug „\(request.toolName)“ ausführen?"
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "Approve")
-            alert.addButton(withTitle: "Deny")
+            alert.addButton(withTitle: "Erlauben")
+            alert.addButton(withTitle: "Ablehnen")
 
-            let checkbox = NSButton(checkboxWithTitle: "Approve all in the future", target: nil, action: nil)
+            let checkbox = NSButton(checkboxWithTitle: "Alle Blitz-Neo-Aktionen künftig automatisch erlauben", target: nil, action: nil)
             checkbox.state = .off
             alert.accessoryView = checkbox
 

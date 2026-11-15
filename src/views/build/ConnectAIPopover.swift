@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 enum AIAgent: String, CaseIterable {
@@ -118,7 +119,7 @@ struct ConnectAIPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Connect AI")
+            Text("KI verbinden")
                 .font(.headline)
 
             // Agent type selector
@@ -147,10 +148,10 @@ struct ConnectAIPopover: View {
                 }) {
                     Image(systemName: copiedCommand ? "checkmark" : "doc.on.doc")
                 }
-                .help("Copy to clipboard")
+                .help("In die Zwischenablage kopieren")
             }
 
-            Text("Run this in your terminal to connect \(agent.displayName) to this project.")
+            Text("Führe diesen Befehl im Terminal aus, um \(agent.displayName) mit diesem Projekt zu verbinden.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -158,7 +159,7 @@ struct ConnectAIPopover: View {
             if let prompt = tabPrompt {
                 Divider()
 
-                Text("Suggested prompt")
+                Text("Vorgeschlagene Anfrage")
                     .font(.subheadline.weight(.medium))
 
                 HStack(spacing: 8) {
@@ -177,7 +178,7 @@ struct ConnectAIPopover: View {
                     }) {
                         Image(systemName: copiedPrompt ? "checkmark" : "doc.on.doc")
                     }
-                    .help("Copy prompt to clipboard")
+                    .help("Anfrage in die Zwischenablage kopieren")
                 }
             }
         }

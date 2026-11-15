@@ -64,26 +64,26 @@ enum ProjectTemplateScaffolder {
         for path in spec.cleanupPaths {
             let item = staging.appendingPathComponent(path).standardizedFileURL
             guard item.path.hasPrefix(staging.path + "/") else {
-                throw ProjectSetupService.SetupError(message: "Invalid template cleanup path.")
+                throw ProjectSetupService.SetupError(message: "Die Vorlage enthält einen ungültigen Pfad zum Bereinigen von Dateien.")
             }
             if fm.fileExists(atPath: item.path) { try fm.removeItem(at: item) }
         }
         let entries = try fm.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil)
         guard !entries.contains(where: { $0.lastPathComponent == ".blitz" }) else {
-            throw ProjectSetupService.SetupError(message: "Template may not replace project metadata.")
+            throw ProjectSetupService.SetupError(message: "Die Vorlage darf keine Projektmetadaten ersetzen.")
         }
         guard try ProjectCreationReservation.validate(projectDirectory) == token else {
-            throw ProjectSetupService.SetupError(message: "The project folder changed during setup.")
+            throw ProjectSetupService.SetupError(message: "Der Projektordner wurde während der Einrichtung verändert.")
         }
         for entry in entries {
             let destination = projectDirectory.appendingPathComponent(entry.lastPathComponent)
             if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
-                throw ProjectSetupService.SetupError(message: "Project setup would replace existing files. The existing files were preserved.")
+                throw ProjectSetupService.SetupError(message: "Die Projekteinrichtung würde vorhandene Dateien ersetzen. Die Dateien wurden unverändert beibehalten.")
             }
         }
         for entry in entries {
             guard try ProjectCreationReservation.validate(projectDirectory) == token else {
-                throw ProjectSetupService.SetupError(message: "The project folder changed during setup.")
+                throw ProjectSetupService.SetupError(message: "Der Projektordner wurde während der Einrichtung verändert.")
             }
             let destination = projectDirectory.appendingPathComponent(entry.lastPathComponent)
             let result = entry.path.withCString { source in
@@ -97,7 +97,7 @@ enum ProjectTemplateScaffolder {
     private static func containedFile(_ path: String, in directory: URL) throws -> URL {
         let file = directory.appendingPathComponent(path).standardizedFileURL
         guard file.path.hasPrefix(directory.path + "/") else {
-            throw ProjectSetupService.SetupError(message: "Invalid template output path.")
+            throw ProjectSetupService.SetupError(message: "Die Vorlage enthält einen ungültigen Ausgabepfad.")
         }
         return file
     }

@@ -9,8 +9,9 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
         Log("launch_log=\(BlitzPaths.launchLogFile.path)")
         AppRelaunchService.shared.clearPendingRestart()
         AnalyticsService.trackAppLaunch()
-        if let fileMenu = NSApp.mainMenu?.item(withTitle: "File") {
-            fileMenu.title = "Project"
+        if let fileMenu = NSApp.mainMenu?.item(withTitle: "Ablage")
+            ?? NSApp.mainMenu?.item(withTitle: "File") {
+            fileMenu.title = "Projekt"
         }
         // Set dock icon from bundled resource (needed for swift run / non-.app launches)
         if Bundle.main.bundleURL.pathExtension != "app",

@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct DeviceBuildView: View {
@@ -8,9 +9,9 @@ struct DeviceBuildView: View {
             Image(systemName: "iphone.gen3")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("Physical Device Build")
+            Text("Build auf einem Gerät")
                 .font(BlitzLayout.pageTitle)
-            Text("Connect an iOS device via USB to build and run.")
+            Text("Verbinde ein iOS-Gerät per USB, um die App darauf zu erstellen und auszuführen.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

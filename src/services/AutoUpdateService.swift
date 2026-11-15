@@ -199,7 +199,7 @@ final class AutoUpdateManager {
         try? FileManager.default.removeItem(at: pkgPath)
 
         guard status == 0 else {
-            throw UpdateError(message: "Installation failed (exit code \(status))")
+            throw UpdateError(message: "Installation fehlgeschlagen (Exit-Code \(status))")
         }
 
         terminateApp()
@@ -235,7 +235,7 @@ final class AutoUpdateManager {
         }.value
 
         guard status == 0 else {
-            throw UpdateError(message: "Installation failed (exit code \(status))")
+            throw UpdateError(message: "Installation fehlgeschlagen (Exit-Code \(status))")
         }
 
         terminateApp()

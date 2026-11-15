@@ -232,7 +232,7 @@ struct VersionDraftSheet: View {
                     }
                     VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
                         Toggle("Store-Texte übernehmen", isOn: $copyMetadata)
-                        Toggle("Review-Kontaktdaten übernehmen", isOn: $copyReviewDetail)
+                        Toggle("Prüfkontaktdaten übernehmen", isOn: $copyReviewDetail)
                     }
                     if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
                     if !isChecking && draftTarget?.platform == nil {

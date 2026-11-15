@@ -174,7 +174,7 @@ extension ASCManager {
         guard let service else { return }
         let trimmedLocale = locale.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLocale.isEmpty else {
-            writeError = "No app information locale selected."
+            writeError = "Keine Sprache für die App-Informationen ausgewählt."
             return
         }
 
@@ -278,7 +278,7 @@ extension ASCManager {
     func updateAppInfoLocalizationField(_ field: String, value: String, locale: String? = nil) async {
         let targetLocale = locale ?? activeAppInformationLocale()
         guard let targetLocale else {
-            writeError = "No app info localization selected."
+            writeError = "Keine Lokalisierung für die App-Informationen ausgewählt."
             return
         }
 

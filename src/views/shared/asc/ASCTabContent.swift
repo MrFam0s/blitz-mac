@@ -35,7 +35,7 @@ struct ASCTabContent<Content: View>: View {
         } else if isLoading && !shouldRenderContentWhileLoading {
             VStack(spacing: 12) {
                 ProgressView()
-                Text("Loading\u{2026}")
+                Text("Wird geladen …")
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
@@ -64,7 +64,7 @@ struct ASCTabContent<Content: View>: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
 
-                Button("Retry") {
+                Button("Erneut versuchen") {
                     Task { await asc.refreshTabData(tab) }
                 }
                 .buttonStyle(.bordered)
@@ -89,7 +89,7 @@ struct ASCTabContent<Content: View>: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Button("Retry") {
+                            Button("Erneut versuchen") {
                                 Task { await asc.refreshTabData(tab) }
                             }
                             .buttonStyle(.bordered)
@@ -108,7 +108,7 @@ struct ASCTabContent<Content: View>: View {
 struct ASCNoProjectSelectedView: View {
     var body: some View {
         VStack(spacing: 10) {
-            Text("Select a project first.")
+            Text("Wähle zuerst ein Projekt aus.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -139,7 +139,7 @@ struct ASCTabLoadingPlaceholder: View {
 struct ASCTabRefreshButton: View {
     var asc: ASCManager
     var tab: AppTab
-    var helpText: String = "Refresh this tab"
+    var helpText: String = "Diese Rubrik aktualisieren"
 
     private var isRefreshing: Bool {
         asc.isTabLoading(tab)
@@ -148,7 +148,7 @@ struct ASCTabRefreshButton: View {
     private var refreshHelp: String {
         let date = tab == .app ? asc.overviewCacheDate : asc.tabLoadedAt[tab]
         guard let date else { return helpText }
-        return "\(helpText) · Data from \(date.formatted(date: .abbreviated, time: .shortened))"
+        return "\(helpText) · Datenstand: \(date.formatted(date: .abbreviated, time: .shortened))"
     }
 
     var body: some View {
@@ -168,6 +168,7 @@ struct ASCTabRefreshButton: View {
         }
         .buttonStyle(.borderless)
         .disabled(isRefreshing)
+        .accessibilityLabel(isRefreshing ? "Wird aktualisiert …" : helpText)
         .help(refreshHelp)
     }
 }
