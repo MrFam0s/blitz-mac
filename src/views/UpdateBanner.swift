@@ -15,8 +15,8 @@ struct UpdateOverlay: View {
                 .ignoresSafeArea()
 
             UpdateCardContent(autoUpdate: autoUpdate)
-                .frame(width: 420)
-                .padding(32)
+                .frame(width: 512)
+                .padding(24)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
         }
@@ -31,15 +31,8 @@ struct UpdateCardContent: View {
     var body: some View {
         switch autoUpdate.state {
         case .available(let version, let notes):
-            VStack(spacing: 16) {
-                HStack {
-                    Text("Update verfügbar")
-                        .font(.title3.weight(.semibold))
-                    Spacer()
-                    Text("v\(version)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                BlitzSetupHeader("Blitz Neo aktualisieren", subtitle: "Version \(version) ist verfügbar.")
 
                 if !notes.isEmpty {
                     ScrollView {
@@ -47,42 +40,32 @@ struct UpdateCardContent: View {
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxHeight: 200)
                 }
 
-                VStack(spacing: 8) {
+                Divider()
+                HStack {
+                    Button("Später") {
+                        autoUpdate.dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    Spacer()
                     Button("Jetzt aktualisieren") {
                         Task { await autoUpdate.performUpdate() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-
-                    Button("Später") {
-                        autoUpdate.dismiss()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 }
             }
 
         case .downloading(let percent):
-            VStack(spacing: 20) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.blue)
-
-                VStack(spacing: 6) {
-                    Text("Update wird geladen")
-                        .font(.title2.weight(.semibold))
-                    if percent >= 0 {
-                        Text("\(percent)%")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                BlitzSetupHeader("Update wird geladen", subtitle: percent >= 0
+                    ? "\(percent) % abgeschlossen"
+                    : "Die neue Version von Blitz Neo wird heruntergeladen.")
 
                 if percent >= 0 {
                     ProgressView(value: Double(percent), total: 100)
@@ -93,58 +76,42 @@ struct UpdateCardContent: View {
                         .progressViewStyle(.linear)
                         .frame(maxWidth: .infinity)
                 }
-
-                Text("Bitte warten …")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
 
         case .installing:
-            VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
+                BlitzSetupHeader("Update wird installiert", subtitle: "Blitz Neo startet anschließend automatisch neu.")
+
                 ProgressView()
-                    .controlSize(.large)
-
-                VStack(spacing: 6) {
-                    Text("Update wird installiert")
-                        .font(.title2.weight(.semibold))
-                    Text("Blitz Neo startet anschließend automatisch neu.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("Bitte warten …")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
             }
 
         case .failed(let message):
-            VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.orange)
-
-                VStack(spacing: 6) {
-                    Text("Update fehlgeschlagen")
-                        .font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: 16) {
+                Label("Update fehlgeschlagen", systemImage: "exclamationmark.triangle")
+                    .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                ScrollView {
                     Text(message)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(4)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxHeight: 200)
 
-                HStack(spacing: 12) {
+                Divider()
+                HStack {
+                    Button("Schließen") {
+                        autoUpdate.dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    Spacer()
                     Button("Erneut versuchen") {
                         Task { await autoUpdate.performUpdate() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-
-                    Button("Schließen") {
-                        autoUpdate.dismiss()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
                 }
             }
 
@@ -263,23 +230,28 @@ struct UpdateSettingsRow: View {
     }
 
     private var updateSheet: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button {
-                    showUpdateSheet = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding([.top, .trailing], 12)
-
+        VStack(alignment: .leading, spacing: 16) {
             UpdateCardContent(autoUpdate: autoUpdate)
-                .padding(24)
+
+            if hasActiveUpdate {
+                Divider()
+                HStack {
+                    Button("Schließen") {
+                        showUpdateSheet = false
+                    }
+                    .keyboardShortcut(.cancelAction)
+                    Spacer()
+                }
+            }
         }
-        .frame(width: 480, height: 380)
+        .padding(24)
+        .frame(width: 560)
+    }
+
+    private var hasActiveUpdate: Bool {
+        switch autoUpdate.state {
+        case .downloading, .installing: return true
+        default: return false
+        }
     }
 }

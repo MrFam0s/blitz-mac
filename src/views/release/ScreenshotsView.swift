@@ -1161,20 +1161,23 @@ private struct ScreenshotPreviewSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(title).font(.headline).lineLimit(1).truncationMode(.middle)
-                Spacer()
-                Button("Schließen") { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-            .padding(16)
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("Screenshot-Vorschau", subtitle: title)
+                .textSelection(.enabled)
             Divider()
             GeometryReader { geometry in
                 Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                     .frame(width: geometry.size.width, height: geometry.size.height)
             }
-            .padding(16)
+            Divider()
+            HStack {
+                Spacer()
+                Button("Schließen") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
         }
+        .font(.callout)
+        .padding(24)
         .frame(width: min(1000, max(360, (NSApp.keyWindow?.frame.width ?? 1000) - 80)),
                height: min(760, max(300, (NSApp.keyWindow?.frame.height ?? 760) - 100)))
     }

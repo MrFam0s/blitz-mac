@@ -47,7 +47,7 @@ struct MonetizationView: View {
                     selection: selectedVersionBinding,
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/pricing") },
                     refreshTab: .monetization,
-                    refreshHelpText: "Refresh monetization data"
+                    refreshHelpText: "Preise und Kaufprodukte aktualisieren"
                 )
                 .blitzToolbar()
             }
@@ -72,7 +72,7 @@ struct MonetizationView: View {
                     && asc.subscriptionGroups.isEmpty {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Loading pricing, products, and subscriptions…")
+                        Text("Preise, In-App-Käufe und Abos werden geladen …")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -101,8 +101,8 @@ private struct PricePicker: View {
     }
 
     var body: some View {
-        Picker("Price", selection: $selectedPointId) {
-            Text("Select a price…").tag("")
+        Picker("Preis", selection: $selectedPointId) {
+            Text("Preis auswählen …").tag("")
             ForEach(sortedPaidPoints) { pt in
                 Text("$\(pt.attributes.customerPrice ?? "?")").tag(pt.id)
             }
@@ -122,7 +122,7 @@ private struct ScreenshotPicker: View {
             Text(label)
             Spacer()
             if path.isEmpty {
-                Button("Choose File…") { showPicker = true }
+                Button("Datei auswählen …") { showPicker = true }
                     .controlSize(.small)
             } else {
                 HStack(spacing: 6) {
@@ -132,7 +132,7 @@ private struct ScreenshotPicker: View {
                     Text(URL(fileURLWithPath: path).lastPathComponent)
                         .font(.caption)
                         .lineLimit(1)
-                    Button("Change") { showPicker = true }
+                    Button("Ändern") { showPicker = true }
                         .controlSize(.mini)
                 }
             }
@@ -192,21 +192,21 @@ private struct AppPricingSection: View {
     var body: some View {
         let isLoading = asc.isTabLoading(.monetization)
         SectionCard {
-            Label("Pricing & Availability", systemImage: "dollarsign.circle")
+            Label("Preise und Verfügbarkeit", systemImage: "dollarsign.circle")
                 .font(BlitzLayout.sectionTitle)
 
             if isLoading && asc.appPricePoints.isEmpty && asc.currentAppPricePointId == nil && asc.scheduledAppPricePointId == nil {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Loading pricing state…")
+                    Text("Preisdaten werden geladen …")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             } else {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Free App").font(.body.weight(.medium))
-                        Text("Your app will be available for free on the App Store.")
+                        Text("Kostenlose App").font(.body.weight(.medium))
+                        Text("Die App wird im App Store kostenlos angeboten.")
                             .font(.callout).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -226,6 +226,7 @@ private struct AppPricingSection: View {
                         }
                     ))
                         .labelsHidden()
+                        .accessibilityLabel("Kostenlose App")
                         .fixedSize()
                 }
 
@@ -233,7 +234,7 @@ private struct AppPricingSection: View {
                     PricePicker(pricePoints: asc.appPricePoints, selectedPointId: $selectedPricePointId)
 
                     if !selectedPricePointId.isEmpty {
-                        Button("Set Price") {
+                        Button("Preis speichern") {
                             isSaving = true
                             Task {
                                 await asc.setAppPrice(pricePointId: selectedPricePointId)
@@ -254,7 +255,7 @@ private struct AppPricingSection: View {
                                     .font(.caption.weight(.semibold))
                                     .rotationEffect(.degrees(showScheduled ? 90 : 0))
                                     .animation(.easeInOut(duration: 0.15), value: showScheduled)
-                                Text("Schedule Price Change")
+                                Text("Preisänderung planen")
                                 Spacer()
                             }
                             .contentShape(Rectangle())
@@ -263,11 +264,11 @@ private struct AppPricingSection: View {
 
                         if showScheduled {
                             VStack(alignment: .leading, spacing: 12) {
-                                DatePicker("Effective Date", selection: $scheduledDate, in: Date()..., displayedComponents: .date)
+                                DatePicker("Gültig ab", selection: $scheduledDate, in: Date()..., displayedComponents: .date)
                                 PricePicker(pricePoints: asc.appPricePoints, selectedPointId: $scheduledPricePointId)
 
                                 if !scheduledPricePointId.isEmpty {
-                                    Button("Create Price Change") {
+                                    Button("Preisänderung speichern") {
                                         isSaving = true
                                         let currentId = selectedPricePointId.isEmpty ? freePointId : selectedPricePointId
                                         let dateStr = formatDate(scheduledDate)
@@ -292,7 +293,7 @@ private struct AppPricingSection: View {
             if isSaving {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Saving…").font(.callout).foregroundStyle(.secondary)
+                    Text("Wird gespeichert …").font(.callout).foregroundStyle(.secondary)
                 }
             }
         }
@@ -367,11 +368,11 @@ private struct InAppPurchasesSection: View {
 
     private var missingFields: [String] {
         var missing: [String] = []
-        if iapRefName.isEmpty { missing.append("Reference Name") }
-        if iapProductId.isEmpty { missing.append("Product ID") }
-        if iapDisplayName.isEmpty { missing.append("Display Name") }
-        if iapDescription.isEmpty { missing.append("Description") }
-        if iapScreenshotPath.isEmpty { missing.append("Review Screenshot") }
+        if iapRefName.isEmpty { missing.append("Referenzname") }
+        if iapProductId.isEmpty { missing.append("Produkt-ID") }
+        if iapDisplayName.isEmpty { missing.append("Anzeigename") }
+        if iapDescription.isEmpty { missing.append("Beschreibung") }
+        if iapScreenshotPath.isEmpty { missing.append("Prüfbild") }
         return missing
     }
 
@@ -379,10 +380,10 @@ private struct InAppPurchasesSection: View {
         let isLoading = asc.isTabLoading(.monetization)
         SectionCard {
             HStack {
-                Label("In-App Purchases", systemImage: "cart")
+                Label("In-App-Käufe", systemImage: "cart")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
-                Button(showCreateForm ? "Cancel" : "Create") {
+                Button(showCreateForm ? "Abbrechen" : "Kauf hinzufügen …") {
                     showCreateForm.toggle()
                     if !showCreateForm { resetForm() }
                 }
@@ -393,12 +394,12 @@ private struct InAppPurchasesSection: View {
                 if isLoading {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Loading in-app purchases…")
+                        Text("In-App-Käufe werden geladen …")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("No in-app purchases configured.")
+                    Text("Noch keine In-App-Käufe eingerichtet.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             } else {
@@ -415,35 +416,39 @@ private struct InAppPurchasesSection: View {
             if showCreateForm {
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("New In-App Purchase").font(.subheadline.weight(.semibold))
+                    Text("Neuer In-App-Kauf").font(.subheadline.weight(.semibold))
 
-                    Picker("Type", selection: $iapType) {
-                        ForEach(iapTypes, id: \.self) { Text(formatType($0)).tag($0) }
-                    }.pickerStyle(.segmented)
+                    BlitzSetupField("Typ") {
+                        Picker("Typ", selection: $iapType) {
+                            ForEach(iapTypes, id: \.self) { Text(formatType($0)).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityLabel("Typ")
+                    }
 
-                    RequiredField("Reference Name", text: $iapRefName, showError: showValidation && iapRefName.isEmpty)
-                    RequiredField("Product ID", text: $iapProductId, showError: showValidation && iapProductId.isEmpty)
-                    RequiredField("Display Name", text: $iapDisplayName, showError: showValidation && iapDisplayName.isEmpty)
-                    RequiredField("Description", text: $iapDescription, showError: showValidation && iapDescription.isEmpty)
+                    RequiredField("Referenzname", text: $iapRefName, showError: showValidation && iapRefName.isEmpty)
+                    RequiredField("Produkt-ID", text: $iapProductId, showError: showValidation && iapProductId.isEmpty)
+                    RequiredField("Anzeigename", text: $iapDisplayName, showError: showValidation && iapDisplayName.isEmpty)
+                    RequiredField("Beschreibung", text: $iapDescription, showError: showValidation && iapDescription.isEmpty)
                     PricePicker(pricePoints: asc.appPricePoints, selectedPointId: $iapPricePointId)
-                    ScreenshotPicker(label: "Review Screenshot", path: $iapScreenshotPath)
+                    ScreenshotPicker(label: "Prüfbild", path: $iapScreenshotPath)
                     if showValidation && iapScreenshotPath.isEmpty {
-                        Text("Review screenshot is required.")
+                        Text("Ein Prüfbild ist erforderlich.")
                             .font(.caption2).foregroundStyle(.red)
                     } else {
-                        Text("Min 640x920px PNG/JPEG. Required by App Review.")
+                        Text("Mindestens 640 × 920 Pixel, PNG oder JPEG. Für die App-Prüfung erforderlich.")
                             .font(.caption2).foregroundStyle(.tertiary)
                     }
 
                     if showValidation && !missingFields.isEmpty {
-                        Text("Required: \(missingFields.joined(separator: ", "))")
+                        Text("Erforderlich: \(missingFields.joined(separator: ", "))")
                             .font(.caption).foregroundStyle(.red)
                     }
 
                     if asc.isCreating {
                         CreateProgressBar(progress: asc.createProgress, message: asc.createProgressMessage)
                     } else {
-                        Button("Create") {
+                        Button("In-App-Kauf anlegen") {
                             if !missingFields.isEmpty {
                                 showValidation = true
                                 return
@@ -466,15 +471,15 @@ private struct InAppPurchasesSection: View {
                 showCreateForm = false; resetForm()
             }
         }
-        .alert("Delete In-App Purchase?", isPresented: .init(
+        .alert("In-App-Kauf löschen?", isPresented: .init(
             get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }
         )) {
-            Button("Delete", role: .destructive) {
+            Button("Löschen", role: .destructive) {
                 if let t = deleteTarget { Task { await asc.deleteIAP(id: t.id) } }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("This will permanently delete \"\(deleteTarget?.attributes.name ?? "")\".")
+            Text("„\(deleteTarget?.attributes.name ?? "")“ wird dauerhaft gelöscht.")
         }
         .onChange(of: asc.pendingCreateValues) { _, pending in
             guard let pending, pending["kind"] == "iap" else { return }
@@ -502,26 +507,27 @@ private struct InAppPurchasesSection: View {
 // MARK: - Required Field
 
 private struct RequiredField: View {
-    let placeholder: String
+    let title: String
     @Binding var text: String
     let showError: Bool
 
-    init(_ placeholder: String, text: Binding<String>, showError: Bool) {
-        self.placeholder = placeholder
+    init(_ title: String, text: Binding<String>, showError: Bool) {
+        self.title = title
         self._text = text
         self.showError = showError
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            TextField(placeholder, text: $text)
+        BlitzSetupField(title) {
+            TextField("", text: $text)
                 .textFieldStyle(.roundedBorder)
+                .accessibilityLabel(title)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(showError ? .red : .clear, lineWidth: 1)
                 )
             if showError {
-                Text("\(placeholder) is required.")
+                Text("\(title) ist erforderlich.")
                     .font(.caption2).foregroundStyle(.red)
             }
         }
@@ -559,7 +565,7 @@ private struct IAPDetailRow: View {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2).foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(iap.attributes.name ?? "Unnamed").font(.body.weight(.medium))
+                            Text(iap.attributes.name ?? "Ohne Namen").font(.body.weight(.medium))
                             BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                                 Text(iap.attributes.productId ?? "").font(.caption).foregroundStyle(.secondary)
                                 Text(formatType(iap.attributes.inAppPurchaseType))
@@ -572,7 +578,7 @@ private struct IAPDetailRow: View {
                 .buttonStyle(.plain)
                 if iap.attributes.state == "READY_TO_SUBMIT" {
                     SubmitForReviewButton(
-                        itemName: iap.attributes.name ?? "IAP",
+                        itemName: iap.attributes.name ?? "In-App-Kauf",
                         asc: asc,
                         onSubmit: { await asc.submitIAPForReview(id: iap.id) }
                     )
@@ -589,24 +595,24 @@ private struct IAPDetailRow: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
                     Divider()
-                    RequiredField("Reference Name", text: $editName, showError: showValidation && editName.isEmpty)
-                    RequiredField("Display Name", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
+                    RequiredField("Referenzname", text: $editName, showError: showValidation && editName.isEmpty)
+                    RequiredField("Anzeigename", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
                         .disabled(!canEditLocalization)
-                    RequiredField("Description", text: $editDescription, showError: showValidation && editDescription.isEmpty)
+                    RequiredField("Beschreibung", text: $editDescription, showError: showValidation && editDescription.isEmpty)
                         .disabled(!canEditLocalization)
-                    TextField("Review Notes", text: $editReviewNote, axis: .vertical)
+                    TextField("Hinweise für die App-Prüfung", text: $editReviewNote, axis: .vertical)
                         .lineLimit(2...4).textFieldStyle(.roundedBorder)
                         .disabled(!canEditReview)
 
                     if !canEditReview {
-                        Label("Review-Unterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
+                        Label("Prüfunterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    ScreenshotPicker(label: "Review Screenshot", path: $screenshotPath)
+                    ScreenshotPicker(label: "Prüfbild", path: $screenshotPath)
                         .disabled(!canEditReview)
                     if canEditReview && !screenshotPath.isEmpty {
                         HStack {
-                            Button("Upload Screenshot") {
+                            Button("Prüfbild hochladen") {
                                 isUploading = true
                                 Task {
                                     await asc.uploadIAPScreenshot(iapId: iap.id, path: screenshotPath)
@@ -619,12 +625,12 @@ private struct IAPDetailRow: View {
                     }
 
                     if showValidation && (editDisplayName.isEmpty || editDescription.isEmpty) {
-                        Text("Display Name and Description are required.")
+                        Text("Anzeigename und Beschreibung sind erforderlich.")
                             .font(.caption).foregroundStyle(.red)
                     }
 
                     HStack {
-                        Button("Save") {
+                        Button("Speichern") {
                             if canEditLocalization && (editDisplayName.isEmpty || editDescription.isEmpty) {
                                 showValidation = true
                                 return
@@ -691,12 +697,12 @@ private struct SubscriptionsSection: View {
 
     private var missingFields: [String] {
         var missing: [String] = []
-        if effectiveGroupName.isEmpty { missing.append("Group Name") }
-        if subRefName.isEmpty { missing.append("Reference Name") }
-        if subProductId.isEmpty { missing.append("Product ID") }
-        if subDisplayName.isEmpty { missing.append("Display Name") }
-        if subDescription.isEmpty { missing.append("Description") }
-        if subScreenshotPath.isEmpty { missing.append("Review Screenshot") }
+        if effectiveGroupName.isEmpty { missing.append("Gruppenname") }
+        if subRefName.isEmpty { missing.append("Referenzname") }
+        if subProductId.isEmpty { missing.append("Produkt-ID") }
+        if subDisplayName.isEmpty { missing.append("Anzeigename") }
+        if subDescription.isEmpty { missing.append("Beschreibung") }
+        if subScreenshotPath.isEmpty { missing.append("Prüfbild") }
         return missing
     }
 
@@ -704,10 +710,10 @@ private struct SubscriptionsSection: View {
         let isLoading = asc.isTabLoading(.monetization)
         SectionCard {
             HStack {
-                Label("Subscriptions", systemImage: "arrow.triangle.2.circlepath")
+                Label("Abos", systemImage: "arrow.triangle.2.circlepath")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
-                Button(showCreateForm ? "Cancel" : "Create") {
+                Button(showCreateForm ? "Abbrechen" : "Abo hinzufügen …") {
                     showCreateForm.toggle()
                     if !showCreateForm { resetForm() }
                 }
@@ -718,12 +724,12 @@ private struct SubscriptionsSection: View {
                 if isLoading {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Loading subscriptions…")
+                        Text("Abos werden geladen …")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("No subscriptions configured.")
+                    Text("Noch keine Abos eingerichtet.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             } else {
@@ -740,52 +746,52 @@ private struct SubscriptionsSection: View {
             if showCreateForm {
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("New Subscription").font(.subheadline.weight(.semibold))
+                    Text("Neues Abo").font(.subheadline.weight(.semibold))
 
                     if asc.subscriptionGroups.isEmpty {
-                        RequiredField("Subscription Group Name", text: $newGroupName,
+                        RequiredField("Name der Abo-Gruppe", text: $newGroupName,
                                       showError: showValidation && effectiveGroupName.isEmpty)
                     } else {
-                        Picker("Group", selection: $subGroupName) {
-                            Text("New group…").tag("")
+                        Picker("Gruppe", selection: $subGroupName) {
+                            Text("Neue Gruppe …").tag("")
                             ForEach(asc.subscriptionGroups) { g in
                                 Text(g.attributes.referenceName ?? g.id).tag(g.attributes.referenceName ?? g.id)
                             }
                         }
                         if subGroupName.isEmpty {
-                            RequiredField("New Group Name", text: $newGroupName,
+                            RequiredField("Name der neuen Gruppe", text: $newGroupName,
                                           showError: showValidation && effectiveGroupName.isEmpty)
                         }
                     }
 
-                    RequiredField("Reference Name", text: $subRefName, showError: showValidation && subRefName.isEmpty)
-                    RequiredField("Product ID", text: $subProductId, showError: showValidation && subProductId.isEmpty)
-                    RequiredField("Display Name", text: $subDisplayName, showError: showValidation && subDisplayName.isEmpty)
-                    RequiredField("Description", text: $subDescription, showError: showValidation && subDescription.isEmpty)
+                    RequiredField("Referenzname", text: $subRefName, showError: showValidation && subRefName.isEmpty)
+                    RequiredField("Produkt-ID", text: $subProductId, showError: showValidation && subProductId.isEmpty)
+                    RequiredField("Anzeigename", text: $subDisplayName, showError: showValidation && subDisplayName.isEmpty)
+                    RequiredField("Beschreibung", text: $subDescription, showError: showValidation && subDescription.isEmpty)
 
-                    Picker("Duration", selection: $subDuration) {
+                    Picker("Laufzeit", selection: $subDuration) {
                         ForEach(durations, id: \.self) { Text(formatDuration($0)).tag($0) }
                     }
 
                     PricePicker(pricePoints: asc.appPricePoints, selectedPointId: $subPricePointId)
-                    ScreenshotPicker(label: "Review Screenshot", path: $subScreenshotPath)
+                    ScreenshotPicker(label: "Prüfbild", path: $subScreenshotPath)
                     if showValidation && subScreenshotPath.isEmpty {
-                        Text("Review screenshot is required.")
+                        Text("Ein Prüfbild ist erforderlich.")
                             .font(.caption2).foregroundStyle(.red)
                     } else {
-                        Text("Min 640x920px PNG/JPEG. Required by App Review.")
+                        Text("Mindestens 640 × 920 Pixel, PNG oder JPEG. Für die App-Prüfung erforderlich.")
                             .font(.caption2).foregroundStyle(.tertiary)
                     }
 
                     if showValidation && !missingFields.isEmpty {
-                        Text("Required: \(missingFields.joined(separator: ", "))")
+                        Text("Erforderlich: \(missingFields.joined(separator: ", "))")
                             .font(.caption).foregroundStyle(.red)
                     }
 
                     if asc.isCreating {
                         CreateProgressBar(progress: asc.createProgress, message: asc.createProgressMessage)
                     } else {
-                        Button("Create") {
+                        Button("Abo anlegen") {
                             if !missingFields.isEmpty {
                                 showValidation = true
                                 return
@@ -808,25 +814,25 @@ private struct SubscriptionsSection: View {
                 showCreateForm = false; resetForm()
             }
         }
-        .alert("Delete Subscription?", isPresented: .init(
+        .alert("Abo löschen?", isPresented: .init(
             get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }
         )) {
-            Button("Delete", role: .destructive) {
+            Button("Löschen", role: .destructive) {
                 if let t = deleteTarget { Task { await asc.deleteSubscription(id: t.id) } }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("This will permanently delete \"\(deleteTarget?.attributes.name ?? "")\".")
+            Text("„\(deleteTarget?.attributes.name ?? "")“ wird dauerhaft gelöscht.")
         }
-        .alert("Delete Subscription Group?", isPresented: .init(
+        .alert("Abo-Gruppe löschen?", isPresented: .init(
             get: { deleteGroupTarget != nil }, set: { if !$0 { deleteGroupTarget = nil } }
         )) {
-            Button("Delete", role: .destructive) {
+            Button("Löschen", role: .destructive) {
                 if let g = deleteGroupTarget { Task { await asc.deleteSubscriptionGroup(id: g.id) } }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("This will permanently delete the group \"\(deleteGroupTarget?.attributes.referenceName ?? "")\".")
+            Text("Die Gruppe „\(deleteGroupTarget?.attributes.referenceName ?? "")“ wird dauerhaft gelöscht.")
         }
         .onChange(of: asc.pendingCreateValues) { _, pending in
             guard let pending, pending["kind"] == "subscription" else { return }
@@ -866,7 +872,7 @@ private struct SubscriptionGroupRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(group.attributes.referenceName ?? "Group")
+                Text(group.attributes.referenceName ?? "Gruppe")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -879,10 +885,10 @@ private struct SubscriptionGroupRow: View {
 
             // Group localization edit
             HStack(spacing: 8) {
-                TextField("Group Display Name", text: $editGroupName)
+                TextField("Anzeigename der Gruppe", text: $editGroupName)
                     .textFieldStyle(.roundedBorder)
                     .font(.caption)
-                Button("Save") {
+                Button("Speichern") {
                     guard !editGroupName.isEmpty else { return }
                     isSavingGroup = true
                     Task {
@@ -900,12 +906,12 @@ private struct SubscriptionGroupRow: View {
                 if asc.isTabLoading(.monetization) {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.mini)
-                        Text("Loading subscriptions in this group…")
+                        Text("Abos dieser Gruppe werden geladen …")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 } else {
-                    Text("No subscriptions in this group.")
+                    Text("Keine Abos in dieser Gruppe.")
                         .font(.caption).foregroundStyle(.tertiary)
                 }
             }
@@ -957,7 +963,7 @@ private struct SubscriptionDetailRow: View {
                         Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                             .font(.caption2).foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(sub.attributes.name ?? "Unnamed").font(.body.weight(.medium))
+                            Text(sub.attributes.name ?? "Ohne Namen").font(.body.weight(.medium))
                             BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 4) {
                                 Text(sub.attributes.productId ?? "").font(.caption).foregroundStyle(.secondary)
                                 Text(formatDuration(sub.attributes.subscriptionPeriod))
@@ -970,7 +976,7 @@ private struct SubscriptionDetailRow: View {
                 .buttonStyle(.plain)
                 if sub.attributes.state == "READY_TO_SUBMIT" {
                     SubmitForReviewButton(
-                        itemName: sub.attributes.name ?? "Subscription",
+                        itemName: sub.attributes.name ?? "Abo",
                         asc: asc,
                         onSubmit: { await asc.submitSubscriptionForReview(id: sub.id) }
                     )
@@ -986,24 +992,24 @@ private struct SubscriptionDetailRow: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 10) {
                     Divider()
-                    RequiredField("Reference Name", text: $editName, showError: showValidation && editName.isEmpty)
-                    RequiredField("Display Name", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
+                    RequiredField("Referenzname", text: $editName, showError: showValidation && editName.isEmpty)
+                    RequiredField("Anzeigename", text: $editDisplayName, showError: showValidation && editDisplayName.isEmpty)
                         .disabled(!canEditLocalization)
-                    RequiredField("Description", text: $editDescription, showError: showValidation && editDescription.isEmpty)
+                    RequiredField("Beschreibung", text: $editDescription, showError: showValidation && editDescription.isEmpty)
                         .disabled(!canEditLocalization)
-                    TextField("Review Notes", text: $editReviewNote, axis: .vertical)
+                    TextField("Hinweise für die App-Prüfung", text: $editReviewNote, axis: .vertical)
                         .lineLimit(2...4).textFieldStyle(.roundedBorder)
                         .disabled(!canEditReview)
 
                     if !canEditReview {
-                        Label("Review-Unterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
+                        Label("Prüfunterlagen sind für diesen Produktstatus gesperrt.", systemImage: "lock")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    ScreenshotPicker(label: "Review Screenshot", path: $screenshotPath)
+                    ScreenshotPicker(label: "Prüfbild", path: $screenshotPath)
                         .disabled(!canEditReview)
                     if canEditReview && !screenshotPath.isEmpty {
                         HStack {
-                            Button("Upload Screenshot") {
+                            Button("Prüfbild hochladen") {
                                 isUploading = true
                                 Task {
                                     await asc.uploadSubscriptionScreenshot(subscriptionId: sub.id, path: screenshotPath)
@@ -1016,12 +1022,12 @@ private struct SubscriptionDetailRow: View {
                     }
 
                     if showValidation && (editDisplayName.isEmpty || editDescription.isEmpty) {
-                        Text("Display Name and Description are required.")
+                        Text("Anzeigename und Beschreibung sind erforderlich.")
                             .font(.caption).foregroundStyle(.red)
                     }
 
                     HStack {
-                        Button("Save") {
+                        Button("Speichern") {
                             if canEditLocalization && (editDisplayName.isEmpty || editDescription.isEmpty) {
                                 showValidation = true
                                 return
@@ -1077,15 +1083,15 @@ private struct SubmitForReviewButton: View {
     }
 
     var body: some View {
-        Button("Submit for Review") {
+        Button("Produkt zur Prüfung einreichen") {
             showConfirm = true
         }
         .controlSize(.mini)
         .buttonStyle(.borderedProminent)
         .tint(.green)
         .disabled(isSubmitting)
-        .alert("Submit for Review?", isPresented: $showConfirm) {
-            Button("Submit") {
+        .alert("Dieses Produkt zur Prüfung einreichen?", isPresented: $showConfirm) {
+            Button("Produkt einreichen") {
                 isSubmitting = true
                 Task {
                     let success = await onSubmit()
@@ -1096,19 +1102,19 @@ private struct SubmitForReviewButton: View {
                     }
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button("Abbrechen", role: .cancel) {}
         } message: {
-            Text("Submit \"\(itemName)\" for App Review? This cannot be undone.")
+            Text("„\(itemName)“ einzeln zur App-Prüfung einreichen? Eine App-Version und weitere Produkte sind darin nicht enthalten.")
         }
-        .alert("First-Time Submission", isPresented: $showFirstTimeAlert) {
+        .alert("Erstmalige Einreichung", isPresented: $showFirstTimeAlert) {
             if let url = ascVersionURL {
-                Button("Open App Store Connect") {
+                Button("App Store Connect öffnen") {
                     NSWorkspace.shared.open(url)
                 }
             }
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Apple requires the first IAP/Subscription to be submitted with an app version via the App Store Connect website.\n\nIn App Store Connect website: go to your app version, scroll to \"In-App Purchases and Subscriptions\", click \"Select In-App Purchases or Subscriptions\", check the items to include, then submit the version for review.\n\nAfter the first approval, future submissions can be done directly from Blitz Neo.")
+            Text("Reiche diesen ersten In-App-Kauf oder dieses Abo gemeinsam mit einer App-Version über die Blitz-Neo-CLI oder MCP ein. Wähle die Produkte und gegebenenfalls die zugehörige Abo-Gruppe ausdrücklich aus. Es wird nichts automatisch hinzugefügt.\n\nDie manuelle Einreichungsvorschau umfasst nur die App. Eine gemeinsame Einreichung ist auch in App Store Connect möglich.")
         }
         .overlay {
             if isSubmitting {
@@ -1122,21 +1128,21 @@ private struct SubmitForReviewButton: View {
 
 private func formatType(_ type: String?) -> String {
     switch type {
-    case "CONSUMABLE": return "Consumable"
-    case "NON_CONSUMABLE": return "Non-Consumable"
-    case "NON_RENEWING_SUBSCRIPTION": return "Non-Renewing"
+    case "CONSUMABLE": return "Verbrauchbar"
+    case "NON_CONSUMABLE": return "Nicht verbrauchbar"
+    case "NON_RENEWING_SUBSCRIPTION": return "Abo ohne Verlängerung"
     default: return type ?? ""
     }
 }
 
 private func formatDuration(_ d: String?) -> String {
     switch d {
-    case "ONE_WEEK": return "1 Week"
-    case "ONE_MONTH": return "1 Month"
-    case "TWO_MONTHS": return "2 Months"
-    case "THREE_MONTHS": return "3 Months"
-    case "SIX_MONTHS": return "6 Months"
-    case "ONE_YEAR": return "1 Year"
+    case "ONE_WEEK": return "1 Woche"
+    case "ONE_MONTH": return "1 Monat"
+    case "TWO_MONTHS": return "2 Monate"
+    case "THREE_MONTHS": return "3 Monate"
+    case "SIX_MONTHS": return "6 Monate"
+    case "ONE_YEAR": return "1 Jahr"
     default: return d ?? ""
     }
 }
@@ -1150,7 +1156,19 @@ private func stateBadge(_ state: String?) -> some View {
     case "APPROVED": .green
     default: .secondary
     }
-    Text(state ?? "")
+    let label: String = switch state {
+    case "READY_TO_SUBMIT": "Bereit zur Einreichung"
+    case "MISSING_METADATA": "Angaben fehlen"
+    case "WAITING_FOR_REVIEW": "Wartet auf Prüfung"
+    case "IN_REVIEW": "In Prüfung"
+    case "APPROVED": "Genehmigt"
+    case "REJECTED": "Abgelehnt"
+    case "DEVELOPER_ACTION_NEEDED": "Aktion erforderlich"
+    case "DEVELOPER_REMOVED_FROM_SALE": "Vom Verkauf zurückgezogen"
+    case "REMOVED_FROM_SALE": "Nicht im Verkauf"
+    default: state ?? ""
+    }
+    Text(label)
         .font(.caption2)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)

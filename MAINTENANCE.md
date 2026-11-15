@@ -2,6 +2,36 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 86 — consistent release and utility dialogs
+
+Version drafts, release handoffs and submission previews now use the same
+headings, field labels and spacing as project setup. Short dialogs fit their
+content; long content scrolls above a fixed action row. The handoff button explicitly says it copies an assignment;
+opening the dialog does not start an agent or submit a release. Version state
+and Store availability remain distinct, while repeated status labels are removed.
+
+Apple sign-in places account actions below the browser rather than squeezing
+them into the header. Blitz update cards provide one dismissal action and retain
+complete, scrollable error details. Icon generation and screenshot previews use
+the same dialog hierarchy. Purchase/subscription forms keep visible labels after
+entry and identify their creation and individual submission actions. The obsolete
+first-purchase website-only notice now explains the supported joint CLI/MCP flow.
+Monetization no longer repeats the release-target picker above its version bar.
+The navigation entry is now “Monetarisierung”; pricing, purchase/subscription
+forms, confirmation dialogs, product statuses and progress messages are German.
+Apple enum values, product identifiers, prices and Store-localization selection
+are unchanged. The product type uses a menu so translated labels fit narrow panes.
+
+Identity, authentication, draft creation, build selection, readiness and submission
+logic remain unchanged. All 625 Swift tests pass. Independent reviews cover
+rendering branches and preserved target, build and session handling. The native
+Release bundle is signed and verified with deep/strict codesign. Rendered checks
+cover drafts, handoffs, submission status, icon and screenshot previews and the
+product form, including an open side terminal. Long updater notes/errors and
+Apple sign-in chrome are checked in isolated previews with no-op services, in
+light/dark appearances. This does not test a live login or updater transaction;
+no Store creation, upload, submission or product mutation is used for validation.
+
 ## 1.0.74 build 85 — consistent import and app setup dialogs
 
 Project import, local creation, release-target setup, Store identity registration

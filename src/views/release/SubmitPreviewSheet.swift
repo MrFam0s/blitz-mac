@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 struct SubmitPreviewSheet: View {
@@ -28,82 +29,101 @@ struct SubmitPreviewSheet: View {
     private var selectedBuild: ASCBuild? { validBuilds.first { $0.id == selectedBuildId } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(asc.canCreateUpdate ? "Versionsentwurf anlegen" : (isSubmittable ? "Submit for Review" : "Submission Status"))
-                .font(.title2.weight(.semibold))
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("Einreichung prüfen", subtitle: "Prüfe die ausgewählte Version, den Build und die Veröffentlichungsart vor dem Absenden an Apple.")
 
-            // App header: icon + info
-            HStack(alignment: .top, spacing: 20) {
-                // App icon
-                if let icon = appIcon {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 100, height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 22))
-                } else {
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(.blue.gradient)
-                        .frame(width: 100, height: 100)
-                        .overlay(
-                            Image(systemName: "app.fill")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.white)
-                        )
-                }
+            Divider()
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(asc.app?.name ?? "App")
-                        .font(.title3.weight(.semibold))
-                    if let version = targetVersion {
-                        Text("Version \(version.attributes.versionString)")
-                            .foregroundStyle(.secondary)
+            BlitzSetupScrollArea(maxHeight: 360) {
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                    HStack(alignment: .top, spacing: BlitzLayout.sectionSpacing) {
+                        if let icon = appIcon {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 64, height: 64)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } else {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(.blue.gradient)
+                                .frame(width: 64, height: 64)
+                                .overlay(
+                                    Image(systemName: "app.fill")
+                                        .font(.system(size: 28))
+                                        .foregroundStyle(.white)
+                                )
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(asc.app?.name ?? "App")
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let version = targetVersion {
+                                Text("Version \(version.attributes.versionString)")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(asc.app?.bundleId ?? "")
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if asc.canCreateUpdate, let version = targetVersion {
+                                // This branch shows draft guidance below, not the status card.
+                                ASCStatusBadge(presentation: ASCReleaseStatusPresentation.version(
+                                    version, distributionReadyVersionID: asc.distributionReadyVersion?.id
+                                ))
+                            }
+                            if !isSubmittable, let version = targetVersion,
+                               ASCReleaseStatus.isLive(version.attributes.effectiveState),
+                               version.id == asc.distributionReadyVersion?.id {
+                                ASCStatusBadge(presentation: ASCReleaseStatusPresentation.store(
+                                    distributionReadyVersionID: asc.distributionReadyVersion?.id,
+                                    liveVersionID: asc.storeLiveVersion?.id,
+                                    availability: asc.confirmedStoreAvailability,
+                                    isLoading: asc.isStoreAvailabilityLoading,
+                                    failed: asc.storeAvailabilityFailed
+                                ))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Text(asc.app?.bundleId ?? "")
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+                    if isSubmittable { buildSelector }
 
-                    if isSubmittable {
-                        buildSelector
+                    if releaseTarget != nil && !targetMatches {
+                        Text("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen.")
+                            .font(.callout).foregroundStyle(.orange)
+                    }
+                    if isCheckingReadiness {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Aktuellen Store-Stand prüfen …")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if asc.canCreateUpdate {
+                        createUpdateRequiredContent
+                    } else if isSubmittable {
+                        if let mode = expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) {
+                            Label(mode == .manual ? "Veröffentlichung: manuell nach Apples Freigabe" : "Veröffentlichung: automatisch nach Apples Freigabe",
+                                  systemImage: "calendar.badge.checkmark")
+                                .font(.callout).foregroundStyle(.secondary)
+                        } else if !isCheckingReadiness {
+                            Text("Die Veröffentlichungsart ist unbekannt oder geplant. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen und diese Vorschau neu öffnen.")
+                                .font(.callout).foregroundStyle(.orange)
+                        }
+                        submittableContent
                     } else {
-                        versionStatusBadge
+                        nonSubmittableContent
                     }
+
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Divider()
 
-            if releaseTarget != nil && !targetMatches {
-                Text("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen.")
-                    .font(.callout).foregroundStyle(.orange)
-            }
-            if isCheckingReadiness {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Checking current App Store data…")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-            }
-
-            if asc.canCreateUpdate {
-                createUpdateRequiredContent
-            } else if isSubmittable {
-                if let mode = expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) {
-                    Label(mode == .manual ? "Veröffentlichung: manuell nach Apples Freigabe" : "Veröffentlichung: automatisch nach Apples Freigabe",
-                          systemImage: "calendar.badge.checkmark")
-                        .font(.callout).foregroundStyle(.secondary)
-                } else if !isCheckingReadiness {
-                    Text("Die Veröffentlichungsart ist unbekannt oder geplant. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen und diese Vorschau neu öffnen.")
-                        .font(.callout).foregroundStyle(.orange)
-                }
-                submittableContent
-            } else {
-                nonSubmittableContent
-            }
-
-            // Footer buttons
-            HStack {
-                Button(isSubmittable ? "Cancel" : "Close") {
+            HStack(spacing: BlitzLayout.fieldSpacing) {
+                Button(isSubmittable ? "Abbrechen" : "Schließen") {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
@@ -115,7 +135,7 @@ struct SubmitPreviewSheet: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else if isSubmittable {
-                    Button("Submit for Review") {
+                    Button("Zur Prüfung einreichen") {
                         Task {
                             let buildId = selectedBuildId.isEmpty ? nil : selectedBuildId
                             guard let releaseTarget, releaseTarget.matches(asc) else { return }
@@ -132,8 +152,9 @@ struct SubmitPreviewSheet: View {
                 }
             }
         }
+        .font(.callout)
         .padding(24)
-        .frame(width: 480)
+        .frame(width: 560)
         .task {
             defer { isCheckingReadiness = false }
             releaseTarget = asc.releaseOperationTarget()
@@ -161,14 +182,14 @@ struct SubmitPreviewSheet: View {
                     .font(.title3)
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("A new App Store version is required.")
+                    Text("Ein neuer Versionsentwurf ist erforderlich.")
                         .font(.callout.weight(.medium))
-                    Text("Create a new App Store version before attaching a build and submitting an update.")
+                    Text("Lege zuerst einen Versionsentwurf an. Anschließend kannst du einen Build zuordnen und das Update einreichen.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(12)
+            .padding(BlitzLayout.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.orange.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -180,42 +201,29 @@ struct SubmitPreviewSheet: View {
     @ViewBuilder
     private var buildSelector: some View {
         if validBuilds.isEmpty && isCheckingReadiness {
-            Text("Loading builds…")
+            Text("Builds werden geladen …")
                 .font(.callout).foregroundStyle(.secondary)
         } else if validBuilds.isEmpty {
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
                     .font(.caption)
-                Text("No valid builds available")
+                Text("Keine passenden Builds verfügbar")
                     .font(.callout)
                     .foregroundStyle(.red)
             }
             .padding(.top, 4)
         } else {
-            Picker(selection: $selectedBuildId) {
-                Text("Select a build\u{2026}").tag("")
-                ForEach(validBuilds) { build in
-                    Text("Build \(build.attributes.version)")
-                        .tag(build.id)
+            BlitzSetupField("Build") {
+                Picker("Build", selection: $selectedBuildId) {
+                    Text("Bitte auswählen …").tag("")
+                    ForEach(validBuilds) { build in
+                        Text(build.attributes.version).tag(build.id)
+                    }
                 }
-            } label: {
-                Text("Build")
-                    .font(.callout.weight(.medium))
+                .pickerStyle(.menu)
+                .accessibilityLabel("Build")
             }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 200)
-            .padding(.top, 4)
-        }
-    }
-
-    // MARK: - Version Status Badge (non-submittable)
-
-    @ViewBuilder
-    private var versionStatusBadge: some View {
-        if let version = targetVersion {
-            ASCVersionStatusBadges(asc: asc, version: version)
-                .padding(.top, 4)
         }
     }
 
@@ -227,13 +235,13 @@ struct SubmitPreviewSheet: View {
             selectedBuild == nil || $0.label != "Build"
         })
         if readiness.fields.contains(where: { $0.required && $0.loadFailed }) {
-            Label("Some required data could not be checked. Refresh the overview before submitting.",
+            Label("Einige Pflichtangaben konnten nicht geprüft werden. Aktualisiere die Übersicht vor der Einreichung.",
                   systemImage: "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(.orange)
         }
         if !readiness.missingRequired.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Missing Required Fields")
+                Text("Fehlende Pflichtangaben")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.red)
                 ForEach(readiness.missingRequired) { field in
@@ -246,7 +254,7 @@ struct SubmitPreviewSheet: View {
                     }
                 }
             }
-            .padding(12)
+            .padding(BlitzLayout.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.red.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -255,7 +263,7 @@ struct SubmitPreviewSheet: View {
         if asc.isSubmitting {
             HStack(spacing: 12) {
                 ProgressView()
-                Text("Submitting for review\u{2026}")
+                Text("Wird zur Prüfung eingereicht …")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -285,14 +293,14 @@ struct SubmitPreviewSheet: View {
                     .font(.title3)
                     .foregroundStyle(color)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Version status: \(presentation.label)")
+                    Text("Status: \(presentation.label)")
                         .font(.callout.weight(.medium))
-                    Text("You cannot modify the build or re-submit while in this state.")
+                    Text("In diesem Zustand lässt sich der Build nicht ändern und die Version nicht erneut einreichen.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(12)
+            .padding(BlitzLayout.cardInset)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(color.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -306,12 +314,12 @@ struct SubmitPreviewSheet: View {
                                 Image(systemName: item.attributes.state == "REJECTED" ? "xmark.circle.fill" : "checkmark.circle.fill")
                                     .foregroundStyle(item.attributes.state == "REJECTED" ? .red : .green)
                                     .font(.caption)
-                                Text(item.attributes.state?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Unknown")
+                                Text(item.attributes.state?.replacingOccurrences(of: "_", with: " ").capitalized ?? "Unbekannt")
                                     .font(.callout)
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(BlitzLayout.cardInset)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.red.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 8))

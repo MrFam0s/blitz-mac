@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
 /// Wraps a tab's content with loading, error, and empty-app states.
@@ -72,7 +73,8 @@ struct ASCTabContent<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             VStack(spacing: 0) {
-                if [.builds, .groups, .betaInfo, .feedback, .monetization].contains(tab) {
+                // Monetization already includes this picker in its version toolbar.
+                if [.builds, .groups, .betaInfo, .feedback].contains(tab) {
                     HStack { ASCReleaseTargetPicker(asc: asc, tab: tab); Spacer() }.blitzToolbar()
                     Divider()
                 }

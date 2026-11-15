@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 struct AppleIDLoginSheet: View {
-    var subtitle: String = "Sign in to App Store Connect to authenticate your Apple ID session."
+    var subtitle: String = "Melde dich bei App Store Connect an, um deinen Apple-Account mit Blitz Neo zu verbinden."
     var requireDeveloperPortal = false
     var onSessionCaptured: (IrisSession) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -14,29 +14,10 @@ struct AppleIDLoginSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Sign in with Apple ID")
-                        .font(.headline)
-                    Text(requireDeveloperPortal ? "App Store Connect und Developer-Portal für denselben Anbieter bestätigen." : subtitle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Use Another Apple ID") {
-                    isResettingBrowser = true
-                    Task { @MainActor in
-                        await ASCWebView.resetBrowser()
-                        isLoading = true
-                        browserID = UUID()
-                        isResettingBrowser = false
-                    }
-                }
-                .disabled(isResettingBrowser)
-                Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
-            }
-            .padding()
+            BlitzSetupHeader("Mit Apple-Account anmelden", subtitle: requireDeveloperPortal
+                ? "App Store Connect und Developer-Portal für denselben Anbieter bestätigen."
+                : subtitle)
+                .padding(24)
 
             Divider()
 
@@ -44,8 +25,10 @@ struct AppleIDLoginSheet: View {
                 Text(validationMessage)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
             }
 
             ZStack {
@@ -65,13 +48,32 @@ struct AppleIDLoginSheet: View {
                 }
 
                 if isLoading || isResettingBrowser {
-                    ProgressView("Loading App Store Connect…")
+                    ProgressView("App Store Connect wird geladen …")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(.background.opacity(0.8))
                 }
             }
+
+            Divider()
+
+            HStack {
+                Button("Abbrechen") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Anderen Apple-Account verwenden") {
+                    isResettingBrowser = true
+                    Task { @MainActor in
+                        await ASCWebView.resetBrowser()
+                        isLoading = true
+                        browserID = UUID()
+                        isResettingBrowser = false
+                    }
+                }
+                .disabled(isResettingBrowser)
+            }
+            .padding(24)
         }
-        .frame(width: 520, height: 620)
+        .frame(width: 560, height: 660)
         .onAppear { irisLog("AppleIDLoginSheet: sheet appeared") }
     }
 }

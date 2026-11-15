@@ -1,7 +1,7 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 
-/// Shared hierarchy for local project import and App Store setup.
+/// Shared hierarchy for setup, release and utility dialogs.
 struct BlitzSetupHeader: View {
     let title: String
     let subtitle: String
@@ -52,5 +52,33 @@ struct BlitzSetupField<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+/// Fits short dialog content and scrolls longer content above the fixed footer.
+struct BlitzSetupScrollArea<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder var content: () -> Content
+    @State private var contentHeight: CGFloat = 0
+
+    var body: some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: SetupContentHeight.self, value: geometry.size.height)
+                    }
+                }
+        }
+        .frame(height: min(maxHeight, max(1, contentHeight)))
+        .onPreferenceChange(SetupContentHeight.self) { contentHeight = $0 }
+    }
+}
+
+private struct SetupContentHeight: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

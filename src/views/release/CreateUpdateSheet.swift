@@ -14,80 +14,94 @@ struct ReleaseAutomationSheet: View {
     private var agent: AIAgent { AIAgent(rawValue: appState.settingsStore.defaultAgentCLI) ?? .claudeCode }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Update automatisch veröffentlichen").font(.title2.weight(.semibold))
-            Text("Prüft Build und Store-Stand, führt Tests aus und reicht das Update bei Apple ein. Nach Apples Freigabe wird es automatisch veröffentlicht.")
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("Update automatisch veröffentlichen", subtitle: "Bereite die Veröffentlichung im Entwicklungs-Chat oder im Blitz-Neo-Terminal vor. Der Auftrag umfasst Tests, Einreichung und die automatische Veröffentlichung nach Apples Freigabe.")
 
-            if let context {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(context.appName).font(.headline)
-                    Text(context.projectPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    Text("Zuletzt freigegebene Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let draft = context.preparedVersion {
-                    Label("Vorbereiteter Entwurf: Version \(draft.version)", systemImage: "doc.text")
-                        .font(.headline)
-                    Text("Gespeicherte Texte, Screenshots und App-Preview-Videos dieses Entwurfs bleiben erhalten. Starte erst, wenn eure Bearbeitung abgeschlossen ist. Fehlende Release Notes werden ergänzt.")
-                        .font(.callout).foregroundStyle(.secondary)
-                } else {
-                    Text("Für ein normales App-Update werden eine neue Version und der passende Changelog vorbereitet. Vorhandene Store-Texte und Medien bleiben erhalten.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-                if let preflight {
-                    if preflight.artifacts.isEmpty {
-                        Text("Keine passenden lokalen Build-Artefakte gefunden. Der Agent prüft zusätzlich den Quellstand und den Build-Ordner des Projekts.")
-                            .font(.callout).foregroundStyle(.secondary)
-                    } else {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Lokale Build-Artefakte (\(preflight.artifacts.count))").font(.callout.weight(.medium))
-                            ForEach(Array(preflight.artifacts.prefix(3))) { artifact in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(URL(fileURLWithPath: artifact.path).lastPathComponent).lineLimit(1)
-                                    Text(artifactDescription(artifact, live: context.displayedLiveVersion))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }.help(artifact.path)
+            Divider()
+
+            BlitzSetupScrollArea(maxHeight: 360) {
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                    if let context {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(context.appName).font(.headline).fixedSize(horizontal: false, vertical: true)
+                            Text(context.projectPath)
+                                .font(.caption.monospaced()).foregroundStyle(.secondary)
+                                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                            Text("Zuletzt freigegebene Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let draft = context.preparedVersion {
+                            Label("Vorbereiteter Entwurf: Version \(draft.version)", systemImage: "doc.text")
+                                .font(.headline)
+                            Text("Gespeicherte Texte, Screenshots und App-Preview-Videos dieses Entwurfs bleiben erhalten. Starte erst, wenn die Bearbeitung abgeschlossen ist. Fehlende Versionshinweise werden ergänzt.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        } else {
+                            Text("Für ein normales App-Update werden eine neue Version und der passende Changelog vorbereitet. Vorhandene Store-Texte und Medien bleiben erhalten.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                        if let preflight {
+                            if preflight.artifacts.isEmpty {
+                                Text("Keine passenden lokalen Build-Artefakte gefunden. Der Agent prüft zusätzlich den Quellstand und den Build-Ordner des Projekts.")
+                                    .font(.callout).foregroundStyle(.secondary)
+                            } else {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Lokale Build-Artefakte (\(preflight.artifacts.count))").font(.callout.weight(.medium))
+                                    ForEach(Array(preflight.artifacts.prefix(3))) { artifact in
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(URL(fileURLWithPath: artifact.path).lastPathComponent).lineLimit(1)
+                                            Text(artifactDescription(artifact, live: context.displayedLiveVersion))
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }.help(artifact.path)
+                                    }
+                                    if preflight.artifacts.count > 3 { Text("Weitere \(preflight.artifacts.count - 3) im Projektordner").font(.caption).foregroundStyle(.secondary) }
+                                }
                             }
-                            if preflight.artifacts.count > 3 { Text("Weitere \(preflight.artifacts.count - 3) im Projektordner").font(.caption).foregroundStyle(.secondary) }
+                            if preflight.incomplete {
+                                Text("Die Vorschau ist unvollständig. Der Ablauf prüft den tatsächlichen Release-Pfad erneut.")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
+                        } else {
+                            HStack { ProgressView().controlSize(.small); Text("Build-Ordner wird geprüft …").font(.callout) }
                         }
                     }
-                    if preflight.incomplete {
-                        Text("Die Vorschau ist unvollständig. Der Ablauf prüft den tatsächlichen Release-Pfad erneut.")
-                            .font(.caption).foregroundStyle(.orange)
+
+                    VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
+                        Text("Ablauf").font(.callout.weight(.medium))
+                        Label("App- und Store-Änderungen prüfen und Tests ausführen", systemImage: "checkmark.circle")
+                        Label(context?.preparedVersion == nil ? "Version und Changelog für die Store-Sprachen erstellen" : "Entwurf prüfen und fehlende Versionshinweise ergänzen", systemImage: "text.badge.plus")
+                        Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
+                        Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
                     }
-                } else {
-                    HStack { ProgressView().controlSize(.small); Text("Build-Ordner wird geprüft …").font(.callout) }
+                    Text("Beide Wege prüfen denselben App- und Build-Stand. Ohne nachgewiesene Änderungen oder bei fehlgeschlagenen Tests wird nichts eingereicht. Im Blitz-Terminal startet \(agent.displayName).")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let copiedHandoff {
+                        Label("Auftrag kopiert. Füge ihn im Entwicklungs-Chat ein, um den Ablauf zu starten.", systemImage: "checkmark.circle")
+                            .foregroundStyle(.secondary)
+                            .help(copiedHandoff.path)
+                    }
+                    if let error {
+                        Text(error).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                Label("App- und Store-Änderungen prüfen und Tests ausführen", systemImage: "checkmark.circle")
-                Label(context?.preparedVersion == nil ? "Version und Changelog für die Store-Sprachen erstellen" : "Entwurf prüfen und fehlende Release Notes ergänzen", systemImage: "text.badge.plus")
-                Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
-                Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
-            }.font(.callout)
-            Text("Setze den Auftrag bevorzugt im Entwicklungs-Chat fort oder starte \(agent.displayName) im Blitz-Neo-Terminal. Beide Wege prüfen denselben App- und Build-Stand. Ohne nachgewiesene Änderungen oder bei fehlgeschlagenen Tests wird nichts eingereicht.")
-                .font(.caption).foregroundStyle(.secondary)
-            if let copiedHandoff {
-                Label("Auftrag kopiert. Füge ihn im Entwicklungs-Chat ein, um den Ablauf zu starten.", systemImage: "checkmark.circle")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .help(copiedHandoff.path)
-            }
-            if let error { Text(error).font(.callout).foregroundStyle(.orange) }
             Divider()
-            VStack(alignment: .trailing, spacing: 10) {
-                Button("Im bestehenden Chat fortsetzen") { start(inExistingChat: true) }
+
+            HStack(spacing: BlitzLayout.fieldSpacing) {
+                Button(copiedHandoff == nil ? "Abbrechen" : "Schließen") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Im Blitz-Terminal starten") { start(inExistingChat: false) }
+                    .disabled(context == nil || preflight == nil)
+                Button("Auftrag für Chat kopieren") { start(inExistingChat: true) }
                     .buttonStyle(.borderedProminent)
                     .disabled(context == nil || preflight == nil)
-                HStack {
-                    Button(copiedHandoff == nil ? "Abbrechen" : "Schließen") { dismiss() }.keyboardShortcut(.cancelAction)
-                    Spacer()
-                    Button("Im Blitz-Terminal starten") { start(inExistingChat: false) }
-                        .disabled(context == nil || preflight == nil)
-                }
             }
         }
+        .font(.callout)
         .padding(24)
         .frame(width: 620)
         .task {
@@ -193,69 +207,70 @@ struct VersionDraftSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Versionsentwurf anlegen")
-                .font(.title2.weight(.semibold))
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("Versionsentwurf anlegen", subtitle: "Lege einen Entwurf in App Store Connect an, um Texte und Screenshots vor der Einreichung zu bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
 
-            Text("Legt nur einen Entwurf in App Store Connect an. Danach könnt ihr Texte und Screenshots in Blitz Neo oder per Codex bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            Divider()
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Version")
-                    .font(.callout.weight(.medium))
-                TextField("z. B. 1.4.2", text: $versionString)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Store-Texte der bisherigen Version übernehmen", isOn: $copyMetadata)
-                Toggle("Review-Kontaktdaten übernehmen", isOn: $copyReviewDetail)
-
-                Picker("Übernehmen aus", selection: $copyFromVersionId) {
-                    Text("Keine").tag("")
-                    ForEach(sourceVersions) { version in
-                        Text("Version \(version.attributes.versionString)")
-                            .tag(version.id)
+            BlitzSetupScrollArea(maxHeight: 300) {
+                VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+                    BlitzSetupField("Versionsnummer") {
+                        TextField("z. B. 1.4.2", text: $versionString)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Versionsnummer")
                     }
+                    BlitzSetupField("Daten übernehmen aus") {
+                        Picker("Daten übernehmen aus", selection: $copyFromVersionId) {
+                            Text("Keine bisherige Version").tag("")
+                            ForEach(sourceVersions) { version in
+                                Text("Version \(version.attributes.versionString)").tag(version.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .accessibilityLabel("Daten übernehmen aus")
+                        .disabled(!copyMetadata && !copyReviewDetail)
+                    }
+                    VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
+                        Toggle("Store-Texte übernehmen", isOn: $copyMetadata)
+                        Toggle("Review-Kontaktdaten übernehmen", isOn: $copyReviewDetail)
+                    }
+                    if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
+                    if !isChecking && draftTarget?.platform == nil {
+                        Text("Bitte zuerst die Plattform in der Versionsleiste auswählen und den Dialog erneut öffnen.")
+                            .font(.callout).foregroundStyle(.orange)
+                    }
+
+                    if !isChecking, !versionString.isEmpty,
+                       let validation = ASCReleaseStatus.newVersionError(versionString, history: sourceVersions) {
+                        Text(validation).font(.callout).foregroundStyle(.orange)
+                    }
+                    if let blockerMessage {
+                        Text(blockerMessage)
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                            .padding(BlitzLayout.cardInset)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    if let error = asc.versionCreationError, !error.isEmpty {
+                        Text(error)
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .padding(BlitzLayout.cardInset)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+
                 }
-                .pickerStyle(.menu)
-                .disabled(!copyMetadata && !copyReviewDetail)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Label("Build und Einreichung folgen erst, wenn ihr später die Veröffentlichung startet.", systemImage: "pause.circle")
-                .font(.callout).foregroundStyle(.secondary)
-            if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
-            if !isChecking && draftTarget?.platform == nil {
-                Text("Bitte zuerst die Plattform in der Versionsleiste auswählen und den Dialog erneut öffnen.")
-                    .font(.callout).foregroundStyle(.orange)
-            }
+            Divider()
 
-            if !isChecking, !versionString.isEmpty,
-               let validation = ASCReleaseStatus.newVersionError(versionString, history: sourceVersions) {
-                Text(validation).font(.callout).foregroundStyle(.orange)
-            }
-            if let blockerMessage {
-                Text(blockerMessage)
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.orange.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            if let error = asc.versionCreationError, !error.isEmpty {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-
-            HStack {
+            HStack(spacing: BlitzLayout.fieldSpacing) {
                 Button("Abbrechen") {
                     dismiss()
                 }
@@ -287,8 +302,9 @@ struct VersionDraftSheet: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
+        .font(.callout)
         .padding(24)
-        .frame(width: 540)
+        .frame(width: 560)
         .disabled(asc.isCreatingVersion)
         .interactiveDismissDisabled(asc.isCreatingVersion)
         .task {

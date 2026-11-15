@@ -44,7 +44,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .app: "App"
         case .appInformation: "App Information"
         case .screenshots: "Screenshots"
-        case .monetization: "Monetization"
+        case .monetization: "Monetarisierung"
         case .review: "Review"
         case .analytics: "Analytics"
         case .reviews: "Reviews"

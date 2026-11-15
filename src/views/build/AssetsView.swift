@@ -1,3 +1,4 @@
+// Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
@@ -487,30 +488,35 @@ struct AssetsView: View {
     // MARK: - Color Generator Sheet
 
     private var colorGeneratorSheet: some View {
-        VStack(spacing: 20) {
-            Text("Generate App Icon")
-                .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
+            BlitzSetupHeader("App-Icon aus Farbe", subtitle: "Erstellt einfarbige PNG-Dateien in allen benötigten Größen.")
 
-            ColorPicker("Icon Color", selection: $iconColor, supportsOpacity: false)
-                .frame(maxWidth: 200)
+            Divider()
 
-            RoundedRectangle(cornerRadius: 22)
-                .fill(iconColor)
-                .frame(width: 100, height: 100)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 1)
-                )
+            HStack(spacing: BlitzLayout.sectionSpacing) {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(iconColor)
+                    .frame(width: 100, height: 100)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22)
+                            .strokeBorder(.white.opacity(0.2), lineWidth: 1)
+                    )
+                    .accessibilityLabel("Icon-Vorschau")
 
-            Text("Generates solid-color PNG icons for all required sizes.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                BlitzSetupField("Farbe") {
+                    ColorPicker("Farbe", selection: $iconColor, supportsOpacity: false)
+                        .accessibilityLabel("Farbe")
+                }
+            }
 
-            HStack {
-                Button("Cancel") { showColorGenerator = false }
+            Divider()
+
+            HStack(spacing: BlitzLayout.fieldSpacing) {
+                Button("Abbrechen") { showColorGenerator = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Generate") {
+                if isGenerating { ProgressView().controlSize(.small) }
+                Button("Icon erstellen") {
                     generateColorIcon()
                 }
                 .buttonStyle(.borderedProminent)
@@ -518,12 +524,10 @@ struct AssetsView: View {
                 .keyboardShortcut(.defaultAction)
             }
 
-            if isGenerating {
-                ProgressView("Generating\u{2026}")
-            }
         }
+        .font(.callout)
         .padding(24)
-        .frame(width: 320)
+        .frame(width: 560)
     }
 
     private func generateColorIcon() {
