@@ -90,3 +90,20 @@ struct ReleaseWorkflowArgumentsTests {
         #expect(row.hint?.contains("iris API") == false)
     }
 }
+
+
+@Test func resubmissionPreparationArgumentsCannotRetargetSavedOperation() throws {
+    let values: [String: Any] = ["operationId": "old", "accountKey": "issuer:key", "submissionId": "review"]
+    try ReleaseWorkflowArguments.validateKeys(name: "release_prepare_resubmission", arguments: values)
+    for key in ["appId", "buildId", "reviewItems", "releaseMode", "confirmLegacyDraftRecovery", "resumeSubmissionId"] {
+        var invalid = values; invalid[key] = "foreign"
+        #expect(throws: (any Error).self) {
+            try ReleaseWorkflowArguments.validateKeys(name: "release_prepare_resubmission", arguments: invalid)
+        }
+    }
+    let tools = MCPRegistry.allTools()
+    let tool = try #require(tools.first { $0["name"] as? String == "release_prepare_resubmission" })
+    let schema = try #require(tool["inputSchema"] as? [String: Any])
+    #expect(schema["additionalProperties"] as? Bool == false)
+    #expect(MCPRegistry.category(for: "release_prepare_resubmission") == .query)
+}

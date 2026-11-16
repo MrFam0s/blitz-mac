@@ -2,6 +2,24 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 89 — resubmission after review corrections
+
+The guarded release workflow distinguishes the original acknowledged submission
+from Apple's current review state. An explicit resubmission preparation preserves
+the old journal and binds a fresh content digest to the same app/build and exact
+purchase/subscription selection. It accepts only an existing review whose selected
+items have all been updated to ready for review. The final guarded send reuses
+that review and never creates or adds items. Unknown final-send outcomes remain
+read-only reconciliation cases; ordinary unsubmitted-draft recovery is unchanged.
+
+Validation: all 641 Swift tests in 12 suites pass, including the targeted
+69-test release workflow run. Nine release-metadata checks, the DE/EN localization
+audit and an independent state/identity/retry review pass. The native Release
+bundle and installed build 89 pass deep/strict Developer ID signature verification.
+The bundled CLI exposes the separate preparation command. The existing pinned
+Go 1.27.3 toolchain supplied dependency notices; no toolchain was installed.
+No public Blitz release or tag is part of this correction.
+
 ## 1.0.74 build 88 — German and English interface
 
 The maintained source now includes complete German/English interface catalogs.

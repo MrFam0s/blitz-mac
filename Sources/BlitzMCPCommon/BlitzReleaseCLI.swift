@@ -13,6 +13,7 @@ public enum BlitzReleaseCLI {
       targets   List this explicitly named project's configured release targets.
       context   Read the explicitly requested project's current MCP target.
       prepare   Record an exact app/build and selected product versions; no Apple writes.
+      prepare-resubmission  Prepare a new attempt for an already resolved rejected review.
       validate  Refresh readiness and the prepared content fingerprint.
       status    Reconcile a saved operation with Apple; no Apple writes.
       submit    Submit only a validated, unchanged operation with its digest.
@@ -35,6 +36,13 @@ public enum BlitzReleaseCLI {
     the previous run stopped before its final submit. The draft state alone
     cannot prove this. No new user approval is needed for unchanged already
     authorized scope, but an unknown old submit outcome must remain blocked.
+
+    After resolving rejected items in App Store Connect, prepare-resubmission
+    accepts the previous operationId, accountKey and exact submissionId. It reads
+    Apple and creates a new operation/digest for the current metadata and the same
+    complete item set. Validate and submit that new operation normally. This never
+    resolves items, creates another review, or recovers an uncertain final submit.
+    Historical state=submitted is not a current queue status; inspect submissionState.
 
     Preparation and validation do not authorize submission. Submission requires
     the user's instruction for the exact app, version, build and release mode.
@@ -78,6 +86,7 @@ public enum BlitzReleaseCLI {
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         let commands = ["targets": "get_release_targets", "context": "get_release_context", "prepare": "release_prepare",
+                        "prepare-resubmission": "release_prepare_resubmission",
                         "validate": "release_validate", "status": "release_status", "submit": "release_submit"]
         guard arguments.count == 4, arguments[0] == "release",
               let tool = commands[arguments[1]], arguments[2] == "--request",
@@ -107,7 +116,9 @@ public enum BlitzReleaseCLI {
         let failed = result["isError"] as? Bool == true || messages.contains { $0.hasPrefix("Error:") }
         if !failed, messages.count == 1,
            let record = try? JSONSerialization.jsonObject(with: Data(messages[0].utf8)) as? [String: Any] {
-            let incomplete = (tool == "release_submit" && record["state"] as? String != "submitted")
+            let currentSubmission = record["submissionState"] as? String
+            let currentReviewNotSubmitted = currentSubmission.map { !["WAITING_FOR_REVIEW", "IN_REVIEW", "COMPLETING", "COMPLETE"].contains($0) } ?? false
+            let incomplete = (tool == "release_submit" && (record["state"] as? String != "submitted" || currentReviewNotSubmitted))
                 || (tool == "release_validate" && (record["validation"] as? [String: Any])?["ready"] as? Bool != true)
             return (try encode(record), incomplete)
         }

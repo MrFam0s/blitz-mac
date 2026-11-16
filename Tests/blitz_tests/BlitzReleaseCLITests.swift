@@ -98,4 +98,22 @@ struct BlitzReleaseCLITests {
         #expect(try BlitzReleaseCLI.output(response: response, id: "test", tool: "release_validate").failed)
         #expect(try !BlitzReleaseCLI.output(response: response, id: "test", tool: "release_status").failed)
     }
+    @Test func resubmissionPreparationUsesExplicitOldOperationAndHistoricalSubmittedIsNotSuccess() throws {
+        let invocation = try BlitzReleaseCLI.parse(["release", "prepare-resubmission", "--request", "-"])
+        #expect(invocation.tool == "release_prepare_resubmission")
+        let data = Data(#"{"operationId":"old","accountKey":"issuer:key","submissionId":"review"}"#.utf8)
+        let request = try BlitzReleaseCLI.request(invocation, data: data, id: "id")
+        let parsed = try #require(JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any])
+        let params = try #require(parsed["params"] as? [String: Any])
+        #expect(params["name"] as? String == "release_prepare_resubmission")
+        for state in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW"] {
+            let record = ["state": "submitted", "submissionState": state, "appleState": "READY_FOR_REVIEW"]
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+            let response = String(decoding: try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": "id",
+                "result": ["content": [["type": "text", "text": text]]]]), as: UTF8.self)
+            #expect(try BlitzReleaseCLI.output(response: response, id: "id", tool: "release_submit").failed)
+            #expect(try !BlitzReleaseCLI.output(response: response, id: "id", tool: "release_status").failed)
+        }
+    }
+
 }

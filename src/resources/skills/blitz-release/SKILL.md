@@ -152,6 +152,28 @@ Once the build is attached and the Store content is ready:
    change or an uncertain response, query status; do not replay submission through
    ASC or create a new operation to bypass an unresolved attempt.
 
+## Updated review after an acknowledged rejection
+
+A historical `state: submitted` does not prove that Apple is currently reviewing
+an updated submission. Inspect `appleState` and `submissionState`. A Resolution
+Center reply is not a new submission. For information-only requests, follow
+Apple's requested response path; do not resubmit merely because the status has
+not changed. If the user has explicitly updated rejected items for review, verify
+the existing submission and all its selected items before continuing.
+
+For the same already authorized app/build and selected product versions, use
+`blitz-neo release prepare-resubmission --request <JSON-file>` with the original
+acknowledged `operationId`, original `accountKey`, and exact `submissionId`.
+This reads Apple and creates a new operation/digest for current protected content;
+it does not send, resolve, remove or add review items. The old journal is preserved.
+Only a uniquely identified existing review with the exact original selection and
+all items ready for review is eligible. Follow ordinary `validate` and `submit`
+on the returned new operation and its fresh confirmation digest. Do not reuse the
+old digest. No further user approval is needed for unchanged already authorized
+release scope, but a changed app/build/product selection needs a new scoped plan.
+After sending, read back that same review and its complete item set in a submitted
+review state. An uncertain final send allows `status` only, never blind replay.
+
 If `status` returns `resumableSubmissionId`, it has identified a unique existing
 unsubmitted draft for this same operation. Verify that ID against the saved release
 evidence. For this already authorized, unchanged release, use the same `submit`

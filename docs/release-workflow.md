@@ -55,6 +55,7 @@ There is no shell interpolation or generic remote-command execution.
 | `targets` | `get_release_targets` | List the explicitly named project's local release targets and Store bindings |
 | `context` | `get_release_context` | Verify the explicitly requested current UI target |
 | `prepare` | `release_prepare` | Read Apple and record a fixed release snapshot |
+| `prepare-resubmission` | `release_prepare_resubmission` | Prepare the exact resolved review again with a fresh content snapshot |
 | `validate` | `release_validate` | Fresh readiness and unchanged-content checks |
 | `status` | `release_status` | Read-only reconciliation after delay/restart |
 | `submit` | `release_submit` | Guarded release-mode update and review submission |
@@ -87,7 +88,9 @@ attach its explicitly chosen build under the same durable operation lock.
 CLI output is JSON. Protocol errors, malformed replies, blocked validation and
 unconfirmed submission exit nonzero. A successful `status` query can describe an
 unresolved operation and exit zero: callers must inspect `state`/`appleState`.
-`submitted` does not mean published or currently sold on the App Store.
+`submitted` records a historically acknowledged send. It does not mean that Apple
+is currently reviewing the version, that it was resubmitted after rejection, or
+that it is published. Read the current `appleState` and `submissionState` too.
 
 ## Joint app, purchase and subscription review
 
@@ -310,3 +313,32 @@ message all agree. This is not a global warning waiver: unselected products,
 missing product evidence, other or unknown lifecycle states and changed warning
 shapes remain blocking. The evidence is recalculated during validation and does
 not alter the content fingerprint or allow a changed selection.
+
+## Resubmit an updated, previously rejected review
+
+A Resolution Center reply and an update to the review notes are not a new
+submission. Apple can answer information-only requests in the existing thread.
+If the rejected item is explicitly updated for review in App Store Connect,
+`READY_FOR_REVIEW` means prepared, not sent; the enclosing review may still be
+`UNRESOLVED_ISSUES` and retain its original submission date.
+
+Use the separate `prepare-resubmission` command for this state. Its request names
+the acknowledged original `operationId`, original `accountKey`, and exact
+`submissionId`. It reads Apple, preserves the old journal, and records a new
+operation with the same app, platform, build, release mode and selected product
+versions. Updated review notes and other current protected content receive a new
+confirmation digest. This command neither resolves rejected items nor sends them.
+
+The existing review must contain exactly the original app and product versions,
+with every item ready for review. No foreign, missing, removed or still-rejected
+item is accepted. The normal `validate` and explicitly confirmed `submit` steps
+then operate on the new operation. Submission sends only the existing review;
+it cannot create another review or attach additional items. Read back the same
+review and all selected items in an actual submitted review state before reporting
+success. After an uncertain send, use `status` only; never repeat the send to
+work around a timeout. The unsubmitted-draft recovery path remains separate.
+
+Apple documents the item-update and final resubmission steps in
+[Manage a submission with unresolved issues](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/manage-a-submission-with-unresolved-issues).
+This differs from replying to an information-only request without updating the
+review items; use the action actually requested or already initiated by the user.

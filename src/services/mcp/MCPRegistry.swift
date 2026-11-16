@@ -41,6 +41,13 @@ enum MCPRegistry {
             ],
             required: ["projectId", "projectPath", "appId", "bundleId", "platform", "accountKey", "versionId", "buildId", "releaseMode"]
         ))
+        tools.append(tool(
+            name: "release_prepare_resubmission",
+            description: "Read-only preparation of a new attempt for the exact previously acknowledged review after its rejected items were resolved in Apple. Requires the old operationId, accountKey and submissionId. Preserves the original app/build/product set and release mode, binds current metadata into a new digest, and never resolves items or retries an uncertain submit. Validate and explicitly submit the returned new operation.",
+            properties: ["operationId": ["type": "string"], "accountKey": ["type": "string"],
+                         "submissionId": ["type": "string"], "releaseTargetId": ["type": "string"]],
+            required: ["operationId", "accountKey", "submissionId"]
+        ))
         for (name, description) in [
             ("release_status", "Read and reconcile a durable operation with Apple. Never replays an upload or submission. Use after a timeout or restart before any retry."),
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
@@ -496,7 +503,7 @@ enum MCPRegistry {
         // Navigation / read-only
         case "app_get_state", "nav_switch_tab", "nav_list_tabs":
             return .navigation
-        case "project_list", "project_get_active", "get_release_context", "get_release_targets", "release_prepare", "release_validate", "release_status":
+        case "project_list", "project_get_active", "get_release_context", "get_release_targets", "release_prepare", "release_prepare_resubmission", "release_validate", "release_status":
             return .query
         case "simulator_list_devices":
             return .query
@@ -565,7 +572,7 @@ enum MCPRegistry {
         if !required.isEmpty {
             schema["required"] = required
         }
-        if ["release_prepare", "release_validate", "release_status", "release_submit"].contains(name) {
+        if ["release_prepare", "release_prepare_resubmission", "release_validate", "release_status", "release_submit"].contains(name) {
             schema["additionalProperties"] = false
         }
         return [
