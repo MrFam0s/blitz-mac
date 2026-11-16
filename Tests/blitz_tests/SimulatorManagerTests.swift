@@ -31,24 +31,28 @@ import Testing
 
 @MainActor
 @Test func simulatorMissingSelectionDoesNotBootAnArbitraryDevice() async {
-    let driver = SimulatorTestDriver(devices: [simDevice("other", booted: true)])
-    let manager = SimulatorManager(service: driver, saveSelection: { _, _ in })
-    #expect(await manager.startSelectedDevice(for: simProject("new")) == false)
-    #expect(manager.selectedDeviceID == nil)
-    #expect(await manager.startSelectedDevice(for: simProject("missing", selected: "deleted")) == false)
-    #expect(manager.selectedDeviceID == "deleted")
-    #expect(manager.errorMessage?.contains("nicht verfügbar") == true)
-    #expect(await driver.bootCalls.isEmpty)
+    await L10n.$overrideLanguage.withValue("de") {
+        let driver = SimulatorTestDriver(devices: [simDevice("other", booted: true)])
+        let manager = SimulatorManager(service: driver, saveSelection: { _, _ in })
+        #expect(await manager.startSelectedDevice(for: simProject("new")) == false)
+        #expect(manager.selectedDeviceID == nil)
+        #expect(await manager.startSelectedDevice(for: simProject("missing", selected: "deleted")) == false)
+        #expect(manager.selectedDeviceID == "deleted")
+        #expect(manager.errorMessage?.contains("nicht verfügbar") == true)
+        #expect(await driver.bootCalls.isEmpty)
+    }
 }
 
 @MainActor
 @Test func simulatorDoesNotBootWhenProjectPreferenceCannotBeSaved() async {
-    let driver = SimulatorTestDriver(devices: [simDevice("mine")])
-    let manager = SimulatorManager(service: driver, saveSelection: { _, _ in throw CocoaError(.fileWriteNoPermission) })
-    #expect(await manager.selectDevice("mine", for: simProject("one")) == false)
-    #expect(manager.selectedDeviceID == nil)
-    #expect(manager.errorMessage?.contains("save") == true)
-    #expect(await driver.bootCalls.isEmpty)
+    await L10n.$overrideLanguage.withValue("en") {
+        let driver = SimulatorTestDriver(devices: [simDevice("mine")])
+        let manager = SimulatorManager(service: driver, saveSelection: { _, _ in throw CocoaError(.fileWriteNoPermission) })
+        #expect(await manager.selectDevice("mine", for: simProject("one")) == false)
+        #expect(manager.selectedDeviceID == nil)
+        #expect(manager.errorMessage?.contains("save") == true)
+        #expect(await driver.bootCalls.isEmpty)
+    }
 }
 
 @MainActor

@@ -74,7 +74,7 @@ struct ASCOverview: View {
                     onPublishUpdate: { asc.showReleaseAutomationSheet = true },
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                     refreshTab: .app,
-                    refreshHelpText: "Übersicht aktualisieren"
+                    refreshHelpText: L10n.tr("Übersicht aktualisieren")
                 )
                 .blitzToolbar()
             }
@@ -108,7 +108,7 @@ struct ASCOverview: View {
         if asc.isTabLoading(.app) {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
-                Text(asc.overviewCacheDate == nil ? "App-Daten werden geladen …" : "Gespeicherte Daten werden aktualisiert …")
+                Text(asc.overviewCacheDate == nil ? L10n.tr("App-Daten werden geladen …") : L10n.tr("Gespeicherte Daten werden aktualisiert …"))
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -154,14 +154,14 @@ struct ASCOverview: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .help("Bundle-ID des Projekts ändern")
+                            .help(L10n.tr("Bundle-ID des Projekts ändern"))
                             .popover(isPresented: $showBundleIDSelector, arrowEdge: .bottom) {
                                 ProjectBundleIDSelectorView(
                                     appState: appState,
                                     asc: asc,
                                     tab: .app,
                                     platform: appState.activeProject?.platform ?? .iOS,
-                                    subtitle: "Wähle die Kennung des App-Ziels, dessen App-Store-Daten du hier verwalten möchtest.",
+                                    subtitle: L10n.tr("Wähle die Kennung des App-Ziels, dessen App-Store-Daten du hier verwalten möchtest."),
                                     standalone: false
                                 )
                                 .frame(width: 480)
@@ -277,7 +277,7 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "list.bullet.rectangle")
                     .foregroundStyle(.blue)
-                Text("Qualität des Store-Eintrags")
+                Text(L10n.tr("Qualität des Store-Eintrags"))
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
                 Text(listingHealthSummaryText)
@@ -307,11 +307,11 @@ struct ASCOverview: View {
         let missing = rows.filter { $0.kind == .missing }.count
         let short = rows.filter { $0.kind == .short }.count
         if missing == 0 && short == 0 {
-            return "Vollständig"
+            return L10n.tr("Vollständig")
         }
         var parts: [String] = []
-        if missing > 0 { parts.append("\(missing) fehlen") }
-        if short > 0 { parts.append("\(short) kurz") }
+        if missing > 0 { parts.append(L10n.tr("\(missing) fehlen")) }
+        if short > 0 { parts.append(L10n.tr("\(short) kurz")) }
         return parts.joined(separator: ", ")
     }
 
@@ -348,10 +348,10 @@ struct ASCOverview: View {
 
     private func listingHealthPlaceholder(for kind: ListingHealthKind) -> String {
         switch kind {
-        case .missing: return "Nicht festgelegt"
-        case .short: return "Kurz"
-        case .complete: return "Vollständig"
-        case .optimized: return "Optimiert"
+        case .missing: return L10n.tr("Nicht festgelegt")
+        case .short: return L10n.tr("Kurz")
+        case .complete: return L10n.tr("Vollständig")
+        case .optimized: return L10n.tr("Optimiert")
         }
     }
 
@@ -423,10 +423,10 @@ struct ASCOverview: View {
                     }
                 }
             } else if field.loadFailed {
-                Text(field.value.map { truncate(BlitzDisplayText.readinessValue($0, field: field.label), limit: 70) + " · Gespeichert" } ?? "Nicht geladen")
+                Text(field.value.map { truncate(BlitzDisplayText.readinessValue($0, field: field.label), limit: 70) + L10n.tr(" · Gespeichert") } ?? L10n.tr("Nicht geladen"))
                     .font(.callout).foregroundStyle(.secondary).lineLimit(1)
             } else if field.isLoading {
-                Text("Wird geladen …").font(.callout).foregroundStyle(.secondary)
+                Text(L10n.tr("Wird geladen …")).font(.callout).foregroundStyle(.secondary)
             } else if let url = field.actionUrl, let nsUrl = URL(string: url) {
                 if field.label != "Privacy Nutrition Labels" {
                     Button {
@@ -434,13 +434,13 @@ struct ASCOverview: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "sparkles")
-                            Text("Ergänzen")
+                            Text(L10n.tr("Ergänzen"))
                         }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
-                Button("Im Browser öffnen") {
+                Button(L10n.tr("Im Browser öffnen")) {
                     NSWorkspace.shared.open(nsUrl)
                 }
                 .buttonStyle(.bordered)
@@ -451,7 +451,7 @@ struct ASCOverview: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
-                        Text("Ergänzen")
+                        Text(L10n.tr("Ergänzen"))
                     }
                 }
                 .buttonStyle(.bordered)
@@ -468,9 +468,9 @@ struct ASCOverview: View {
 
     private func submissionReadinessHelp(_ field: SubmissionReadiness.FieldStatus) -> String {
         if field.loadFailed {
-            return "Dieser Wert konnte nicht aktualisiert werden. Lade die Übersicht erneut."
+            return L10n.tr("Dieser Wert konnte nicht aktualisiert werden. Lade die Übersicht erneut.")
         }
-        if field.isLoading { return "Dieser Wert wird geprüft …" }
+        if field.isLoading { return L10n.tr("Dieser Wert wird geprüft …") }
         if field.hint != nil, let hint = BlitzDisplayText.readinessHint(field: field.label) {
             return hint
         }
@@ -497,7 +497,7 @@ struct ASCOverview: View {
             RejectionCardView(asc: asc, version: rejectionCardVersion) {
                 HStack {
                     Spacer()
-                    Button("Erneute Einreichung vorbereiten") {
+                    Button(L10n.tr("Erneute Einreichung vorbereiten")) {
                         showPreview = true
                     }
                     .buttonStyle(.borderedProminent)
@@ -525,15 +525,15 @@ struct ASCOverview: View {
         )
         .help(store.help)
         versionMetric(
-            title: "In Vorbereitung", value: pending?.attributes.versionString ?? "—",
+            title: L10n.tr("In Vorbereitung"), value: pending?.attributes.versionString ?? "—",
             subtitle: pending.map { stateLabel($0.attributes.effectiveState ?? "") },
             color: pending != nil ? .orange : .secondary, icon: "clock.fill"
         )
         versionMetric(
-            title: "Versionen", value: "\(asc.releaseVersions.count)",
+            title: L10n.tr("Versionen"), value: "\(asc.releaseVersions.count)",
             subtitle: nil, color: .secondary, icon: "list.number"
         )
-        .help("Alle Versionen seit Beginn")
+        .help(L10n.tr("Alle Versionen seit Beginn"))
     }
 
     // MARK: - Submission Readiness (original standalone list)
@@ -542,14 +542,14 @@ struct ASCOverview: View {
         VStack(alignment: .leading, spacing: 12) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
-                    Text("Einreichungsprüfung")
+                    Text(L10n.tr("Einreichungsprüfung"))
                         .font(BlitzLayout.sectionTitle)
                         .fixedSize()
                     Spacer(minLength: 0)
                     submissionReadinessAction.fixedSize()
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Einreichungsprüfung").font(BlitzLayout.sectionTitle)
+                    Text(L10n.tr("Einreichungsprüfung")).font(BlitzLayout.sectionTitle)
                     submissionReadinessAction
                 }
             }
@@ -570,7 +570,7 @@ struct ASCOverview: View {
         let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
         let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
         if !asc.canCreateUpdate {
-            Button(showStatus ? "Status anzeigen" : "Zur Prüfung einreichen") {
+            Button(showStatus ? L10n.tr("Status anzeigen") : L10n.tr("Zur Prüfung einreichen")) {
                 showPreview = true
             }
             .buttonStyle(.borderedProminent)
@@ -589,13 +589,13 @@ struct ASCOverview: View {
                 Text("Screenshots")
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
-                Button("Neue Screenshots erstellen") {
+                Button(L10n.tr("Neue Screenshots erstellen")) {
                     // Slot for the sibling screenshot-generation workstream.
                     appState.activeTab = .screenshots
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                Button("Verwalten") {
+                Button(L10n.tr("Verwalten")) {
                     appState.activeTab = .screenshots
                 }
                 .buttonStyle(.bordered)
@@ -604,7 +604,7 @@ struct ASCOverview: View {
 
             let screenshots = screenshotsForPreview
             if screenshots.isEmpty {
-                Text("Für die Hauptsprache wurden noch keine Screenshots hochgeladen.")
+                Text(L10n.tr("Für die Hauptsprache wurden noch keine Screenshots hochgeladen."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -673,13 +673,13 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .foregroundStyle(.teal)
-                Text("Aktivität")
+                Text(L10n.tr("Aktivität"))
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
 
             if asc.submissionHistoryEvents.isEmpty {
-                Text("Keine aktuellen Einreichungsaktivitäten.")
+                Text(L10n.tr("Keine aktuellen Einreichungsaktivitäten."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -710,7 +710,7 @@ struct ASCOverview: View {
             HStack {
                 Image(systemName: "folder.fill.badge.gearshape")
                     .foregroundStyle(.orange)
-                Text("Lokales Projekt")
+                Text(L10n.tr("Lokales Projekt"))
                     .font(BlitzLayout.sectionTitle)
                 Spacer()
             }
@@ -736,12 +736,12 @@ struct ASCOverview: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let latestBuild = latestLocalBuildLabel {
-                        Text("Letzter Build: \(latestBuild)")
+                        Text(L10n.tr("Letzter Build: \(latestBuild)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     HStack(spacing: 8) {
-                        Button("Im Finder öffnen") {
+                        Button(L10n.tr("Im Finder öffnen")) {
                             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: project.path)
                         }
                         .buttonStyle(.bordered)
@@ -751,13 +751,13 @@ struct ASCOverview: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Mit dieser App ist noch kein lokales Projekt verknüpft.")
+                    Text(L10n.tr("Mit dieser App ist noch kein lokales Projekt verknüpft."))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button {
                         appState.showImportProjectSheet = true
                     } label: {
-                        Label("Projekt verknüpfen …", systemImage: "square.and.arrow.down")
+                        Label(L10n.tr("Projekt verknüpfen …"), systemImage: "square.and.arrow.down")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -880,23 +880,23 @@ struct ASCOverview: View {
     private func submissionEventStyle(_ eventType: ASCSubmissionHistoryEventType) -> (String, Color) {
         switch eventType {
         case .submitted:
-            return ("Eingereicht", .blue)
+            return (L10n.tr("Eingereicht"), .blue)
         case .submissionError:
-            return ("Einreichungsfehler", .red)
+            return (L10n.tr("Einreichungsfehler"), .red)
         case .inReview:
-            return ("In Prüfung", .blue)
+            return (L10n.tr("In Prüfung"), .blue)
         case .processing:
-            return ("In Verarbeitung", .orange)
+            return (L10n.tr("In Verarbeitung"), .orange)
         case .accepted:
-            return ("Akzeptiert", .green)
+            return (L10n.tr("Akzeptiert"), .green)
         case .live:
-            return ("Veröffentlicht", .green)
+            return (L10n.tr("Veröffentlicht"), .green)
         case .rejected:
-            return ("Abgelehnt", .red)
+            return (L10n.tr("Abgelehnt"), .red)
         case .withdrawn:
-            return ("Zurückgezogen", .orange)
+            return (L10n.tr("Zurückgezogen"), .orange)
         case .removed:
-            return ("Entfernt", .secondary)
+            return (L10n.tr("Entfernt"), .secondary)
         }
     }
 }

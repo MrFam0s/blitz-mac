@@ -11,7 +11,7 @@ final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
         AnalyticsService.trackAppLaunch()
         if let fileMenu = NSApp.mainMenu?.item(withTitle: "Ablage")
             ?? NSApp.mainMenu?.item(withTitle: "File") {
-            fileMenu.title = "Projekt"
+            fileMenu.title = L10n.tr("Projekt")
         }
         // Set dock icon from bundled resource (needed for swift run / non-.app launches)
         if Bundle.main.bundleURL.pathExtension != "app",
@@ -72,6 +72,7 @@ struct BlitzApp: App {
     var body: some Scene {
         Window("Blitz Neo", id: "main") {
             ContentView(appState: appState)
+                .environment(\.locale, L10n.locale)
                 .focusEffectDisabled()
                 .onAppear {
                     appDelegate.appState = appState

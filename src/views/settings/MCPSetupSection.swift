@@ -12,39 +12,39 @@ struct MCPSetupSection: View {
     @State private var copyError = false
 
     var body: some View {
-        Section("Blitz-Neo-Werkzeuge (MCP)") {
+        Section(L10n.tr("Blitz-Neo-Werkzeuge (MCP)")) {
             HStack {
-                Text("Lokaler Dienst")
+                Text(L10n.tr("Lokaler Dienst"))
                 Spacer()
                 HStack(spacing: 5) {
                     Circle()
                         .fill(serverRunning == true ? Color.green : Color.secondary)
                         .frame(width: 7, height: 7)
-                    Text(serverRunning.map { $0 ? "Bereit" : "Nicht gestartet" } ?? "Wird geprüft …")
+                    Text(serverRunning.map { $0 ? L10n.tr("Bereit") : L10n.tr("Nicht gestartet") } ?? L10n.tr("Wird geprüft …"))
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Stellt Chats die Werkzeuge der laufenden Blitz-Neo-App bereit. Die Einrichtung im Agenten wird separat geprüft.")
+            Text(L10n.tr("Stellt Chats die Werkzeuge der laufenden Blitz-Neo-App bereit. Die Einrichtung im Agenten wird separat geprüft."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if let configuration {
-                LabeledContent("\(agent.displayName) · Blitz-App", value: configuration.app.label)
-                LabeledContent("\(agent.displayName) · iPhone & Simulator", value: configuration.iphone.label)
+                LabeledContent(L10n.tr("\(agent.displayName) · Blitz-App"), value: configuration.app.label)
+                LabeledContent(L10n.tr("\(agent.displayName) · iPhone & Simulator"), value: configuration.iphone.label)
 
                 if configuration.app == .restricted || configuration.iphone == .restricted {
-                    Text("Die globale Werkzeugauswahl gilt weiterhin. Neue Werkzeuge werden dort nicht automatisch ergänzt; die Freigaben des Agenten gelten zusätzlich.")
+                    Text(L10n.tr("Die globale Werkzeugauswahl gilt weiterhin. Neue Werkzeuge werden dort nicht automatisch ergänzt; die Freigaben des Agenten gelten zusätzlich."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                DisclosureGroup("Manuelle Einrichtung", isExpanded: $showManualSetup) {
+                DisclosureGroup(L10n.tr("Manuelle Einrichtung"), isExpanded: $showManualSetup) {
                     Text(manualInstructions(configuration))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                     if configuration.app == .missing {
-                        Button(copied ? "Kopiert" : "Blitz-App-Konfiguration für \(agent.displayName) kopieren",
+                        Button(copied ? L10n.tr("Kopiert") : L10n.tr("Blitz-App-Konfiguration für \(agent.displayName) kopieren"),
                                systemImage: copied ? "checkmark" : "doc.on.doc") {
                             let snippet = MCPIntegrationConfiguration.manualSnippet(agent: agent, helperPath: BlitzPaths.mcpHelper.path)
                             NSPasteboard.general.clearContents()
@@ -53,13 +53,13 @@ struct MCPSetupSection: View {
                         }
                         .buttonStyle(.plain)
                     } else if configuration.app != .unreadable {
-                        Button("Konfigurationsdatei öffnen", systemImage: "doc.text") {
+                        Button(L10n.tr("Konfigurationsdatei öffnen"), systemImage: "doc.text") {
                             NSWorkspace.shared.open(configuration.file)
                         }
                         .buttonStyle(.plain)
                     }
                     if copyError {
-                        Text("Die Konfiguration konnte nicht kopiert werden.")
+                        Text(L10n.tr("Die Konfiguration konnte nicht kopiert werden."))
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
@@ -81,12 +81,12 @@ struct MCPSetupSection: View {
 
     private func manualInstructions(_ configuration: MCPIntegrationConfiguration) -> String {
         if configuration.app == .unreadable {
-            return "Die globale Konfiguration konnte nicht gelesen werden. Bitte in \(agent.displayName) prüfen. Es wurde nichts geändert."
+            return L10n.tr("Die globale Konfiguration konnte nicht gelesen werden. Bitte in \(agent.displayName) prüfen. Es wurde nichts geändert.")
         }
         if configuration.app != .missing {
-            return "Der globale Blitz-Eintrag ist bereits vorhanden. Bitte keinen zweiten Eintrag anlegen. Änderungen und die Werkzeugauswahl verwaltest du in \(configuration.file.path)."
+            return L10n.tr("Der globale Blitz-Eintrag ist bereits vorhanden. Bitte keinen zweiten Eintrag anlegen. Änderungen und die Werkzeugauswahl verwaltest du in \(configuration.file.path).")
         }
-        let target = agent == .codex ? "als eigenen Abschnitt" : "unter \"\(agent == .claudeCode ? "mcpServers" : "mcp")\""
-        return "Nur für die manuelle Einrichtung der Blitz-App: \(target) in \(configuration.file.path) einfügen. Vorher vorhandene Projekt- oder Plugin-Konfigurationen prüfen, damit kein zweiter Eintrag entsteht. Blitz-Projekte können die Werkzeuge bereits bereitstellen."
+        let target = agent == .codex ? L10n.tr("als eigenen Abschnitt") : L10n.tr("unter \"\(agent == .claudeCode ? "mcpServers" : "mcp")\"")
+        return L10n.tr("Nur für die manuelle Einrichtung der Blitz-App: \(target) in \(configuration.file.path) einfügen. Vorher vorhandene Projekt- oder Plugin-Konfigurationen prüfen, damit kein zweiter Eintrag entsteht. Blitz-Projekte können die Werkzeuge bereits bereitstellen.")
     }
 }

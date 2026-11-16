@@ -251,10 +251,10 @@ final class MetalRenderer {
 
         var errorDescription: String? {
             switch self {
-            case .noMetalDevice: return "No Metal-capable GPU found"
-            case .noCommandQueue: return "Failed to create Metal command queue"
-            case .noShaderLibrary: return "Failed to load Metal shader library"
-            case .shaderCompileFailed(let msg): return "Shader compile failed: \(msg)"
+            case .noMetalDevice: return L10n.tr("No Metal-capable GPU found")
+            case .noCommandQueue: return L10n.tr("Failed to create Metal command queue")
+            case .noShaderLibrary: return L10n.tr("Failed to load Metal shader library")
+            case .shaderCompileFailed(let msg): return L10n.tr("Shader compile failed: \(msg)")
             }
         }
     }

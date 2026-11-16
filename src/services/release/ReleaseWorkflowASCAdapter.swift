@@ -5,10 +5,10 @@ enum ReleaseWorkflowAPIError: Error, LocalizedError {
     case httpStatus(Int), appleResponse(ReleaseAppleError), invalidResponse, validationUnavailable
     var errorDescription: String? {
         switch self {
-        case .httpStatus(let status): return "Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(status))."
-        case .appleResponse(let error): return "Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(error.httpStatus), \(error.codes.joined(separator: ", ")))."
-        case .invalidResponse: return "Apple lieferte keine vollständig zuordenbare Release-Antwort."
-        case .validationUnavailable: return "Die vollständige ASC-Release-Prüfung konnte nicht verifiziert werden."
+        case .httpStatus(let status): return L10n.tr("Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(status)).")
+        case .appleResponse(let error): return L10n.tr("Apple-Anfrage für den Release-Auftrag fehlgeschlagen (HTTP \(error.httpStatus), \(error.codes.joined(separator: ", "))).")
+        case .invalidResponse: return L10n.tr("Apple lieferte keine vollständig zuordenbare Release-Antwort.")
+        case .validationUnavailable: return L10n.tr("Die vollständige ASC-Release-Prüfung konnte nicht verifiziert werden.")
         }
     }
 }

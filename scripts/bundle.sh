@@ -186,6 +186,13 @@ for bundle_dir in .build/${CONFIG}/*.bundle; do
     fi
 done
 
+# Native menu/panel and permission translations belong in the main bundle too.
+for language in de en; do
+    mkdir -p "$BUNDLE_DIR/Contents/Resources/$language.lproj"
+    cp "$ROOT_DIR/src/resources/$language.lproj/InfoPlist.strings" \
+        "$BUNDLE_DIR/Contents/Resources/$language.lproj/InfoPlist.strings"
+done
+
 # Embed Claude skills in .app bundle
 SKILLS_SRC="$ROOT_DIR/src/resources/skills"
 SKILLS_DST="$BUNDLE_DIR/Contents/Resources/claude-skills"
@@ -238,9 +245,9 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << PLIST
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
     <key>CFBundleDevelopmentRegion</key>
-    <string>de</string>
+    <string>en</string>
     <key>CFBundleLocalizations</key>
-    <array><string>de</string></array>
+    <array><string>de</string><string>en</string></array>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key>

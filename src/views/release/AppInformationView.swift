@@ -73,33 +73,33 @@ struct AppInformationView: View {
     }
 
     private static let categories: [(String, String)] = [
-        ("GAMES", "Spiele"),
-        ("UTILITIES", "Dienstprogramme"),
-        ("PRODUCTIVITY", "Produktivität"),
-        ("SOCIAL_NETWORKING", "Soziale Netze"),
-        ("PHOTO_AND_VIDEO", "Foto und Video"),
-        ("MUSIC", "Musik"),
-        ("TRAVEL", "Reisen"),
-        ("SPORTS", "Sport"),
-        ("HEALTH_AND_FITNESS", "Gesundheit und Fitness"),
-        ("EDUCATION", "Bildung"),
-        ("BUSINESS", "Wirtschaft"),
-        ("FINANCE", "Finanzen"),
-        ("NEWS", "Nachrichten"),
-        ("FOOD_AND_DRINK", "Essen und Trinken"),
+        ("GAMES", L10n.tr("Spiele")),
+        ("UTILITIES", L10n.tr("Dienstprogramme")),
+        ("PRODUCTIVITY", L10n.tr("Produktivität")),
+        ("SOCIAL_NETWORKING", L10n.tr("Soziale Netze")),
+        ("PHOTO_AND_VIDEO", L10n.tr("Foto und Video")),
+        ("MUSIC", L10n.tr("Musik")),
+        ("TRAVEL", L10n.tr("Reisen")),
+        ("SPORTS", L10n.tr("Sport")),
+        ("HEALTH_AND_FITNESS", L10n.tr("Gesundheit und Fitness")),
+        ("EDUCATION", L10n.tr("Bildung")),
+        ("BUSINESS", L10n.tr("Wirtschaft")),
+        ("FINANCE", L10n.tr("Finanzen")),
+        ("NEWS", L10n.tr("Nachrichten")),
+        ("FOOD_AND_DRINK", L10n.tr("Essen und Trinken")),
         ("LIFESTYLE", "Lifestyle"),
         ("SHOPPING", "Shopping"),
-        ("ENTERTAINMENT", "Unterhaltung"),
-        ("REFERENCE", "Nachschlagewerke"),
-        ("MEDICAL", "Medizin"),
+        ("ENTERTAINMENT", L10n.tr("Unterhaltung")),
+        ("REFERENCE", L10n.tr("Nachschlagewerke")),
+        ("MEDICAL", L10n.tr("Medizin")),
         ("NAVIGATION", "Navigation"),
-        ("WEATHER", "Wetter"),
-        ("DEVELOPER_TOOLS", "Entwicklerwerkzeuge"),
+        ("WEATHER", L10n.tr("Wetter")),
+        ("DEVELOPER_TOOLS", L10n.tr("Entwicklerwerkzeuge")),
     ]
 
     private static let contentRightsOptions: [(String, String)] = [
-        ("DOES_NOT_USE_THIRD_PARTY_CONTENT", "Keine Inhalte Dritter"),
-        ("USES_THIRD_PARTY_CONTENT", "Inhalte Dritter mit Nutzungsrechten"),
+        ("DOES_NOT_USE_THIRD_PARTY_CONTENT", L10n.tr("Keine Inhalte Dritter")),
+        ("USES_THIRD_PARTY_CONTENT", L10n.tr("Inhalte Dritter mit Nutzungsrechten")),
     ]
 
     var body: some View {
@@ -158,24 +158,24 @@ struct AppInformationView: View {
                     selection: selectedVersionBinding,
                     appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                     refreshTab: .appInformation,
-                    refreshHelpText: "App-Informationen aktualisieren"
+                    refreshHelpText: L10n.tr("App-Informationen aktualisieren")
                 ) {
                     if !locales.isEmpty {
-                        Picker("Sprache", selection: selectedLocaleBinding) {
+                        Picker(L10n.tr("Sprache"), selection: selectedLocaleBinding) {
                             ForEach(locales) { loc in
                                 Text(loc.attributes.locale).tag(loc.attributes.locale)
                             }
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
-                        .accessibilityLabel("Sprache")
-                        .help("Sprache des Store-Eintrags")
+                        .accessibilityLabel(L10n.tr("Sprache"))
+                        .help(L10n.tr("Sprache des Store-Eintrags"))
                         .frame(width: 110, alignment: .leading)
                     }
                     if isSaving {
                         HStack(spacing: 4) {
                             ProgressView().controlSize(.mini)
-                            Text("Wird gespeichert …").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.tr("Wird gespeichert …")).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -185,7 +185,7 @@ struct AppInformationView: View {
             Divider()
 
             if !asc.canEditField("description") || !asc.canEditField("title") {
-                Label("Gesperrte Angaben sind schreibgeschützt. Werbetext und Copyright bleiben bearbeitbar. Für andere Änderungen eine bearbeitbare Version auswählen.", systemImage: "lock.fill")
+                Label(L10n.tr("Gesperrte Angaben sind schreibgeschützt. Werbetext und Copyright bleiben bearbeitbar. Für andere Änderungen eine bearbeitbare Version auswählen."), systemImage: "lock.fill")
                     .font(.callout).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, BlitzLayout.pageInset)
@@ -223,14 +223,14 @@ struct AppInformationView: View {
             } else if asc.localizations.isEmpty {
                 if isLoading {
                     ASCTabLoadingPlaceholder(
-                        title: "App-Informationen werden geladen …",
-                        message: "Sprachfassungen und App-Angaben werden abgerufen."
+                        title: L10n.tr("App-Informationen werden geladen …"),
+                        message: L10n.tr("Sprachfassungen und App-Angaben werden abgerufen.")
                     )
                 } else {
                     ContentUnavailableView(
-                        "Keine Sprachfassungen",
+                        L10n.tr("Keine Sprachfassungen"),
                         systemImage: "text.page",
-                        description: Text("Für die aktuelle Version wurden keine Sprachfassungen gefunden.")
+                        description: Text(L10n.tr("Für die aktuelle Version wurden keine Sprachfassungen gefunden."))
                     )
                     .padding(.top, 60)
                 }
@@ -260,36 +260,36 @@ struct AppInformationView: View {
 
     private var localizedContentFields: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            Text("Store-Eintrag")
+            Text(L10n.tr("Store-Eintrag"))
                 .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             editableField("Name", text: $title, fieldKey: "title", maxChars: 30)
-            editableField("Untertitel", text: $subtitle, fieldKey: "subtitle", maxChars: 30)
-            editableMultilineField("Beschreibung", text: $descriptionText, fieldKey: "description", maxChars: 4000)
-            editableField("Schlüsselwörter", text: $keywords, fieldKey: "keywords", maxChars: 100)
-            editableMultilineField("Werbetext", text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
-            editableMultilineField("Neuigkeiten", text: $whatsNew, fieldKey: "whatsNew")
+            editableField(L10n.tr("Untertitel"), text: $subtitle, fieldKey: "subtitle", maxChars: 30)
+            editableMultilineField(L10n.tr("Beschreibung"), text: $descriptionText, fieldKey: "description", maxChars: 4000)
+            editableField(L10n.tr("Schlüsselwörter"), text: $keywords, fieldKey: "keywords", maxChars: 100)
+            editableMultilineField(L10n.tr("Werbetext"), text: $promotionalText, fieldKey: "promotionalText", maxChars: 170)
+            editableMultilineField(L10n.tr("Neuigkeiten"), text: $whatsNew, fieldKey: "whatsNew")
         }
     }
 
     private var categoryAndLinks: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            Text("Kategorie und Links")
+            Text(L10n.tr("Kategorie und Links"))
                 .font(BlitzLayout.sectionTitle)
                 .foregroundStyle(.secondary)
             // Primary Category
             VStack(alignment: .leading, spacing: 6) {
-                Text("Hauptkategorie")
+                Text(L10n.tr("Hauptkategorie"))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
                 Picker("", selection: $primaryCategory) {
-                    Text("Bitte auswählen …").tag("")
+                    Text(L10n.tr("Bitte auswählen …")).tag("")
                     ForEach(Self.categories, id: \.0) { id, label in
                         Text(label).tag(id)
                     }
                 }
                 .labelsHidden()
-                .accessibilityLabel("Hauptkategorie")
+                .accessibilityLabel(L10n.tr("Hauptkategorie"))
                 .disabled(!asc.canEditField("primaryCategory"))
                 .onChange(of: primaryCategory) { _, newValue in
                     guard !suppressAutomaticWrites, isCurrentForm else { return }
@@ -306,17 +306,17 @@ struct AppInformationView: View {
 
             // Content Rights
             VStack(alignment: .leading, spacing: 6) {
-                Text("Inhaltsrechte")
+                Text(L10n.tr("Inhaltsrechte"))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
                 Picker("", selection: $contentRights) {
-                    Text("Bitte auswählen …").tag("")
+                    Text(L10n.tr("Bitte auswählen …")).tag("")
                     ForEach(Self.contentRightsOptions, id: \.0) { id, label in
                         Text(label).tag(id)
                     }
                 }
                 .labelsHidden()
-                .accessibilityLabel("Inhaltsrechte")
+                .accessibilityLabel(L10n.tr("Inhaltsrechte"))
                 .disabled(!asc.canEditField("contentRightsDeclaration"))
                 .onChange(of: contentRights) { _, newValue in
                     guard !suppressAutomaticWrites, isCurrentForm else { return }
@@ -336,9 +336,9 @@ struct AppInformationView: View {
 
             Divider()
 
-            editableField("Datenschutz-URL", text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
-            editableField("Support-URL", text: $supportUrl, fieldKey: "supportUrl")
-            editableField("Marketing-URL", text: $marketingUrl, fieldKey: "marketingUrl")
+            editableField(L10n.tr("Datenschutz-URL"), text: $privacyPolicyUrl, fieldKey: "privacyPolicyUrl")
+            editableField(L10n.tr("Support-URL"), text: $supportUrl, fieldKey: "supportUrl")
+            editableField(L10n.tr("Marketing-URL"), text: $marketingUrl, fieldKey: "marketingUrl")
         }
     }
 
@@ -356,7 +356,7 @@ struct AppInformationView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(showAdvanced ? 90 : 0))
-                    Text("Erweitert")
+                    Text(L10n.tr("Erweitert"))
                         .font(.callout.weight(.medium))
                     Spacer()
                 }
@@ -369,40 +369,40 @@ struct AppInformationView: View {
             if showAdvanced {
                 VStack(alignment: .leading, spacing: 0) {
                     // App Identity (read-only details)
-                    advancedSectionHeader("App-Identität")
+                    advancedSectionHeader(L10n.tr("App-Identität"))
 
                     if let app = asc.app {
                         Group {
-                            InfoRow(label: "App-ID", value: app.id)
+                            InfoRow(label: L10n.tr("App-ID"), value: app.id)
                             Divider().opacity(0.5)
-                            InfoRow(label: "Bundle-ID", value: app.bundleId)
+                            InfoRow(label: L10n.tr("Bundle-ID"), value: app.bundleId)
                             if let locale = app.primaryLocale {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Hauptsprache", value: locale)
+                                InfoRow(label: L10n.tr("Hauptsprache"), value: locale)
                             }
                             if let vendor = app.vendorNumber {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Anbieternummer", value: vendor)
+                                InfoRow(label: L10n.tr("Anbieternummer"), value: vendor)
                             }
                         }
                         .foregroundStyle(.secondary)
                     }
 
                     // Version Information
-                    advancedSectionHeader("Versionsinformationen")
+                    advancedSectionHeader(L10n.tr("Versionsinformationen"))
                         .padding(.top, 16)
 
                     if asc.releaseVersions.isEmpty {
                         if isLoading {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text("Versionsinformationen werden geladen …")
+                                Text(L10n.tr("Versionsinformationen werden geladen …"))
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 8)
                         } else {
-                            Text("Keine Versionen gefunden")
+                            Text(L10n.tr("Keine Versionen gefunden"))
                                 .font(.callout)
                                 .foregroundStyle(.tertiary)
                                 .padding(.vertical, 8)
@@ -433,17 +433,17 @@ struct AppInformationView: View {
                     }
 
                     // Project Settings
-                    advancedSectionHeader("Projekteinstellungen")
+                    advancedSectionHeader(L10n.tr("Projekteinstellungen"))
                         .padding(.top, 16)
 
                     if let project = appState.activeProject {
                         Group {
-                            InfoRow(label: "Projektname", value: project.name)
+                            InfoRow(label: L10n.tr("Projektname"), value: project.name)
                             Divider().opacity(0.5)
-                            InfoRow(label: "Projekttyp", value: project.type.rawValue)
+                            InfoRow(label: L10n.tr("Projekttyp"), value: project.type.rawValue)
                             if let bid = project.metadata.bundleIdentifier {
                                 Divider().opacity(0.5)
-                                InfoRow(label: "Bundle-ID (lokal)", value: bid)
+                                InfoRow(label: L10n.tr("Bundle-ID (lokal)"), value: bid)
                             }
                         }
                         .foregroundStyle(.secondary)
@@ -453,21 +453,21 @@ struct AppInformationView: View {
                             asc: asc,
                             tab: .appInformation,
                             platform: project.platform,
-                            subtitle: "Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt.",
+                            subtitle: L10n.tr("Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt."),
                             standalone: false
                         )
                     }
 
                     // Build Signing
-                    advancedSectionHeader("Build-Signierung")
+                    advancedSectionHeader(L10n.tr("Build-Signierung"))
                         .padding(.top, 16)
 
                     VStack(alignment: .leading, spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Team-ID")
+                            Text(L10n.tr("Team-ID"))
                                 .font(.callout.weight(.medium))
                                 .foregroundStyle(.tertiary)
-                            TextField("z. B. 4GS43493GL", text: $teamId)
+                            TextField(L10n.tr("z. B. 4GS43493GL"), text: $teamId)
                                 .textFieldStyle(.roundedBorder)
                                 .focused($focusedField, equals: "teamId")
                                 .fontDesign(.monospaced)
@@ -482,7 +482,7 @@ struct AppInformationView: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundStyle(.green.opacity(0.6))
                                                 .font(.callout)
-                                            Text("Verteilungszertifikat")
+                                            Text(L10n.tr("Verteilungszertifikat"))
                                                 .font(.callout)
                                                 .foregroundStyle(.secondary)
                                             Spacer()
@@ -498,7 +498,7 @@ struct AppInformationView: View {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundStyle(.green.opacity(0.6))
                                                 .font(.callout)
-                                            Text("Bereitstellungsprofil")
+                                            Text(L10n.tr("Bereitstellungsprofil"))
                                                 .font(.callout)
                                                 .foregroundStyle(.secondary)
                                             Spacer()
@@ -511,7 +511,7 @@ struct AppInformationView: View {
                                     }
                                 }
                             } else {
-                                Text("Die Signierung ist noch nicht eingerichtet. Führe app_store_setup_signing aus oder trage oben eine Team-ID ein.")
+                                Text(L10n.tr("Die Signierung ist noch nicht eingerichtet. Führe app_store_setup_signing aus oder trage oben eine Team-ID ein."))
                                     .font(.callout)
                                     .foregroundStyle(.tertiary)
                             }

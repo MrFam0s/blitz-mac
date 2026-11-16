@@ -1,0 +1,2 @@
+"NSScreenCaptureUsageDescription" = "Blitz Neo needs screen recording access to display the iOS Simulator.";
+"NSCameraUsageDescription" = "Blitz Neo needs camera access to display connected iOS device screens over USB.";

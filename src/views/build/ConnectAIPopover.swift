@@ -119,11 +119,11 @@ struct ConnectAIPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("KI verbinden")
+            Text(L10n.tr("KI verbinden"))
                 .font(.headline)
 
             // Agent type selector
-            Picker("Agent", selection: $selectedAgent) {
+            Picker(L10n.tr("Agent"), selection: $selectedAgent) {
                 ForEach(AIAgent.allCases, id: \.rawValue) { agent in
                     Text(agent.displayName).tag(agent.rawValue)
                 }
@@ -148,10 +148,10 @@ struct ConnectAIPopover: View {
                 }) {
                     Image(systemName: copiedCommand ? "checkmark" : "doc.on.doc")
                 }
-                .help("In die Zwischenablage kopieren")
+                .help(L10n.tr("In die Zwischenablage kopieren"))
             }
 
-            Text("Führe diesen Befehl im Terminal aus, um \(agent.displayName) mit diesem Projekt zu verbinden.")
+            Text(L10n.tr("Führe diesen Befehl im Terminal aus, um \(agent.displayName) mit diesem Projekt zu verbinden."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -159,7 +159,7 @@ struct ConnectAIPopover: View {
             if let prompt = tabPrompt {
                 Divider()
 
-                Text("Vorgeschlagene Anfrage")
+                Text(L10n.tr("Vorgeschlagene Anfrage"))
                     .font(.subheadline.weight(.medium))
 
                 HStack(spacing: 8) {
@@ -178,7 +178,7 @@ struct ConnectAIPopover: View {
                     }) {
                         Image(systemName: copiedPrompt ? "checkmark" : "doc.on.doc")
                     }
-                    .help("Anfrage in die Zwischenablage kopieren")
+                    .help(L10n.tr("Anfrage in die Zwischenablage kopieren"))
                 }
             }
         }

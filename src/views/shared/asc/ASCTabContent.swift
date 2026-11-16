@@ -35,7 +35,7 @@ struct ASCTabContent<Content: View>: View {
         } else if isLoading && !shouldRenderContentWhileLoading {
             VStack(spacing: 12) {
                 ProgressView()
-                Text("Wird geladen …")
+                Text(L10n.tr("Wird geladen …"))
                     .foregroundStyle(.secondary)
                     .font(.callout)
             }
@@ -49,7 +49,7 @@ struct ASCTabContent<Content: View>: View {
                 asc: asc,
                 tab: tab,
                 platform: platform,
-                title: "App-Store-Zuordnung",
+                title: L10n.tr("App-Store-Zuordnung"),
                 standalone: true
                 )
             }
@@ -64,7 +64,7 @@ struct ASCTabContent<Content: View>: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
 
-                Button("Erneut versuchen") {
+                Button(L10n.tr("Erneut versuchen")) {
                     Task { await asc.refreshTabData(tab) }
                 }
                 .buttonStyle(.bordered)
@@ -89,7 +89,7 @@ struct ASCTabContent<Content: View>: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Button("Erneut versuchen") {
+                            Button(L10n.tr("Erneut versuchen")) {
                                 Task { await asc.refreshTabData(tab) }
                             }
                             .buttonStyle(.bordered)
@@ -108,7 +108,7 @@ struct ASCTabContent<Content: View>: View {
 struct ASCNoProjectSelectedView: View {
     var body: some View {
         VStack(spacing: 10) {
-            Text("Wähle zuerst ein Projekt aus.")
+            Text(L10n.tr("Wähle zuerst ein Projekt aus."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -139,7 +139,7 @@ struct ASCTabLoadingPlaceholder: View {
 struct ASCTabRefreshButton: View {
     var asc: ASCManager
     var tab: AppTab
-    var helpText: String = "Diese Rubrik aktualisieren"
+    var helpText: String = L10n.tr("Diese Rubrik aktualisieren")
 
     private var isRefreshing: Bool {
         asc.isTabLoading(tab)
@@ -148,7 +148,7 @@ struct ASCTabRefreshButton: View {
     private var refreshHelp: String {
         let date = tab == .app ? asc.overviewCacheDate : asc.tabLoadedAt[tab]
         guard let date else { return helpText }
-        return "\(helpText) · Datenstand: \(date.formatted(date: .abbreviated, time: .shortened))"
+        return L10n.tr("\(helpText) · Datenstand: \(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.locale)))")
     }
 
     var body: some View {
@@ -168,7 +168,7 @@ struct ASCTabRefreshButton: View {
         }
         .buttonStyle(.borderless)
         .disabled(isRefreshing)
-        .accessibilityLabel(isRefreshing ? "Wird aktualisiert …" : helpText)
+        .accessibilityLabel(isRefreshing ? L10n.tr("Wird aktualisiert …") : helpText)
         .help(refreshHelp)
     }
 }
@@ -208,7 +208,7 @@ func ascShortDate(_ iso: String) -> String {
     f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let f2 = ISO8601DateFormatter()
     if let d = f1.date(from: iso) ?? f2.date(from: iso) {
-        return d.formatted(date: .abbreviated, time: .omitted)
+        return d.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(L10n.locale))
     }
     return iso
 }
@@ -219,7 +219,7 @@ func ascLongDate(_ iso: String) -> String {
     f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let f2 = ISO8601DateFormatter()
     if let d = f1.date(from: iso) ?? f2.date(from: iso) {
-        return d.formatted(date: .abbreviated, time: .shortened)
+        return d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.locale))
     }
     return iso
 }

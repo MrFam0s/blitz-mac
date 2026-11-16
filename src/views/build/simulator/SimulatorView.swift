@@ -108,7 +108,7 @@ struct SimulatorView: View {
 
                     HStack(spacing: 8) {
                         if stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission {
-                            Button("Systemeinstellungen öffnen") {
+                            Button(L10n.tr("Systemeinstellungen öffnen")) {
                                 if stream.needsScreenRecordingPermission {
                                     AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
                                 }
@@ -116,7 +116,7 @@ struct SimulatorView: View {
                                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
                             }
                         }
-                        Button("Erneut versuchen") {
+                        Button(L10n.tr("Erneut versuchen")) {
                             Task {
                                 await appState.startProjectSimulator()
                             }
@@ -133,11 +133,11 @@ struct SimulatorView: View {
                     ProgressView()
                         .controlSize(.large)
                     if let name = appState.simulatorManager.bootingDeviceName {
-                        Text("Wechsel zu \(name) …")
+                        Text(L10n.tr("Wechsel zu \(name) …"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Simulator wird gestartet …")
+                        Text(L10n.tr("Simulator wird gestartet …"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
                     }
@@ -159,14 +159,14 @@ struct SimulatorView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         Text(appState.simulatorManager.selectedDeviceID == nil
-                             ? "Wähle einen Simulator für dieses Projekt" : "Simulator ist startbereit")
+                             ? L10n.tr("Wähle einen Simulator für dieses Projekt") : L10n.tr("Simulator ist startbereit"))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
 
-                        Text("Die Geräteauswahl wird pro Projekt gespeichert. Andere laufende Simulatoren bleiben geöffnet.")
+                        Text(L10n.tr("Die Geräteauswahl wird pro Projekt gespeichert. Andere laufende Simulatoren bleiben geöffnet."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button("Simulator starten") {
+                        Button(L10n.tr("Simulator starten")) {
                             Task {
                                 await appState.startProjectSimulator()
                             }
@@ -206,7 +206,7 @@ struct SimulatorView: View {
                     Image(systemName: "house")
                         .padding(.horizontal, 4)
                 }
-                .help("Home-Taste")
+                .help(L10n.tr("Home-Taste"))
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -224,7 +224,7 @@ struct SimulatorView: View {
                     Image(systemName: "paintbrush")
                         .padding(.horizontal, 4)
                 }
-                .help("Darstellung der Gesten")
+                .help(L10n.tr("Darstellung der Gesten"))
             }
 
         }

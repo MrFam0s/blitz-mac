@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 struct AppleIDLoginSheet: View {
-    var subtitle: String = "Melde dich bei App Store Connect an, um deinen Apple-Account mit Blitz Neo zu verbinden."
+    var subtitle: String = L10n.tr("Melde dich bei App Store Connect an, um deinen Apple-Account mit Blitz Neo zu verbinden.")
     var requireDeveloperPortal = false
     var onSessionCaptured: (IrisSession) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -14,8 +14,8 @@ struct AppleIDLoginSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            BlitzSetupHeader("Mit Apple-Account anmelden", subtitle: requireDeveloperPortal
-                ? "App Store Connect und Developer-Portal für denselben Anbieter bestätigen."
+            BlitzSetupHeader(L10n.tr("Mit Apple-Account anmelden"), subtitle: requireDeveloperPortal
+                ? L10n.tr("App Store Connect und Developer-Portal für denselben Anbieter bestätigen.")
                 : subtitle)
                 .padding(24)
 
@@ -48,7 +48,7 @@ struct AppleIDLoginSheet: View {
                 }
 
                 if isLoading || isResettingBrowser {
-                    ProgressView("App Store Connect wird geladen …")
+                    ProgressView(L10n.tr("App Store Connect wird geladen …"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(.background.opacity(0.8))
                 }
@@ -57,10 +57,10 @@ struct AppleIDLoginSheet: View {
             Divider()
 
             HStack {
-                Button("Abbrechen") { dismiss() }
+                Button(L10n.tr("Abbrechen")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Anderen Apple-Account verwenden") {
+                Button(L10n.tr("Anderen Apple-Account verwenden")) {
                     isResettingBrowser = true
                     Task { @MainActor in
                         await ASCWebView.resetBrowser()
@@ -231,14 +231,14 @@ struct ASCWebView: NSViewRepresentable {
                     guard !ASCWebAuthentication.cookieHeader(from: session.cookies).isEmpty else {
                         throw ASCWebAuthenticationError.notAuthenticated
                     }
-                    self.parent.validationMessage = "Apple-Anmeldung wird für Blitz Neo und ASC geprüft …"
+                    self.parent.validationMessage = L10n.tr("Apple-Anmeldung wird für Blitz Neo und ASC geprüft …")
                     let evidence = try await ASCWebSessionCLIImporter().importSession(session)
                     guard self.gate.accepts(token), !Task.isCancelled else { return }
                     session.importEvidence = evidence
                     if !evidence.satisfies(requireDeveloperPortal: self.parent.requireDeveloperPortal) {
                         self.gate.finish(token)
                         self.nextValidationAt = Date().addingTimeInterval(10)
-                        self.parent.validationMessage = "App Store Connect ist bestätigt. Bitte die Anmeldung im Developer-Portal für denselben Anbieter abschließen. Eine Vertragszustimmung wird hier nicht automatisch erteilt."
+                        self.parent.validationMessage = L10n.tr("App Store Connect ist bestätigt. Bitte die Anmeldung im Developer-Portal für denselben Anbieter abschließen. Eine Vertragszustimmung wird hier nicht automatisch erteilt.")
                         if ASCWebAuthentication.isAppStoreConnectURL(webView.url) {
                             webView.load(URLRequest(url: URL(string: "https://developer.apple.com/account/")!))
                         }
@@ -258,7 +258,7 @@ struct ASCWebView: NSViewRepresentable {
                     // are logged or displayed by the login sheet.
                     self.parent.validationMessage = (error as? ASCWebAuthenticationError)?.errorDescription
                         ?? (error as? ASCWebSessionCLIImporter.ImportError)?.errorDescription
-                        ?? "Die Anmeldung konnte noch nicht für ASC übernommen werden. Bitte schließe die Apple-Anmeldung ab; Blitz Neo prüft sie erneut."
+                        ?? L10n.tr("Die Anmeldung konnte noch nicht für ASC übernommen werden. Bitte schließe die Apple-Anmeldung ab; Blitz Neo prüft sie erneut.")
                     irisLog("Apple web session validation failed; login remains open")
                 }
             }

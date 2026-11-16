@@ -59,7 +59,7 @@ final class ProjectSetupManager {
     /// Scaffold a project using the appropriate template for its type.
     @discardableResult
     func setup(projectId: String, projectName: String, projectPath: String, projectType: ProjectType = .reactNative, platform: ProjectPlatform = .iOS) async -> String? {
-        guard !isSettingUp else { return "Ein anderes Projekt wird bereits erstellt. Warte, bis der Vorgang abgeschlossen ist." }
+        guard !isSettingUp else { return L10n.tr("Ein anderes Projekt wird bereits erstellt. Warte, bis der Vorgang abgeschlossen ist.") }
         isSettingUp = true
         setupProjectId = projectId
         currentStep = nil
@@ -89,7 +89,7 @@ final class ProjectSetupManager {
                     onStep: { step in self.currentStep = step }
                 )
             case (.flutter, _):
-                throw ProjectSetupService.SetupError(message: "Flutter-Projekte werden noch nicht unterstützt")
+                throw ProjectSetupService.SetupError(message: L10n.tr("Flutter-Projekte werden noch nicht unterstützt"))
             }
             // Ensure .mcp.json, CLAUDE.md, .claude/settings.local.json exist
             // Keep agent configuration separate from the generated template.
@@ -115,7 +115,7 @@ final class ProjectSetupManager {
     }
 
     var stepMessage: String {
-        if let error = errorMessage { return "Fehler: \(error)" }
-        return currentStep.map { $0 == .copying ? "Vorlage wird kopiert …" : "Bereit" } ?? "Wird vorbereitet …"
+        if let error = errorMessage { return L10n.tr("Fehler: \(error)") }
+        return currentStep.map { $0 == .copying ? L10n.tr("Vorlage wird kopiert …") : L10n.tr("Bereit") } ?? L10n.tr("Wird vorbereitet …")
     }
 }

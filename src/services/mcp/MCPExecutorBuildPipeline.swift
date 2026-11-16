@@ -200,7 +200,7 @@ extension MCPExecutor {
                     guard upload.attributes.cfBundleShortVersionString == metadata.shortVersion,
                           upload.attributes.cfBundleVersion == metadata.buildNumber,
                           upload.attributes.platform == Self.ascPlatformString(for: platform) else {
-                        throw BuildArtifactMetadata.ValidationError(message: "The App Store upload record does not match the uploaded version, build number and platform.")
+                        throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The App Store upload record does not match the uploaded version, build number and platform."))
                     }
                     lastUpload = upload
                     if let buildId = upload.buildId, !buildId.isEmpty {
@@ -250,7 +250,7 @@ extension MCPExecutor {
 
         await MainActor.run {
             appState.ascManager.buildPipelinePhase = .signingSetup
-            appState.ascManager.buildPipelineMessage = "Setting up signing…"
+            appState.ascManager.buildPipelineMessage = L10n.tr("Setting up signing…")
         }
 
         let pipeline = BuildPipelineService()
@@ -340,23 +340,23 @@ extension MCPExecutor {
                   let project = appState.activeProject, asc.loadedProjectId == project.id,
                   let app = asc.app, let credentials = asc.credentials,
                   let accountKey = DashboardSummaryStore.accountKey(for: credentials), let service = asc.service else {
-                throw BuildArtifactMetadata.ValidationError(message: "The active app/account is not fully loaded or changed during approval. Reopen the intended project and retry.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The active app/account is not fully loaded or changed during approval. Reopen the intended project and retry."))
             }
             guard asc.buildPipelinePhase == .idle else {
-                throw BuildArtifactMetadata.ValidationError(message: "Another build pipeline operation is already running for this project.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Another build pipeline operation is already running for this project."))
             }
             let metadata = ProjectStorage().readMetadata(projectId: project.id) ?? project.metadata
             guard let configured = metadata.selectedReleaseTarget,
                   configured.id == project.selectedReleaseTarget?.id,
                   let bundleID = configured.bundleIdentifier, bundleID == app.bundleId else {
-                throw BuildArtifactMetadata.ValidationError(message: "The project's Bundle ID does not match the loaded App Store app.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The project's Bundle ID does not match the loaded App Store app."))
             }
             let registeredProject = Project(id: project.id, metadata: metadata, path: project.path)
             _ = try RegisteredReleaseTarget.resolve(project: registeredProject, releaseTargetID: configured.id,
                 appID: app.id, bundleID: bundleID, platform: configured.platform.ascPlatformValue, accountKey: accountKey)
             let teamID = metadata.teamId ?? ""
             guard !needsTeamID || !teamID.isEmpty else {
-                throw BuildArtifactMetadata.ValidationError(message: "No team ID is set. Run app_store_setup_signing first.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("No team ID is set. Run app_store_setup_signing first."))
             }
             let version: ASCAppStoreVersion?
             if let selected = asc.selectedVersion, ASCReleaseStatus.isEditable(selected.attributes.appStoreState) {
@@ -368,11 +368,11 @@ extension MCPExecutor {
             let key = ObjectIdentifier(appState)
             var operation = Self.pipelineOperations[key] ?? BuildPipelineOperationState()
             guard let operationID = operation.begin() else {
-                throw BuildArtifactMetadata.ValidationError(message: "A build/upload operation is already running. Wait for its result before starting another.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("A build/upload operation is already running. Wait for its result before starting another."))
             }
             Self.pipelineOperations[key] = operation
             asc.buildPipelinePhase = needsTeamID ? .archiving : .uploading
-            asc.buildPipelineMessage = "Validating build inputs…"
+            asc.buildPipelineMessage = L10n.tr("Validating build inputs…")
             return PipelineTarget(operationID: operationID, project: registeredProject, bundleID: bundleID, teamID: teamID,
                                   appID: app.id, platform: configured.platform, releaseTargetID: configured.id, version: version,
                                   selectedVersionID: asc.selectedVersion?.id, revision: asc.projectRevision,
@@ -397,7 +397,7 @@ extension MCPExecutor {
 
     private func requireCurrentPipelineTarget(_ target: PipelineTarget) async throws {
         guard !Task.isCancelled, await MainActor.run(body: { Self.pipelineTargetMatches(target, appState: appState) }) else {
-            throw BuildArtifactMetadata.ValidationError(message: "The app, account or selected version changed during this operation. No further changes were made; reopen the original app to inspect the result.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The app, account or selected version changed during this operation. No further changes were made; reopen the original app to inspect the result."))
         }
     }
 
@@ -418,13 +418,13 @@ extension MCPExecutor {
         var highest: String?
         for build in existing {
             guard build.appId == appID, let train = build.preReleaseVersion else {
-                throw BuildArtifactMetadata.ValidationError(message: "Cannot verify the existing build identities. Refresh App Store Connect before uploading.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Cannot verify the existing build identities. Refresh App Store Connect before uploading."))
             }
             guard train.attributes.platform == ascPlatformString(for: metadata.platform),
                   metadata.platform == .macOS || train.attributes.version == metadata.shortVersion else { continue }
             let number = build.attributes.version
             guard let order = BuildArtifactMetadata.compareNumbers(metadata.buildNumber, number) else {
-                throw BuildArtifactMetadata.ValidationError(message: "Existing build number '\(number)' could not be compared safely. Inspect this build train before uploading.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Existing build number '\(number)' could not be compared safely. Inspect this build train before uploading."))
             }
             if order != .orderedDescending {
                 if highest == nil || BuildArtifactMetadata.compareNumbers(number, highest!) == .orderedDescending {
@@ -433,7 +433,7 @@ extension MCPExecutor {
             }
         }
         if let highest {
-            throw BuildArtifactMetadata.ValidationError(message: "Build \(metadata.buildNumber) is already used or is not newer than \(highest) for this app/platform/version. Choose a greater CFBundleVersion, including its dotted components, and rebuild.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Build \(metadata.buildNumber) is already used or is not newer than \(highest) for this app/platform/version. Choose a greater CFBundleVersion, including its dotted components, and rebuild."))
         }
     }
 
@@ -446,7 +446,7 @@ extension MCPExecutor {
         await MainActor.run {
             guard Self.pipelineTargetMatches(target, appState: appState) else { return }
             appState.ascManager.buildPipelinePhase = .archiving
-            appState.ascManager.buildPipelineMessage = "Starting build…"
+            appState.ascManager.buildPipelineMessage = L10n.tr("Starting build…")
         }
         let appStateRef = appState
         do {
@@ -500,17 +500,17 @@ extension MCPExecutor {
             try metadata.validate(bundleID: target.bundleID, platform: target.platform,
                                   version: target.version?.attributes.versionString)
             guard metadata.usesNonExemptEncryption != nil else {
-                throw BuildArtifactMetadata.ValidationError(message: "ITSAppUsesNonExemptEncryption is missing. Declare the app's actual encryption use as YES or NO in its Info.plist and rebuild; Blitz will not invent this declaration.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("ITSAppUsesNonExemptEncryption is missing. Declare the app's actual encryption use as YES or NO in its Info.plist and rebuild; Blitz will not invent this declaration."))
             }
             if let version = target.version {
                 guard version.attributes.platform == Self.ascPlatformString(for: target.platform),
                       ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
-                    throw BuildArtifactMetadata.ValidationError(message: "The captured App Store version is not an editable version of this platform.")
+                    throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The captured App Store version is not an editable version of this platform."))
                 }
             }
             let freshApp = try await target.service.fetchApp(id: target.appID)
             guard freshApp.bundleId == metadata.bundleID else {
-                throw BuildArtifactMetadata.ValidationError(message: "The server's App Store app does not match the artifact's Bundle ID.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The server's App Store app does not match the artifact's Bundle ID."))
             }
             let existingBuilds = try await target.service.fetchBuilds(appId: target.appID)
             try Self.validateBuildNumber(metadata, appID: target.appID, existing: existingBuilds)
@@ -518,7 +518,7 @@ extension MCPExecutor {
             await MainActor.run {
                 guard Self.pipelineTargetMatches(target, appState: appState) else { return }
                 appState.ascManager.buildPipelinePhase = .uploading
-                appState.ascManager.buildPipelineMessage = "Uploading artifact…"
+                appState.ascManager.buildPipelineMessage = L10n.tr("Uploading artifact…")
             }
             let uploadStartedAt = Date()
             uploadStarted = true
@@ -562,7 +562,7 @@ extension MCPExecutor {
                 do {
                     guard build.matchesRelease(appId: target.appID, versionString: metadata.shortVersion, platform: target.platform),
                           build.attributes.version == metadata.buildNumber else {
-                        throw BuildArtifactMetadata.ValidationError(message: "The processed build identity does not match the uploaded app, version, build number and platform. It was not attached.")
+                        throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The processed build identity does not match the uploaded app, version, build number and platform. It was not attached."))
                     }
                     try await requireCurrentPipelineTarget(target)
                     if let version = target.version {
@@ -571,7 +571,7 @@ extension MCPExecutor {
                               freshVersion.attributes.versionString == metadata.shortVersion,
                               freshVersion.attributes.platform == Self.ascPlatformString(for: target.platform),
                               ASCReleaseStatus.isEditable(freshVersion.attributes.appStoreState) else {
-                            throw BuildArtifactMetadata.ValidationError(message: "The captured App Store version changed or is no longer editable. The upload succeeded but was not attached.")
+                            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The captured App Store version changed or is no longer editable. The upload succeeded but was not attached."))
                         }
                         try await requireCurrentPipelineTarget(target)
                         try await target.service.patchBuildEncryption(buildId: build.id, usesNonExemptEncryption: metadata.usesNonExemptEncryption!)

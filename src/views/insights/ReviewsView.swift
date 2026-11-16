@@ -25,10 +25,10 @@ struct ReviewsView: View {
     private var reviewsContent: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Bewertungen")
+                Text(L10n.tr("Bewertungen"))
                     .font(BlitzLayout.pageTitle)
                 Spacer()
-                ASCTabRefreshButton(asc: asc, tab: .reviews, helpText: "Bewertungen aktualisieren")
+                ASCTabRefreshButton(asc: asc, tab: .reviews, helpText: L10n.tr("Bewertungen aktualisieren"))
             }
             .blitzToolbar()
 
@@ -37,14 +37,14 @@ struct ReviewsView: View {
             if asc.customerReviews.isEmpty {
                 if asc.isTabLoading(.reviews) {
                     ASCTabLoadingPlaceholder(
-                        title: "Bewertungen werden geladen",
-                        message: "Sternebewertungen und Rezensionen werden geladen."
+                        title: L10n.tr("Bewertungen werden geladen"),
+                        message: L10n.tr("Sternebewertungen und Rezensionen werden geladen.")
                     )
                 } else {
                     ContentUnavailableView(
-                        "Keine Bewertungen",
+                        L10n.tr("Keine Bewertungen"),
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text("Für diese App wurden keine Kundenbewertungen gefunden.")
+                        description: Text(L10n.tr("Für diese App wurden keine Kundenbewertungen gefunden."))
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -91,7 +91,7 @@ struct ReviewsView: View {
 
             HStack(alignment: .top, spacing: 12) {
                 if let nickname = review.attributes.reviewerNickname {
-                    Text("von \(nickname)")
+                    Text(L10n.tr("von \(nickname)"))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -99,7 +99,7 @@ struct ReviewsView: View {
                 Spacer()
                 if let appId = asc.app?.id {
                     Link(destination: URL(string: "https://appstoreconnect.apple.com/apps/\(appId)/appstore/ios/customerreviews")!) {
-                        Text("Antworten")
+                        Text(L10n.tr("Antworten"))
                             .font(.caption.weight(.medium))
                     }
                     .fixedSize()

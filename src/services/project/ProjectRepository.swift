@@ -85,7 +85,7 @@ struct ProjectRepository {
                            selectedBuildSettings: BuildSettings? = nil) throws -> BlitzProjectMetadata {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw ProjectSetupService.SetupError(message: "Wähle zum Importieren einen vorhandenen Projektordner aus.")
+            throw ProjectSetupService.SetupError(message: L10n.tr("Wähle zum Importieren einen vorhandenen Projektordner aus."))
         }
         var metadata = try readMetadataFromDirectory(directory) ?? BlitzProjectMetadata(
             name: directory.lastPathComponent, type: type, platform: platform, createdAt: Date()
@@ -233,7 +233,7 @@ enum ProjectOpenError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notABlitzProject:
-            return "Kein Blitz-Neo-Projekt. Der ausgewählte Ordner enthält keine Datei .blitz/project.json. Füge externe Projekte über „Importieren“ hinzu."
+            return L10n.tr("Kein Blitz-Neo-Projekt. Der ausgewählte Ordner enthält keine Datei .blitz/project.json. Füge externe Projekte über „Importieren“ hinzu.")
         }
     }
 }

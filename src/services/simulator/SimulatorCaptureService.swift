@@ -320,17 +320,17 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         var errorDescription: String? {
             switch self {
             case .simulatorWindowNotFound:
-                return "Das ausgewählte Simulatorfenster konnte nicht eindeutig gefunden werden. Öffne dieses Gerät in einem kompakten Device-Hub- oder Simulatorfenster und versuche es erneut."
+                return L10n.tr("Das ausgewählte Simulatorfenster konnte nicht eindeutig gefunden werden. Öffne dieses Gerät in einem kompakten Device-Hub- oder Simulatorfenster und versuche es erneut.")
             case .ambiguousSimulatorName:
-                return "Mehrere laufende Simulatoren haben denselben Namen. Gib dem Projektsimulator in Xcode einen eindeutigen Namen und versuche es erneut."
+                return L10n.tr("Mehrere laufende Simulatoren haben denselben Namen. Gib dem Projektsimulator in Xcode einen eindeutigen Namen und versuche es erneut.")
             case .screenRecordingDenied(let msg):
-                return "Die Bildschirmaufnahme ist nicht erlaubt. Erteile die Freigabe unter Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme und starte Blitz Neo neu. Falls macOS danach keinen Neustart von Blitz Neo anbietet, starte den Mac neu. (\(msg))"
+                return L10n.tr("Die Bildschirmaufnahme ist nicht erlaubt. Erteile die Freigabe unter Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme und starte Blitz Neo neu. Falls macOS danach keinen Neustart von Blitz Neo anbietet, starte den Mac neu. (\(msg))")
             case .captureStartFailed(let msg):
-                return "Die Bildschirmaufnahme konnte nicht gestartet werden: \(msg)"
+                return L10n.tr("Die Bildschirmaufnahme konnte nicht gestartet werden: \(msg)")
             case .accessibilityDenied:
-                return "Erlaube Blitz Neo unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen den Zugriff, damit es den Gerätebildschirm im Device Hub finden kann. Versuche es anschließend erneut."
+                return L10n.tr("Erlaube Blitz Neo unter Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen den Zugriff, damit es den Gerätebildschirm im Device Hub finden kann. Versuche es anschließend erneut.")
             case .deviceScreenNotFound:
-                return "Der Gerätebildschirm im Device Hub wurde nicht gefunden. Öffne das ausgewählte Gerät in einem kompakten Fenster und versuche es erneut."
+                return L10n.tr("Der Gerätebildschirm im Device Hub wurde nicht gefunden. Öffne das ausgewählte Gerät in einem kompakten Fenster und versuche es erneut.")
             }
         }
     }

@@ -23,7 +23,7 @@ struct DashboardRefreshStatusView: View {
                             Text(issueTitle).font(.callout.weight(.semibold))
                             Text(issueMessage ?? "").font(.callout).foregroundStyle(.secondary)
                             if isShowingSavedData {
-                                Text("Gespeicherte Daten werden angezeigt. Der aktuelle Status konnte nicht geprüft werden.")
+                                Text(L10n.tr("Gespeicherte Daten werden angezeigt. Der aktuelle Status konnte nicht geprüft werden."))
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -52,8 +52,8 @@ struct DashboardRefreshStatusView: View {
 
     @ViewBuilder
     private var issueActions: some View {
-        if needsSettings { Button("Einstellungen", action: openSettings) }
-        Button("Erneut versuchen", action: retry).disabled(isLoading)
+        if needsSettings { Button(L10n.tr("Einstellungen"), action: openSettings) }
+        Button(L10n.tr("Erneut versuchen"), action: retry).disabled(isLoading)
     }
 
 }

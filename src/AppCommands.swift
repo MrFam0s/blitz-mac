@@ -7,17 +7,17 @@ struct AppCommands: Commands {
     var body: some Commands {
         // Replace File menu contents with Project items
         CommandGroup(replacing: .newItem) {
-            Button("Neues Projekt …") {
+            Button(L10n.tr("Neues Projekt …")) {
                 appState.showNewProjectSheet = true
             }
             .keyboardShortcut("n", modifiers: .command)
 
-            Button("Projekt öffnen …") {
+            Button(L10n.tr("Projekt öffnen …")) {
                 openProjectFromMenu()
             }
             .keyboardShortcut("o", modifiers: .command)
 
-            Button("Projekt importieren …") {
+            Button(L10n.tr("Projekt importieren …")) {
                 appState.showImportProjectSheet = true
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
@@ -25,13 +25,13 @@ struct AppCommands: Commands {
             Divider()
 
             // Open Recent submenu
-            Menu("Zuletzt geöffnet") {
+            Menu(L10n.tr("Zuletzt geöffnet")) {
                 let sorted = appState.projectManager.projects.sorted {
                     ($0.metadata.lastOpenedAt ?? .distantPast) > ($1.metadata.lastOpenedAt ?? .distantPast)
                 }
 
                 if sorted.isEmpty {
-                    Text("Keine zuletzt geöffneten Projekte")
+                    Text(L10n.tr("Keine zuletzt geöffneten Projekte"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sorted) { project in
@@ -46,7 +46,7 @@ struct AppCommands: Commands {
 
                     Divider()
 
-                    Button("Liste leeren") {
+                    Button(L10n.tr("Liste leeren")) {
                         let storage = ProjectStorage()
                         storage.clearRecentProjects()
                         Task {
@@ -58,7 +58,7 @@ struct AppCommands: Commands {
 
             Divider()
 
-            Button("Projekt schließen") {
+            Button(L10n.tr("Projekt schließen")) {
                 appState.activeProjectId = nil
                 appState.activeTab = .dashboard
             }
@@ -84,7 +84,7 @@ struct AppCommands: Commands {
 
         // View > Terminal toggle
         CommandGroup(after: .sidebar) {
-            Button(appState.showTerminal ? "Terminal ausblenden" : "Terminal einblenden") {
+            Button(appState.showTerminal ? L10n.tr("Terminal ausblenden") : L10n.tr("Terminal einblenden")) {
                 appState.showTerminal.toggle()
                 if appState.showTerminal && appState.terminalManager.sessions.isEmpty {
                     appState.terminalManager.createSession(projectPath: appState.activeProject?.path)
@@ -95,7 +95,7 @@ struct AppCommands: Commands {
 
         // Build menu
         CommandMenu("Build") {
-            Button("Starten") {
+            Button(L10n.tr("Starten")) {
                 guard appState.activeProject != nil else { return }
                 Task {
                     await appState.startProjectSimulator()
@@ -104,7 +104,7 @@ struct AppCommands: Commands {
             .keyboardShortcut("r", modifiers: .command)
             .disabled(appState.activeProjectId == nil)
 
-            Button("Stoppen") {
+            Button(L10n.tr("Stoppen")) {
                 Task { await appState.stopProjectSimulator() }
             }
             .keyboardShortcut(".", modifiers: .command)
@@ -117,7 +117,7 @@ struct AppCommands: Commands {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Wähle einen Blitz-Neo-Projektordner aus."
+        panel.message = L10n.tr("Wähle einen Blitz-Neo-Projektordner aus.")
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
@@ -130,7 +130,7 @@ struct AppCommands: Commands {
             }
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Projekt konnte nicht geöffnet werden"
+            alert.messageText = L10n.tr("Projekt konnte nicht geöffnet werden")
             alert.informativeText = error.localizedDescription
             alert.alertStyle = .warning
             alert.runModal()

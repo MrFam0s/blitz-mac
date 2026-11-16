@@ -29,14 +29,14 @@ struct SidebarView: View {
                 }
 
                 // Release group
-                Section("Veröffentlichung") {
+                Section(L10n.tr("Veröffentlichung")) {
                     ForEach(AppTab.Group.release.tabs) { tab in
                         navigationRow(tab)
                     }
                 }
 
                 // Insights group
-                Section("Auswertung") {
+                Section(L10n.tr("Auswertung")) {
                     ForEach(AppTab.Group.insights.tabs) { tab in
                         navigationRow(tab)
                     }
@@ -62,7 +62,7 @@ struct SidebarView: View {
                 .scrollDisabled(true)
                 .frame(height: 42)
 
-                Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") · Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")")
+                Text(L10n.tr("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") · Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 20)

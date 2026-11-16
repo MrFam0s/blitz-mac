@@ -21,6 +21,7 @@ verification results and known limitations.
 - App overview, version drafts, listing text, screenshots, pricing and review data.
 - TestFlight builds, groups, beta information and feedback.
 - Cached views and layouts that adapt beside the integrated terminal.
+- German and English interface, following macOS or a selection in Settings.
 - Project-specific simulator selection and device tooling.
 - Coding assistants through the terminal and compatible MCP tools.
 - Separate draft creation and an explicitly started publication workflow.

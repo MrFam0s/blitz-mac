@@ -36,11 +36,11 @@ struct ASCWebSessionCLIImporter {
 
         var errorDescription: String? {
             switch self {
-            case .helperUnavailable: return "Der ASC-Helfer ist nicht verfügbar. Bitte Blitz Neo neu starten."
-            case .invalidSession: return "Apple hat noch keine eindeutige App-Store-Connect-Anmeldung mit Anbieter bestätigt."
-            case .rejected: return "ASC konnte die Apple-Anmeldung nicht bestätigen oder speichern. Bitte die Anmeldung abschließen und erneut prüfen."
-            case .timedOut: return "Die Prüfung der Apple-Anmeldung hat zu lange gedauert. Bitte erneut versuchen."
-            case .identityChanged: return "Apple-Konto oder Anbieter haben sich während der Sitzungsprüfung geändert. Bitte die Anmeldung erneut prüfen."
+            case .helperUnavailable: return L10n.tr("Der ASC-Helfer ist nicht verfügbar. Bitte Blitz Neo neu starten.")
+            case .invalidSession: return L10n.tr("Apple hat noch keine eindeutige App-Store-Connect-Anmeldung mit Anbieter bestätigt.")
+            case .rejected: return L10n.tr("ASC konnte die Apple-Anmeldung nicht bestätigen oder speichern. Bitte die Anmeldung abschließen und erneut prüfen.")
+            case .timedOut: return L10n.tr("Die Prüfung der Apple-Anmeldung hat zu lange gedauert. Bitte erneut versuchen.")
+            case .identityChanged: return L10n.tr("Apple-Konto oder Anbieter haben sich während der Sitzungsprüfung geändert. Bitte die Anmeldung erneut prüfen.")
             }
         }
     }

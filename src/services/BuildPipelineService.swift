@@ -40,12 +40,12 @@ struct BuildArtifactMetadata: Equatable, Sendable {
 
     static func fromPlist(_ data: Data, platform: ProjectPlatform) throws -> Self {
         guard let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
-            throw ValidationError(message: "The artifact's Info.plist is not a dictionary.")
+            throw ValidationError(message: L10n.tr("The artifact's Info.plist is not a dictionary."))
         }
         func requiredString(_ key: String) throws -> String {
             guard let value = plist[key] as? String, !value.isEmpty,
                   value == value.trimmingCharacters(in: .whitespacesAndNewlines) else {
-                throw ValidationError(message: "The artifact has no valid \(key). Rebuild before uploading.")
+                throw ValidationError(message: L10n.tr("The artifact has no valid \(key). Rebuild before uploading."))
             }
             return value
         }
@@ -54,22 +54,22 @@ struct BuildArtifactMetadata: Equatable, Sendable {
         let build = try requiredString("CFBundleVersion")
         guard numericComponents(version) != nil,
               let buildParts = numericComponents(build), buildParts.first != "0" else {
-            throw ValidationError(message: "Version '\(version)' and build '\(build)' must contain one to three numeric components; the build must start with a positive number.")
+            throw ValidationError(message: L10n.tr("Version '\(version)' and build '\(build)' must contain one to three numeric components; the build must start with a positive number."))
         }
         let declaredPlatforms = (plist["CFBundleSupportedPlatforms"] as? [String]) ?? []
         let platformName = plist["DTPlatformName"] as? String
         let allowedName = platform == .macOS ? "macosx" : "iphoneos"
         guard !declaredPlatforms.isEmpty || platformName?.isEmpty == false else {
-            throw ValidationError(message: "The artifact does not declare its platform (CFBundleSupportedPlatforms or DTPlatformName). Rebuild it with the intended Xcode destination before uploading.")
+            throw ValidationError(message: L10n.tr("The artifact does not declare its platform (CFBundleSupportedPlatforms or DTPlatformName). Rebuild it with the intended Xcode destination before uploading."))
         }
         if (!declaredPlatforms.isEmpty && declaredPlatforms.map({ $0.lowercased() }) != [allowedName])
             || (platformName != nil && platformName?.lowercased() != allowedName) {
-            throw ValidationError(message: "The artifact platform does not match \(platform.rawValue). Simulator builds cannot be uploaded.")
+            throw ValidationError(message: L10n.tr("The artifact platform does not match \(platform.rawValue). Simulator builds cannot be uploaded."))
         }
         var encryption: Bool?
         if let value = plist["ITSAppUsesNonExemptEncryption"] {
             guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
-                throw ValidationError(message: "ITSAppUsesNonExemptEncryption must be a Boolean describing the app's actual encryption use.")
+                throw ValidationError(message: L10n.tr("ITSAppUsesNonExemptEncryption must be a Boolean describing the app's actual encryption use."))
             }
             encryption = number.boolValue
         }
@@ -79,16 +79,16 @@ struct BuildArtifactMetadata: Equatable, Sendable {
 
     func validate(bundleID expectedBundleID: String, platform expectedPlatform: ProjectPlatform, version: String? = nil) throws {
         guard bundleID == expectedBundleID, platform == expectedPlatform else {
-            throw ValidationError(message: "Artifact identity mismatch: \(bundleID) (\(platform.rawValue)); expected \(expectedBundleID) (\(expectedPlatform.rawValue)).")
+            throw ValidationError(message: L10n.tr("Artifact identity mismatch: \(bundleID) (\(platform.rawValue)); expected \(expectedBundleID) (\(expectedPlatform.rawValue))."))
         }
         if let version, shortVersion != version {
-            throw ValidationError(message: "Artifact version \(shortVersion) does not match the selected App Store version \(version). Select the matching version or rebuild; no upload was started.")
+            throw ValidationError(message: L10n.tr("Artifact version \(shortVersion) does not match the selected App Store version \(version). Select the matching version or rebuild; no upload was started."))
         }
     }
 
     func validateExportMatchesArchive(_ archive: Self) throws {
         guard self == archive else {
-            throw ValidationError(message: "Export changed the archived app identity, version, build number or encryption declaration. Archive: \(archive.bundleID) \(archive.shortVersion) (\(archive.buildNumber)); export: \(bundleID) \(shortVersion) (\(buildNumber)). Rebuild before uploading.")
+            throw ValidationError(message: L10n.tr("Export changed the archived app identity, version, build number or encryption declaration. Archive: \(archive.bundleID) \(archive.shortVersion) (\(archive.buildNumber)); export: \(bundleID) \(shortVersion) (\(buildNumber)). Rebuild before uploading."))
         }
     }
 
@@ -113,7 +113,7 @@ struct BuildArtifactMetadata: Equatable, Sendable {
             guard data.count + chunk.count <= limit else {
                 process.terminate()
                 process.waitUntilExit()
-                throw ValidationError(message: "Artifact metadata exceeds the allowed size.")
+                throw ValidationError(message: L10n.tr("Artifact metadata exceeds the allowed size."))
             }
             data.append(chunk)
         }
@@ -121,7 +121,7 @@ struct BuildArtifactMetadata: Equatable, Sendable {
         guard process.terminationStatus == 0 else {
             let errorData = try Data(contentsOf: errorURL)
             let message = String(decoding: errorData.prefix(8192), as: UTF8.self)
-            throw ValidationError(message: "Cannot inspect artifact: \(URL(fileURLWithPath: executable).lastPathComponent) failed (\(process.terminationStatus)): \(message)")
+            throw ValidationError(message: L10n.tr("Cannot inspect artifact: \(URL(fileURLWithPath: executable).lastPathComponent) failed (\(process.terminationStatus)): \(message)"))
         }
         return data
     }
@@ -132,7 +132,7 @@ struct BuildArtifactMetadata: Equatable, Sendable {
             let expectedExtension = platform == .macOS ? "pkg" : "ipa"
             guard url.pathExtension.lowercased() == expectedExtension,
                   FileManager.default.fileExists(atPath: url.path) else {
-                throw ValidationError(message: "Provide an existing .\(expectedExtension) for the selected \(platform.rawValue) app.")
+                throw ValidationError(message: L10n.tr("Provide an existing .\(expectedExtension) for the selected \(platform.rawValue) app."))
             }
             if platform == .iOS {
                 let listing = try commandData("/usr/bin/unzip", ["-Z1", url.path])
@@ -142,7 +142,7 @@ struct BuildArtifactMetadata: Equatable, Sendable {
                     return parts.count == 3 && parts[0] == "Payload" && parts[1].hasSuffix(".app") && parts[2] == "Info.plist"
                 }
                 guard plistEntries.count == 1, let entry = plistEntries.first else {
-                    throw ValidationError(message: "The IPA must contain exactly one top-level application's Info.plist.")
+                    throw ValidationError(message: L10n.tr("The IPA must contain exactly one top-level application's Info.plist."))
                 }
                 return try fromPlist(commandData("/usr/bin/unzip", ["-p", url.path, entry]), platform: platform)
             }
@@ -152,12 +152,12 @@ struct BuildArtifactMetadata: Equatable, Sendable {
             let payloadPaths = String(decoding: try commandData("/usr/sbin/pkgutil", ["--payload-files", url.path]), as: UTF8.self)
             guard !payloadPaths.components(separatedBy: .newlines).contains(where: {
                 $0.hasPrefix("/") || $0.split(separator: "/").contains("..")
-            }) else { throw ValidationError(message: "The package contains unsafe payload paths.") }
+            }) else { throw ValidationError(message: L10n.tr("The package contains unsafe payload paths.")) }
             let expanded = root.appendingPathComponent("expanded")
             _ = try commandData("/usr/sbin/pkgutil", ["--expand-full", url.path, expanded.path])
             let apps = try topLevelApps(in: expanded)
             guard apps.count == 1, let app = apps.first else {
-                throw ValidationError(message: "The PKG must contain exactly one top-level application; found \(apps.count).")
+                throw ValidationError(message: L10n.tr("The PKG must contain exactly one top-level application; found \(apps.count)."))
             }
             return try readApp(app, root: expanded, platform: platform)
         }.value
@@ -165,7 +165,7 @@ struct BuildArtifactMetadata: Equatable, Sendable {
 
     private static func topLevelApps(in directory: URL) throws -> [URL] {
         guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isSymbolicLinkKey]) else {
-            throw ValidationError(message: "Cannot inspect expanded package.")
+            throw ValidationError(message: L10n.tr("Cannot inspect expanded package."))
         }
         var apps: [URL] = []
         for case let url as URL in enumerator {
@@ -184,17 +184,17 @@ struct BuildArtifactMetadata: Equatable, Sendable {
     private static func readApp(_ app: URL, root: URL, platform: ProjectPlatform) throws -> Self {
         let info = app.appendingPathComponent(platform == .macOS ? "Contents/Info.plist" : "Info.plist").resolvingSymlinksInPath()
         guard info.path.hasPrefix(root.resolvingSymlinksInPath().path + "/") else {
-            throw ValidationError(message: "Application metadata points outside its artifact.")
+            throw ValidationError(message: L10n.tr("Application metadata points outside its artifact."))
         }
         let size = try info.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        guard size <= 8 * 1024 * 1024 else { throw ValidationError(message: "Artifact metadata exceeds the allowed size.") }
+        guard size <= 8 * 1024 * 1024 else { throw ValidationError(message: L10n.tr("Artifact metadata exceeds the allowed size.")) }
         return try fromPlist(Data(contentsOf: info), platform: platform)
     }
 
     static func readArchive(at archiveURL: URL, platform: ProjectPlatform) throws -> Self {
         let apps = try FileManager.default.contentsOfDirectory(at: archiveURL.appendingPathComponent("Products/Applications"), includingPropertiesForKeys: nil).filter { $0.pathExtension == "app" }
         guard apps.count == 1, let app = apps.first else {
-            throw ValidationError(message: "The archive must contain exactly one application.")
+            throw ValidationError(message: L10n.tr("The archive must contain exactly one application."))
         }
         return try readApp(app, root: archiveURL, platform: platform)
     }
@@ -326,7 +326,7 @@ actor BuildPipelineService {
                                       root: URL = BlitzPaths.signing) throws -> URL {
         guard AppCreationIdentity.validBundleID(bundleId), !accountKey.isEmpty,
               accountKey == accountKey.trimmingCharacters(in: .whitespacesAndNewlines) else {
-            throw BuildArtifactMetadata.ValidationError(message: "An exact Bundle ID and account are required for signing.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("An exact Bundle ID and account are required for signing."))
         }
         let identity = try JSONEncoder().encode([bundleId, platform.ascPlatformValue, accountKey])
         let scope = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
@@ -382,7 +382,7 @@ actor BuildPipelineService {
         let signingDirectory = try Self.signingCacheDirectory(bundleId: bundleId, platform: platform, accountKey: accountKey)
         var state = loadSigningState(directory: signingDirectory)
         if let teamId, let cachedTeam = state.teamId, teamId != cachedTeam {
-            throw BuildArtifactMetadata.ValidationError(message: "The selected team differs from this target's cached signing team. Verify the account/team before signing.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The selected team differs from this target's cached signing team. Verify the account/team before signing."))
         }
         var log: [String] = []
 
@@ -534,7 +534,7 @@ actor BuildPipelineService {
                     profileType: profileType
                 )
             } catch let ascErr as ASCError where ascErr.isConflict {
-                throw BuildArtifactMetadata.ValidationError(message: "A provisioning profile already exists for this exact signing target. Verify and reconcile '\(profileName)' before retrying; no existing profiles were deleted.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("A provisioning profile already exists for this exact signing target. Verify and reconcile '\(profileName)' before retrying; no existing profiles were deleted."))
             }
             emit("Created profile: \(profile.attributes.name)")
 
@@ -727,7 +727,7 @@ actor BuildPipelineService {
             : ["generic/platform=macOS", "generic/platform=macOS,variant=Mac Catalyst"]
         let destination = configured ?? (platform == .iOS ? "generic/platform=iOS" : "generic/platform=macOS")
         guard allowed.contains(destination) else {
-            throw BuildArtifactMetadata.ValidationError(message: "The configured archive destination does not match \(platform.rawValue). Select its generic device, native Mac or Mac Catalyst destination; simulator/device IDs are not release destinations.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("The configured archive destination does not match \(platform.rawValue). Select its generic device, native Mac or Mac Catalyst destination; simulator/device IDs are not release destinations."))
         }
         return destination
     }
@@ -799,7 +799,7 @@ actor BuildPipelineService {
         }
 
         guard workspaces.count <= 1 else {
-            throw XcodeProjectIdentityEditor.IdentityError(message: "Multiple workspaces were found. Open the intended workspace directory before archiving.")
+            throw XcodeProjectIdentityEditor.IdentityError(message: L10n.tr("Multiple workspaces were found. Open the intended workspace directory before archiving."))
         }
         let useWorkspace = !workspaces.isEmpty
         let buildTarget = useWorkspace
@@ -834,7 +834,7 @@ actor BuildPipelineService {
         // Load signing state so we can use manual distribution signing in both archive + export
         let signingState = loadSigningState(directory: signingDirectory)
         guard signingState.teamId == teamId else {
-            throw BuildArtifactMetadata.ValidationError(message: "No verified signing state exists for this exact account, platform, Bundle ID and team. Run app_store_setup_signing for this target first.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("No verified signing state exists for this exact account, platform, Bundle ID and team. Run app_store_setup_signing for this target first."))
         }
         let profileRef = signingState.profileName ?? signingState.profileUUID ?? ""
 
@@ -1046,10 +1046,10 @@ actor BuildPipelineService {
     ) throws -> [String] {
         let isMacArtifact = platform == .macOS
         guard URL(fileURLWithPath: artifactPath).pathExtension.lowercased() == (isMacArtifact ? "pkg" : "ipa") else {
-            throw BuildArtifactMetadata.ValidationError(message: "Artifact extension does not match the upload platform.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Artifact extension does not match the upload platform."))
         }
         if isMacArtifact && metadata == nil {
-            throw BuildArtifactMetadata.ValidationError(message: "PKG upload requires its verified version and build number.")
+            throw BuildArtifactMetadata.ValidationError(message: L10n.tr("PKG upload requires its verified version and build number."))
         }
         var args = ["builds", "upload", "--app", appId]
         if isMacArtifact {
@@ -1059,7 +1059,7 @@ actor BuildPipelineService {
         }
         if let metadata {
             guard metadata.platform == platform else {
-                throw BuildArtifactMetadata.ValidationError(message: "Artifact metadata does not match the upload platform.")
+                throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Artifact metadata does not match the upload platform."))
             }
             args += ["--version", metadata.shortVersion, "--build-number", metadata.buildNumber]
         }
@@ -1178,6 +1178,6 @@ actor BuildPipelineService {
             )
         }
 
-        throw BuildArtifactMetadata.ValidationError(message: "Upload requires a captured App Store app and authenticated ASC service. Reopen the app before retrying.")
+        throw BuildArtifactMetadata.ValidationError(message: L10n.tr("Upload requires a captured App Store app and authenticated ASC service. Reopen the app before retrying."))
     }
 }

@@ -14,11 +14,11 @@ enum TouchOverlaySkin: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .laser: "Laser"
-        case .ripple: "Wellen"
-        case .aurora: "Polarlicht"
-        case .spark: "Funken"
-        case .ghost: "Geist"
+        case .laser: L10n.tr("Laser")
+        case .ripple: L10n.tr("Wellen")
+        case .aurora: L10n.tr("Polarlicht")
+        case .spark: L10n.tr("Funken")
+        case .ghost: L10n.tr("Geist")
         }
     }
 

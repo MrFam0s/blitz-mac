@@ -351,7 +351,7 @@ struct ContentView: View {
                 } label: {
                     Label("Terminal", systemImage: "terminal")
                 }
-                .help("Terminal mit KI-Agent öffnen")
+                .help(L10n.tr("Terminal mit KI-Agent öffnen"))
             }
         }
     }
@@ -450,7 +450,7 @@ struct DetailView: View {
             ProgressView()
                 .controlSize(.large)
 
-            Text("Projekt wird eingerichtet")
+            Text(L10n.tr("Projekt wird eingerichtet"))
                 .font(.title3.weight(.medium))
 
             Text(setup.stepMessage)
@@ -458,7 +458,7 @@ struct DetailView: View {
                 .foregroundStyle(.secondary)
 
             if setup.errorMessage != nil {
-                Button("Erneut versuchen") {
+                Button(L10n.tr("Erneut versuchen")) {
                     guard let project = appState.activeProject else { return }
                     Task {
                         await setup.setup(

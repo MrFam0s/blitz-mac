@@ -7,7 +7,7 @@ struct ASCVersionPickerBar<Content: View>: View {
     var onPublishUpdate: (() -> Void)? = nil
     var appStoreURL: URL? = nil
     var refreshTab: AppTab? = nil
-    var refreshHelpText: String = "Diese Rubrik aktualisieren"
+    var refreshHelpText: String = L10n.tr("Diese Rubrik aktualisieren")
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -43,8 +43,8 @@ struct ASCVersionPickerBar<Content: View>: View {
                             .font(.system(size: 12, weight: .medium))
                             .frame(width: 20, height: 24)
                     }
-                    .accessibilityLabel("In App Store Connect öffnen")
-                    .help("In App Store Connect öffnen")
+                    .accessibilityLabel(L10n.tr("In App Store Connect öffnen"))
+                    .help(L10n.tr("In App Store Connect öffnen"))
                 }
                 if let refreshTab {
                     ASCTabRefreshButton(asc: asc, tab: refreshTab, helpText: refreshHelpText)
@@ -74,14 +74,14 @@ struct ASCVersionPickerBar<Content: View>: View {
 
     @ViewBuilder private var releaseActions: some View {
         if let onCreateDraft {
-            Button("Versionsentwurf anlegen", action: onCreateDraft)
+            Button(L10n.tr("Versionsentwurf anlegen"), action: onCreateDraft)
                 .buttonStyle(.bordered)
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.center)
                 .disabled(!asc.canCreateVersion || asc.newVersionCreationBlocker != nil)
                 .help(asc.newVersionCreationBlocker == nil
-                      ? "Entwurf zum Bearbeiten von Texten und Medien anlegen. Es wird nichts eingereicht."
-                      : "Es gibt bereits eine unveröffentlichte Version. Wähle sie zum Bearbeiten aus.")
+                      ? L10n.tr("Entwurf zum Bearbeiten von Texten und Medien anlegen. Es wird nichts eingereicht.")
+                      : L10n.tr("Es gibt bereits eine unveröffentlichte Version. Wähle sie zum Bearbeiten aus."))
         }
         if let onPublishUpdate {
             if asc.canStartReleaseAutomation {
@@ -96,10 +96,10 @@ struct ASCVersionPickerBar<Content: View>: View {
     }
 
     private func publishUpdateButton(action: @escaping () -> Void) -> some View {
-        Button("Update automatisch veröffentlichen", action: action)
+        Button(L10n.tr("Update automatisch veröffentlichen"), action: action)
             .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.center)
-            .help("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden.")
+            .help(L10n.tr("Öffnet den Ablauf für Build, Changelog und Einreichung. Ein vorhandener bearbeitbarer Entwurf kann weiterverwendet werden."))
     }
 
 }
@@ -112,7 +112,7 @@ extension ASCVersionPickerBar where Content == EmptyView {
         onPublishUpdate: (() -> Void)? = nil,
         appStoreURL: URL? = nil,
         refreshTab: AppTab? = nil,
-        refreshHelpText: String = "Diese Rubrik aktualisieren"
+        refreshHelpText: String = L10n.tr("Diese Rubrik aktualisieren")
     ) {
         self.asc = asc
         self.selection = selection

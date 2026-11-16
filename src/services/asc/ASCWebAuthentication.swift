@@ -10,13 +10,13 @@ enum ASCWebAuthenticationError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAuthenticated:
-            return "Apple hat die Anmeldung noch nicht bestätigt. Bitte schließe die Anmeldung in diesem Fenster ab."
+            return L10n.tr("Apple hat die Anmeldung noch nicht bestätigt. Bitte schließe die Anmeldung in diesem Fenster ab.")
         case .invalidResponse:
-            return "Apple hat keine gültige App-Store-Connect-Sitzung zurückgegeben. Die Anmeldung wurde noch nicht übernommen."
+            return L10n.tr("Apple hat keine gültige App-Store-Connect-Sitzung zurückgegeben. Die Anmeldung wurde noch nicht übernommen.")
         case .transport:
-            return "Die Apple-Anmeldung konnte nicht geprüft werden. Bitte prüfe die Verbindung und versuche es erneut."
+            return L10n.tr("Die Apple-Anmeldung konnte nicht geprüft werden. Bitte prüfe die Verbindung und versuche es erneut.")
         case .accountChanged:
-            return "Das Apple-Konto hat sich während der Prüfung geändert. Bitte melde dich erneut an."
+            return L10n.tr("Das Apple-Konto hat sich während der Prüfung geändert. Bitte melde dich erneut an.")
         }
     }
 }

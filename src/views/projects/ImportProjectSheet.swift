@@ -24,18 +24,18 @@ struct ImportProjectSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Projekt importieren", subtitle: "Verknüpfe einen vorhandenen Projektordner mit Blitz Neo und prüfe das gewünschte App-Ziel.")
+            BlitzSetupHeader(L10n.tr("Projekt importieren"), subtitle: L10n.tr("Verknüpfe einen vorhandenen Projektordner mit Blitz Neo und prüfe das gewünschte App-Ziel."))
 
             Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                    BlitzSetupField("Projektordner") {
+                    BlitzSetupField(L10n.tr("Projektordner")) {
                         HStack(spacing: BlitzLayout.fieldSpacing) {
-                            TextField("/Pfad/zum/Projekt", text: $projectPath)
-                                .accessibilityLabel("Projektordner")
+                            TextField(L10n.tr("/Pfad/zum/Projekt"), text: $projectPath)
+                                .accessibilityLabel(L10n.tr("Projektordner"))
                                 .onSubmit { inspectProjectPath() }
-                            Button("Auswählen …") {
+                            Button(L10n.tr("Auswählen …")) {
                                 let panel = NSOpenPanel()
                                 panel.canChooseDirectories = true
                                 panel.canChooseFiles = false
@@ -45,12 +45,12 @@ struct ImportProjectSheet: View {
                                     inspectProjectPath()
                                 }
                             }
-                            .accessibilityLabel("Projektordner auswählen")
+                            .accessibilityLabel(L10n.tr("Projektordner auswählen"))
                         }
                         HStack(spacing: BlitzLayout.fieldSpacing) {
-                            Button("Ordner prüfen") { inspectProjectPath() }
+                            Button(L10n.tr("Ordner prüfen")) { inspectProjectPath() }
                                 .disabled(normalizedProjectPath.isEmpty || isImporting)
-                            Text(hasInspectedProject ? "Ordner geprüft." : "Die Erkennung startet erst beim Prüfen oder Auswählen des Ordners.")
+                            Text(hasInspectedProject ? L10n.tr("Ordner geprüft.") : L10n.tr("Die Erkennung startet erst beim Prüfen oder Auswählen des Ordners."))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -58,37 +58,37 @@ struct ImportProjectSheet: View {
                     }
 
                     if !savedTargets.isEmpty {
-                        Toggle("Weiteres Veröffentlichungsziel hinzufügen", isOn: $addingReleaseTarget)
+                        Toggle(L10n.tr("Weiteres Veröffentlichungsziel hinzufügen"), isOn: $addingReleaseTarget)
                         if !addingReleaseTarget {
-                            BlitzSetupField("Gespeichertes Ziel") {
-                                Picker("Gespeichertes Ziel", selection: $selectedReleaseTargetId) {
-                                    ForEach(savedTargets) { Text("\($0.displayName) · \($0.bundleIdentifier ?? "ohne Bundle-ID")").tag($0.id) }
+                            BlitzSetupField(L10n.tr("Gespeichertes Ziel")) {
+                                Picker(L10n.tr("Gespeichertes Ziel"), selection: $selectedReleaseTargetId) {
+                                    ForEach(savedTargets) { Text("\($0.displayName) · \($0.bundleIdentifier ?? L10n.tr("ohne Bundle-ID"))").tag($0.id) }
                                 }
-                                .accessibilityLabel("Gespeichertes Ziel")
+                                .accessibilityLabel(L10n.tr("Gespeichertes Ziel"))
                                 .onChange(of: selectedReleaseTargetId) { _, id in applySavedTarget(id) }
                             }
                         }
                     }
                     if !discoveredTargets.isEmpty {
-                        BlitzSetupField("Xcode-App-Ziel") {
-                            Picker("Xcode-App-Ziel", selection: $selectedDiscoveredTarget) {
-                                Text("Manuell auswählen").tag("")
+                        BlitzSetupField(L10n.tr("Xcode-App-Ziel")) {
+                            Picker(L10n.tr("Xcode-App-Ziel"), selection: $selectedDiscoveredTarget) {
+                                Text(L10n.tr("Manuell auswählen")).tag("")
                                 ForEach(discoveredTargets) { Text($0.label).tag($0.id) }
                             }
-                            .accessibilityLabel("Xcode-App-Ziel")
+                            .accessibilityLabel(L10n.tr("Xcode-App-Ziel"))
                             .onChange(of: selectedDiscoveredTarget) { _, id in applyDiscoveredTarget(id) }
                         }
                     }
 
                     Divider()
 
-                    BlitzSetupField("Plattform") {
-                        Picker("Plattform", selection: $platform) {
+                    BlitzSetupField(L10n.tr("Plattform")) {
+                        Picker(L10n.tr("Plattform"), selection: $platform) {
                             Text("iOS").tag(ProjectPlatform.iOS)
                             Text("macOS").tag(ProjectPlatform.macOS)
                         }
                         .pickerStyle(.segmented)
-                        .accessibilityLabel("Plattform")
+                        .accessibilityLabel(L10n.tr("Plattform"))
                         .onChange(of: platform) { _, newPlatform in
                             if newPlatform == .macOS {
                                 projectType = .swift
@@ -99,8 +99,8 @@ struct ImportProjectSheet: View {
                             }
                         }
                     }
-                    BlitzSetupField("Projekttyp") {
-                        Picker("Projekttyp", selection: $projectType) {
+                    BlitzSetupField(L10n.tr("Projekttyp")) {
+                        Picker(L10n.tr("Projekttyp"), selection: $projectType) {
                             if platform == .iOS {
                                 Text("React Native").tag(ProjectType.reactNative)
                                 Text("Swift").tag(ProjectType.swift)
@@ -109,16 +109,16 @@ struct ImportProjectSheet: View {
                                 Text("Swift").tag(ProjectType.swift)
                             }
                         }
-                        .accessibilityLabel("Projekttyp")
+                        .accessibilityLabel(L10n.tr("Projekttyp"))
                     }
                     if projectType == .swift {
-                        BlitzSetupField("Xcode-Scheme") {
-                            TextField("z. B. MeineApp", text: $scheme)
-                                .accessibilityLabel("Xcode-Scheme")
+                        BlitzSetupField(L10n.tr("Xcode-Scheme")) {
+                            TextField(L10n.tr("z. B. MeineApp"), text: $scheme)
+                                .accessibilityLabel(L10n.tr("Xcode-Scheme"))
                         }
-                        BlitzSetupField("Konfiguration") {
+                        BlitzSetupField(L10n.tr("Konfiguration")) {
                             TextField("Release", text: $configuration)
-                                .accessibilityLabel("Konfiguration")
+                                .accessibilityLabel(L10n.tr("Konfiguration"))
                         }
                     }
 
@@ -148,11 +148,11 @@ struct ImportProjectSheet: View {
             Divider()
 
             HStack(spacing: BlitzLayout.fieldSpacing) {
-                Button("Abbrechen") { isPresented = false }
+                Button(L10n.tr("Abbrechen")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 if isImporting { ProgressView().controlSize(.small) }
-                Button("Projekt importieren") {
+                Button(L10n.tr("Projekt importieren")) {
                     Task { await importProject() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -184,12 +184,12 @@ struct ImportProjectSheet: View {
         resetDetectedProjectState()
         guard !path.isEmpty else { return }
         guard path.hasPrefix("/"), path != "/" else {
-            errorMessage = "Wähle den konkreten Projektordner oder gib seinen vollständigen Pfad ein."
+            errorMessage = L10n.tr("Wähle den konkreten Projektordner oder gib seinen vollständigen Pfad ein.")
             return
         }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            errorMessage = "Der Projektordner wurde nicht gefunden. Prüfe den Pfad."
+            errorMessage = L10n.tr("Der Projektordner wurde nicht gefunden. Prüfe den Pfad.")
             return
         }
         refreshDetectedProjectState(for: URL(fileURLWithPath: path, isDirectory: true))
@@ -208,25 +208,25 @@ struct ImportProjectSheet: View {
     @ViewBuilder
     private var bundleIDField: some View {
         if selectedXcodeTarget?.bundleIdentifier == nil && selectedXcodeTarget != nil {
-            BlitzSetupField("Bundle-ID", hint: "Dieses Ziel verwendet eine bedingte oder abgeleitete Kennung. Übernimm die genaue Release-Bundle-ID aus seinen Xcode-Build-Einstellungen.") {
+            BlitzSetupField(L10n.tr("Bundle-ID"), hint: L10n.tr("Dieses Ziel verwendet eine bedingte oder abgeleitete Kennung. Übernimm die genaue Release-Bundle-ID aus seinen Xcode-Build-Einstellungen.")) {
                 TextField("org.beispiel.MeineApp", text: $selectedBundleId)
                     .font(.system(.callout, design: .monospaced))
-                    .accessibilityLabel("Release-Bundle-ID")
+                    .accessibilityLabel(L10n.tr("Release-Bundle-ID"))
             }
         } else if bundleIDOptions.count > 1 {
-            BlitzSetupField("Bundle-ID", hint: "Mehrere Kennungen gefunden. Wähle die Kennung des gewünschten App-Ziels für App Store Connect.") {
-                Picker("Bundle-ID", selection: $selectedBundleId) {
-                    if selectedBundleId.isEmpty { Text("App-Kennung auswählen").tag("") }
+            BlitzSetupField(L10n.tr("Bundle-ID"), hint: L10n.tr("Mehrere Kennungen gefunden. Wähle die Kennung des gewünschten App-Ziels für App Store Connect.")) {
+                Picker(L10n.tr("Bundle-ID"), selection: $selectedBundleId) {
+                    if selectedBundleId.isEmpty { Text(L10n.tr("App-Kennung auswählen")).tag("") }
                     ForEach(bundleIDOptions, id: \.self) { bundleId in
                         Text(bundleId).tag(bundleId)
                     }
                 }
-                .accessibilityLabel("Bundle-ID")
+                .accessibilityLabel(L10n.tr("Bundle-ID"))
             }
         } else if let bundleId = bundleIDOptions.first {
-            BlitzSetupField("Bundle-ID", hint: savedTargets.contains(where: { $0.bundleIdentifier == bundleId })
-                ? "Für dieses Projekt gespeichert. Die Zuordnung lässt sich später ändern."
-                : "Im Projekt erkannt. Die Zuordnung lässt sich später ändern.") {
+            BlitzSetupField(L10n.tr("Bundle-ID"), hint: savedTargets.contains(where: { $0.bundleIdentifier == bundleId })
+                ? L10n.tr("Für dieses Projekt gespeichert. Die Zuordnung lässt sich später ändern.")
+                : L10n.tr("Im Projekt erkannt. Die Zuordnung lässt sich später ändern.")) {
                 Text(bundleId)
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
@@ -236,8 +236,8 @@ struct ImportProjectSheet: View {
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             }
         } else if !projectPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            BlitzSetupField("Bundle-ID") {
-                Text("Keine Kennung erkannt. Du kannst das Projekt importieren und die Zuordnung anschließend einrichten.")
+            BlitzSetupField(L10n.tr("Bundle-ID")) {
+                Text(L10n.tr("Keine Kennung erkannt. Du kannst das Projekt importieren und die Zuordnung anschließend einrichten."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -342,7 +342,7 @@ struct ImportProjectSheet: View {
             inspectedProjectPath = url.standardizedFileURL.path
         } catch {
             resetDetectedProjectState()
-            errorMessage = "Die vorhandenen Projektdaten konnten nicht gelesen werden und werden nicht überschrieben: \(error.localizedDescription)"
+            errorMessage = L10n.tr("Die vorhandenen Projektdaten konnten nicht gelesen werden und werden nicht überschrieben: \(error.localizedDescription)")
         }
     }
 
@@ -366,7 +366,7 @@ struct ImportProjectSheet: View {
 
     private func importProject() async {
         guard hasInspectedProject else {
-            errorMessage = "Prüfe den aktuellen Projektordner vor dem Import."
+            errorMessage = L10n.tr("Prüfe den aktuellen Projektordner vor dem Import.")
             return
         }
         isImporting = true
@@ -384,13 +384,13 @@ struct ImportProjectSheet: View {
                 case .swift: detectedName = "Swift"
                 case .flutter: detectedName = "Flutter"
                 }
-                errorMessage = "Dieses Projekt verwendet offenbar \(detectedName). Wähle den passenden Projekttyp."
+                errorMessage = L10n.tr("Dieses Projekt verwendet offenbar \(detectedName). Wähle den passenden Projekttyp.")
                 return
             }
         }
 
         if requiresBundleIdSelection {
-            errorMessage = "Wähle vor dem Import die Bundle-ID des gewünschten App-Ziels."
+            errorMessage = L10n.tr("Wähle vor dem Import die Bundle-ID des gewünschten App-Ziels.")
             return
         }
 

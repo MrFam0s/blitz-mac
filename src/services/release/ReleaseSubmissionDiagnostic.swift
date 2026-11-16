@@ -76,8 +76,8 @@ struct ReleaseSubmissionDiagnostic: Codable, Equatable, Sendable {
     }
 
     var message: String {
-        let step = phase?.rawValue ?? "unbekannt"
+        let step = phase?.rawValue ?? L10n.tr("unbekannt")
         let response = apple.map { " HTTP \($0.httpStatus)" + ($0.codes.isEmpty ? "" : " (\($0.codes.joined(separator: ", ")))") } ?? ""
-        return "Release-Schritt \(step): \(category).\(response) Der Auftrag bleibt gegen Wiederholung gesperrt; den gespeicherten Status prüfen."
+        return L10n.tr("Release-Schritt \(step): \(category).\(response) Der Auftrag bleibt gegen Wiederholung gesperrt; den gespeicherten Status prüfen.")
     }
 }

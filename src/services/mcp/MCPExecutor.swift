@@ -328,13 +328,13 @@ actor MCPExecutor {
             NSApp.activate(ignoringOtherApps: true)
 
             let alert = NSAlert()
-            alert.messageText = "Anfrage des KI-Agenten"
-            alert.informativeText = "Werkzeug „\(request.toolName)“ ausführen?"
+            alert.messageText = L10n.tr("Anfrage des KI-Agenten")
+            alert.informativeText = L10n.tr("Werkzeug „\(request.toolName)“ ausführen?")
             alert.alertStyle = .informational
-            alert.addButton(withTitle: "Erlauben")
-            alert.addButton(withTitle: "Ablehnen")
+            alert.addButton(withTitle: L10n.tr("Erlauben"))
+            alert.addButton(withTitle: L10n.tr("Ablehnen"))
 
-            let checkbox = NSButton(checkboxWithTitle: "Alle Blitz-Neo-Aktionen künftig automatisch erlauben", target: nil, action: nil)
+            let checkbox = NSButton(checkboxWithTitle: L10n.tr("Alle Blitz-Neo-Aktionen künftig automatisch erlauben"), target: nil, action: nil)
             checkbox.state = .off
             alert.accessoryView = checkbox
 
@@ -610,7 +610,7 @@ actor MCPExecutor {
                     appID: app.id, bundleID: bundleID, platform: selected.platform.ascPlatformValue, accountKey: accountKey)
                 let teamID = metadata.teamId ?? ""
                 guard !needsTeamId || !teamID.isEmpty else {
-                    throw BuildArtifactMetadata.ValidationError(message: "No team ID is set. Run app_store_setup_signing first.")
+                    throw BuildArtifactMetadata.ValidationError(message: L10n.tr("No team ID is set. Run app_store_setup_signing first."))
                 }
                 return BuildContext(project: project, bundleId: bundleID, teamId: teamID, accountKey: accountKey, service: service)
             }

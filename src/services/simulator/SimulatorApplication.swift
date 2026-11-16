@@ -45,9 +45,9 @@ struct SimulatorApplication: Equatable {
         var errorDescription: String? {
             switch self {
             case .viewerUnavailable:
-                "Device Hub or Simulator could not be found in the selected Xcode. Check Xcode's command-line tools selection."
+                L10n.tr("Device Hub or Simulator could not be found in the selected Xcode. Check Xcode's command-line tools selection.")
             case .invalidDevice:
-                "The selected simulator has an invalid identifier. Refresh the devices and choose it again."
+                L10n.tr("The selected simulator has an invalid identifier. Refresh the devices and choose it again.")
             }
         }
     }

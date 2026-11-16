@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var showSkipPermsDetail = false
     @State private var showAskAIDetail = false
     @State private var terminalResetWarning: String?
+    @State private var interfaceLanguage = AppLanguage.stored()
 
     private enum SettingsSection: String, CaseIterable, Identifiable {
         case general = "Allgemein"
@@ -20,16 +21,24 @@ struct SettingsView: View {
         case maintenance = "Wartung"
 
         var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .general: return L10n.tr("Allgemein")
+            case .integrations: return L10n.tr("Integrationen")
+            case .permissions: return L10n.tr("Freigaben")
+            case .maintenance: return L10n.tr("Wartung")
+            }
+        }
     }
 
     private let gateableCategories: [(ApprovalRequest.ToolCategory, String)] = [
-        (.ascFormMutation, "Store-Texte und Metadaten ändern"),
-        (.ascScreenshotMutation, "Screenshots hochladen"),
-        (.ascSubmitMutation, "Zur App-Prüfung einreichen"),
-        (.buildPipeline, "Builds ausführen"),
-        (.projectMutation, "Projekte ändern"),
-        (.settingsMutation, "Einstellungen ändern"),
-        (.simulatorControl, "Simulator steuern"),
+        (.ascFormMutation, L10n.tr("Store-Texte und Metadaten ändern")),
+        (.ascScreenshotMutation, L10n.tr("Screenshots hochladen")),
+        (.ascSubmitMutation, L10n.tr("Zur App-Prüfung einreichen")),
+        (.buildPipeline, L10n.tr("Builds ausführen")),
+        (.projectMutation, L10n.tr("Projekte ändern")),
+        (.settingsMutation, L10n.tr("Einstellungen ändern")),
+        (.simulatorControl, L10n.tr("Simulator steuern")),
     ]
 
     private var configuredTerminal: TerminalApp {
@@ -46,14 +55,14 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            Text("Einstellungen")
+            Text(L10n.tr("Einstellungen"))
                 .font(BlitzLayout.pageTitle)
             ViewThatFits(in: .horizontal) {
                 sectionPicker
                     .pickerStyle(.segmented)
                     .fixedSize(horizontal: true, vertical: false)
                 HStack {
-                    Text("Bereich")
+                    Text(L10n.tr("Bereich"))
                     Spacer(minLength: 8)
                     sectionPicker
                         .pickerStyle(.menu)
@@ -100,9 +109,9 @@ struct SettingsView: View {
     }
 
     private var sectionPicker: some View {
-        Picker("Bereich", selection: $selectedSection) {
+        Picker(L10n.tr("Bereich"), selection: $selectedSection) {
             ForEach(SettingsSection.allCases) { section in
-                Text(section.rawValue).tag(section)
+                Text(section.label).tag(section)
             }
         }
         .labelsHidden()
@@ -123,8 +132,21 @@ struct SettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var generalSection: some View {
-        Section("Terminal & KI-Agent") {
+        Section(L10n.tr("Sprache")) {
+            Picker(L10n.tr("Oberflächensprache"), selection: $interfaceLanguage) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.label).tag(language)
+                }
+            }
+            .onChange(of: interfaceLanguage) { _, language in language.save() }
+            Text(L10n.tr("Automatisch folgt der bevorzugten macOS-Sprache. Änderungen gelten ab dem nächsten Start von Blitz Neo. App-Store-Texte und Terminal-Inhalte bleiben unverändert."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        Section(L10n.tr("Terminal & KI-Agent")) {
             // Terminal picker
             HStack {
                 Text("Terminal")
@@ -146,7 +168,7 @@ struct SettingsView: View {
 
                     Divider()
 
-                    Button("Andere App auswählen …") {
+                    Button(L10n.tr("Andere App auswählen …")) {
                         showTerminalPicker = true
                     }
                 } label: {
@@ -177,7 +199,7 @@ struct SettingsView: View {
 
             // Agent CLI picker
             HStack {
-                Text("KI-Agent")
+                Text(L10n.tr("KI-Agent"))
                 Spacer()
                 Menu {
                     ForEach(AIAgent.allCases, id: \.rawValue) { agent in
@@ -206,23 +228,23 @@ struct SettingsView: View {
             }
 
             if currentTerminal.isBuiltIn {
-                settingValue("Terminalschrift", value: TerminalFont.resolved.displayName ?? TerminalFont.resolved.fontName)
+                settingValue(L10n.tr("Terminalschrift"), value: TerminalFont.resolved.displayName ?? TerminalFont.resolved.fontName)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("Installierte Nerd Fonts werden für Shell-Symbole automatisch bevorzugt.")
+                Text(L10n.tr("Installierte Nerd Fonts werden für Shell-Symbole automatisch bevorzugt."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if currentTerminal.isBuiltIn && currentAgent == .codex {
-                settingValue("Codex-Sitzung", value: "Letzte Sitzung im Projekt fortsetzen")
+                settingValue(L10n.tr("Codex-Sitzung"), value: L10n.tr("Letzte Sitzung im Projekt fortsetzen"))
                     .font(.callout)
-                Text("Ohne frühere Sitzung startet eine neue Unterhaltung. Beim Öffnen wird kein Auftrag gesendet; mit /new beginnst du eine neue Unterhaltung.")
+                Text(L10n.tr("Ohne frühere Sitzung startet eine neue Unterhaltung. Beim Öffnen wird kein Auftrag gesendet; mit /new beginnst du eine neue Unterhaltung."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Beim Start einen Auftrag zum aktuellen Tab senden", isOn: Binding(
+                    Toggle(L10n.tr("Beim Start einen Auftrag zum aktuellen Tab senden"), isOn: Binding(
                         get: { settings.sendDefaultPrompt },
                         set: { newValue in
                             settings.sendDefaultPrompt = newValue
@@ -231,7 +253,7 @@ struct SettingsView: View {
                     ))
 
                     learnMore(isExpanded: $showAskAIDetail) {
-                        Text("Blitz Neo sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung.")
+                        Text(L10n.tr("Blitz Neo sendet beim Start einen Auftrag passend zum geöffneten Tab an \(currentAgent.displayName). Deaktiviert öffnet sich eine leere Sitzung."))
                     }
                 }
             }
@@ -240,13 +262,13 @@ struct SettingsView: View {
     }
 
     private var agentPermissionsSection: some View {
-        Section("Agent-Freigaben") {
+        Section(L10n.tr("Agent-Freigaben")) {
             if currentAgent == .codex {
-                Text("MCP-Werkzeugauswahl und MCP-Freigaben werden in Codex verwaltet. Die Einrichtung prüfst du unter Integrationen.")
+                Text(L10n.tr("MCP-Werkzeugauswahl und MCP-Freigaben werden in Codex verwaltet. Die Einrichtung prüfst du unter Integrationen."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
-                Toggle("Blitz-Werkzeuge automatisch erlauben", isOn: Binding(
+                Toggle(L10n.tr("Blitz-Werkzeuge automatisch erlauben"), isOn: Binding(
                     get: { settings.whitelistBlitzMCPTools },
                     set: { newValue in
                         settings.whitelistBlitzMCPTools = newValue
@@ -255,12 +277,12 @@ struct SettingsView: View {
                     }
                 ))
 
-                Text("Gilt gemeinsam für die von Blitz Neo eingerichteten Claude-Code- und OpenCode-Konfigurationen. Eigene Regeln können zusätzlich gelten.")
+                Text(L10n.tr("Gilt gemeinsam für die von Blitz Neo eingerichteten Claude-Code- und OpenCode-Konfigurationen. Eigene Regeln können zusätzlich gelten."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Toggle("ASC-Befehle automatisch erlauben", isOn: Binding(
+            Toggle(L10n.tr("ASC-Befehle automatisch erlauben"), isOn: Binding(
                     get: { settings.allowASCCLICalls },
                     set: { newValue in
                         settings.allowASCCLICalls = newValue
@@ -268,11 +290,11 @@ struct SettingsView: View {
                         refreshAgentPermissionFiles()
                     }
                 ))
-            Text("Gilt agentenübergreifend für die von Blitz Neo eingerichteten Projekte.")
+            Text(L10n.tr("Gilt agentenübergreifend für die von Blitz Neo eingerichteten Projekte."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if currentAgent == .codex {
-                Text("Legt ASC-Freigaberegeln für Blitz-Projekte an. Codex lädt sie in vertrauenswürdigen Projekten; weitere Codex-Regeln gelten zusätzlich.")
+                Text(L10n.tr("Legt ASC-Freigaberegeln für Blitz-Projekte an. Codex lädt sie in vertrauenswürdigen Projekten; weitere Codex-Regeln gelten zusätzlich."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -280,7 +302,7 @@ struct SettingsView: View {
             // Skip permissions toggle (only for agents that support it)
             if currentAgent.skipPermissionsFlag != nil {
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle("Neue Agent-Sitzungen ohne Bestätigungen starten", isOn: Binding(
+                    Toggle(L10n.tr("Neue Agent-Sitzungen ohne Bestätigungen starten"), isOn: Binding(
                         get: { settings.skipAgentPermissions },
                         set: { newValue in
                             settings.skipAgentPermissions = newValue
@@ -289,7 +311,7 @@ struct SettingsView: View {
                     ))
 
                     learnMore(isExpanded: $showSkipPermsDetail) {
-                        Text("\(currentAgent.displayName) führt Werkzeuge ohne seine üblichen Bestätigungen aus. Die Freigaben für Aktionen in Blitz Neo gelten zusätzlich.")
+                        Text(L10n.tr("\(currentAgent.displayName) führt Werkzeuge ohne seine üblichen Bestätigungen aus. Die Freigaben für Aktionen in Blitz Neo gelten zusätzlich."))
                     }
                 }
             }
@@ -299,10 +321,10 @@ struct SettingsView: View {
 
     private var blitzPermissionsSection: some View {
         Section {
-            Text("Aktivierte Aktionen benötigen in Blitz Neo keine zusätzliche Rückfrage. Prüfungen für App, Version und Einreichung bleiben bestehen.")
+            Text(L10n.tr("Aktivierte Aktionen benötigen in Blitz Neo keine zusätzliche Rückfrage. Prüfungen für App, Version und Einreichung bleiben bestehen."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Toggle("Alle Blitz-Neo-Aktionen automatisch erlauben", isOn: Binding(
+            Toggle(L10n.tr("Alle Blitz-Neo-Aktionen automatisch erlauben"), isOn: Binding(
                 get: {
                     gateableCategories.allSatisfy { settings.permissionToggles[$0.0.rawValue] ?? false }
                 },
@@ -325,7 +347,7 @@ struct SettingsView: View {
                 ))
             }
         } header: {
-            Text("Aktionen in Blitz Neo")
+            Text(L10n.tr("Aktionen in Blitz Neo"))
         }
     }
 
@@ -339,25 +361,25 @@ struct SettingsView: View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("API-Schlüssel")
+                    Text(L10n.tr("API-Schlüssel"))
                     Spacer()
                     if appState.ascManager.credentials != nil {
-                        Text("Eingerichtet")
+                        Text(L10n.tr("Eingerichtet"))
                             .font(.callout)
                             .foregroundStyle(.green)
                     } else {
-                        Text("Nicht eingerichtet")
+                        Text(L10n.tr("Nicht eingerichtet"))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                Button("API-Schlüssel entfernen", role: .destructive) {
+                Button(L10n.tr("API-Schlüssel entfernen"), role: .destructive) {
                     showClearCredentialsConfirm = true
                 }
                 .disabled(appState.ascManager.credentials == nil)
 
-                Text("Entfernt den gespeicherten API-Schlüssel samt Kennungen. Die separate Apple-Webanmeldung bleibt erhalten.")
+                Text(L10n.tr("Entfernt den gespeicherten API-Schlüssel samt Kennungen. Die separate Apple-Webanmeldung bleibt erhalten."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -365,15 +387,15 @@ struct SettingsView: View {
             Text("App Store Connect")
         }
         .confirmationDialog(
-            "App-Store-Connect-API-Schlüssel entfernen?",
+            L10n.tr("App-Store-Connect-API-Schlüssel entfernen?"),
             isPresented: $showClearCredentialsConfirm,
             titleVisibility: .visible
         ) {
-            Button("API-Schlüssel entfernen", role: .destructive) {
+            Button(L10n.tr("API-Schlüssel entfernen"), role: .destructive) {
                 appState.ascManager.deleteCredentials()
             }
         } message: {
-            Text("Der gespeicherte API-Schlüssel und seine Kennungen werden lokal entfernt. Für App Store Connect musst du sie anschließend erneut hinterlegen.")
+            Text(L10n.tr("Der gespeicherte API-Schlüssel und seine Kennungen werden lokal entfernt. Für App Store Connect musst du sie anschließend erneut hinterlegen."))
         }
 
     }
@@ -389,7 +411,7 @@ struct SettingsView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8, weight: .bold))
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
-                    Text("Details")
+                    Text(L10n.tr("Details"))
                 }
                 .font(.caption)
                 .foregroundStyle(Color.accentColor)
@@ -485,7 +507,7 @@ struct SettingsView: View {
     private func refreshTerminalResetWarning() {
         let resolution = settings.resolveDefaultTerminal()
         if let missing = resolution.replacedMissingTerminal {
-            terminalResetWarning = "\(missing.displayName) ist nicht mehr installiert. Terminal wird stattdessen verwendet."
+            terminalResetWarning = L10n.tr("\(missing.displayName) ist nicht mehr installiert. Terminal wird stattdessen verwendet.")
         }
     }
 }

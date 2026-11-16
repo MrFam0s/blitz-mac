@@ -1,0 +1,2 @@
+"NSScreenCaptureUsageDescription" = "Blitz Neo benötigt die Bildschirmaufnahme, um den iOS-Simulator anzuzeigen.";
+"NSCameraUsageDescription" = "Blitz Neo benötigt Kamerazugriff, um die Bildschirme angeschlossener iOS-Geräte über USB anzuzeigen.";

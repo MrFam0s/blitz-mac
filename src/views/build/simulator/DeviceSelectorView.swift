@@ -12,7 +12,7 @@ struct DeviceSelectorView: View {
 
     var body: some View {
         Menu {
-            Section("Simulatoren") {
+            Section(L10n.tr("Simulatoren")) {
                 ForEach(supportedSimulators) { sim in
                     Button(action: {
                         Task { await selectSimulator(sim) }
@@ -28,14 +28,14 @@ struct DeviceSelectorView: View {
                 }
 
                 if supportedSimulators.isEmpty {
-                    Text("Keine unterstützten Simulatoren gefunden")
+                    Text(L10n.tr("Keine unterstützten Simulatoren gefunden"))
                         .foregroundStyle(.secondary)
                 }
             }
 
             Divider()
 
-            Button("Geräteliste aktualisieren") {
+            Button(L10n.tr("Geräteliste aktualisieren")) {
                 Task { await appState.simulatorManager.loadSimulators() }
             }
         } label: {
@@ -46,7 +46,7 @@ struct DeviceSelectorView: View {
                     Text(sim.name)
                         .font(.system(size: 11))
                 } else {
-                    Text("Gerät auswählen")
+                    Text(L10n.tr("Gerät auswählen"))
                         .font(.system(size: 11))
                 }
                 if appState.simulatorManager.isBooting {
@@ -57,7 +57,7 @@ struct DeviceSelectorView: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .help("Simulator für dieses Projekt auswählen und merken")
+        .help(L10n.tr("Simulator für dieses Projekt auswählen und merken"))
     }
 
     private func selectSimulator(_ sim: SimulatorInfo) async {

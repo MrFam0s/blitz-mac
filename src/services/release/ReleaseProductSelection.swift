@@ -303,7 +303,7 @@ enum ReleaseProductSelection {
 
         private func issue(_ key: String, _ reason: String, status: String = "unverified", locale: String? = nil) {
             diagnostics.append(.init(id: "joint_review.\(key).\(reason)", status: status, source: "publicApi", reason: reason, locale: locale,
-                guidance: "Die ausgewählten Produktversionen, Metadaten und Prüfbilder in App Store Connect vervollständigen und denselben Blitz-Auftrag erneut prüfen."))
+                guidance: L10n.tr("Die ausgewählten Produktversionen, Metadaten und Prüfbilder in App Store Connect vervollständigen und denselben Blitz-Auftrag erneut prüfen.")))
         }
 
         private static let iapTypes = ["CONSUMABLE", "NON_CONSUMABLE", "NON_RENEWING_SUBSCRIPTION"]

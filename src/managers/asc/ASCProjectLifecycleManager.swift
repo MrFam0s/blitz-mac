@@ -273,7 +273,7 @@ extension ASCManager {
         if let binding = selectedTarget?.storeBinding,
            binding.accountKey != DashboardSummaryStore.accountKey(for: credentials) {
             app = nil
-            credentialsError = "Dieses Veröffentlichungsziel gehört zu einem anderen App-Store-Connect-Konto. Bitte das hinterlegte Konto verwenden."
+            credentialsError = L10n.tr("Dieses Veröffentlichungsziel gehört zu einem anderen App-Store-Connect-Konto. Bitte das hinterlegte Konto verwenden.")
             return
         }
         let revision = projectRevision

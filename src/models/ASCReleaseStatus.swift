@@ -7,6 +7,23 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
     let storeAvailability: ASCStoreAvailability?
     var platformSummaries: [String: String]? = nil
 
+    /// Cache only language-independent codes. Older snapshots stored these
+    /// system-owned labels in German or English; translate them at display time
+    /// without rewriting the cache or interpreting arbitrary user content.
+    var localizedPlatformSummaries: [String: String]? {
+        platformSummaries?.mapValues { value in
+            switch value {
+            case "REJECTED", "Abgelehnt", "Rejected": return L10n.tr("Abgelehnt")
+            case "IN_REVIEW", "In Prüfung", "In Review", "In review": return L10n.tr("In Prüfung")
+            case "LIVE_ON_STORE", "Live": return "Live"
+            case "APPROVED", "Freigegeben", "Approved": return L10n.tr("Freigegeben")
+            case "UNAVAILABLE_ON_STORE", "Nicht im Store", "Not in Store", "Not in store": return L10n.tr("Nicht im Store")
+            case "UNPUBLISHED", "Nicht veröffentlicht", "Not Published", "Not published": return L10n.tr("Nicht veröffentlicht")
+            default: return value
+            }
+        }
+    }
+
     var isUnavailableOnStore: Bool { storeAvailability == .unavailable }
 
     init(isLiveOnStore: Bool, isPendingReview: Bool, isRejected: Bool, storeAvailability: ASCStoreAvailability? = nil) {
@@ -34,11 +51,11 @@ struct ASCDashboardProjectStatus: Codable, Sendable, Equatable {
                 ))
             })
             platformSummaries = byPlatform.mapValues { status in
-                if status.isRejected { return "Abgelehnt" }
-                if status.isPendingReview { return "In Prüfung" }
-                if status.isLiveOnStore { return availability == .available ? "Live" : "Freigegeben" }
-                if status.isUnavailableOnStore { return "Nicht im Store" }
-                return "Nicht veröffentlicht"
+                if status.isRejected { return "REJECTED" }
+                if status.isPendingReview { return "IN_REVIEW" }
+                if status.isLiveOnStore { return availability == .available ? "LIVE_ON_STORE" : "APPROVED" }
+                if status.isUnavailableOnStore { return "UNAVAILABLE_ON_STORE" }
+                return "UNPUBLISHED"
             }
             let statuses = Array(byPlatform.values)
             isLiveOnStore = statuses.contains { $0.isLiveOnStore }
@@ -129,14 +146,14 @@ enum ASCReleaseStatus {
     static func newVersionError(_ value: String, history: [ASCAppStoreVersion]) -> String? {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard ReleaseAutomationService.compareVersions(value, value) != nil else {
-            return "Die Version muss aus ein bis drei Zahlengruppen bestehen, z. B. 1.4.2."
+            return L10n.tr("Die Version muss aus ein bis drei Zahlengruppen bestehen, z. B. 1.4.2.")
         }
         for previous in history {
             guard let order = ReleaseAutomationService.compareVersions(value, previous.attributes.versionString) else {
-                return "Die vorhandene Version \(previous.attributes.versionString) konnte nicht verglichen werden."
+                return L10n.tr("Die vorhandene Version \(previous.attributes.versionString) konnte nicht verglichen werden.")
             }
             guard order == .orderedDescending else {
-                return "Die neue Version muss höher als \(previous.attributes.versionString) sein."
+                return L10n.tr("Die neue Version muss höher als \(previous.attributes.versionString) sein.")
             }
         }
         return nil

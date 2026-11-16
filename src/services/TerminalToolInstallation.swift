@@ -17,8 +17,8 @@ struct TerminalToolInstallation: Identifiable, Equatable {
 
         var detail: String {
             switch self {
-            case .asc: return "Store-Daten, Builds und Uploads mit derselben ASC-Installation wie in Blitz Neo."
-            case .release: return "Updates aus anderen Chats prüfen und über den Blitz-Neo-Ablauf einreichen. Blitz Neo muss dafür geöffnet sein."
+            case .asc: return L10n.tr("Store-Daten, Builds und Uploads mit derselben ASC-Installation wie in Blitz Neo.")
+            case .release: return L10n.tr("Updates aus anderen Chats prüfen und über den Blitz-Neo-Ablauf einreichen. Blitz Neo muss dafür geöffnet sein.")
             }
         }
     }

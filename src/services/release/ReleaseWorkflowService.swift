@@ -204,19 +204,19 @@ enum ReleaseWorkflowError: Error, LocalizedError {
     case submissionFailed(ReleaseSubmissionDiagnostic)
     var errorDescription: String? {
         switch self {
-        case .invalidTarget: return "Der Release-Auftrag benötigt eindeutige Projekt-, Konto-, App-, Plattform-, Versions- und Build-IDs."
-        case .accountChanged: return "Der Release-Auftrag gehört zu einem anderen Apple-Konto."
-        case .identityChanged: return "App, Plattform, Version oder zugeordneter Build stimmen nicht mit dem Release-Auftrag überein."
-        case .contentChanged: return "Texte, Medien oder Release-Daten haben sich geändert. Bitte erneut vorbereiten und prüfen."
-        case .buildNotPrepared: return "Zuerst die genaue Version mit einem verarbeiteten, passenden Build vorbereiten und verknüpfen."
-        case .unknownOperation: return "Der Release-Auftrag wurde nicht gefunden."
-        case .busy: return "Für diese App und Plattform läuft bereits ein Release-Schritt."
-        case .unsafeState: return "Der gespeicherte Release-Zustand ist ungültig oder nicht mehr aktiv."
-        case .confirmationRequired: return "Der Bestätigungswert muss genau dem geprüften Release-Auftrag entsprechen."
-        case .notReady: return "Die frische Release-Prüfung hat offene oder nicht verifizierte Punkte gefunden."
-        case .uncertainOutcome: return "Ein vorheriger Schreibauftrag hat einen unklaren Ausgang. Nur den Status abgleichen; nicht erneut einreichen."
+        case .invalidTarget: return L10n.tr("Der Release-Auftrag benötigt eindeutige Projekt-, Konto-, App-, Plattform-, Versions- und Build-IDs.")
+        case .accountChanged: return L10n.tr("Der Release-Auftrag gehört zu einem anderen Apple-Konto.")
+        case .identityChanged: return L10n.tr("App, Plattform, Version oder zugeordneter Build stimmen nicht mit dem Release-Auftrag überein.")
+        case .contentChanged: return L10n.tr("Texte, Medien oder Release-Daten haben sich geändert. Bitte erneut vorbereiten und prüfen.")
+        case .buildNotPrepared: return L10n.tr("Zuerst die genaue Version mit einem verarbeiteten, passenden Build vorbereiten und verknüpfen.")
+        case .unknownOperation: return L10n.tr("Der Release-Auftrag wurde nicht gefunden.")
+        case .busy: return L10n.tr("Für diese App und Plattform läuft bereits ein Release-Schritt.")
+        case .unsafeState: return L10n.tr("Der gespeicherte Release-Zustand ist ungültig oder nicht mehr aktiv.")
+        case .confirmationRequired: return L10n.tr("Der Bestätigungswert muss genau dem geprüften Release-Auftrag entsprechen.")
+        case .notReady: return L10n.tr("Die frische Release-Prüfung hat offene oder nicht verifizierte Punkte gefunden.")
+        case .uncertainOutcome: return L10n.tr("Ein vorheriger Schreibauftrag hat einen unklaren Ausgang. Nur den Status abgleichen; nicht erneut einreichen.")
         case .submissionFailed(let diagnostic): return diagnostic.message
-        case .storage: return "Der private Release-Zustand konnte nicht sicher gespeichert werden."
+        case .storage: return L10n.tr("Der private Release-Zustand konnte nicht sicher gespeichert werden.")
         }
     }
 }

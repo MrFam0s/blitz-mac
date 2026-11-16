@@ -13,7 +13,7 @@ extension ASCManager {
         writeError = nil
         isCreating = true
         createProgress = 0
-        createProgressMessage = "In-App-Kauf wird erstellt …"
+        createProgressMessage = L10n.tr("In-App-Kauf wird erstellt …")
 
         createTask = Task { [weak self] in
             guard let self else { return }
@@ -23,20 +23,20 @@ extension ASCManager {
                     appId: appId, name: name, productId: productId, inAppPurchaseType: type
                 )
 
-                createProgressMessage = "Lokalisierung wird gespeichert …"
+                createProgressMessage = L10n.tr("Lokalisierung wird gespeichert …")
                 createProgress = 0.15
                 try await service.localizeInAppPurchase(
                     iapId: iap.id, locale: "en-US", name: displayName, description: description
                 )
 
-                createProgressMessage = "Verfügbarkeit wird gespeichert …"
+                createProgressMessage = L10n.tr("Verfügbarkeit wird gespeichert …")
                 createProgress = 0.3
                 let territories = try await service.fetchAllTerritories()
                 try await service.createIAPAvailability(iapId: iap.id, territoryIds: territories)
 
                 createProgress = 0.5
                 if !price.isEmpty, let priceVal = Double(price), priceVal > 0 {
-                    createProgressMessage = "Preis wird gespeichert …"
+                    createProgressMessage = L10n.tr("Preis wird gespeichert …")
                     let points = try await service.fetchInAppPurchasePricePoints(iapId: iap.id)
                     if let match = points.first(where: {
                         guard let cp = $0.attributes.customerPrice, let cpVal = Double(cp) else { return false }
@@ -48,11 +48,11 @@ extension ASCManager {
 
                 createProgress = 0.7
                 if let path = screenshotPath {
-                    createProgressMessage = "Prüfbild wird hochgeladen …"
+                    createProgressMessage = L10n.tr("Prüfbild wird hochgeladen …")
                     try await service.uploadIAPReviewScreenshot(iapId: iap.id, path: path)
                 }
 
-                createProgressMessage = "Warten auf die Statusaktualisierung …"
+                createProgressMessage = L10n.tr("Warten auf die Statusaktualisierung …")
                 createProgress = 0.9
                 try await pollRefreshIAPs(service: service, appId: appId)
                 createProgress = 1.0
@@ -158,7 +158,7 @@ extension ASCManager {
             let product = try await service.fetchInAppPurchaseRecord(id: iapId)
             guard projectRevision == revision, !Task.isCancelled else { return }
             guard ASCEditability.canEditProductReview(product.attributes.state) else {
-                throw ASCError.notFound("Review-Screenshots dieses Produkts sind bei Apple gesperrt.")
+                throw ASCError.notFound(L10n.tr("Review-Screenshots dieses Produkts sind bei Apple gesperrt."))
             }
             try await service.uploadIAPReviewScreenshot(iapId: iapId, path: path)
             AnalyticsService.trackBlitzManagedASCUsage(
@@ -217,7 +217,7 @@ extension ASCManager {
         writeError = nil
         isCreating = true
         createProgress = 0
-        createProgressMessage = "Abo-Gruppe wird eingerichtet …"
+        createProgressMessage = L10n.tr("Abo-Gruppe wird eingerichtet …")
 
         createTask = Task { [weak self] in
             guard let self else { return }
@@ -235,19 +235,19 @@ extension ASCManager {
                     try await service.localizeSubscriptionGroup(groupId: group.id, locale: "en-US", name: groupName)
                 }
 
-                createProgressMessage = "Abonnement wird erstellt …"
+                createProgressMessage = L10n.tr("Abonnement wird erstellt …")
                 createProgress = 0.08
                 let sub = try await service.createSubscription(
                     groupId: group.id, name: name, productId: productId, subscriptionPeriod: duration
                 )
 
-                createProgressMessage = "Lokalisierung wird gespeichert …"
+                createProgressMessage = L10n.tr("Lokalisierung wird gespeichert …")
                 createProgress = 0.12
                 try await service.localizeSubscription(
                     subscriptionId: sub.id, locale: "en-US", name: displayName, description: description
                 )
 
-                createProgressMessage = "Verfügbarkeit wird gespeichert …"
+                createProgressMessage = L10n.tr("Verfügbarkeit wird gespeichert …")
                 createProgress = 0.16
                 let territories = try await service.fetchAllTerritories()
                 try await service.createSubscriptionAvailability(subscriptionId: sub.id, territoryIds: territories)
@@ -260,10 +260,10 @@ extension ASCManager {
                         return abs(cpVal - priceVal) < 0.001
                     }) {
                         // Pricing loop: 0.2 → 0.8 (bulk of the time)
-                        createProgressMessage = "Preise werden gespeichert (0/175) …"
+                        createProgressMessage = L10n.tr("Preise werden gespeichert (0/175) …")
                         try await service.setSubscriptionPrice(subscriptionId: sub.id, pricePointId: match.id) { done, total in
                             Task { @MainActor [weak self] in
-                                self?.createProgressMessage = "Preise werden gespeichert (\(done)/\(total)) …"
+                                self?.createProgressMessage = L10n.tr("Preise werden gespeichert (\(done)/\(total)) …")
                                 self?.createProgress = 0.2 + 0.6 * (Double(done) / Double(total))
                             }
                         }
@@ -272,11 +272,11 @@ extension ASCManager {
 
                 createProgress = 0.85
                 if let path = screenshotPath {
-                    createProgressMessage = "Prüfbild wird hochgeladen …"
+                    createProgressMessage = L10n.tr("Prüfbild wird hochgeladen …")
                     try await service.uploadSubscriptionReviewScreenshot(subscriptionId: sub.id, path: path)
                 }
 
-                createProgressMessage = "Warten auf die Statusaktualisierung …"
+                createProgressMessage = L10n.tr("Warten auf die Statusaktualisierung …")
                 createProgress = 0.9
                 try await pollRefreshSubscriptions(service: service, appId: appId)
                 createProgress = 1.0
@@ -386,7 +386,7 @@ extension ASCManager {
             guard projectRevision == revision, app?.id == appId, !Task.isCancelled else { return }
             subscriptionsPerGroup[id] = subscriptions
             guard subscriptions.isEmpty else {
-                throw ASCError.notFound("Diese Gruppe enthält noch Abonnements und kann nicht gelöscht werden.")
+                throw ASCError.notFound(L10n.tr("Diese Gruppe enthält noch Abonnements und kann nicht gelöscht werden."))
             }
             try await service.deleteSubscriptionGroup(groupId: id)
             subscriptionGroups = try await service.fetchSubscriptionGroups(appId: appId)
@@ -417,7 +417,7 @@ extension ASCManager {
             let product = try await service.fetchSubscriptionRecord(id: subscriptionId)
             guard projectRevision == revision, !Task.isCancelled else { return }
             guard ASCEditability.canEditProductReview(product.attributes.state) else {
-                throw ASCError.notFound("Review-Screenshots dieses Produkts sind bei Apple gesperrt.")
+                throw ASCError.notFound(L10n.tr("Review-Screenshots dieses Produkts sind bei Apple gesperrt."))
             }
             try await service.uploadSubscriptionReviewScreenshot(subscriptionId: subscriptionId, path: path)
             AnalyticsService.trackBlitzManagedASCUsage(

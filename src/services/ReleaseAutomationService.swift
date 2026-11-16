@@ -62,7 +62,7 @@ enum ReleaseAutomationService {
         let targetVersions = platform.map { ASCReleaseStatus.versions(versions, for: $0) } ?? versions
         guard let current = ASCReleaseStatus.currentUpdateVersion(for: targetVersions) else { return nil }
         guard ASCReleaseStatus.isEditable(current.attributes.appStoreState) else {
-            throw ASCError.notFound("Version \(current.attributes.versionString) ist bereits eingereicht oder gesperrt. Bitte ihren Status prüfen.")
+            throw ASCError.notFound(L10n.tr("Version \(current.attributes.versionString) ist bereits eingereicht oder gesperrt. Bitte ihren Status prüfen."))
         }
         return PreparedReleaseVersion(id: current.id, version: current.attributes.versionString)
     }
@@ -179,7 +179,7 @@ enum ReleaseAutomationService {
 
     static func prompt(context: ReleaseAutomationContext, preflight: ReleasePreflight) throws -> String {
         guard let url = Bundle.appResources.url(forResource: "release-automation", withExtension: "md") else {
-            throw NSError(domain: "ReleaseAutomation", code: 1, userInfo: [NSLocalizedDescriptionKey: "Der Release-Ablauf fehlt im App-Bundle."])
+            throw NSError(domain: "ReleaseAutomation", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.tr("Der Release-Ablauf fehlt im App-Bundle.")])
         }
         let workflow = try String(contentsOf: url, encoding: .utf8)
         let encoder = JSONEncoder()

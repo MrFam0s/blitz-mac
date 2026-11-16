@@ -141,15 +141,17 @@ private func integrityBuild(_ id: String = "build") -> ASCBuild {
 }
 
 @MainActor @Test func failedCopyKeepsCreatedDraftAndReportsPartialResult() async {
-    let manager = integrityManager(), service = IntegrityCreationService()
-    service.copyConflict = true
-    service.patchFails = true
-    let result = await manager.createUpdateVersion(versionString: "1.10", platform: .iOS, copyReviewDetail: false, using: service)
-    #expect(result == nil)
-    #expect(service.calls.filter { $0 == "create" }.count == 1)
-    #expect(manager.appStoreVersions.contains { $0.id == "created" })
-    #expect(manager.versionCreationError?.contains("nicht vollständig vorbereitet") == true)
-    #expect(!manager.isCreatingVersion)
+    await L10n.$overrideLanguage.withValue("de") {
+        let manager = integrityManager(), service = IntegrityCreationService()
+        service.copyConflict = true
+        service.patchFails = true
+        let result = await manager.createUpdateVersion(versionString: "1.10", platform: .iOS, copyReviewDetail: false, using: service)
+        #expect(result == nil)
+        #expect(service.calls.filter { $0 == "create" }.count == 1)
+        #expect(manager.appStoreVersions.contains { $0.id == "created" })
+        #expect(manager.versionCreationError?.contains("nicht vollständig vorbereitet") == true)
+        #expect(!manager.isCreatingVersion)
+    }
 }
 
 @MainActor @Test func releaseTargetRejectsVersionPlatformAndRevisionChanges() throws {

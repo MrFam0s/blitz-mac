@@ -14,9 +14,9 @@ struct AnalyticsView: View {
 
         var displayName: String {
             switch self {
-            case .last7Days: "7 Tage"
-            case .last30Days: "30 Tage"
-            case .last90Days: "90 Tage"
+            case .last7Days: L10n.tr("7 Tage")
+            case .last30Days: L10n.tr("30 Tage")
+            case .last90Days: L10n.tr("90 Tage")
             }
         }
     }
@@ -44,19 +44,19 @@ struct AnalyticsView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Statistiken")
+                    Text(L10n.tr("Statistiken"))
                         .font(BlitzLayout.pageTitle)
                     Spacer()
-                    ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: "Statistiken aktualisieren")
+                    ASCTabRefreshButton(asc: asc, tab: .analytics, helpText: L10n.tr("Statistiken aktualisieren"))
                 }
-                Picker("Zeitraum", selection: $dateRange) {
+                Picker(L10n.tr("Zeitraum"), selection: $dateRange) {
                     ForEach(DateRange.allCases, id: \.self) {
                         Text($0.displayName).tag($0)
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .accessibilityLabel("Zeitraum")
+                .accessibilityLabel(L10n.tr("Zeitraum"))
                 .frame(maxWidth: 300, alignment: .leading)
             }
             .blitzToolbar()
@@ -74,19 +74,19 @@ struct AnalyticsView: View {
 
                     // Placeholder chart with mock data to illustrate layout
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Downloads (Beispieldaten)")
+                        Text(L10n.tr("Downloads (Beispieldaten)"))
                             .font(BlitzLayout.sectionTitle)
 
                         Chart(mockDownloadData(for: dateRange)) { point in
                             LineMark(
-                                x: .value("Datum", point.date),
-                                y: .value("Downloads", point.value)
+                                x: .value(L10n.tr("Datum"), point.date),
+                                y: .value(L10n.tr("Downloads"), point.value)
                             )
                             .foregroundStyle(.blue)
 
                             AreaMark(
-                                x: .value("Datum", point.date),
-                                y: .value("Downloads", point.value)
+                                x: .value(L10n.tr("Datum"), point.date),
+                                y: .value(L10n.tr("Downloads"), point.value)
                             )
                             .foregroundStyle(.blue.opacity(0.1))
                         }
@@ -103,7 +103,7 @@ struct AnalyticsView: View {
                         }
                         .frame(height: 200)
 
-                        Text("Nur Beispieldaten – für echte Daten werden Verkaufsberichte benötigt.")
+                        Text(L10n.tr("Nur Beispieldaten – für echte Daten werden Verkaufsberichte benötigt."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -123,9 +123,9 @@ struct AnalyticsView: View {
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Für Verkaufsberichte ist die Anbieternummer erforderlich")
+                Text(L10n.tr("Für Verkaufsberichte ist die Anbieternummer erforderlich"))
                     .font(BlitzLayout.sectionTitle)
-                Text("Die Anbieternummer dieser App ist nicht verfügbar. Sie steht normalerweise unter „Zahlungen und Finanzberichte“ in App Store Connect.")
+                Text(L10n.tr("Die Anbieternummer dieser App ist nicht verfügbar. Sie steht normalerweise unter „Zahlungen und Finanzberichte“ in App Store Connect."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -143,9 +143,9 @@ struct AnalyticsView: View {
                 .foregroundStyle(.blue)
                 .font(.title3)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Verkaufsdaten noch nicht verfügbar")
+                Text(L10n.tr("Verkaufsdaten noch nicht verfügbar"))
                     .font(BlitzLayout.sectionTitle)
-                Text("Der Abruf von Verkaufsberichten über die ASC-API ist noch in Entwicklung. Das Diagramm zeigt Beispieldaten.")
+                Text(L10n.tr("Der Abruf von Verkaufsberichten über die ASC-API ist noch in Entwicklung. Das Diagramm zeigt Beispieldaten."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

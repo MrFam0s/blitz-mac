@@ -42,17 +42,17 @@ enum AppTab: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: "Dashboard"
         case .app: "App"
-        case .appInformation: "App-Informationen"
+        case .appInformation: L10n.tr("App-Informationen")
         case .screenshots: "Screenshots"
-        case .monetization: "Monetarisierung"
-        case .review: "App-Prüfung"
-        case .analytics: "Statistiken"
-        case .reviews: "Bewertungen"
+        case .monetization: L10n.tr("Monetarisierung")
+        case .review: L10n.tr("App-Prüfung")
+        case .analytics: L10n.tr("Statistiken")
+        case .reviews: L10n.tr("Bewertungen")
         case .builds: "Builds"
-        case .groups: "Testgruppen"
-        case .betaInfo: "Beta-Informationen"
-        case .feedback: "Rückmeldungen"
-        case .settings: "Einstellungen"
+        case .groups: L10n.tr("Testgruppen")
+        case .betaInfo: L10n.tr("Beta-Informationen")
+        case .feedback: L10n.tr("Rückmeldungen")
+        case .settings: L10n.tr("Einstellungen")
         }
     }
 
@@ -102,7 +102,7 @@ enum AppSubTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .overview: "Übersicht"
+        case .overview: L10n.tr("Übersicht")
         case .simulator: "Simulator"
         case .tests: "Tests"
         case .icon: "Icon"

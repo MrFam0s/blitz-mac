@@ -43,64 +43,64 @@ struct BundleIDSetupView: View {
 
     // Capabilities supported by the ASC API (can be enabled automatically)
     private static let capabilities: [(type: String, name: String)] = [
-        ("PUSH_NOTIFICATIONS", "Push-Mitteilungen"),
-        ("IN_APP_PURCHASE", "In-App-Käufe"),
-        ("APPLE_ID_AUTH", "Mit Apple anmelden"),
+        ("PUSH_NOTIFICATIONS", L10n.tr("Push-Mitteilungen")),
+        ("IN_APP_PURCHASE", L10n.tr("In-App-Käufe")),
+        ("APPLE_ID_AUTH", L10n.tr("Mit Apple anmelden")),
         ("ICLOUD", "iCloud"),
         ("GAME_CENTER", "Game Center"),
         ("APPLE_PAY", "Apple Pay"),
-        ("APP_GROUPS", "App-Gruppen"),
-        ("ASSOCIATED_DOMAINS", "Zugeordnete Domains"),
+        ("APP_GROUPS", L10n.tr("App-Gruppen")),
+        ("ASSOCIATED_DOMAINS", L10n.tr("Zugeordnete Domains")),
         ("HEALTHKIT", "HealthKit"),
         ("HOMEKIT", "HomeKit"),
         ("SIRIKIT", "Siri"),
-        ("NFC_TAG_READING", "NFC-Tags lesen"),
+        ("NFC_TAG_READING", L10n.tr("NFC-Tags lesen")),
         ("WALLET", "Wallet"),
-        ("MAPS", "Karten"),
-        ("DATA_PROTECTION", "Datenschutz"),
-        ("AUTOFILL_CREDENTIAL_PROVIDER", "Zugangsdaten automatisch ausfüllen"),
-        ("ACCESS_WIFI_INFORMATION", "WLAN-Informationen lesen"),
+        ("MAPS", L10n.tr("Karten")),
+        ("DATA_PROTECTION", L10n.tr("Datenschutz")),
+        ("AUTOFILL_CREDENTIAL_PROVIDER", L10n.tr("Zugangsdaten automatisch ausfüllen")),
+        ("ACCESS_WIFI_INFORMATION", L10n.tr("WLAN-Informationen lesen")),
         ("CLASSKIT", "ClassKit"),
-        ("NETWORK_EXTENSIONS", "Netzwerkerweiterungen"),
-        ("PERSONAL_VPN", "Persönliches VPN"),
-        ("MULTIPATH", "Mehrwegeverbindungen"),
+        ("NETWORK_EXTENSIONS", L10n.tr("Netzwerkerweiterungen")),
+        ("PERSONAL_VPN", L10n.tr("Persönliches VPN")),
+        ("MULTIPATH", L10n.tr("Mehrwegeverbindungen")),
         ("HOT_SPOT", "Hotspot"),
-        ("WIRELESS_ACCESSORY_CONFIGURATION", "Drahtloses Zubehör"),
-        ("INTER_APP_AUDIO", "Audio zwischen Apps"),
-        ("NETWORK_CUSTOM_PROTOCOL", "Eigenes Netzwerkprotokoll"),
-        ("COREMEDIA_HLS_LOW_LATENCY", "HLS mit geringer Latenz"),
-        ("SYSTEM_EXTENSION_INSTALL", "Systemerweiterungen"),
-        ("USER_MANAGEMENT", "Benutzerverwaltung"),
+        ("WIRELESS_ACCESSORY_CONFIGURATION", L10n.tr("Drahtloses Zubehör")),
+        ("INTER_APP_AUDIO", L10n.tr("Audio zwischen Apps")),
+        ("NETWORK_CUSTOM_PROTOCOL", L10n.tr("Eigenes Netzwerkprotokoll")),
+        ("COREMEDIA_HLS_LOW_LATENCY", L10n.tr("HLS mit geringer Latenz")),
+        ("SYSTEM_EXTENSION_INSTALL", L10n.tr("Systemerweiterungen")),
+        ("USER_MANAGEMENT", L10n.tr("Benutzerverwaltung")),
     ]
 
     // Additional capabilities only configurable through the Apple Developer portal
     private static let portalOnlyCapabilities: [String] = [
-        "5G-Netzsegmentierung",
+        L10n.tr("5G-Netzsegmentierung"),
         "App Attest",
-        "Hintergrundmodi",
-        "Kommunikationsmitteilungen",
-        "Erweiterter virtueller Adressraum",
-        "Familiensteuerung",
-        "Schriften",
-        "Gruppenaktivitäten",
-        "Kopfposition",
-        "HealthKit-Schätzwerte neu kalibrieren",
-        "HLS-Zwischenvorschauen",
-        "Erhöhtes Speicherlimit beim Debuggen",
-        "Tagebuchvorschläge",
-        "Schlüsselbundfreigabe",
-        "Matter-Einrichtungsdaten zulassen",
-        "Per MDM verwaltete zugeordnete Domains",
-        "Mediengeräte erkennen",
-        "Zusammenarbeit in Nachrichten",
-        "Installation bei Bedarf",
-        "Sprechfunk",
-        "Sensible Inhalte analysieren",
-        "Mit dir geteilt",
-        "Eingelegte SIM für Mobilfunkanbieter",
-        "Profil für räumliches Audio",
-        "Dauerhafte Ausführung",
-        "Zeitkritische Mitteilungen",
+        L10n.tr("Hintergrundmodi"),
+        L10n.tr("Kommunikationsmitteilungen"),
+        L10n.tr("Erweiterter virtueller Adressraum"),
+        L10n.tr("Familiensteuerung"),
+        L10n.tr("Schriften"),
+        L10n.tr("Gruppenaktivitäten"),
+        L10n.tr("Kopfposition"),
+        L10n.tr("HealthKit-Schätzwerte neu kalibrieren"),
+        L10n.tr("HLS-Zwischenvorschauen"),
+        L10n.tr("Erhöhtes Speicherlimit beim Debuggen"),
+        L10n.tr("Tagebuchvorschläge"),
+        L10n.tr("Schlüsselbundfreigabe"),
+        L10n.tr("Matter-Einrichtungsdaten zulassen"),
+        L10n.tr("Per MDM verwaltete zugeordnete Domains"),
+        L10n.tr("Mediengeräte erkennen"),
+        L10n.tr("Zusammenarbeit in Nachrichten"),
+        L10n.tr("Installation bei Bedarf"),
+        L10n.tr("Sprechfunk"),
+        L10n.tr("Sensible Inhalte analysieren"),
+        L10n.tr("Mit dir geteilt"),
+        L10n.tr("Eingelegte SIM für Mobilfunkanbieter"),
+        L10n.tr("Profil für räumliches Audio"),
+        L10n.tr("Dauerhafte Ausführung"),
+        L10n.tr("Zeitkritische Mitteilungen"),
         "WeatherKit",
     ]
 
@@ -156,11 +156,11 @@ struct BundleIDSetupView: View {
                 .onChange(of: DashboardSummaryStore.accountKey(for: asc.credentials)) { _, _ in resetForProjectChange() }
             }
         }
-        .alert("Aktion im Apple-Developer-Konto erforderlich", isPresented: $showProgramLicenseAlert) {
-            Button("Apple-Developer-Konto öffnen") {
+        .alert(L10n.tr("Aktion im Apple-Developer-Konto erforderlich"), isPresented: $showProgramLicenseAlert) {
+            Button(L10n.tr("Apple-Developer-Konto öffnen")) {
                 NSWorkspace.shared.open(Self.appleDeveloperAccountURL)
             }
-            Button("Schließen", role: .cancel) {}
+            Button(L10n.tr("Schließen"), role: .cancel) {}
         } message: {
             Text(programLicenseAlertMessage)
         }
@@ -170,7 +170,7 @@ struct BundleIDSetupView: View {
 
     @ViewBuilder
     private var formContent: some View {
-        BlitzSetupHeader("Neue App einrichten", subtitle: "Bereite einen separaten Store-Eintrag für dieses Veröffentlichungsziel vor. Für eine weitere Plattform derselben App verwende die Veröffentlichungsziele und den bestehenden Store-Eintrag.")
+        BlitzSetupHeader(L10n.tr("Neue App einrichten"), subtitle: L10n.tr("Bereite einen separaten Store-Eintrag für dieses Veröffentlichungsziel vor. Für eine weitere Plattform derselben App verwende die Veröffentlichungsziele und den bestehenden Store-Eintrag."))
 
         Divider()
 
@@ -182,14 +182,14 @@ struct BundleIDSetupView: View {
         }
 
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupField("Bundle-ID", hint: "Technische Kennung mit unveränderter Groß- und Kleinschreibung. Nach der Registrierung lässt sie sich nicht ändern.") {
-                TextField("org.beispiel.MeineApp", text: $bundleIdentifier)
+            BlitzSetupField(L10n.tr("Bundle-ID"), hint: L10n.tr("Technische Kennung mit unveränderter Groß- und Kleinschreibung. Nach der Registrierung lässt sie sich nicht ändern.")) {
+                TextField(L10n.tr("org.beispiel.MeineApp"), text: $bundleIdentifier)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.callout, design: .monospaced))
-                    .accessibilityLabel("Bundle-ID")
+                    .accessibilityLabel(L10n.tr("Bundle-ID"))
             }
-            BlitzSetupField("App-Store-Name", hint: "Öffentlicher Name mit 2–30 Zeichen, unabhängig von der technischen Kennung.") {
-                TextField("Meine App", text: Binding(
+            BlitzSetupField(L10n.tr("App-Store-Name"), hint: L10n.tr("Öffentlicher Name mit 2–30 Zeichen, unabhängig von der technischen Kennung.")) {
+                TextField(L10n.tr("Meine App"), text: Binding(
                     get: { publicAppName },
                     set: { newValue in
                         let oldValue = publicAppName
@@ -200,19 +200,19 @@ struct BundleIDSetupView: View {
                     }
                 ))
                 .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("App-Store-Name")
+                .accessibilityLabel(L10n.tr("App-Store-Name"))
             }
-            BlitzSetupField("SKU", hint: "Dauerhafte interne Kennung: Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche; keine Leerzeichen.") {
-                TextField("MeineApp-\(effectivePlatform.rawValue)", text: $sku)
+            BlitzSetupField("SKU", hint: L10n.tr("Dauerhafte interne Kennung: Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche; keine Leerzeichen.")) {
+                TextField(L10n.tr("MeineApp-\(effectivePlatform.rawValue)"), text: $sku)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("SKU")
             }
-            BlitzSetupField("Hauptsprache", hint: "Exakter Sprachcode, zum Beispiel de-DE oder en-US.") {
+            BlitzSetupField(L10n.tr("Hauptsprache"), hint: L10n.tr("Exakter Sprachcode, zum Beispiel de-DE oder en-US.")) {
                 TextField("de-DE", text: $primaryLocale)
                     .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Hauptsprache")
+                    .accessibilityLabel(L10n.tr("Hauptsprache"))
             }
-            BlitzSetupField("Plattform") {
+            BlitzSetupField(L10n.tr("Plattform")) {
                 Text(effectivePlatform.rawValue)
                     .font(.callout)
             }
@@ -228,9 +228,9 @@ struct BundleIDSetupView: View {
 
         // Capabilities
         VStack(alignment: .leading, spacing: 8) {
-            Text("App-Funktionen")
+            Text(L10n.tr("App-Funktionen"))
                 .font(.callout.weight(.medium))
-            Text("Wähle die benötigten Funktionen. Weitere lassen sich später im Apple-Developer-Portal aktivieren.")
+            Text(L10n.tr("Wähle die benötigten Funktionen. Weitere lassen sich später im Apple-Developer-Portal aktivieren."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -256,7 +256,7 @@ struct BundleIDSetupView: View {
                 HStack(spacing: 4) {
                     Image(systemName: showAdditional ? "chevron.down" : "chevron.right")
                         .font(.caption2)
-                    Text("Weitere Funktionen (\(Self.portalOnlyCapabilities.count))")
+                    Text(L10n.tr("Weitere Funktionen (\(Self.portalOnlyCapabilities.count))"))
                         .font(.caption)
                 }
                 .foregroundStyle(.secondary)
@@ -270,10 +270,10 @@ struct BundleIDSetupView: View {
                         Image(systemName: "info.circle")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text("Diese Funktionen aktivierst du manuell im ")
+                        Text(L10n.tr("Diese Funktionen aktivierst du manuell im "))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        + Text("[Developer-Portal](https://developer.apple.com/account/resources/identifiers/list).")
+                        + Text(LocalizedStringKey(L10n.tr("[Developer-Portal](https://developer.apple.com/account/resources/identifiers/list).")))
                             .font(.caption)
                     }
 
@@ -302,7 +302,7 @@ struct BundleIDSetupView: View {
         // Submit button
         HStack {
             Spacer()
-            Button("Bundle-ID registrieren") {
+            Button(L10n.tr("Bundle-ID registrieren")) {
                 registerBundleId()
             }
             .buttonStyle(.borderedProminent)
@@ -327,17 +327,17 @@ struct BundleIDSetupView: View {
 
     @ViewBuilder
     private var manualContent: some View {
-        BlitzSetupHeader("Store-Eintrag anlegen", subtitle: "Die Bundle-ID ist registriert. Lege jetzt die App mit den bestätigten Angaben in App Store Connect an.")
+        BlitzSetupHeader(L10n.tr("Store-Eintrag anlegen"), subtitle: L10n.tr("Die Bundle-ID ist registriert. Lege jetzt die App mit den bestätigten Angaben in App Store Connect an."))
 
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupField("Bundle-ID") {
+            BlitzSetupField(L10n.tr("Bundle-ID")) {
                 Text(createdBundleId)
                     .font(.system(.callout, design: .monospaced))
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
             if let identity = creationContext?.identity {
-                BlitzSetupField("App-Store-Name") {
+                BlitzSetupField(L10n.tr("App-Store-Name")) {
                     Text(identity.appName).textSelection(.enabled)
                 }
                 BlitzSetupField("SKU") {
@@ -348,7 +348,7 @@ struct BundleIDSetupView: View {
                     .foregroundStyle(.secondary)
             }
             if capabilitiesEnabled > 0 {
-                Label("Aktivierte App-Funktionen: \(capabilitiesEnabled)", systemImage: "checkmark.circle")
+                Label(L10n.tr("Aktivierte App-Funktionen: \(capabilitiesEnabled)"), systemImage: "checkmark.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -368,13 +368,13 @@ struct BundleIDSetupView: View {
                 Button {
                     launchClaudeCodeForAppCreate(bundleId: createdBundleId, inExistingChat: true)
                 } label: {
-                    Label("Im bestehenden Chat fortsetzen", systemImage: "doc.on.clipboard")
+                    Label(L10n.tr("Im bestehenden Chat fortsetzen"), systemImage: "doc.on.clipboard")
                         .font(.callout.weight(.medium))
                 }
                 .buttonStyle(.borderedProminent)
 
                 if copiedCreationHandoff {
-                    Text("Auftrag kopiert. Im Entwicklungs-Chat einfügen, um genau diese bestätigte App anzulegen.")
+                    Text(L10n.tr("Auftrag kopiert. Im Entwicklungs-Chat einfügen, um genau diese bestätigte App anzulegen."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
@@ -383,7 +383,7 @@ struct BundleIDSetupView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles")
-                        Text("Im Blitz-Terminal starten")
+                        Text(L10n.tr("Im Blitz-Terminal starten"))
                         Image(systemName: "arrow.right")
                             .font(.caption)
                     }
@@ -395,7 +395,7 @@ struct BundleIDSetupView: View {
                 Link(destination: URL(string: "https://appstoreconnect.apple.com/apps")!) {
                     HStack(spacing: 6) {
                         Image(systemName: "key")
-                        Text("App Store Connect öffnen")
+                        Text(L10n.tr("App Store Connect öffnen"))
                         Image(systemName: "arrow.right")
                             .font(.caption)
                     }
@@ -413,7 +413,7 @@ struct BundleIDSetupView: View {
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.semibold))
                                 .rotationEffect(.degrees(showCreateInstructions ? 90 : 0))
-                            Text("Anleitung zur manuellen Einrichtung")
+                            Text(L10n.tr("Anleitung zur manuellen Einrichtung"))
                                 .font(.callout.weight(.medium))
                         }
                         .foregroundStyle(.blue)
@@ -423,12 +423,12 @@ struct BundleIDSetupView: View {
 
                     if showCreateInstructions {
                         VStack(alignment: .leading, spacing: 8) {
-                            createInstructionStep(1, "Öffne **[App Store Connect](https://appstoreconnect.apple.com/apps)** und klicke auf **+**.")
-                            createInstructionStep(2, "Wähle **Neue App**.")
-                            createInstructionStep(3, "Wähle Plattform und Hauptsprache wie oben bestätigt.")
-                            createInstructionStep(4, "Übernimm den bestätigten App-Store-Namen und wähle die registrierte Bundle-ID.")
-                            createInstructionStep(5, "Übernimm die bestätigte **SKU**.")
-                            createInstructionStep(6, "Klicke auf **Erstellen**.")
+                            createInstructionStep(1, L10n.tr("Öffne **[App Store Connect](https://appstoreconnect.apple.com/apps)** und klicke auf **+**."))
+                            createInstructionStep(2, L10n.tr("Wähle **Neue App**."))
+                            createInstructionStep(3, L10n.tr("Wähle Plattform und Hauptsprache wie oben bestätigt."))
+                            createInstructionStep(4, L10n.tr("Übernimm den bestätigten App-Store-Namen und wähle die registrierte Bundle-ID."))
+                            createInstructionStep(5, L10n.tr("Übernimm die bestätigte **SKU**."))
+                            createInstructionStep(6, L10n.tr("Klicke auf **Erstellen**."))
                         }
                         .padding(.top, 8)
                     }
@@ -439,7 +439,7 @@ struct BundleIDSetupView: View {
         Divider()
 
         VStack(alignment: .leading, spacing: 12) {
-            Text("Store-Eintrag bereits angelegt?")
+            Text(L10n.tr("Store-Eintrag bereits angelegt?"))
                 .font(.callout.weight(.medium))
 
             if let error {
@@ -450,12 +450,12 @@ struct BundleIDSetupView: View {
             }
 
             BlitzFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
-                Button("Angaben bearbeiten") {
+                Button(L10n.tr("Angaben bearbeiten")) {
                     goBackToBundleRegistrationForm()
                 }
                 .buttonStyle(.bordered)
 
-                Button("Store-Eintrag prüfen") {
+                Button(L10n.tr("Store-Eintrag prüfen")) {
                     confirmAppCreated()
                 }
                 .buttonStyle(.borderedProminent)
@@ -469,7 +469,7 @@ struct BundleIDSetupView: View {
     private var confirmingContent: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text("Store-Eintrag wird geprüft …")
+            Text(L10n.tr("Store-Eintrag wird geprüft …"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -544,7 +544,7 @@ struct BundleIDSetupView: View {
         let caps = Array(selectedCapabilities).sorted()
         error = nil
         phase = .creating
-        progressMessage = "Bundle-ID und ausgewählte App-Funktionen werden registriert …"
+        progressMessage = L10n.tr("Bundle-ID und ausgewählte App-Funktionen werden registriert …")
         Task {
             do {
                 guard viewOperationId == operation, asc.loadedProjectId == originalProjectId,
@@ -632,7 +632,7 @@ struct BundleIDSetupView: View {
                 NSPasteboard.general.clearContents()
                 guard NSPasteboard.general.setString(prompt, forType: .string) else {
                     throw NSError(domain: "BlitzReleaseHandoff", code: 2,
-                        userInfo: [NSLocalizedDescriptionKey: "Der Auftrag konnte nicht in die Zwischenablage kopiert werden."])
+                        userInfo: [NSLocalizedDescriptionKey: L10n.tr("Der Auftrag konnte nicht in die Zwischenablage kopiert werden.")])
                 }
                 copiedCreationHandoff = true
                 error = nil
@@ -655,13 +655,13 @@ struct BundleIDSetupView: View {
     // MARK: - Helpers
 
     @ViewBuilder
-    private func createInstructionStep(_ number: Int, _ text: LocalizedStringKey) -> some View {
+    private func createInstructionStep(_ number: Int, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("\(number).")
                 .font(.caption.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 16, alignment: .trailing)
-            Text(text)
+            Text(LocalizedStringKey(text))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -669,7 +669,7 @@ struct BundleIDSetupView: View {
     }
 
     private func presentProgramLicenseAgreementAlert(_ error: ASCError) {
-        programLicenseAlertMessage = error.programLicenseAgreementMessage + "\n\nÖffne https://developer.apple.com/account und bestätige dort die aktuelle Vereinbarung. Versuche es anschließend erneut."
+        programLicenseAlertMessage = error.programLicenseAgreementMessage + L10n.tr("\n\nÖffne https://developer.apple.com/account und bestätige dort die aktuelle Vereinbarung. Versuche es anschließend erneut.")
         showProgramLicenseAlert = true
     }
 

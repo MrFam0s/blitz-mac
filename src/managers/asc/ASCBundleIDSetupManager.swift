@@ -74,11 +74,11 @@ extension ASCManager {
 
         var errorDescription: String? {
             switch self {
-            case .ascServiceNotConfigured: return "App Store Connect ist nicht eingerichtet."
-            case .missingBundleId: return "Es ist kein bestätigter Vorgang zum Anlegen einer App geöffnet. Kehre zuerst zur Einrichtung der Bundle-ID zurück."
-            case .staleOperation: return "Das Projekt, das Konto oder der Vorgang zum Anlegen der App hat sich geändert. Kehre zum ursprünglichen Projekt zurück und starte die Einrichtung erneut."
-            case .identityMismatch: return "Die angegebenen App-Kenndaten stimmen nicht mit dem bestätigten Vorgang überein. Es wurde keine App zugeordnet."
-            case .projectUnavailable: return "Das ursprüngliche Projekt ist nicht mehr verfügbar. Es wurden keine Projektmetadaten aktualisiert."
+            case .ascServiceNotConfigured: return L10n.tr("App Store Connect ist nicht eingerichtet.")
+            case .missingBundleId: return L10n.tr("Es ist kein bestätigter Vorgang zum Anlegen einer App geöffnet. Kehre zuerst zur Einrichtung der Bundle-ID zurück.")
+            case .staleOperation: return L10n.tr("Das Projekt, das Konto oder der Vorgang zum Anlegen der App hat sich geändert. Kehre zum ursprünglichen Projekt zurück und starte die Einrichtung erneut.")
+            case .identityMismatch: return L10n.tr("Die angegebenen App-Kenndaten stimmen nicht mit dem bestätigten Vorgang überein. Es wurde keine App zugeordnet.")
+            case .projectUnavailable: return L10n.tr("Das ursprüngliche Projekt ist nicht mehr verfügbar. Es wurden keine Projektmetadaten aktualisiert.")
             }
         }
     }
@@ -169,7 +169,7 @@ extension ASCManager {
         pendingBundleIDSetup = context
         completed = true
         return BundleIDRegistrationResult(context: context, capabilitiesEnabled: enabled,
-            canonicalIdentifierNotice: canonical == identity.bundleId ? nil : "Apple hat diese Kennung bereits als „\(canonical)“ registriert. Diese genaue Schreibweise wird im Folgenden verwendet.")
+            canonicalIdentifierNotice: canonical == identity.bundleId ? nil : L10n.tr("Apple hat diese Kennung bereits als „\(canonical)“ registriert. Diese genaue Schreibweise wird im Folgenden verwendet."))
     }
 
     func confirmBundleIDSetupAppCreated(

@@ -15,7 +15,7 @@ struct ReleaseAutomationSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Update automatisch veröffentlichen", subtitle: "Bereite die Veröffentlichung im Entwicklungs-Chat oder im Blitz-Neo-Terminal vor. Der Auftrag umfasst Tests, Einreichung und die automatische Veröffentlichung nach Apples Freigabe.")
+            BlitzSetupHeader(L10n.tr("Update automatisch veröffentlichen"), subtitle: L10n.tr("Bereite die Veröffentlichung im Entwicklungs-Chat oder im Blitz-Neo-Terminal vor. Der Auftrag umfasst Tests, Einreichung und die automatische Veröffentlichung nach Apples Freigabe."))
 
             Divider()
 
@@ -27,25 +27,25 @@ struct ReleaseAutomationSheet: View {
                             Text(context.projectPath)
                                 .font(.caption.monospaced()).foregroundStyle(.secondary)
                                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-                            Text("Zuletzt freigegebene Version: \(context.displayedLiveVersion ?? "unbekannt") · \(context.platform.rawValue)")
+                            Text(L10n.tr("Zuletzt freigegebene Version: \(context.displayedLiveVersion ?? L10n.tr("unbekannt")) · \(context.platform.rawValue)"))
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if let draft = context.preparedVersion {
-                            Label("Vorbereiteter Entwurf: Version \(draft.version)", systemImage: "doc.text")
+                            Label(L10n.tr("Vorbereiteter Entwurf: Version \(draft.version)"), systemImage: "doc.text")
                                 .font(.headline)
-                            Text("Gespeicherte Texte, Screenshots und App-Preview-Videos dieses Entwurfs bleiben erhalten. Starte erst, wenn die Bearbeitung abgeschlossen ist. Fehlende Versionshinweise werden ergänzt.")
+                            Text(L10n.tr("Gespeicherte Texte, Screenshots und App-Preview-Videos dieses Entwurfs bleiben erhalten. Starte erst, wenn die Bearbeitung abgeschlossen ist. Fehlende Versionshinweise werden ergänzt."))
                                 .font(.callout).foregroundStyle(.secondary)
                         } else {
-                            Text("Für ein normales App-Update werden eine neue Version und der passende Changelog vorbereitet. Vorhandene Store-Texte und Medien bleiben erhalten.")
+                            Text(L10n.tr("Für ein normales App-Update werden eine neue Version und der passende Changelog vorbereitet. Vorhandene Store-Texte und Medien bleiben erhalten."))
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                         if let preflight {
                             if preflight.artifacts.isEmpty {
-                                Text("Keine passenden lokalen Build-Artefakte gefunden. Der Agent prüft zusätzlich den Quellstand und den Build-Ordner des Projekts.")
+                                Text(L10n.tr("Keine passenden lokalen Build-Artefakte gefunden. Der Agent prüft zusätzlich den Quellstand und den Build-Ordner des Projekts."))
                                     .font(.callout).foregroundStyle(.secondary)
                             } else {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Lokale Build-Artefakte (\(preflight.artifacts.count))").font(.callout.weight(.medium))
+                                    Text(L10n.tr("Lokale Build-Artefakte (\(preflight.artifacts.count))")).font(.callout.weight(.medium))
                                     ForEach(Array(preflight.artifacts.prefix(3))) { artifact in
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(URL(fileURLWithPath: artifact.path).lastPathComponent).lineLimit(1)
@@ -53,30 +53,30 @@ struct ReleaseAutomationSheet: View {
                                                 .font(.caption).foregroundStyle(.secondary)
                                         }.help(artifact.path)
                                     }
-                                    if preflight.artifacts.count > 3 { Text("Weitere \(preflight.artifacts.count - 3) im Projektordner").font(.caption).foregroundStyle(.secondary) }
+                                    if preflight.artifacts.count > 3 { Text(L10n.tr("Weitere \(preflight.artifacts.count - 3) im Projektordner")).font(.caption).foregroundStyle(.secondary) }
                                 }
                             }
                             if preflight.incomplete {
-                                Text("Die Vorschau ist unvollständig. Der Ablauf prüft den tatsächlichen Release-Pfad erneut.")
+                                Text(L10n.tr("Die Vorschau ist unvollständig. Der Ablauf prüft den tatsächlichen Release-Pfad erneut."))
                                     .font(.caption).foregroundStyle(.orange)
                             }
                         } else {
-                            HStack { ProgressView().controlSize(.small); Text("Build-Ordner wird geprüft …").font(.callout) }
+                            HStack { ProgressView().controlSize(.small); Text(L10n.tr("Build-Ordner wird geprüft …")).font(.callout) }
                         }
                     }
 
                     VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
-                        Text("Ablauf").font(.callout.weight(.medium))
-                        Label("App- und Store-Änderungen prüfen und Tests ausführen", systemImage: "checkmark.circle")
-                        Label(context?.preparedVersion == nil ? "Version und Changelog für die Store-Sprachen erstellen" : "Entwurf prüfen und fehlende Versionshinweise ergänzen", systemImage: "text.badge.plus")
-                        Label("Build hochladen und bei Apple zur Prüfung einreichen", systemImage: "arrow.up.circle")
-                        Label("Nach Apples Freigabe automatisch veröffentlichen", systemImage: "app.badge.checkmark")
+                        Text(L10n.tr("Ablauf")).font(.callout.weight(.medium))
+                        Label(L10n.tr("App- und Store-Änderungen prüfen und Tests ausführen"), systemImage: "checkmark.circle")
+                        Label(context?.preparedVersion == nil ? L10n.tr("Version und Changelog für die Store-Sprachen erstellen") : L10n.tr("Entwurf prüfen und fehlende Versionshinweise ergänzen"), systemImage: "text.badge.plus")
+                        Label(L10n.tr("Build hochladen und bei Apple zur Prüfung einreichen"), systemImage: "arrow.up.circle")
+                        Label(L10n.tr("Nach Apples Freigabe automatisch veröffentlichen"), systemImage: "app.badge.checkmark")
                     }
-                    Text("Beide Wege prüfen denselben App- und Build-Stand. Ohne nachgewiesene Änderungen oder bei fehlgeschlagenen Tests wird nichts eingereicht. Im Blitz-Terminal startet \(agent.displayName).")
+                    Text(L10n.tr("Beide Wege prüfen denselben App- und Build-Stand. Ohne nachgewiesene Änderungen oder bei fehlgeschlagenen Tests wird nichts eingereicht. Im Blitz-Terminal startet \(agent.displayName)."))
                         .font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let copiedHandoff {
-                        Label("Auftrag kopiert. Füge ihn im Entwicklungs-Chat ein, um den Ablauf zu starten.", systemImage: "checkmark.circle")
+                        Label(L10n.tr("Auftrag kopiert. Füge ihn im Entwicklungs-Chat ein, um den Ablauf zu starten."), systemImage: "checkmark.circle")
                             .foregroundStyle(.secondary)
                             .help(copiedHandoff.path)
                     }
@@ -91,12 +91,12 @@ struct ReleaseAutomationSheet: View {
             Divider()
 
             HStack(spacing: BlitzLayout.fieldSpacing) {
-                Button(copiedHandoff == nil ? "Abbrechen" : "Schließen") { dismiss() }
+                Button(copiedHandoff == nil ? L10n.tr("Abbrechen") : L10n.tr("Schließen")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Im Blitz-Terminal starten") { start(inExistingChat: false) }
+                Button(L10n.tr("Im Blitz-Terminal starten")) { start(inExistingChat: false) }
                     .disabled(context == nil || preflight == nil)
-                Button("Auftrag für Chat kopieren") { start(inExistingChat: true) }
+                Button(L10n.tr("Auftrag für Chat kopieren")) { start(inExistingChat: true) }
                     .buttonStyle(.borderedProminent)
                     .disabled(context == nil || preflight == nil)
             }
@@ -107,7 +107,7 @@ struct ReleaseAutomationSheet: View {
         .task {
             guard let project = appState.activeProject, let app = appState.ascManager.app,
                   project.metadata.bundleIdentifier == app.bundleId else {
-                error = "Für den automatischen Ablauf muss die App mit ihrem lokalen Projekt verknüpft sein. Ein Entwurf kann über „Versionsentwurf anlegen“ erstellt werden."
+                error = L10n.tr("Für den automatischen Ablauf muss die App mit ihrem lokalen Projekt verknüpft sein. Ein Entwurf kann über „Versionsentwurf anlegen“ erstellt werden.")
                 return
             }
             releaseTarget = appState.ascManager.releaseOperationTarget()
@@ -115,7 +115,7 @@ struct ReleaseAutomationSheet: View {
             let versions: [ASCAppStoreVersion]
             let prepared: PreparedReleaseVersion?
             do {
-                guard let service = appState.ascManager.service else { throw ASCError.notFound("ASC ist nicht verbunden.") }
+                guard let service = appState.ascManager.service else { throw ASCError.notFound(L10n.tr("ASC ist nicht verbunden.")) }
                 versions = try await service.fetchAppStoreVersions(appId: app.id)
                 guard !Task.isCancelled, appState.ascManager.projectRevision == revision,
                       appState.ascManager.app?.id == app.id else { return }
@@ -133,7 +133,7 @@ struct ReleaseAutomationSheet: View {
             )
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: target.projectPath, isDirectory: &isDirectory), isDirectory.boolValue else {
-                error = "Der verknüpfte Projektordner ist nicht erreichbar."
+                error = L10n.tr("Der verknüpfte Projektordner ist nicht erreichbar.")
                 return
             }
             context = target
@@ -145,9 +145,9 @@ struct ReleaseAutomationSheet: View {
     }
 
     private func artifactDescription(_ artifact: LocalReleaseArtifact, live: String?) -> String {
-        guard let version = artifact.version, let build = artifact.build else { return "App-Zuordnung und Inhalt werden beim Start geprüft" }
+        guard let version = artifact.version, let build = artifact.build else { return L10n.tr("App-Zuordnung und Inhalt werden beim Start geprüft") }
         let newer = live.flatMap { ReleaseAutomationService.compareVersions(version, $0) } == .orderedDescending
-        return "Version \(version) · Build \(build)" + (newer ? " · neuer als die angezeigte freigegebene Version" : " · noch kein Nachweis für ein neues Release")
+        return "Version \(version) · Build \(build)" + (newer ? L10n.tr(" · neuer als die angezeigte freigegebene Version") : L10n.tr(" · noch kein Nachweis für ein neues Release"))
     }
 
     private func start(inExistingChat: Bool) {
@@ -155,7 +155,7 @@ struct ReleaseAutomationSheet: View {
         guard releaseTarget?.matches(appState.ascManager) == true, context.matches(project: appState.activeProject, app: appState.ascManager.app),
               ReleaseAutomationService.matchesPreparedVersion(context, versions: appState.ascManager.appStoreVersions),
               context.accountKey == DashboardSummaryStore.accountKey(for: appState.ascManager.credentials) else {
-            error = "Die ausgewählte App oder ihr Entwurf hat sich geändert. Bitte schließe den Dialog und starte erneut."
+            error = L10n.tr("Die ausgewählte App oder ihr Entwurf hat sich geändert. Bitte schließe den Dialog und starte erneut.")
             return
         }
         do {
@@ -167,7 +167,7 @@ struct ReleaseAutomationSheet: View {
                 NSPasteboard.general.clearContents()
                 guard NSPasteboard.general.setString(handoff.instructions, forType: .string) else {
                     throw NSError(domain: "BlitzReleaseHandoff", code: 2,
-                        userInfo: [NSLocalizedDescriptionKey: "Der Auftrag konnte nicht in die Zwischenablage kopiert werden."])
+                        userInfo: [NSLocalizedDescriptionKey: L10n.tr("Der Auftrag konnte nicht in die Zwischenablage kopiert werden.")])
                 }
                 copiedHandoff = handoff.document
                 error = nil
@@ -208,35 +208,35 @@ struct VersionDraftSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Versionsentwurf anlegen", subtitle: "Lege einen Entwurf in App Store Connect an, um Texte und Screenshots vor der Einreichung zu bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht.")
+            BlitzSetupHeader(L10n.tr("Versionsentwurf anlegen"), subtitle: L10n.tr("Lege einen Entwurf in App Store Connect an, um Texte und Screenshots vor der Einreichung zu bearbeiten. Videos lassen sich per Codex/ASC oder in App Store Connect pflegen. Es wird kein Build hochgeladen und nichts eingereicht."))
 
             Divider()
 
             BlitzSetupScrollArea(maxHeight: 300) {
                 VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                    BlitzSetupField("Versionsnummer") {
-                        TextField("z. B. 1.4.2", text: $versionString)
+                    BlitzSetupField(L10n.tr("Versionsnummer")) {
+                        TextField(L10n.tr("z. B. 1.4.2"), text: $versionString)
                             .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Versionsnummer")
+                            .accessibilityLabel(L10n.tr("Versionsnummer"))
                     }
-                    BlitzSetupField("Daten übernehmen aus") {
-                        Picker("Daten übernehmen aus", selection: $copyFromVersionId) {
-                            Text("Keine bisherige Version").tag("")
+                    BlitzSetupField(L10n.tr("Daten übernehmen aus")) {
+                        Picker(L10n.tr("Daten übernehmen aus"), selection: $copyFromVersionId) {
+                            Text(L10n.tr("Keine bisherige Version")).tag("")
                             ForEach(sourceVersions) { version in
                                 Text("Version \(version.attributes.versionString)").tag(version.id)
                             }
                         }
                         .pickerStyle(.menu)
-                        .accessibilityLabel("Daten übernehmen aus")
+                        .accessibilityLabel(L10n.tr("Daten übernehmen aus"))
                         .disabled(!copyMetadata && !copyReviewDetail)
                     }
                     VStack(alignment: .leading, spacing: BlitzLayout.fieldSpacing) {
-                        Toggle("Store-Texte übernehmen", isOn: $copyMetadata)
-                        Toggle("Prüfkontaktdaten übernehmen", isOn: $copyReviewDetail)
+                        Toggle(L10n.tr("Store-Texte übernehmen"), isOn: $copyMetadata)
+                        Toggle(L10n.tr("Prüfkontaktdaten übernehmen"), isOn: $copyReviewDetail)
                     }
-                    if isChecking { ProgressView("Aktuellen Store-Stand prüfen …").controlSize(.small) }
+                    if isChecking { ProgressView(L10n.tr("Aktuellen Store-Stand prüfen …")).controlSize(.small) }
                     if !isChecking && draftTarget?.platform == nil {
-                        Text("Bitte zuerst die Plattform in der Versionsleiste auswählen und den Dialog erneut öffnen.")
+                        Text(L10n.tr("Bitte zuerst die Plattform in der Versionsleiste auswählen und den Dialog erneut öffnen."))
                             .font(.callout).foregroundStyle(.orange)
                     }
 
@@ -271,14 +271,14 @@ struct VersionDraftSheet: View {
             Divider()
 
             HStack(spacing: BlitzLayout.fieldSpacing) {
-                Button("Abbrechen") {
+                Button(L10n.tr("Abbrechen")) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                Button("Versionsentwurf anlegen") {
+                Button(L10n.tr("Versionsentwurf anlegen")) {
                     Task {
                         guard targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
                         guard let draftTarget, draftTarget.matches(asc), let platform = draftTarget.platform else { return }
@@ -314,7 +314,7 @@ struct VersionDraftSheet: View {
             asc.versionCreationError = nil
             defer { isChecking = false }
             do {
-                guard let appID = targetAppID, let service = asc.service else { throw ASCError.notFound("Keine App oder ASC-Verbindung ausgewählt.") }
+                guard let appID = targetAppID, let service = asc.service else { throw ASCError.notFound(L10n.tr("Keine App oder ASC-Verbindung ausgewählt.")) }
                 let versions = try await service.fetchAppStoreVersions(appId: appID)
                 guard !Task.isCancelled, targetRevision == asc.projectRevision, targetAppID == asc.app?.id else { return }
                 guard draftTarget?.matches(asc) == true else { return }

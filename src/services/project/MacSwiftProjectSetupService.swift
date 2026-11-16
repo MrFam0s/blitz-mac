@@ -15,7 +15,7 @@ struct MacSwiftProjectSetupService {
         let bundleId = SwiftProjectSetupService.toBundleId(appName)
         let spec = ProjectTemplateSpec(
             templateName: "swift-mac-template",
-            missingTemplateMessage: "Die mitgelieferte Swift-Vorlage für macOS wurde nicht gefunden.",
+            missingTemplateMessage: L10n.tr("Die mitgelieferte Swift-Vorlage für macOS wurde nicht gefunden."),
             replacements: [
                 "__APP_NAME__": appName,
                 "__BUNDLE_ID__": bundleId

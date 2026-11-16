@@ -144,11 +144,11 @@ enum ProjectReleaseTargetError: LocalizedError {
     case missing, ambiguous, invalid, duplicate, boundIdentity
     var errorDescription: String? {
         switch self {
-        case .missing: return "Das Veröffentlichungsziel wurde nicht gefunden. Bitte das Ziel erneut auswählen."
-        case .ambiguous: return "Dieses Projekt hat mehrere Veröffentlichungsziele. Bitte die genaue releaseTargetId angeben."
-        case .invalid: return "Das Veröffentlichungsziel enthält widersprüchliche Store- oder Projektkennungen."
-        case .duplicate: return "Dieses Veröffentlichungsziel ist bereits vorhanden. Bitte das vorhandene Ziel auswählen."
-        case .boundIdentity: return "Die Bundle-ID einer bestätigten Store-Zuordnung kann nicht geändert werden. Lege dafür ein separates Veröffentlichungsziel an."
+        case .missing: return L10n.tr("Das Veröffentlichungsziel wurde nicht gefunden. Bitte das Ziel erneut auswählen.")
+        case .ambiguous: return L10n.tr("Dieses Projekt hat mehrere Veröffentlichungsziele. Bitte die genaue releaseTargetId angeben.")
+        case .invalid: return L10n.tr("Das Veröffentlichungsziel enthält widersprüchliche Store- oder Projektkennungen.")
+        case .duplicate: return L10n.tr("Dieses Veröffentlichungsziel ist bereits vorhanden. Bitte das vorhandene Ziel auswählen.")
+        case .boundIdentity: return L10n.tr("Die Bundle-ID einer bestätigten Store-Zuordnung kann nicht geändert werden. Lege dafür ein separates Veröffentlichungsziel an.")
         }
     }
 }

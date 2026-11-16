@@ -32,25 +32,25 @@ struct FeedbackView: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Rückmeldungen")
+                    Text(L10n.tr("Rückmeldungen"))
                         .font(BlitzLayout.pageTitle)
                     Spacer()
                     if isLoadingFeedback {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: "Rückmeldungen aktualisieren")
+                    ASCTabRefreshButton(asc: asc, tab: .feedback, helpText: L10n.tr("Rückmeldungen aktualisieren"))
                 }
 
                 if !builds.isEmpty {
-                    Picker("Build", selection: $localSelectedBuildId) {
+                    Picker(L10n.tr("Build"), selection: $localSelectedBuildId) {
                         ForEach(builds) { build in
                             Text(TestFlightPresentation.buildLabel(build))
                                 .tag(build.id)
                         }
                     }
                     .pickerStyle(.menu)
-                    .accessibilityLabel("Build")
+                    .accessibilityLabel(L10n.tr("Build"))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .onAppear {
                         if localSelectedBuildId.isEmpty {
@@ -66,38 +66,38 @@ struct FeedbackView: View {
             if builds.isEmpty {
                 if asc.isTabLoading(.feedback) {
                     ASCTabLoadingPlaceholder(
-                        title: "Rückmeldungen werden geladen",
-                        message: "Builds und aktuelle Rückmeldungen der Tester werden geladen."
+                        title: L10n.tr("Rückmeldungen werden geladen"),
+                        message: L10n.tr("Builds und aktuelle Rückmeldungen der Tester werden geladen.")
                     )
                 } else {
                     ContentUnavailableView(
-                        "Keine Builds",
+                        L10n.tr("Keine Builds"),
                         systemImage: "hammer",
-                        description: Text("Lade einen TestFlight-Build hoch, um Rückmeldungen von Testern zu erhalten.")
+                        description: Text(L10n.tr("Lade einen TestFlight-Build hoch, um Rückmeldungen von Testern zu erhalten."))
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             } else if feedback.isEmpty {
                 if isLoadingFeedback {
                     ASCTabLoadingPlaceholder(
-                        title: "Rückmeldungen werden geladen",
-                        message: "Kommentare und Screenshots der Tester zu diesem Build werden geladen."
+                        title: L10n.tr("Rückmeldungen werden geladen"),
+                        message: L10n.tr("Kommentare und Screenshots der Tester zu diesem Build werden geladen.")
                     )
                 } else if let error = asc.tabError[.feedback] {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("Rückmeldungen konnten nicht geladen werden", systemImage: "exclamationmark.triangle")
+                        Label(L10n.tr("Rückmeldungen konnten nicht geladen werden"), systemImage: "exclamationmark.triangle")
                         Text(error).font(.caption).foregroundStyle(.secondary)
-                        Button("Erneut versuchen") {
+                        Button(L10n.tr("Erneut versuchen")) {
                             Task { await asc.refreshBetaFeedback(buildId: effectiveBuildId) }
                         }.buttonStyle(.bordered)
                     }.frame(maxWidth: .infinity, maxHeight: .infinity).blitzPagePadding()
                 } else if asc.betaFeedback[effectiveBuildId] == nil {
-                    ASCTabLoadingPlaceholder(title: "Rückmeldungen werden geladen", message: "Kommentare und Screenshots der Tester zu diesem Build werden geladen.")
+                    ASCTabLoadingPlaceholder(title: L10n.tr("Rückmeldungen werden geladen"), message: L10n.tr("Kommentare und Screenshots der Tester zu diesem Build werden geladen."))
                 } else {
                     ContentUnavailableView(
-                        "Keine Rückmeldungen",
+                        L10n.tr("Keine Rückmeldungen"),
                         systemImage: "exclamationmark.bubble",
-                        description: Text("Für diesen Build gibt es noch keine Rückmeldungen von Testern.")
+                        description: Text(L10n.tr("Für diesen Build gibt es noch keine Rückmeldungen von Testern."))
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -125,7 +125,7 @@ struct FeedbackView: View {
     private func feedbackRow(_ item: ASCBetaFeedback) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
-                Label(item.attributes.emailAddress ?? "Anonym", systemImage: "person.circle")
+                Label(item.attributes.emailAddress ?? L10n.tr("Anonym"), systemImage: "person.circle")
                     .font(BlitzLayout.bodyFont.weight(.medium))
                     .fixedSize(horizontal: false, vertical: true)
                 if let ts = item.attributes.timestamp {

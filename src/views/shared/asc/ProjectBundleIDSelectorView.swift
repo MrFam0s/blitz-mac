@@ -6,7 +6,7 @@ struct ProjectBundleIDSelectorView: View {
     var asc: ASCManager
     var tab: AppTab
     var platform: ProjectPlatform = .iOS
-    var title: String = "App-Store-Zuordnung"
+    var title: String = L10n.tr("App-Store-Zuordnung")
     var subtitle: String? = nil
     var standalone: Bool = false
 
@@ -69,26 +69,26 @@ struct ProjectBundleIDSelectorView: View {
         }
 
         if asc.app == nil {
-            return "Für dieses Projekt wurde keine App in App Store Connect gefunden. Prüfe die Zuordnung oder starte die Einrichtung einer neuen App."
+            return L10n.tr("Für dieses Projekt wurde keine App in App Store Connect gefunden. Prüfe die Zuordnung oder starte die Einrichtung einer neuen App.")
         }
 
-        return "Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt."
+        return L10n.tr("Wähle die App-Kennung, mit der dieses Projekt seine Daten aus App Store Connect lädt.")
     }
 
     private var discoveryDescription: String {
         if isASCFilteredSelection {
             return discoveredBundleIds.count == 1
-                ? "Passender App-Store-Eintrag gefunden."
-                : "\(discoveredBundleIds.count) Kennungen mit App-Store-Eintrag gefunden."
+                ? L10n.tr("Passender App-Store-Eintrag gefunden.")
+                : L10n.tr("\(discoveredBundleIds.count) Kennungen mit App-Store-Eintrag gefunden.")
         }
         if selectionOptions.count == 1, let value = selectionOptions.first {
-            return discoveredBundleIds.contains(value) ? "Im Projekt erkannt." : "Für dieses Projekt gespeichert."
+            return discoveredBundleIds.contains(value) ? L10n.tr("Im Projekt erkannt.") : L10n.tr("Für dieses Projekt gespeichert.")
         }
-        return "Wähle die Kennung des gewünschten App-Ziels."
+        return L10n.tr("Wähle die Kennung des gewünschten App-Ziels.")
     }
 
     private var primaryButtonTitle: String {
-        asc.app == nil ? "Kennung verwenden" : "Zuordnung übernehmen"
+        asc.app == nil ? L10n.tr("Kennung verwenden") : L10n.tr("Zuordnung übernehmen")
     }
 
     private var canSubmitSelection: Bool {
@@ -123,7 +123,7 @@ struct ProjectBundleIDSelectorView: View {
             } else if isResolvingCandidates {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("App-Store-Zuordnung wird geprüft …")
+                    Text(L10n.tr("App-Store-Zuordnung wird geprüft …"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -168,17 +168,17 @@ struct ProjectBundleIDSelectorView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Bundle-ID")
+                Text(L10n.tr("Bundle-ID"))
                     .font(.callout.weight(.medium))
 
                 if usesManualEntry {
-                    TextField("org.beispiel.MeineApp", text: $manualBundleId)
+                    TextField(L10n.tr("org.beispiel.MeineApp"), text: $manualBundleId)
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Bundle-ID manuell eingeben")
+                        .accessibilityLabel(L10n.tr("Bundle-ID manuell eingeben"))
 
                     Text(selectionOptions.isEmpty
-                        ? "Keine Kennung erkannt. Gib die Bundle-ID des App-Ziels ein."
-                        : "Die eingegebene Kennung wird für diese Zuordnung verwendet.")
+                        ? L10n.tr("Keine Kennung erkannt. Gib die Bundle-ID des App-Ziels ein.")
+                        : L10n.tr("Die eingegebene Kennung wird für diese Zuordnung verwendet."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if selectionOptions.count == 1, let bundleID = selectionOptions.first {
@@ -193,15 +193,15 @@ struct ProjectBundleIDSelectorView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Picker("Bundle-ID", selection: pickerSelection) {
-                        if selectedBundleId.isEmpty { Text("App-Kennung auswählen").tag("") }
+                    Picker(L10n.tr("Bundle-ID"), selection: pickerSelection) {
+                        if selectedBundleId.isEmpty { Text(L10n.tr("App-Kennung auswählen")).tag("") }
                         ForEach(selectionOptions, id: \.self) { bundleId in
                             Text(bundleId).tag(bundleId)
                         }
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .accessibilityLabel("Bundle-ID auswählen")
+                    .accessibilityLabel(L10n.tr("Bundle-ID auswählen"))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Text(discoveryDescription)
                         .font(.caption)
@@ -209,7 +209,7 @@ struct ProjectBundleIDSelectorView: View {
                 }
 
                 if !selectionOptions.isEmpty {
-                    Button(usesManualEntry ? "Zur Projektauswahl zurück" : "Andere Bundle-ID eingeben") {
+                    Button(usesManualEntry ? L10n.tr("Zur Projektauswahl zurück") : L10n.tr("Andere Bundle-ID eingeben")) {
                         if usesManualEntry {
                             manualBundleId = ""
                             showManualEntry = false
@@ -237,20 +237,20 @@ struct ProjectBundleIDSelectorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!canSubmitSelection)
 
-                Button("Neu erkennen") {
+                Button(L10n.tr("Neu erkennen")) {
                     Task { await reloadDiscoveredBundleIds() }
                 }
                 .buttonStyle(.bordered)
-                .help("Bundle-IDs erneut aus dem Projekt lesen")
+                .help(L10n.tr("Bundle-IDs erneut aus dem Projekt lesen"))
                 .disabled(isResolvingCandidates || isSaving)
             }
 
-            Button("Neue App einrichten …") {
+            Button(L10n.tr("Neue App einrichten …")) {
                 showRegistrationFlow = true
             }
             .buttonStyle(.link)
             .font(.callout)
-            .help("Öffnet die separate Einrichtung. Die Angaben werden dort bestätigt.")
+            .help(L10n.tr("Öffnet die separate Einrichtung. Die Angaben werden dort bestätigt."))
             .disabled(isSaving)
 
         }
@@ -306,12 +306,12 @@ struct ProjectBundleIDSelectorView: View {
     private func applySelectedBundleId(ifCurrent: (() -> Bool)? = nil) async {
         guard ifCurrent?() != false else { return }
         guard let projectId = appState.activeProjectId else {
-            error = "Kein Projekt ausgewählt."
+            error = L10n.tr("Kein Projekt ausgewählt.")
             return
         }
 
         guard let bundleId = effectiveBundleId else {
-            error = "Wähle eine Bundle-ID aus oder gib sie ein."
+            error = L10n.tr("Wähle eine Bundle-ID aus oder gib sie ein.")
             return
         }
 
@@ -417,7 +417,7 @@ struct ProjectBundleIDSelectorView: View {
             discoveredBundleIds = candidates
             applyDefaultSelection(candidates)
             isASCFilteredSelection = false
-            self.error = "Die erkannten Bundle-IDs konnten in App Store Connect nicht geprüft werden: \(error.localizedDescription)"
+            self.error = L10n.tr("Die erkannten Bundle-IDs konnten in App Store Connect nicht geprüft werden: \(error.localizedDescription)")
         }
     }
 

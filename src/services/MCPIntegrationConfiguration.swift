@@ -9,11 +9,11 @@ struct MCPIntegrationConfiguration {
 
         var label: String {
             switch self {
-            case .missing: return "Kein globaler Eintrag"
-            case .present: return "Globaler Eintrag vorhanden"
-            case .disabled: return "Global deaktiviert"
-            case .restricted: return "Global mit Werkzeugauswahl"
-            case .unreadable: return "Nicht prüfbar"
+            case .missing: return L10n.tr("Kein globaler Eintrag")
+            case .present: return L10n.tr("Globaler Eintrag vorhanden")
+            case .disabled: return L10n.tr("Global deaktiviert")
+            case .restricted: return L10n.tr("Global mit Werkzeugauswahl")
+            case .unreadable: return L10n.tr("Nicht prüfbar")
             }
         }
     }

@@ -32,7 +32,7 @@ struct UpdateCardContent: View {
         switch autoUpdate.state {
         case .available(let version, let notes):
             VStack(alignment: .leading, spacing: 16) {
-                BlitzSetupHeader("Blitz Neo aktualisieren", subtitle: "Version \(version) ist verfügbar.")
+                BlitzSetupHeader(L10n.tr("Blitz Neo aktualisieren"), subtitle: L10n.tr("Version \(version) ist verfügbar."))
 
                 if !notes.isEmpty {
                     ScrollView {
@@ -49,12 +49,12 @@ struct UpdateCardContent: View {
 
                 Divider()
                 HStack {
-                    Button("Später") {
+                    Button(L10n.tr("Später")) {
                         autoUpdate.dismiss()
                     }
                     .keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button("Jetzt aktualisieren") {
+                    Button(L10n.tr("Jetzt aktualisieren")) {
                         Task { await autoUpdate.performUpdate() }
                     }
                     .buttonStyle(.borderedProminent)
@@ -63,9 +63,9 @@ struct UpdateCardContent: View {
 
         case .downloading(let percent):
             VStack(alignment: .leading, spacing: 16) {
-                BlitzSetupHeader("Update wird geladen", subtitle: percent >= 0
-                    ? "\(percent) % abgeschlossen"
-                    : "Die neue Version von Blitz Neo wird heruntergeladen.")
+                BlitzSetupHeader(L10n.tr("Update wird geladen"), subtitle: percent >= 0
+                    ? L10n.tr("\(percent) % abgeschlossen")
+                    : L10n.tr("Die neue Version von Blitz Neo wird heruntergeladen."))
 
                 if percent >= 0 {
                     ProgressView(value: Double(percent), total: 100)
@@ -80,7 +80,7 @@ struct UpdateCardContent: View {
 
         case .installing:
             VStack(alignment: .leading, spacing: 16) {
-                BlitzSetupHeader("Update wird installiert", subtitle: "Blitz Neo startet anschließend automatisch neu.")
+                BlitzSetupHeader(L10n.tr("Update wird installiert"), subtitle: L10n.tr("Blitz Neo startet anschließend automatisch neu."))
 
                 ProgressView()
                     .frame(maxWidth: .infinity)
@@ -88,7 +88,7 @@ struct UpdateCardContent: View {
 
         case .failed(let message):
             VStack(alignment: .leading, spacing: 16) {
-                Label("Update fehlgeschlagen", systemImage: "exclamationmark.triangle")
+                Label(L10n.tr("Update fehlgeschlagen"), systemImage: "exclamationmark.triangle")
                     .font(.title2.weight(.semibold))
                     .accessibilityAddTraits(.isHeader)
                 ScrollView {
@@ -103,12 +103,12 @@ struct UpdateCardContent: View {
 
                 Divider()
                 HStack {
-                    Button("Schließen") {
+                    Button(L10n.tr("Schließen")) {
                         autoUpdate.dismiss()
                     }
                     .keyboardShortcut(.cancelAction)
                     Spacer()
-                    Button("Erneut versuchen") {
+                    Button(L10n.tr("Erneut versuchen")) {
                         Task { await autoUpdate.performUpdate() }
                     }
                     .buttonStyle(.borderedProminent)
@@ -133,7 +133,7 @@ struct UpdateSettingsRow: View {
     var body: some View {
         switch autoUpdate.state {
         case .idle:
-            Button("Nach veröffentlichten Updates suchen") {
+            Button(L10n.tr("Nach veröffentlichten Updates suchen")) {
                 Task { await autoUpdate.checkForUpdate() }
             }
 
@@ -141,7 +141,7 @@ struct UpdateSettingsRow: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Updates werden geprüft …")
+                Text(L10n.tr("Updates werden geprüft …"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -150,10 +150,10 @@ struct UpdateSettingsRow: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("Kein neueres veröffentlichtes Update")
+                Text(L10n.tr("Kein neueres veröffentlichtes Update"))
                     .font(.callout)
                 Spacer()
-                Button("Erneut prüfen") {
+                Button(L10n.tr("Erneut prüfen")) {
                     Task { await autoUpdate.checkForUpdate() }
                 }
                 .controlSize(.small)
@@ -165,7 +165,7 @@ struct UpdateSettingsRow: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Erneut prüfen") {
+                Button(L10n.tr("Erneut prüfen")) {
                     Task { await autoUpdate.checkForUpdate() }
                 }
                 .controlSize(.small)
@@ -175,13 +175,13 @@ struct UpdateSettingsRow: View {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundStyle(.blue)
-                Text("Update verfügbar")
+                Text(L10n.tr("Update verfügbar"))
                     .font(.callout)
                 Text("v\(version)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Update ansehen") {
+                Button(L10n.tr("Update ansehen")) {
                     showUpdateSheet = true
                 }
                 .buttonStyle(.borderedProminent)
@@ -203,7 +203,7 @@ struct UpdateSettingsRow: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Ansehen") {
+                Button(L10n.tr("Ansehen")) {
                     showUpdateSheet = true
                 }
                 .controlSize(.small)
@@ -222,9 +222,9 @@ struct UpdateSettingsRow: View {
 
     private var statusLabel: String {
         switch autoUpdate.state {
-        case .downloading: return "Wird geladen …"
-        case .installing: return "Wird installiert …"
-        case .failed: return "Update fehlgeschlagen"
+        case .downloading: return L10n.tr("Wird geladen …")
+        case .installing: return L10n.tr("Wird installiert …")
+        case .failed: return L10n.tr("Update fehlgeschlagen")
         default: return ""
         }
     }
@@ -236,7 +236,7 @@ struct UpdateSettingsRow: View {
             if hasActiveUpdate {
                 Divider()
                 HStack {
-                    Button("Schließen") {
+                    Button(L10n.tr("Schließen")) {
                         showUpdateSheet = false
                     }
                     .keyboardShortcut(.cancelAction)

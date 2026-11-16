@@ -2,75 +2,87 @@ import Testing
 @testable import Blitz
 
 @Test func releasePresentationSeparatesApprovalFromStoreAvailability() {
-    let version = presentationVersion("current", state: "READY_FOR_SALE")
-    let approval = ASCReleaseStatusPresentation.version(version, distributionReadyVersionID: "current")
-    let unavailable = presentationStore(availability: .unavailable)
-    let live = presentationStore(availability: .available, liveID: "current")
+    L10n.$overrideLanguage.withValue("de") {
+        let version = presentationVersion("current", state: "READY_FOR_SALE")
+        let approval = ASCReleaseStatusPresentation.version(version, distributionReadyVersionID: "current")
+        let unavailable = presentationStore(availability: .unavailable)
+        let live = presentationStore(availability: .available, liveID: "current")
 
-    #expect(approval.label == "Zur Verteilung freigegeben")
-    #expect(approval.tone == .neutral)
-    #expect(unavailable.label == "Nicht im App Store")
-    #expect(unavailable.tone == .neutral)
-    #expect(live.label == "Im App Store verfügbar")
-    #expect(live.tone == .positive)
+        #expect(approval.label == "Zur Verteilung freigegeben")
+        #expect(approval.tone == .neutral)
+        #expect(unavailable.label == "Nicht im App Store")
+        #expect(unavailable.tone == .neutral)
+        #expect(live.label == "Im App Store verfügbar")
+        #expect(live.tone == .positive)
+    }
 }
 
 @Test func releasePresentationNeverCallsHistoricalReadyVersionLive() {
-    for state in ["READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"] {
-        let historical = ASCReleaseStatusPresentation.version(
-            presentationVersion("previous", state: state), distributionReadyVersionID: "current"
-        )
-        #expect(historical.label == "Früher veröffentlicht")
-        #expect(historical.tone == .neutral)
+    L10n.$overrideLanguage.withValue("de") {
+        for state in ["READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION"] {
+            let historical = ASCReleaseStatusPresentation.version(
+                presentationVersion("previous", state: state), distributionReadyVersionID: "current"
+            )
+            #expect(historical.label == "Früher veröffentlicht")
+            #expect(historical.tone == .neutral)
+        }
+        let inconsistentIdentity = presentationStore(availability: .available, liveID: "previous")
+        #expect(inconsistentIdentity.tone != .positive)
     }
-    let inconsistentIdentity = presentationStore(availability: .available, liveID: "previous")
-    #expect(inconsistentIdentity.tone != .positive)
 }
 
 @Test func releasePresentationDoesNotTreatMissingOrFailedAvailabilityAsLive() {
-    let missing = presentationStore(availability: nil, liveID: "current")
-    let failed = presentationStore(availability: .available, liveID: "current", failed: true)
-    let loading = presentationStore(availability: .available, liveID: "current", loading: true)
+    L10n.$overrideLanguage.withValue("de") {
+        let missing = presentationStore(availability: nil, liveID: "current")
+        let failed = presentationStore(availability: .available, liveID: "current", failed: true)
+        let loading = presentationStore(availability: .available, liveID: "current", loading: true)
 
-    #expect(missing.label == "Verfügbarkeit unbekannt")
-    #expect(failed.label == "Verfügbarkeit unbekannt")
-    #expect(loading.label == "Verfügbarkeit wird geprüft …")
-    #expect([missing, failed, loading].allSatisfy { $0.tone == .neutral })
-    #expect(failed.help.contains("Aktualisiere"))
+        #expect(missing.label == "Verfügbarkeit unbekannt")
+        #expect(failed.label == "Verfügbarkeit unbekannt")
+        #expect(loading.label == "Verfügbarkeit wird geprüft …")
+        #expect([missing, failed, loading].allSatisfy { $0.tone == .neutral })
+        #expect(failed.help.contains("Aktualisiere"))
+    }
 }
 
 @Test func releasePresentationTerritoryAvailabilityAloneDoesNotProveALiveVersion() {
-    let status = ASCReleaseStatusPresentation.store(
-        distributionReadyVersionID: nil, liveVersionID: nil, availability: .available,
-        isLoading: false, failed: false
-    )
-    #expect(status.label == "Keine veröffentlichte Version")
-    #expect(status.tone == .neutral)
+    L10n.$overrideLanguage.withValue("de") {
+        let status = ASCReleaseStatusPresentation.store(
+            distributionReadyVersionID: nil, liveVersionID: nil, availability: .available,
+            isLoading: false, failed: false
+        )
+        #expect(status.label == "Keine veröffentlichte Version")
+        #expect(status.tone == .neutral)
+    }
 }
 
 @Test func releasePresentationPreservesReviewAndDraftStatuses() {
-    let draft = ASCReleaseStatusPresentation.version(
-        presentationVersion("draft", state: "PREPARE_FOR_SUBMISSION"), distributionReadyVersionID: "current"
-    )
-    let review = ASCReleaseStatusPresentation.version(
-        presentationVersion("review", state: "WAITING_FOR_REVIEW"), distributionReadyVersionID: "current"
-    )
-    let rejected = ASCReleaseStatusPresentation.version(
-        presentationVersion("rejected", state: "REJECTED"), distributionReadyVersionID: "current"
-    )
-    #expect(draft.label == "Entwurf")
-    #expect(draft.tone == .warning)
-    #expect(review.label == "Wartet auf Prüfung")
-    #expect(review.tone == .review)
-    #expect(rejected.label == "Abgelehnt")
-    #expect(rejected.tone == .rejected)
+    L10n.$overrideLanguage.withValue("de") {
+        let draft = ASCReleaseStatusPresentation.version(
+            presentationVersion("draft", state: "PREPARE_FOR_SUBMISSION"), distributionReadyVersionID: "current"
+        )
+        let review = ASCReleaseStatusPresentation.version(
+            presentationVersion("review", state: "WAITING_FOR_REVIEW"), distributionReadyVersionID: "current"
+        )
+        let rejected = ASCReleaseStatusPresentation.version(
+            presentationVersion("rejected", state: "REJECTED"), distributionReadyVersionID: "current"
+        )
+        #expect(draft.label == "Entwurf")
+        #expect(draft.tone == .warning)
+        #expect(review.label == "Wartet auf Prüfung")
+        #expect(review.tone == .review)
+        #expect(rejected.label == "Abgelehnt")
+        #expect(rejected.tone == .rejected)
+    }
 }
 
 @Test func releasePresentationUsesModernStateBeforeLegacyReadyState() {
-    let version = presentationVersion("current", state: "READY_FOR_SALE", modernState: "WAITING_FOR_REVIEW")
-    let status = ASCReleaseStatusPresentation.version(version, distributionReadyVersionID: "current")
-    #expect(status.label == "Wartet auf Prüfung")
-    #expect(status.tone == .review)
+    L10n.$overrideLanguage.withValue("de") {
+        let version = presentationVersion("current", state: "READY_FOR_SALE", modernState: "WAITING_FOR_REVIEW")
+        let status = ASCReleaseStatusPresentation.version(version, distributionReadyVersionID: "current")
+        #expect(status.label == "Wartet auf Prüfung")
+        #expect(status.tone == .review)
+    }
 }
 
 private func presentationVersion(_ id: String, state: String, modernState: String? = nil) -> ASCAppStoreVersion {

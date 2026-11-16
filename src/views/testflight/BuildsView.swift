@@ -26,24 +26,24 @@ struct BuildsView: View {
     private var buildsContent: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Builds").font(BlitzLayout.pageTitle)
+                Text(L10n.tr("Builds")).font(BlitzLayout.pageTitle)
                 Spacer()
                 TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
-                    .help("Builds und ausgewählte Verteilungsdetails aktualisieren")
+                    .help(L10n.tr("Builds und ausgewählte Verteilungsdetails aktualisieren"))
             }.blitzToolbar()
             Divider()
             if asc.releasePlatformBuilds.isEmpty {
                 if asc.isTabLoading(.builds) {
-                    ASCTabLoadingPlaceholder(title: "Builds werden geladen", message: "Metadaten der TestFlight-Builds werden geladen.")
+                    ASCTabLoadingPlaceholder(title: L10n.tr("Builds werden geladen"), message: L10n.tr("Metadaten der TestFlight-Builds werden geladen."))
                 } else {
-                    ContentUnavailableView("Keine Builds", systemImage: "hammer",
-                                           description: Text("Für diese App wurden keine TestFlight-Builds gefunden."))
+                    ContentUnavailableView(L10n.tr("Keine Builds"), systemImage: "hammer",
+                                           description: Text(L10n.tr("Für diese App wurden keine TestFlight-Builds gefunden.")))
                 }
             } else {
                 GeometryReader { geometry in
                     if geometry.size.width < 760 {
                         VStack(spacing: 0) {
-                            Picker("Build", selection: selection) {
+                            Picker(L10n.tr("Build"), selection: selection) {
                                 ForEach(asc.releasePlatformBuilds) { build in
                                     Text(TestFlightPresentation.buildLabel(build)).tag(Optional(build.id))
                                 }
@@ -76,7 +76,7 @@ struct BuildsView: View {
                     await asc.refreshTestFlightBuildDetail(buildId: id, force: false)
                 }
         } else {
-            ContentUnavailableView("Build auswählen", systemImage: "hammer")
+            ContentUnavailableView(L10n.tr("Build auswählen"), systemImage: "hammer")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -85,13 +85,13 @@ struct BuildsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(TestFlightPresentation.buildLabel(build))
                 .font(.callout.weight(.medium)).fixedSize(horizontal: false, vertical: true)
-            Text("Verarbeitung: \(TestFlightPresentation.status(build.attributes.processingState))")
+            Text(L10n.tr("Verarbeitung: \(TestFlightPresentation.status(build.attributes.processingState))"))
                 .font(.caption).foregroundStyle(.secondary)
             if let date = build.attributes.uploadedDate {
                 Text(ascShortDate(date)).font(.caption).foregroundStyle(.secondary)
             }
-            if TestFlightPresentation.expiration(build) == "Abgelaufen" {
-                Text("Abgelaufen").font(.caption).foregroundStyle(.red)
+            if TestFlightPresentation.expiration(build) == L10n.tr("Abgelaufen") {
+                Text(L10n.tr("Abgelaufen")).font(.caption).foregroundStyle(.red)
             }
         }.padding(.vertical, 4)
     }
@@ -105,48 +105,48 @@ struct BuildsView: View {
                 Text(TestFlightPresentation.buildLabel(build))
                     .font(BlitzLayout.pageTitle).fixedSize(horizontal: false, vertical: true)
                 VStack(spacing: 0) {
-                    InfoRow(label: "Versionsnummer", value: build.preReleaseVersion?.attributes.version ?? "Nicht verfügbar")
+                    InfoRow(label: L10n.tr("Versionsnummer"), value: build.preReleaseVersion?.attributes.version ?? L10n.tr("Nicht verfügbar"))
                     Divider()
-                    InfoRow(label: "Buildnummer", value: build.attributes.version)
+                    InfoRow(label: L10n.tr("Buildnummer"), value: build.attributes.version)
                     Divider()
-                    InfoRow(label: "Plattform", value: TestFlightPresentation.platform(build.preReleaseVersion?.attributes.platform))
+                    InfoRow(label: L10n.tr("Plattform"), value: TestFlightPresentation.platform(build.preReleaseVersion?.attributes.platform))
                     Divider()
-                    InfoRow(label: "Verarbeitung", value: TestFlightPresentation.status(build.attributes.processingState))
+                    InfoRow(label: L10n.tr("Verarbeitung"), value: TestFlightPresentation.status(build.attributes.processingState))
                     Divider()
-                    InfoRow(label: "Interner Test", value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.internalBuildState))
+                    InfoRow(label: L10n.tr("Interner Test"), value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.internalBuildState))
                     Divider()
-                    InfoRow(label: "Externer Test", value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.externalBuildState))
+                    InfoRow(label: L10n.tr("Externer Test"), value: TestFlightPresentation.status(build.buildBetaDetail?.attributes.externalBuildState))
                     Divider()
-                    InfoRow(label: "Gültigkeit", value: TestFlightPresentation.expiration(build))
+                    InfoRow(label: L10n.tr("Gültigkeit"), value: TestFlightPresentation.expiration(build))
                     if let expiry = build.attributes.expirationDate {
                         Divider()
-                        InfoRow(label: "Gültig bis", value: ascLongDate(expiry))
+                        InfoRow(label: L10n.tr("Gültig bis"), value: ascLongDate(expiry))
                     }
                     if let date = build.attributes.uploadedDate {
                         Divider()
-                        InfoRow(label: "Hochgeladen", value: ascLongDate(date))
+                        InfoRow(label: L10n.tr("Hochgeladen"), value: ascLongDate(date))
                     }
                     if let minOS = build.attributes.minOsVersion {
                         Divider()
-                        InfoRow(label: "Mindestens benötigte OS-Version", value: minOS)
+                        InfoRow(label: L10n.tr("Mindestens benötigte OS-Version"), value: minOS)
                     }
                     Divider()
-                    InfoRow(label: "Build-ID", value: build.id)
+                    InfoRow(label: L10n.tr("Build-ID"), value: build.id)
                 }
                 HStack {
-                    Text("Verteilung").font(BlitzLayout.sectionTitle)
+                    Text(L10n.tr("Verteilung")).font(BlitzLayout.sectionTitle)
                     Spacer()
                     TestFlightRefreshButton(isRefreshing: isRefreshing, action: refresh)
-                        .help("Builddetails und Verteilung aktualisieren")
+                        .help(L10n.tr("Builddetails und Verteilung aktualisieren"))
                 }
                 TestFlightDetailStatus(isLoading: loading, error: asc.testFlightBuildErrors[build.id], hasData: detail != nil) {
                     refresh()
                 }
                 if let detail {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Zugeordnete Gruppen (\(detail.betaGroups.count))").font(.headline)
+                        Text(L10n.tr("Zugeordnete Gruppen (\(detail.betaGroups.count))")).font(.headline)
                         if detail.betaGroups.isEmpty {
-                            Text("Diesem Build sind keine Gruppen zugeordnet.").foregroundStyle(.secondary)
+                            Text(L10n.tr("Diesem Build sind keine Gruppen zugeordnet.")).foregroundStyle(.secondary)
                         } else {
                             ForEach(detail.betaGroups) { group in
                                 VStack(alignment: .leading, spacing: 3) {
@@ -157,11 +157,11 @@ struct BuildsView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Einzeln zugeordnete Tester (\(detail.individualTesters.count))").font(.headline)
-                        Text("Nur direkte Zuordnungen. Tester, die den Build über eine Gruppe erhalten, stehen in den Details dieser Gruppe.")
+                        Text(L10n.tr("Einzeln zugeordnete Tester (\(detail.individualTesters.count))")).font(.headline)
+                        Text(L10n.tr("Nur direkte Zuordnungen. Tester, die den Build über eine Gruppe erhalten, stehen in den Details dieser Gruppe."))
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         if detail.individualTesters.isEmpty {
-                            Text("Es sind keine einzelnen Tester zugeordnet.").foregroundStyle(.secondary)
+                            Text(L10n.tr("Es sind keine einzelnen Tester zugeordnet.")).foregroundStyle(.secondary)
                         } else {
                             ForEach(detail.individualTesters) { TestFlightTesterRow(tester: $0) }
                         }

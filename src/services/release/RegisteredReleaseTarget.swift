@@ -21,7 +21,7 @@ enum RegisteredReleaseTarget {
             // legacy target; the live adapter still verifies app/account/build.
             guard target.id == "legacy", configured.count == 1 else {
                 throw NSError(domain: "BlitzReleaseTarget", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                    "Das Veröffentlichungsziel ist noch keinem bestätigten App-Store-Datensatz zugeordnet. Verknüpfe zuerst genau dieses Ziel in Blitz Neo."])
+                    L10n.tr("Das Veröffentlichungsziel ist noch keinem bestätigten App-Store-Datensatz zugeordnet. Verknüpfe zuerst genau dieses Ziel in Blitz Neo.")])
             }
         }
         return target

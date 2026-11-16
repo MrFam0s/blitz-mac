@@ -29,10 +29,10 @@ enum ASCEditability {
 
     static func validateProductChanges(state: String?, oldReviewNote: String?, reviewNote: String?, changesLocalization: Bool) throws {
         if let reviewNote, reviewNote != (oldReviewNote ?? ""), !canEditProductReview(state) {
-            throw ASCError.notFound("Review-Unterlagen dieses Produkts sind bei Apple gesperrt. Änderungen sind vor der Einreichung oder nach einer Ablehnung möglich.")
+            throw ASCError.notFound(L10n.tr("Review-Unterlagen dieses Produkts sind bei Apple gesperrt. Änderungen sind vor der Einreichung oder nach einer Ablehnung möglich."))
         }
         if changesLocalization && !canEditProductLocalization(state) {
-            throw ASCError.notFound("Die Produktlokalisierung ist während der Prüfung bei Apple gesperrt.")
+            throw ASCError.notFound(L10n.tr("Die Produktlokalisierung ist während der Prüfung bei Apple gesperrt."))
         }
     }
 
@@ -66,12 +66,12 @@ extension ASCManager {
     }
 
     var screenshotEditingMessage: String {
-        "Screenshots dieser Version sind bei Apple gesperrt. Wähle eine bearbeitbare Version oder wähle in der Übersicht „Versionsentwurf anlegen“."
+        L10n.tr("Screenshots dieser Version sind bei Apple gesperrt. Wähle eine bearbeitbare Version oder wähle in der Übersicht „Versionsentwurf anlegen“.")
     }
 
     func editingBlockedMessage(_ field: String) -> String {
         if field == "screenshots" { return screenshotEditingMessage }
-        return "Dieses Feld ist für den aktuellen Apple-Status schreibgeschützt. Bitte aktualisiere den Status oder bearbeite eine neue Version."
+        return L10n.tr("Dieses Feld ist für den aktuellen Apple-Status schreibgeschützt. Bitte aktualisiere den Status oder bearbeite eine neue Version.")
     }
 
     func checkWriteTarget(_ target: ASCWriteTarget) throws {
@@ -86,7 +86,7 @@ extension ASCManager {
     /// Called by manager entry points as well as UI: MCP callers receive the same protection.
     func validateWrite(fields: Set<String>, using service: any ASCWriteStateService) async throws -> ASCWriteTarget {
         try MCPMutationScope.checkCurrent()
-        guard let appID = app?.id else { throw ASCError.notFound("Keine App ausgewählt.") }
+        guard let appID = app?.id else { throw ASCError.notFound(L10n.tr("Keine App ausgewählt.")) }
         for field in fields where !canEditField(field) { throw ASCError.notFound(editingBlockedMessage(field)) }
         let target = ASCWriteTarget(revision: projectRevision, appID: appID, versionID: selectedVersion?.id,
             appInfoID: appInfo?.id, releaseTarget: releaseOperationTarget())
@@ -94,14 +94,14 @@ extension ASCManager {
         if needsVersion {
             let versions = try await service.fetchAppStoreVersions(appId: appID)
             try checkWriteTarget(target)
-            guard versions.contains(where: { $0.id == target.versionID }) else { throw ASCError.notFound("Die ausgewählte Version existiert nicht mehr.") }
+            guard versions.contains(where: { $0.id == target.versionID }) else { throw ASCError.notFound(L10n.tr("Die ausgewählte Version existiert nicht mehr.")) }
             appStoreVersions = versions
         }
         if !fields.isDisjoint(with: ASCEditability.appInfoFields) {
-            guard let id = target.appInfoID else { throw ASCError.notFound("App-Informationen sind noch nicht geladen.") }
+            guard let id = target.appInfoID else { throw ASCError.notFound(L10n.tr("App-Informationen sind noch nicht geladen.")) }
             let info = try await service.fetchAppInfoRecord(id: id)
             try checkWriteTarget(target)
-            guard info.id == id else { throw ASCError.notFound("App-Informationen haben sich geändert.") }
+            guard info.id == id else { throw ASCError.notFound(L10n.tr("App-Informationen haben sich geändert.")) }
             appInfo = info
         }
         try checkWriteTarget(target)

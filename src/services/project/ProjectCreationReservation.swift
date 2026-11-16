@@ -12,7 +12,7 @@ enum ProjectCreationReservation {
             .replacingOccurrences(of: " ", with: "-")
             .filter { $0.isLetter || $0.isNumber || $0 == "-" }
         guard id.contains(where: { $0.isLetter || $0.isNumber }) else {
-            throw ProjectSetupService.SetupError(message: "Enter a project name containing letters or numbers.")
+            throw ProjectSetupService.SetupError(message: L10n.tr("Enter a project name containing letters or numbers."))
         }
         return id
     }
@@ -25,7 +25,7 @@ enum ProjectCreationReservation {
         // mkdir is exclusive even for an existing directory or a dangling symlink.
         guard directory.path.withCString({ Darwin.mkdir($0, 0o755) }) == 0 else {
             if errno == EEXIST {
-                throw ProjectSetupService.SetupError(message: "A project folder already exists for this name. Choose a different name; the existing project was not changed.")
+                throw ProjectSetupService.SetupError(message: L10n.tr("A project folder already exists for this name. Choose a different name; the existing project was not changed."))
             }
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
@@ -44,7 +44,7 @@ enum ProjectCreationReservation {
               (try? fm.attributesOfItem(atPath: marker.path)[.type]) as? FileAttributeType == .typeRegular,
               let token = try? Data(contentsOf: marker),
               UUID(uuidString: String(decoding: token, as: UTF8.self)) != nil else {
-            throw ProjectSetupService.SetupError(message: "This folder is not a reserved new project. Existing project files will not be replaced.")
+            throw ProjectSetupService.SetupError(message: L10n.tr("This folder is not a reserved new project. Existing project files will not be replaced."))
         }
         return token
     }

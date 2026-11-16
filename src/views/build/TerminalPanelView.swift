@@ -64,8 +64,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help("Neues Terminal")
-            .accessibilityLabel("Neues Terminal")
+            .help(L10n.tr("Neues Terminal"))
+            .accessibilityLabel(L10n.tr("Neues Terminal"))
 
             Button {
                 let settings = appState.settingsStore
@@ -78,8 +78,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help(isRight ? "Terminal unten anzeigen" : "Terminal rechts anzeigen")
-            .accessibilityLabel(isRight ? "Terminal unten anzeigen" : "Terminal rechts anzeigen")
+            .help(isRight ? L10n.tr("Terminal unten anzeigen") : L10n.tr("Terminal rechts anzeigen"))
+            .accessibilityLabel(isRight ? L10n.tr("Terminal unten anzeigen") : L10n.tr("Terminal rechts anzeigen"))
 
             Button {
                 appState.showTerminal = false
@@ -90,8 +90,8 @@ struct TerminalPanelView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .help("Terminal ausblenden")
-            .accessibilityLabel("Terminal ausblenden")
+            .help(L10n.tr("Terminal ausblenden"))
+            .accessibilityLabel(L10n.tr("Terminal ausblenden"))
             .padding(.trailing, 8)
         }
     }
@@ -120,8 +120,8 @@ struct TerminalPanelView: View {
                     .frame(width: 14, height: 14)
             }
             .buttonStyle(.plain)
-            .help("Terminal-Sitzung schließen")
-            .accessibilityLabel("Terminal-Sitzung schließen")
+            .help(L10n.tr("Terminal-Sitzung schließen"))
+            .accessibilityLabel(L10n.tr("Terminal-Sitzung schließen"))
             .opacity(isActive ? 1 : 0)
         }
         .padding(.horizontal, 10)
@@ -154,10 +154,10 @@ struct TerminalPanelView: View {
     private var terminalContent: some View {
         if manager.sessions.isEmpty {
             VStack(spacing: 8) {
-                Text("Keine Terminal-Sitzungen")
+                Text(L10n.tr("Keine Terminal-Sitzungen"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("Neues Terminal") {
+                Button(L10n.tr("Neues Terminal")) {
                     manager.createSession(projectPath: appState.activeProject?.path)
                 }
                 .buttonStyle(.bordered)

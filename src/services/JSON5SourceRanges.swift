@@ -132,6 +132,6 @@ struct JSON5SourceRanges {
 
     private mutating func advance() { index = text.index(after: index) }
     private func invalid() -> XcodeProjectIdentityEditor.IdentityError {
-        .init(message: "Unsupported or ambiguous Xcode JSON5 syntax. No settings were changed; edit the application target in Xcode.")
+        .init(message: L10n.tr("Unsupported or ambiguous Xcode JSON5 syntax. No settings were changed; edit the application target in Xcode."))
     }
 }

@@ -127,18 +127,20 @@ private struct DetailFixture: ASCTestFlightService {
 }
 
 @Test func testFlightLabelsDistinguishBuildTrainPlatformAndUnknownStates() {
-    var ios: ASCBuild = detailDecode(#"{"id":"ios","attributes":{"version":"7","processingState":"VALID"}}"#)
-    ios.preReleaseVersion = detailDecode(#"{"id":"train","attributes":{"version":"2.0","platform":"IOS"}}"#)
-    var mac = ios
-    mac.preReleaseVersion = detailDecode(#"{"id":"other","attributes":{"version":"3.0","platform":"MAC_OS"}}"#)
-    #expect(TestFlightPresentation.buildLabel(ios) == "2.0 (7) · iOS")
-    #expect(TestFlightPresentation.buildLabel(mac) == "3.0 (7) · macOS")
-    #expect(TestFlightPresentation.status(nil) == "Nicht verfügbar")
-    #expect(TestFlightPresentation.expiration(ios) == "Nicht verfügbar")
-    let expired: ASCBuild = detailDecode(#"{"id":"old","attributes":{"version":"7","expired":false,"expirationDate":"2020-01-01T00:00:00Z"}}"#)
-    #expect(TestFlightPresentation.expiration(expired, now: Date(timeIntervalSince1970: 1_700_000_000)) == "Abgelaufen")
-    let unknownGroup: ASCBetaGroup = detailDecode(#"{"id":"g","attributes":{"name":"Group"}}"#)
-    #expect(TestFlightPresentation.groupType(unknownGroup) == "Typ unbekannt")
+    L10n.$overrideLanguage.withValue("de") {
+        var ios: ASCBuild = detailDecode(#"{"id":"ios","attributes":{"version":"7","processingState":"VALID"}}"#)
+        ios.preReleaseVersion = detailDecode(#"{"id":"train","attributes":{"version":"2.0","platform":"IOS"}}"#)
+        var mac = ios
+        mac.preReleaseVersion = detailDecode(#"{"id":"other","attributes":{"version":"3.0","platform":"MAC_OS"}}"#)
+        #expect(TestFlightPresentation.buildLabel(ios) == "2.0 (7) · iOS")
+        #expect(TestFlightPresentation.buildLabel(mac) == "3.0 (7) · macOS")
+        #expect(TestFlightPresentation.status(nil) == "Nicht verfügbar")
+        #expect(TestFlightPresentation.expiration(ios) == "Nicht verfügbar")
+        let expired: ASCBuild = detailDecode(#"{"id":"old","attributes":{"version":"7","expired":false,"expirationDate":"2020-01-01T00:00:00Z"}}"#)
+        #expect(TestFlightPresentation.expiration(expired, now: Date(timeIntervalSince1970: 1_700_000_000)) == "Abgelaufen")
+        let unknownGroup: ASCBetaGroup = detailDecode(#"{"id":"g","attributes":{"name":"Group"}}"#)
+        #expect(TestFlightPresentation.groupType(unknownGroup) == "Typ unbekannt")
+    }
 }
 
 @MainActor @Test func testFlightCachedFeedbackDoesNotDisplayAnotherBuildsFailure() async {

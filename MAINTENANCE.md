@@ -2,6 +2,36 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.74 build 88 — German and English interface
+
+The maintained source now includes complete German/English interface catalogs.
+Settings → General → Language offers Automatic (macOS), Deutsch and English.
+Automatic follows ordered supported macOS language preferences and falls back to
+English. Selection applies at the next app launch, including native menus and
+file panels; changing it never recreates terminal sessions. Preferences stay in
+Blitz Neo's own domain. Store content, identity/protocol values, terminal output,
+unknown Apple states and original external diagnostics are not translated.
+
+All explicitly localized messages are audited against both catalogs, including
+interpolation parity and shared wording. User interpolations are inserted as data,
+not interpreted as format strings. Dashboard platform summaries now cache stable
+codes and translate at display time, with compatibility for old cached labels.
+See [localization maintenance](docs/localization.md) for adding text and checks.
+
+Validation: 634 Swift tests in 12 suites, nine localization-audit regression
+tests, the source/catalog audit (1,314 keys, no missing translations or token
+mismatches), nine release-metadata checks, native release bundle and strict/deep
+Developer ID signature verification passed. Independent reviews found and fixed
+the cached-language issue and confirmed stable identities and release guards.
+Installed build 88 was checked with automatic German, explicit English after
+relaunch (including native menus), and return to automatic German. Settings,
+overview, version-draft dialog, app information, screenshots, monetization,
+TestFlight and analytics were inspected with the side terminal; original German
+and Korean Store content remained unchanged. Isolated real-component previews
+verified DE/EN long messages at 440 points in light/dark appearance. Test terminal
+and preview apps were closed; the installed app remains on Automatic (macOS).
+No Store mutations, public release/tag or paid cloud CI are part of this update.
+
 ## 1.0.74 build 87 — German application interface
 
 Dashboard, navigation, menus, app information, review, screenshots, TestFlight,

@@ -28,7 +28,7 @@ private enum ScreenshotDeviceType: String, CaseIterable, Identifiable {
     }
 
     var dimensionLabel: String {
-        ASCManager.screenshotDimensionSummary(displayType: ascDisplayType) ?? "Nicht unterstützte Größe"
+        ASCManager.screenshotDimensionSummary(displayType: ascDisplayType) ?? L10n.tr("Nicht unterstützte Größe")
     }
 
     var placeholderAspectRatio: CGFloat {
@@ -518,18 +518,18 @@ struct ScreenshotsView: View {
                             selection: selectedVersionBinding,
                             appStoreURL: asc.app.flatMap { URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/appstore") },
                             refreshTab: .screenshots,
-                            refreshHelpText: "Screenshots aktualisieren"
+                            refreshHelpText: L10n.tr("Screenshots aktualisieren")
                         ) {
                             if !asc.localizations.isEmpty {
-                                Picker("Sprache", selection: selectedLocaleBinding) {
+                                Picker(L10n.tr("Sprache"), selection: selectedLocaleBinding) {
                                     ForEach(asc.localizations) { localization in
                                         Text(localization.attributes.locale).tag(localization.attributes.locale)
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
-                                .accessibilityLabel("Sprache")
-                                .help("Sprache des Store-Eintrags")
+                                .accessibilityLabel(L10n.tr("Sprache"))
+                                .help(L10n.tr("Sprache des Store-Eintrags"))
                                 .frame(width: 110, alignment: .leading)
                             }
                         }
@@ -553,7 +553,7 @@ struct ScreenshotsView: View {
 
                     GeometryReader { geometry in
                         if asc.releasePlatform != nil { trackCanvas(in: geometry.size) }
-                        else { ContentUnavailableView("Plattform wählen", systemImage: "desktopcomputer.and.iphone") }
+                        else { ContentUnavailableView(L10n.tr("Plattform wählen"), systemImage: "desktopcomputer.and.iphone") }
                     }
                 }
             }
@@ -580,7 +580,7 @@ struct ScreenshotsView: View {
                     ?? slot.localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Screenshot")
             }
         }
-        .alert("Importfehler", isPresented: Binding(
+        .alert(L10n.tr("Importfehler"), isPresented: Binding(
             get: { importError != nil },
             set: { if !$0 { importError = nil } }
         )) {
@@ -612,7 +612,7 @@ struct ScreenshotsView: View {
     @ViewBuilder
     private var devicePicker: some View {
         if availableDeviceTypes.count > 1 {
-            Picker("Gerät", selection: $selectedDevice) {
+            Picker(L10n.tr("Gerät"), selection: $selectedDevice) {
                 ForEach(availableDeviceTypes) { device in
                     Text(device.label).tag(device)
                 }
@@ -628,12 +628,12 @@ struct ScreenshotsView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
                     Label {
-                        Text("Synchronisiert")
+                        Text(L10n.tr("Synchronisiert"))
                     } icon: {
                         Circle().fill(.green).frame(width: 8, height: 8)
                     }
                     Label {
-                        Text("Geändert")
+                        Text(L10n.tr("Geändert"))
                     } icon: {
                         Circle().fill(.orange).frame(width: 8, height: 8)
                     }
@@ -644,17 +644,17 @@ struct ScreenshotsView: View {
             Text("\(filledSlotCount)/10")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize()
-                .help("\(filledSlotCount) von 10 Screenshot-Plätzen belegt")
+                .help(L10n.tr("\(filledSlotCount) von 10 Screenshot-Plätzen belegt"))
             Button {
                 Task { await save() }
             } label: {
                 if asc.isSyncing {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text("Wird gespeichert …")
+                        Text(L10n.tr("Wird gespeichert …"))
                     }
                 } else {
-                    Label("Speichern", systemImage: "arrow.up.circle")
+                    Label(L10n.tr("Speichern"), systemImage: "arrow.up.circle")
                 }
             }
             .fixedSize()
@@ -693,9 +693,9 @@ struct ScreenshotsView: View {
 
             if trackItems.isEmpty {
                 ContentUnavailableView(
-                    "Keine Screenshots",
+                    L10n.tr("Keine Screenshots"),
                     systemImage: "photo.on.rectangle",
-                    description: Text("Keine Screenshots für diese Sprache und dieses Gerät.")
+                    description: Text(L10n.tr("Keine Screenshots für diese Sprache und dieses Gerät."))
                 )
             }
 
@@ -798,10 +798,10 @@ struct ScreenshotsView: View {
     ) -> some View {
         ZStack(alignment: .topTrailing) {
             interactiveSlotImage(slot: slot, displayState: displayState, screenshotHeight: screenshotHeight)
-                .accessibilityAction(named: Text("Vorschau öffnen")) {
+                .accessibilityAction(named: Text(L10n.tr("Vorschau öffnen"))) {
                     if slot.localImage != nil { previewSlot = slot }
                 }
-                .help(slot.localImage != nil ? "Klicken, um die Vorschau zu vergrößern" : "")
+                .help(slot.localImage != nil ? L10n.tr("Klicken, um die Vorschau zu vergrößern") : "")
 
             if asc.canEditField("screenshots") {
                 Button {
@@ -821,7 +821,7 @@ struct ScreenshotsView: View {
                 .buttonStyle(.plain)
                 .padding(6)
                 .disabled(asc.isSyncing)
-                .accessibilityLabel("Screenshot entfernen")
+                .accessibilityLabel(L10n.tr("Screenshot entfernen"))
             }
         }
     }
@@ -870,22 +870,22 @@ struct ScreenshotsView: View {
         return VStack(spacing: 8) {
             Group {
                 if displayState.hasError {
-                    screenshotMessage(icon: "exclamationmark.circle.fill", title: "Upload fehlgeschlagen",
+                    screenshotMessage(icon: "exclamationmark.circle.fill", title: L10n.tr("Upload fehlgeschlagen"),
                                       detail: slot.ascScreenshot?.errorDescription)
                 } else if let image = slot.localImage {
                     Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
                 } else if slot.ascScreenshot?.isProcessing == true {
-                    screenshotMessage(icon: "clock", title: "Apple verarbeitet das Bild",
-                                      detail: "Die Vorschau ist nach der Verarbeitung verfügbar.", canRetry: true)
+                    screenshotMessage(icon: "clock", title: L10n.tr("Apple verarbeitet das Bild"),
+                                      detail: L10n.tr("Die Vorschau ist nach der Verarbeitung verfügbar."), canRetry: true)
                 } else if slot.ascScreenshot?.imageURL != nil, !asc.screenshotPreviewFailures.contains(slot.id) {
                     VStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Vorschau wird geladen …").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.tr("Vorschau wird geladen …")).font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
-                    screenshotMessage(icon: "photo.badge.exclamationmark", title: "Vorschau nicht verfügbar",
-                                      detail: slot.isFromASC ? "Das Bild ist gespeichert, die Vorschau konnte aber nicht geladen werden."
-                                          : "Die lokale Bilddatei konnte nicht geladen werden.", canRetry: slot.isFromASC)
+                    screenshotMessage(icon: "photo.badge.exclamationmark", title: L10n.tr("Vorschau nicht verfügbar"),
+                                      detail: slot.isFromASC ? L10n.tr("Das Bild ist gespeichert, die Vorschau konnte aber nicht geladen werden.")
+                                          : L10n.tr("Die lokale Bilddatei konnte nicht geladen werden."), canRetry: slot.isFromASC)
                 }
             }
             .frame(width: width, height: screenshotHeight)
@@ -894,7 +894,7 @@ struct ScreenshotsView: View {
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(displayState.borderColor, lineWidth: 2))
 
             if slot.localImage != nil, slot.ascScreenshot?.isProcessing == true {
-                Label("Apple verarbeitet das Bild", systemImage: "clock")
+                Label(L10n.tr("Apple verarbeitet das Bild"), systemImage: "clock")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -907,7 +907,7 @@ struct ScreenshotsView: View {
             Text(title).font(.callout.weight(.medium))
             if let detail, !detail.isEmpty { Text(detail).font(.caption) }
             if canRetry {
-                Button("Erneut laden") { Task { await loadSelectedLocaleData(force: true) } }
+                Button(L10n.tr("Erneut laden")) { Task { await loadSelectedLocaleData(force: true) } }
                     .controlSize(.small).disabled(asc.isSyncing)
             }
         }
@@ -932,7 +932,7 @@ struct ScreenshotsView: View {
             VStack(spacing: 6) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title2)
-                Text(asc.canEditField("screenshots") ? "Hochladen" : "Leer")
+                Text(asc.canEditField("screenshots") ? L10n.tr("Hochladen") : L10n.tr("Leer"))
                     .font(.caption)
             }
             .foregroundStyle(.secondary)
@@ -1010,7 +1010,7 @@ struct ScreenshotsView: View {
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Screenshot zum Hinzufügen auswählen"
+        panel.message = L10n.tr("Screenshot zum Hinzufügen auswählen")
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         importFileToSlot(url: url, slotIndex: index)
@@ -1019,7 +1019,7 @@ struct ScreenshotsView: View {
     private func importFileToSlot(url: URL, slotIndex: Int) {
         guard asc.canEditField("screenshots"), !asc.isSyncing else { return }
         guard let projectId = appState.activeProjectId else {
-            importError = "Kein aktives Projekt"
+            importError = L10n.tr("Kein aktives Projekt")
             return
         }
 
@@ -1042,7 +1042,7 @@ struct ScreenshotsView: View {
             }
         } else {
             guard let image = loadImage(from: url) else {
-                importError = "\(url.lastPathComponent): Nicht unterstütztes Format oder Bild nicht lesbar"
+                importError = L10n.tr("\(url.lastPathComponent): Nicht unterstütztes Format oder Bild nicht lesbar")
                 return
             }
             let pngName = url.deletingPathExtension().lastPathComponent + ".png"
@@ -1051,7 +1051,7 @@ struct ScreenshotsView: View {
                 guard let tiff = image.tiffRepresentation,
                       let bitmap = NSBitmapImageRep(data: tiff),
                       let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                    importError = "\(url.lastPathComponent): Umwandlung in PNG fehlgeschlagen"
+                    importError = L10n.tr("\(url.lastPathComponent): Umwandlung in PNG fehlgeschlagen")
                     return
                 }
                 if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
@@ -1105,7 +1105,7 @@ struct ScreenshotsView: View {
                     Task { @MainActor in
                         guard self.asc.projectRevision == revision else { return }
                         guard let slotIndex = self.currentTrack.firstIndex(where: { $0 == nil }) else {
-                            self.importError = "Alle 10 Plätze sind belegt"
+                            self.importError = L10n.tr("Alle 10 Plätze sind belegt")
                             return
                         }
                         self.importFileToSlot(url: url, slotIndex: slotIndex)
@@ -1162,7 +1162,7 @@ private struct ScreenshotPreviewSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Screenshot-Vorschau", subtitle: title)
+            BlitzSetupHeader(L10n.tr("Screenshot-Vorschau"), subtitle: title)
                 .textSelection(.enabled)
             Divider()
             GeometryReader { geometry in
@@ -1172,7 +1172,7 @@ private struct ScreenshotPreviewSheet: View {
             Divider()
             HStack {
                 Spacer()
-                Button("Schließen") { dismiss() }
+                Button(L10n.tr("Schließen")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
         }

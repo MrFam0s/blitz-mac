@@ -30,7 +30,7 @@ struct SubmitPreviewSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Einreichung prüfen", subtitle: "Prüfe die ausgewählte Version, den Build und die Veröffentlichungsart vor dem Absenden an Apple.")
+            BlitzSetupHeader(L10n.tr("Einreichung prüfen"), subtitle: L10n.tr("Prüfe die ausgewählte Version, den Build und die Veröffentlichungsart vor dem Absenden an Apple."))
 
             Divider()
 
@@ -89,13 +89,13 @@ struct SubmitPreviewSheet: View {
                     if isSubmittable { buildSelector }
 
                     if releaseTarget != nil && !targetMatches {
-                        Text("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen.")
+                        Text(L10n.tr("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen."))
                             .font(.callout).foregroundStyle(.orange)
                     }
                     if isCheckingReadiness {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small)
-                            Text("Aktuellen Store-Stand prüfen …")
+                            Text(L10n.tr("Aktuellen Store-Stand prüfen …"))
                                 .font(.callout).foregroundStyle(.secondary)
                         }
                     }
@@ -104,11 +104,11 @@ struct SubmitPreviewSheet: View {
                         createUpdateRequiredContent
                     } else if isSubmittable {
                         if let mode = expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) {
-                            Label(mode == .manual ? "Veröffentlichung: manuell nach Apples Freigabe" : "Veröffentlichung: automatisch nach Apples Freigabe",
+                            Label(mode == .manual ? L10n.tr("Veröffentlichung: manuell nach Apples Freigabe") : L10n.tr("Veröffentlichung: automatisch nach Apples Freigabe"),
                                   systemImage: "calendar.badge.checkmark")
                                 .font(.callout).foregroundStyle(.secondary)
                         } else if !isCheckingReadiness {
-                            Text("Die Veröffentlichungsart ist unbekannt oder geplant. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen und diese Vorschau neu öffnen.")
+                            Text(L10n.tr("Die Veröffentlichungsart ist unbekannt oder geplant. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen und diese Vorschau neu öffnen."))
                                 .font(.callout).foregroundStyle(.orange)
                         }
                         submittableContent
@@ -123,19 +123,19 @@ struct SubmitPreviewSheet: View {
             Divider()
 
             HStack(spacing: BlitzLayout.fieldSpacing) {
-                Button(isSubmittable ? "Abbrechen" : "Schließen") {
+                Button(isSubmittable ? L10n.tr("Abbrechen") : L10n.tr("Schließen")) {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
                 Spacer()
                 if asc.canCreateUpdate {
-                    Button("Versionsentwurf anlegen") {
+                    Button(L10n.tr("Versionsentwurf anlegen")) {
                         asc.showVersionDraftSheet = true
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
                 } else if isSubmittable {
-                    Button("Zur Prüfung einreichen") {
+                    Button(L10n.tr("Zur Prüfung einreichen")) {
                         Task {
                             let buildId = selectedBuildId.isEmpty ? nil : selectedBuildId
                             guard let releaseTarget, releaseTarget.matches(asc) else { return }
@@ -182,9 +182,9 @@ struct SubmitPreviewSheet: View {
                     .font(.title3)
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Ein neuer Versionsentwurf ist erforderlich.")
+                    Text(L10n.tr("Ein neuer Versionsentwurf ist erforderlich."))
                         .font(.callout.weight(.medium))
-                    Text("Lege zuerst einen Versionsentwurf an. Anschließend kannst du einen Build zuordnen und das Update einreichen.")
+                    Text(L10n.tr("Lege zuerst einen Versionsentwurf an. Anschließend kannst du einen Build zuordnen und das Update einreichen."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -201,14 +201,14 @@ struct SubmitPreviewSheet: View {
     @ViewBuilder
     private var buildSelector: some View {
         if validBuilds.isEmpty && isCheckingReadiness {
-            Text("Builds werden geladen …")
+            Text(L10n.tr("Builds werden geladen …"))
                 .font(.callout).foregroundStyle(.secondary)
         } else if validBuilds.isEmpty {
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
                     .font(.caption)
-                Text("Keine passenden Builds verfügbar")
+                Text(L10n.tr("Keine passenden Builds verfügbar"))
                     .font(.callout)
                     .foregroundStyle(.red)
             }
@@ -216,7 +216,7 @@ struct SubmitPreviewSheet: View {
         } else {
             BlitzSetupField("Build") {
                 Picker("Build", selection: $selectedBuildId) {
-                    Text("Bitte auswählen …").tag("")
+                    Text(L10n.tr("Bitte auswählen …")).tag("")
                     ForEach(validBuilds) { build in
                         Text(build.attributes.version).tag(build.id)
                     }
@@ -235,13 +235,13 @@ struct SubmitPreviewSheet: View {
             selectedBuild == nil || $0.label != "Build"
         })
         if readiness.fields.contains(where: { $0.required && $0.loadFailed }) {
-            Label("Einige Pflichtangaben konnten nicht geprüft werden. Aktualisiere die Übersicht vor der Einreichung.",
+            Label(L10n.tr("Einige Pflichtangaben konnten nicht geprüft werden. Aktualisiere die Übersicht vor der Einreichung."),
                   systemImage: "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(.orange)
         }
         if !readiness.missingRequired.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Fehlende Pflichtangaben")
+                Text(L10n.tr("Fehlende Pflichtangaben"))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.red)
                 ForEach(readiness.missingRequired) { field in
@@ -263,7 +263,7 @@ struct SubmitPreviewSheet: View {
         if asc.isSubmitting {
             HStack(spacing: 12) {
                 ProgressView()
-                Text("Wird zur Prüfung eingereicht …")
+                Text(L10n.tr("Wird zur Prüfung eingereicht …"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -295,7 +295,7 @@ struct SubmitPreviewSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Status: \(presentation.label)")
                         .font(.callout.weight(.medium))
-                    Text("In diesem Zustand lässt sich der Build nicht ändern und die Version nicht erneut einreichen.")
+                    Text(L10n.tr("In diesem Zustand lässt sich der Build nicht ändern und die Version nicht erneut einreichen."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -50,20 +50,20 @@ struct ASCReleaseTargetPicker: View {
             if project != nil {
                 Divider()
                 if let target = project?.selectedReleaseTarget {
-                    Button("Store-Zuordnung prüfen / verknüpfen …") {
+                    Button(L10n.tr("Store-Zuordnung prüfen / verknüpfen …")) {
                         setupTargetId = target.id; showSetup = true
                     }
                 }
-                Button("Veröffentlichungsziel hinzufügen …") { setupTargetId = nil; showSetup = true }
+                Button(L10n.tr("Veröffentlichungsziel hinzufügen …")) { setupTargetId = nil; showSetup = true }
             }
         } label: {
-            Label(project?.selectedReleaseTarget?.displayName ?? asc.releasePlatform?.rawValue ?? "Plattform wählen",
+            Label(project?.selectedReleaseTarget?.displayName ?? asc.releasePlatform?.rawValue ?? L10n.tr("Plattform wählen"),
                   systemImage: asc.releasePlatform == .macOS ? "desktopcomputer" : "iphone")
                 .lineLimit(1)
         }
         .controlSize(.small)
         .disabled(switching || asc.isCreatingVersion || asc.isSubmitting || asc.isSyncing)
-        .help("Veröffentlichungsziel und Plattform")
+        .help(L10n.tr("Veröffentlichungsziel und Plattform"))
         .sheet(isPresented: $showSetup) {
             if let state = asc.appState {
                 ProjectReleaseTargetSetupView(appState: state, releaseTargetId: setupTargetId, onSaved: {
@@ -72,7 +72,7 @@ struct ASCReleaseTargetPicker: View {
                 })
             }
         }
-        .alert("Veröffentlichungsziel", isPresented: Binding(get: { selectionError != nil },
+        .alert(L10n.tr("Veröffentlichungsziel"), isPresented: Binding(get: { selectionError != nil },
             set: { if !$0 { selectionError = nil } })) {
             Button("OK") { selectionError = nil }
         } message: { Text(selectionError ?? "") }

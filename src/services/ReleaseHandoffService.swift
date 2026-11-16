@@ -14,7 +14,7 @@ enum ReleaseHandoffService {
 
     static func prepare(context: ReleaseAutomationContext, preflight: ReleasePreflight) throws -> ReleaseHandoffPackage {
         guard let account = context.accountKey, !account.isEmpty else {
-            throw failure("Das Apple-Konto fehlt im Release-Auftrag. Bitte den Dialog erneut öffnen.")
+            throw failure(L10n.tr("Das Apple-Konto fehlt im Release-Auftrag. Bitte den Dialog erneut öffnen."))
         }
         let root = URL(fileURLWithPath: context.projectPath, isDirectory: true)
         let facts = try prepareProductFacts(projectDirectory: root)
@@ -42,12 +42,12 @@ enum ReleaseHandoffService {
         try validatePath(target, inside: root)
         if fm.fileExists(atPath: target.path) {
             guard try target.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
-                throw failure("Die Produktdokumentation ist keine normale Datei.")
+                throw failure(L10n.tr("Die Produktdokumentation ist keine normale Datei."))
             }
             return target
         }
         guard let template = Bundle.appResources.url(forResource: "release-product-facts", withExtension: "md") else {
-            throw failure("Die Vorlage für Produktinformationen fehlt im App-Bundle.")
+            throw failure(L10n.tr("Die Vorlage für Produktinformationen fehlt im App-Bundle."))
         }
         try createFile(Data(contentsOf: template), at: target, mode: 0o644)
         return target
@@ -60,7 +60,7 @@ enum ReleaseHandoffService {
         try validatePath(file, inside: try canonicalProject(projectDirectory))
         if fm.fileExists(atPath: file.path) {
             guard try Data(contentsOf: file) == data else {
-                throw failure("Die gespeicherte App-Identität weicht vom bestätigten Vorgang ab.")
+                throw failure(L10n.tr("Die gespeicherte App-Identität weicht vom bestätigten Vorgang ab."))
             }
         } else {
             try createFile(data, at: file, mode: 0o600)
@@ -76,7 +76,7 @@ enum ReleaseHandoffService {
         try validatePath(ignore, inside: root)
         if fm.fileExists(atPath: ignore.path) {
             guard try String(contentsOf: ignore, encoding: .utf8) == "*\n" else {
-                throw failure("Der private Übergabeordner ist nicht vollständig von Git ausgeschlossen.")
+                throw failure(L10n.tr("Der private Übergabeordner ist nicht vollständig von Git ausgeschlossen."))
             }
         } else { try createFile(Data("*\n".utf8), at: ignore, mode: 0o600) }
         return target
@@ -85,7 +85,7 @@ enum ReleaseHandoffService {
     private static func canonicalProject(_ project: URL) throws -> URL {
         let root = project.standardizedFileURL.resolvingSymlinksInPath()
         guard try root.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
-            throw failure("Der Projektordner ist nicht erreichbar.")
+            throw failure(L10n.tr("Der Projektordner ist nicht erreichbar."))
         }
         return root
     }
@@ -96,17 +96,17 @@ enum ReleaseHandoffService {
             try fm.createDirectory(at: url, withIntermediateDirectories: false, attributes: [.posixPermissions: mode])
         }
         guard try url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else {
-            throw failure("Ein benötigter Projektpfad ist kein Ordner.")
+            throw failure(L10n.tr("Ein benötigter Projektpfad ist kein Ordner."))
         }
         return url
     }
 
     private static func validatePath(_ url: URL, inside root: URL) throws {
-        guard url.standardizedFileURL.path.hasPrefix(root.path + "/") else { throw failure("Der Übergabepfad liegt außerhalb des Projekts.") }
+        guard url.standardizedFileURL.path.hasPrefix(root.path + "/") else { throw failure(L10n.tr("Der Übergabepfad liegt außerhalb des Projekts.")) }
         var candidate = url
         while candidate.path != root.path {
             if (try? candidate.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
-                throw failure("Übergabedateien dürfen keine symbolischen Verknüpfungen verwenden.")
+                throw failure(L10n.tr("Übergabedateien dürfen keine symbolischen Verknüpfungen verwenden."))
             }
             candidate.deleteLastPathComponent()
         }

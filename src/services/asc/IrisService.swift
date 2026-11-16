@@ -7,9 +7,9 @@ enum IrisError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .sessionExpired: return "Apple ID session expired. Please sign in again."
-        case .noSession: return "No Apple ID session available."
-        case .requestFailed(let code, let msg): return "Iris API error \(code): \(msg)"
+        case .sessionExpired: return L10n.tr("Apple ID session expired. Please sign in again.")
+        case .noSession: return L10n.tr("No Apple ID session available.")
+        case .requestFailed(let code, let msg): return L10n.tr("Iris API error \(code): \(msg)")
         }
     }
 }

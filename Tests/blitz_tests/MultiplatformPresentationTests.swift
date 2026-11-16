@@ -103,8 +103,10 @@ private func platformVersion(_ platform: String, id: String, state: String = "PR
 }
 
 @Test func dashboardShowsIndependentStatusesForSharedStoreRecord() throws {
-    let status = ASCDashboardProjectStatus(versions: [try platformVersion("IOS", id: "ios", state: "READY_FOR_SALE"),
-        try platformVersion("MAC_OS", id: "mac", state: "WAITING_FOR_REVIEW")], availability: .available)
-    #expect(status.platformSummaries?["IOS"] == "Live")
-    #expect(status.platformSummaries?["MAC_OS"] == "In Prüfung")
+    try L10n.$overrideLanguage.withValue("de") {
+        let status = ASCDashboardProjectStatus(versions: [try platformVersion("IOS", id: "ios", state: "READY_FOR_SALE"),
+            try platformVersion("MAC_OS", id: "mac", state: "WAITING_FOR_REVIEW")], availability: .available)
+        #expect(status.platformSummaries?["IOS"] == "LIVE_ON_STORE")
+        #expect(status.platformSummaries?["MAC_OS"] == "IN_REVIEW")
+    }
 }

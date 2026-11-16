@@ -86,18 +86,20 @@ private func manualReleaseBuild(app: String = "app", version: String = "1.2", pl
 }
 
 @MainActor @Test func manualSubmissionStopsBeforeAttachmentWhenPreviewReleaseModeChanged() async {
-    let manager = ASCManager()
-    manager.app = ASCApp(id: "app", attributes: .init(bundleId: "org.example.MixedCase", name: "App",
-        primaryLocale: nil, vendorNumber: nil, contentRightsDeclaration: nil), relationships: nil)
-    manager.loadedProjectId = "project"
-    manager.releasePlatform = .iOS
-    manager.appStoreVersions = [manualReleaseVersion(mode: "MANUAL")]
-    manager.selectedVersionId = "version"
-    let service = ManualModeChangeService()
-    #expect(await manager.submitForReview(attachBuildId: "build", expectedReleaseMode: "MANUAL", using: service) == false)
-    #expect(service.calls == ["versions"])
-    #expect(manager.submissionError?.contains("Veröffentlichungsart") == true)
-    #expect(!manager.isSubmitting)
+    await L10n.$overrideLanguage.withValue("de") {
+        let manager = ASCManager()
+        manager.app = ASCApp(id: "app", attributes: .init(bundleId: "org.example.MixedCase", name: "App",
+            primaryLocale: nil, vendorNumber: nil, contentRightsDeclaration: nil), relationships: nil)
+        manager.loadedProjectId = "project"
+        manager.releasePlatform = .iOS
+        manager.appStoreVersions = [manualReleaseVersion(mode: "MANUAL")]
+        manager.selectedVersionId = "version"
+        let service = ManualModeChangeService()
+        #expect(await manager.submitForReview(attachBuildId: "build", expectedReleaseMode: "MANUAL", using: service) == false)
+        #expect(service.calls == ["versions"])
+        #expect(manager.submissionError?.contains("Veröffentlichungsart") == true)
+        #expect(!manager.isSubmitting)
+    }
 }
 
 @Test func manualAppOnlySubmissionPreservesPendingJointSelection() throws {

@@ -65,22 +65,22 @@ final class AutoUpdateManager {
     /// separate from network/API errors and from a failed installation.
     static func evaluateRelease(data: Data, statusCode: Int, currentVersion: String) throws -> ReleaseCheck {
         if statusCode == 404 {
-            return .unavailable("Im Wartungsfork ist noch kein öffentliches Update veröffentlicht. Lokale Wartungsbuilds werden separat installiert.")
+            return .unavailable(L10n.tr("Im Wartungsfork ist noch kein öffentliches Update veröffentlicht. Lokale Wartungsbuilds werden separat installiert."))
         }
         guard (200..<300).contains(statusCode) else {
-            throw UpdateError(message: "Update-Prüfung nicht möglich (HTTP \(statusCode)). Bitte später erneut versuchen.")
+            throw UpdateError(message: L10n.tr("Update-Prüfung nicht möglich (HTTP \(statusCode)). Bitte später erneut versuchen."))
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String else {
-            throw UpdateError(message: "Der Wartungsfork hat keine lesbaren Release-Daten geliefert.")
+            throw UpdateError(message: L10n.tr("Der Wartungsfork hat keine lesbaren Release-Daten geliefert."))
         }
         guard json["draft"] as? Bool != true, json["prerelease"] as? Bool != true else {
-            return .unavailable("Es ist kein stabiles Update veröffentlicht.")
+            return .unavailable(L10n.tr("Es ist kein stabiles Update veröffentlicht."))
         }
         let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
         let parts = version.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) && Int($0) != nil }) else {
-            throw UpdateError(message: "Die Versionsnummer des veröffentlichten Updates ist ungültig.")
+            throw UpdateError(message: L10n.tr("Die Versionsnummer des veröffentlichten Updates ist ungültig."))
         }
         guard isNewer(remote: version, current: currentVersion) else { return .upToDate }
         let assets = json["assets"] as? [[String: Any]] ?? []
@@ -90,7 +90,7 @@ final class AutoUpdateManager {
               let url = asset["browser_download_url"] as? String,
               let parsedURL = URL(string: url), parsedURL.scheme == "https", parsedURL.host != nil,
               let filename = asset["name"] as? String else {
-            return .unavailable("Version \(version) ist veröffentlicht, enthält aber kein installierbares App-Paket.")
+            return .unavailable(L10n.tr("Version \(version) ist veröffentlicht, enthält aber kein installierbares App-Paket."))
         }
         return .available(PublishedUpdate(version: version, downloadURL: url, filename: filename))
     }
@@ -111,7 +111,7 @@ final class AutoUpdateManager {
             request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                throw UpdateError(message: "Die Update-Quelle hat keine gültige Antwort geliefert.")
+                throw UpdateError(message: L10n.tr("Die Update-Quelle hat keine gültige Antwort geliefert."))
             }
             switch try Self.evaluateRelease(data: data, statusCode: http.statusCode, currentVersion: currentVersion) {
             case .upToDate:
@@ -199,7 +199,7 @@ final class AutoUpdateManager {
         try? FileManager.default.removeItem(at: pkgPath)
 
         guard status == 0 else {
-            throw UpdateError(message: "Installation fehlgeschlagen (Exit-Code \(status))")
+            throw UpdateError(message: L10n.tr("Installation fehlgeschlagen (Exit-Code \(status))"))
         }
 
         terminateApp()
@@ -235,7 +235,7 @@ final class AutoUpdateManager {
         }.value
 
         guard status == 0 else {
-            throw UpdateError(message: "Installation fehlgeschlagen (Exit-Code \(status))")
+            throw UpdateError(message: L10n.tr("Installation fehlgeschlagen (Exit-Code \(status))"))
         }
 
         terminateApp()

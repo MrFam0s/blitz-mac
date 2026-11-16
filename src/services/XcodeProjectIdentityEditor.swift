@@ -30,17 +30,17 @@ struct XcodeProjectIdentityEditor {
         let modern = project.appendingPathComponent("project.xcproj")
         let fm = FileManager.default
         guard !(fm.fileExists(atPath: legacy.path) && fm.fileExists(atPath: modern.path)) else {
-            throw IdentityError(message: "Both Xcode project formats are present. Resolve the active project file in Xcode before changing its settings.")
+            throw IdentityError(message: L10n.tr("Both Xcode project formats are present. Resolve the active project file in Xcode before changing its settings."))
         }
         let url = fm.fileExists(atPath: modern.path) ? modern : legacy
         let data = try Data(contentsOf: url)
         guard let text = String(data: data, encoding: .utf8) else {
-            throw IdentityError(message: "Cannot read Xcode project: \(project.lastPathComponent)")
+            throw IdentityError(message: L10n.tr("Cannot read Xcode project: \(project.lastPathComponent)"))
         }
         if url == modern {
             guard let plist = XcodeProjectDiscovery.decodeModernProject(data: data),
                   let targets = plist["targets"] as? [[String: Any]] else {
-                throw IdentityError(message: "Cannot read Xcode project: \(project.lastPathComponent)")
+                throw IdentityError(message: L10n.tr("Cannot read Xcode project: \(project.lastPathComponent)"))
             }
             // Source ranges reject duplicate keys before selection as well as editing.
             var ranges = JSON5SourceRanges(text)
@@ -49,7 +49,7 @@ struct XcodeProjectIdentityEditor {
         }
         guard let plist = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
               let objects = plist["objects"] as? [String: [String: Any]] else {
-            throw IdentityError(message: "Cannot read Xcode project: \(project.lastPathComponent)")
+            throw IdentityError(message: L10n.tr("Cannot read Xcode project: \(project.lastPathComponent)"))
         }
         return Document(url: url, text: text, plist: plist, objects: objects, modernTargets: nil)
     }
@@ -74,7 +74,7 @@ struct XcodeProjectIdentityEditor {
                     let id = target["id"] as? String ?? name
                     guard !id.isEmpty, !name.isEmpty,
                           targets.filter({ ($0["id"] as? String ?? $0["name"] as? String) == id }).count == 1 else {
-                        throw IdentityError(message: "The Xcode project has ambiguous target identities. Resolve them in Xcode before changing settings.")
+                        throw IdentityError(message: L10n.tr("The Xcode project has ambiguous target identities. Resolve them in Xcode before changing settings."))
                     }
                     candidates.append((doc, id, name))
                 }
@@ -109,24 +109,24 @@ struct XcodeProjectIdentityEditor {
             guard let allNames = doc.plist["configurations"] as? [String], !allNames.isEmpty,
                   Set(allNames).count == allNames.count,
                   allNames.allSatisfy({ !$0.isEmpty && $0.rangeOfCharacter(from: CharacterSet(charactersIn: "[]*?")) == nil }) else {
-                throw IdentityError(message: "The selected application target has no unambiguous build configurations.")
+                throw IdentityError(message: L10n.tr("The selected application target has no unambiguous build configurations."))
             }
             let names = allNames.filter { configuration == nil || $0 == configuration }
-            guard !names.isEmpty else { throw IdentityError(message: "The selected app has no '\(configuration ?? "")' configuration.") }
+            guard !names.isEmpty else { throw IdentityError(message: L10n.tr("The selected app has no '\(configuration ?? "")' configuration.")) }
             return Selection(projectURL: doc.url.deletingLastPathComponent(), fileURL: doc.url,
                 targetID: id, targetName: name, configurationIDs: names)
         }
         guard let target = doc.objects[id], let listID = target["buildConfigurationList"] as? String,
               let allIDs = doc.objects[listID]?["buildConfigurations"] as? [String] else {
-            throw IdentityError(message: "The selected application target has no build configurations.")
+            throw IdentityError(message: L10n.tr("The selected application target has no build configurations."))
         }
         let ids = allIDs.filter { configuration == nil || doc.objects[$0]?["name"] as? String == configuration }
-        guard !ids.isEmpty else { throw IdentityError(message: "The selected app has no '\(configuration ?? "")' configuration.") }
+        guard !ids.isEmpty else { throw IdentityError(message: L10n.tr("The selected app has no '\(configuration ?? "")' configuration.")) }
         for (otherID, other) in doc.objects where otherID != id && ["PBXNativeTarget", "PBXAggregateTarget", "PBXProject"].contains(other["isa"] as? String ?? "") {
             if let otherList = other["buildConfigurationList"] as? String,
                let otherConfigs = doc.objects[otherList]?["buildConfigurations"] as? [String],
                !Set(ids).isDisjoint(with: otherConfigs) {
-                throw IdentityError(message: "The selected app shares build configurations with another target or the project. Change its bundle ID in Xcode.")
+                throw IdentityError(message: L10n.tr("The selected app shares build configurations with another target or the project. Change its bundle ID in Xcode."))
             }
         }
         return Selection(projectURL: doc.url.deletingLastPathComponent(), fileURL: doc.url, targetID: id, targetName: name, configurationIDs: ids)
@@ -149,7 +149,7 @@ struct XcodeProjectIdentityEditor {
                     if let id = node.attribute(forName: "BlueprintIdentifier")?.stringValue,
                        let location = node.attribute(forName: "ReferencedContainer")?.stringValue {
                         guard location.hasPrefix("container:") else {
-                            throw IdentityError(message: "Unsupported scheme project reference. Choose a scheme with an explicit project container.")
+                            throw IdentityError(message: L10n.tr("Unsupported scheme project reference. Choose a scheme with an explicit project container."))
                         }
                         let path = String(location.dropFirst("container:".count))
                         let project = URL(fileURLWithPath: path, relativeTo: container.deletingLastPathComponent())
@@ -165,12 +165,12 @@ struct XcodeProjectIdentityEditor {
     @discardableResult
     func update(projectPath: String, bundleID: String, scheme: String? = nil, configuration: String? = nil, teamID: String? = nil, dryRun: Bool = false, expectedOriginal: Data? = nil) throws -> Data {
         guard bundleID.range(of: #"\A[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+\z"#, options: .regularExpression) != nil else {
-            throw IdentityError(message: "Invalid bundle ID. Use ASCII letters, numbers, hyphens and dot-separated components.")
+            throw IdentityError(message: L10n.tr("Invalid bundle ID. Use ASCII letters, numbers, hyphens and dot-separated components."))
         }
         let selection = try select(projectPath: projectPath, scheme: scheme, configuration: configuration)
         let doc = try document(selection.projectURL)
         if let expectedOriginal, expectedOriginal != Data(doc.text.utf8) {
-            throw IdentityError(message: "The Xcode project changed before this update. Retry after saving Xcode changes.")
+            throw IdentityError(message: L10n.tr("The Xcode project changed before this update. Retry after saving Xcode changes."))
         }
         if doc.modernTargets != nil {
             return try updateModern(doc, selection: selection, bundleID: bundleID, configuration: configuration,
@@ -178,7 +178,7 @@ struct XcodeProjectIdentityEditor {
         }
         var parser = OpenStepRanges(doc.text)
         let root = try parser.parse()
-        guard let objectNodes = root.entries["objects"] else { throw IdentityError(message: "Cannot locate Xcode objects safely.") }
+        guard let objectNodes = root.entries["objects"] else { throw IdentityError(message: L10n.tr("Cannot locate Xcode objects safely.")) }
         var edits: [(Range<String.Index>, String)] = []
         var replacements = ["PRODUCT_BUNDLE_IDENTIFIER": bundleID]
         if let teamID, !teamID.isEmpty {
@@ -188,13 +188,13 @@ struct XcodeProjectIdentityEditor {
         for id in selection.configurationIDs {
             guard let object = doc.objects[id], let settings = object["buildSettings"] as? [String: Any],
                   let node = objectNodes.entries[id]?.entries["buildSettings"] else {
-                throw IdentityError(message: "Cannot locate the selected target's build settings safely.")
+                throw IdentityError(message: L10n.tr("Cannot locate the selected target's build settings safely."))
             }
             // Conditional settings can override an ordinary assignment; never guess
             // which SDK-specific identity the user intended to change.
             let conditionalKeys = settings.keys.filter { key in replacements.keys.contains { key.hasPrefix($0 + "[") } }
             guard conditionalKeys.isEmpty else {
-                throw IdentityError(message: "The selected app uses conditional signing or bundle-ID settings. Resolve them in Xcode before changing this value.")
+                throw IdentityError(message: L10n.tr("The selected app uses conditional signing or bundle-ID settings. Resolve them in Xcode before changing this value."))
             }
             for key in replacements.keys.sorted() {
                 let value = replacements[key]!
@@ -216,7 +216,7 @@ struct XcodeProjectIdentityEditor {
         // partly rewritten user project behind.
         _ = try PropertyListSerialization.propertyList(from: Data(result.utf8), format: nil)
         guard try Data(contentsOf: doc.url) == Data(doc.text.utf8) else {
-            throw IdentityError(message: "The Xcode project changed during this update. Retry after saving Xcode changes.")
+            throw IdentityError(message: L10n.tr("The Xcode project changed during this update. Retry after saving Xcode changes."))
         }
         let updatedData = Data(result.utf8)
         if !dryRun { try updatedData.write(to: doc.url, options: .atomic) }
@@ -228,13 +228,13 @@ struct XcodeProjectIdentityEditor {
         guard let targets = doc.modernTargets,
               let targetIndex = targets.firstIndex(where: { ($0["id"] as? String ?? $0["name"] as? String) == selection.targetID }),
               let settings = targets[targetIndex]["build-settings"] as? [String: Any] else {
-            throw IdentityError(message: "Cannot locate the selected application's build settings safely.")
+            throw IdentityError(message: L10n.tr("Cannot locate the selected application's build settings safely."))
         }
         var parser = JSON5SourceRanges(doc.text)
         let root = try parser.parseDocument()
         guard let targetNodes = root.entries["targets"]?.elements, targetNodes.indices.contains(targetIndex),
               let settingsNode = targetNodes[targetIndex].entries["build-settings"] else {
-            throw IdentityError(message: "Cannot locate the selected application's build settings safely.")
+            throw IdentityError(message: L10n.tr("Cannot locate the selected application's build settings safely."))
         }
         var replacements = ["PRODUCT_BUNDLE_IDENTIFIER": bundleID]
         if let teamID, !teamID.isEmpty {
@@ -255,7 +255,7 @@ struct XcodeProjectIdentityEditor {
                 $0.hasPrefix(key + "[") && !allowed.contains($0)
             }
             guard !unsupported else {
-                throw IdentityError(message: "The selected app uses conditional signing or bundle-ID settings. Resolve them in Xcode before changing this value.")
+                throw IdentityError(message: L10n.tr("The selected app uses conditional signing or bundle-ID settings. Resolve them in Xcode before changing this value."))
             }
         }
         var values: [String: String] = [:]
@@ -264,7 +264,7 @@ struct XcodeProjectIdentityEditor {
             if let configuration {
                 if let originalBase = settings[key] {
                     guard let originalValue = originalBase as? String else {
-                        throw IdentityError(message: "The selected app has an unsupported signing or bundle-ID value. No settings were changed.")
+                        throw IdentityError(message: L10n.tr("The selected app has an unsupported signing or bundle-ID value. No settings were changed."))
                     }
                     removeBaseKeys.insert(key)
                     for name in allConfigurations {
@@ -283,7 +283,7 @@ struct XcodeProjectIdentityEditor {
         var edits: [(Range<String.Index>, String)] = []
         for key in removeBaseKeys {
             guard let memberRange = settingsNode.members[key] else {
-                throw IdentityError(message: "Cannot locate the selected application's setting safely.")
+                throw IdentityError(message: L10n.tr("Cannot locate the selected application's setting safely."))
             }
             edits.append((memberRange, ""))
             // Leave comments around the deleted member untouched. A previous
@@ -317,7 +317,7 @@ struct XcodeProjectIdentityEditor {
               let updatedSettings = updatedTargets[targetIndex]["build-settings"] as? [String: Any],
               values.allSatisfy({ updatedSettings[$0.key] as? String == $0.value }),
               removeBaseKeys.allSatisfy({ updatedSettings[$0] == nil }) else {
-            throw IdentityError(message: "The Xcode project update could not be verified. No settings were changed.")
+            throw IdentityError(message: L10n.tr("The Xcode project update could not be verified. No settings were changed."))
         }
         for name in allConfigurations {
             var before = XcodeProjectDiscovery.resolveModernConfigurationSettings(projectSettings, configuration: name)
@@ -328,12 +328,12 @@ struct XcodeProjectIdentityEditor {
                 let selected = configuration == nil || configuration == name
                 let expected = selected ? value : before[key] as? String
                 guard after[key] as? String == expected else {
-                    throw IdentityError(message: "The Xcode project's effective configuration could not be verified. No settings were changed.")
+                    throw IdentityError(message: L10n.tr("The Xcode project's effective configuration could not be verified. No settings were changed."))
                 }
             }
         }
         guard try Data(contentsOf: doc.url) == Data(doc.text.utf8) else {
-            throw IdentityError(message: "The Xcode project changed during this update. Retry after saving Xcode changes.")
+            throw IdentityError(message: L10n.tr("The Xcode project changed during this update. Retry after saving Xcode changes."))
         }
         if !dryRun { try data.write(to: doc.url, options: .atomic) }
         return data
@@ -346,19 +346,19 @@ struct XcodeProjectIdentityEditor {
 
     static func validateResolvedBuildSettings(_ data: Data, targetName: String, expectedBundleID: String, projectURL: URL? = nil) throws {
         guard let entries = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw IdentityError(message: "Could not inspect the selected scheme's resolved build settings.")
+            throw IdentityError(message: L10n.tr("Could not inspect the selected scheme's resolved build settings."))
         }
         let targets = entries.filter { $0["target"] as? String == targetName }
         guard targets.count == 1, let settings = targets.first?["buildSettings"] as? [String: Any],
               let identifier = settings["PRODUCT_BUNDLE_IDENTIFIER"] as? String,
               identifier == expectedBundleID,
               settings["PRODUCT_TYPE"] as? String == "com.apple.product-type.application" else {
-            throw IdentityError(message: "The selected scheme's resolved bundle ID does not match '\(expectedBundleID)'. Check the app target, configuration and xcconfig settings in Xcode.")
+            throw IdentityError(message: L10n.tr("The selected scheme's resolved bundle ID does not match '\(expectedBundleID)'. Check the app target, configuration and xcconfig settings in Xcode."))
         }
         if let projectURL {
             guard let path = settings["PROJECT_FILE_PATH"] as? String,
                   URL(fileURLWithPath: path).resolvingSymlinksInPath() == projectURL.resolvingSymlinksInPath() else {
-                throw IdentityError(message: "The selected scheme resolves to a different Xcode project. Choose an unambiguous workspace and scheme.")
+                throw IdentityError(message: L10n.tr("The selected scheme resolves to a different Xcode project. Choose an unambiguous workspace and scheme."))
             }
         }
     }
@@ -455,6 +455,6 @@ private struct OpenStepRanges {
     }
     mutating func advance() { index = text.index(after: index) }
     func invalid() -> XcodeProjectIdentityEditor.IdentityError {
-        .init(message: "Unsupported Xcode project syntax. No settings were changed; edit the application target in Xcode.")
+        .init(message: L10n.tr("Unsupported Xcode project syntax. No settings were changed; edit the application target in Xcode."))
     }
 }

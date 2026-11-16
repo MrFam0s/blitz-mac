@@ -21,24 +21,24 @@ struct TestsView: View {
                 hero
                 statusBadge
                 ExampleCard(
-                    title: "Funktion ergänzen und testen",
+                    title: L10n.tr("Funktion ergänzen und testen"),
                     icon: "person.badge.plus",
-                    prompt: "Ergänze Registrierung und Anmeldung und teste anschließend den gesamten Ablauf im Simulator.",
-                    preview: "Der Agent entwickelt die Funktion und prüft anschließend den gesamten Ablauf im Simulator: Er tippt, gibt Daten ein und kontrolliert jede Ansicht.",
+                    prompt: L10n.tr("Ergänze Registrierung und Anmeldung und teste anschließend den gesamten Ablauf im Simulator."),
+                    preview: L10n.tr("Der Agent entwickelt die Funktion und prüft anschließend den gesamten Ablauf im Simulator: Er tippt, gibt Daten ein und kontrolliert jede Ansicht."),
                     detail: detailSignup
                 )
                 ExampleCard(
-                    title: "App-Store-Screenshots aufnehmen",
+                    title: L10n.tr("App-Store-Screenshots aufnehmen"),
                     icon: "camera.viewfinder",
-                    prompt: "Erstelle zehn App-Store-Screenshots in unterschiedlichen Ansichten der App und lade sie hoch.",
-                    preview: "Der Agent öffnet verschiedene Ansichten der App, nimmt Screenshots auf und lädt sie in App Store Connect hoch.",
+                    prompt: L10n.tr("Erstelle zehn App-Store-Screenshots in unterschiedlichen Ansichten der App und lade sie hoch."),
+                    preview: L10n.tr("Der Agent öffnet verschiedene Ansichten der App, nimmt Screenshots auf und lädt sie in App Store Connect hoch."),
                     detail: detailScreenshots
                 )
                 ExampleCard(
-                    title: "Abos einrichten und testen",
+                    title: L10n.tr("Abos einrichten und testen"),
                     icon: "creditcard",
-                    prompt: "Erstelle ein Abo, ergänze eine Kaufansicht und teste den Kaufablauf.",
-                    preview: "Der Agent erstellt ein Abo in App Store Connect, ergänzt eine Kaufansicht im Projekt und testet den Kaufablauf auf einem Gerät.",
+                    prompt: L10n.tr("Erstelle ein Abo, ergänze eine Kaufansicht und teste den Kaufablauf."),
+                    preview: L10n.tr("Der Agent erstellt ein Abo in App Store Connect, ergänzt eine Kaufansicht im Projekt und testet den Kaufablauf auf einem Gerät."),
                     detail: detailSubscriptions
                 )
             }
@@ -52,11 +52,11 @@ struct TestsView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Tests mit KI-Agenten automatisieren", systemImage: "sparkles")
+            Label(L10n.tr("Tests mit KI-Agenten automatisieren"), systemImage: "sparkles")
                 .font(BlitzLayout.pageTitle)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Im Projektordner von Blitz Neo kannst du Agenten beauftragen, Funktionen auf iPhones zu testen und Fehler zu finden. Über das **iPhone-MCP** von Blitz Neo kann dein Agent tippen, wischen und Text eingeben – sowohl im Simulator als auch auf einem echten iPhone.")
+            Text(LocalizedStringKey(L10n.tr("Im Projektordner von Blitz Neo kannst du Agenten beauftragen, Funktionen auf iPhones zu testen und Fehler zu finden. Über das **iPhone-MCP** von Blitz Neo kann dein Agent tippen, wischen und Text eingeben – sowohl im Simulator als auch auf einem echten iPhone.")))
                 .font(BlitzLayout.bodyFont)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -71,8 +71,8 @@ struct TestsView: View {
                 .fill(iphoneMCPConfigured ? .green : .orange)
                 .frame(width: 8, height: 8)
             Text(iphoneMCPConfigured
-                 ? "iPhone-MCP ist für dieses Projekt eingerichtet"
-                 : "iPhone-MCP nicht gefunden – öffne ein Projekt, um zu beginnen")
+                 ? L10n.tr("iPhone-MCP ist für dieses Projekt eingerichtet")
+                 : L10n.tr("iPhone-MCP nicht gefunden – öffne ein Projekt, um zu beginnen"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -81,7 +81,7 @@ struct TestsView: View {
 
     // MARK: - Details
 
-    private let detailSignup = """
+    private let detailSignup = L10n.tr("""
     Der Agent erstellt die Ansichten, verbindet sie mit deinem Backend und prüft den Ablauf über **iPhone-MCP**:
 
     1. App starten und die Registrierung öffnen
@@ -92,9 +92,9 @@ struct TestsView: View {
     6. Mit `describe_screen` prüfen, ob die Anmeldung erfolgreich war
 
     Schlägt ein Schritt fehl, sieht der Agent den tatsächlichen Bildschirm und kann den Fehler direkt untersuchen.
-    """
+    """)
 
-    private let detailScreenshots = """
+    private let detailScreenshots = L10n.tr("""
     Der Agent bereitet die App vor jeder Aufnahme über **iPhone-MCP** vor:
 
     1. Die gewünschte Ansicht öffnen, scrollen und passende Daten eingeben
@@ -102,9 +102,9 @@ struct TestsView: View {
     3. Mit `screenshots_switch_localization` → `screenshots_put_track_slot` / `screenshots_remove_track_slot` / `screenshots_reorder_track` → `screenshots_save` die Screenshots in App Store Connect hochladen
 
     So erhältst du aussagekräftige Screenshots, ohne den Simulator selbst bedienen zu müssen.
-    """
+    """)
 
-    private let detailSubscriptions = """
+    private let detailSubscriptions = L10n.tr("""
     Der Agent begleitet den gesamten Ablauf – von App Store Connect bis zum Test auf dem Gerät:
 
     1. Mit `asc_create_subscription` eine Abo-Gruppe und die Preise einrichten
@@ -115,7 +115,7 @@ struct TestsView: View {
     6. Prüfen, ob die Premium-Inhalte nach dem Kauf freigeschaltet sind
 
     **Hinweis:** Erstelle einen Sandbox-Apple-Account unter App Store Connect → Benutzer und Zugriffsrechte → Sandbox und melde dich damit auf dem Testgerät an. Der Agent übernimmt die weiteren Schritte.
-    """
+    """)
 }
 
 // MARK: - Example Card
@@ -154,7 +154,7 @@ private struct ExampleCard: View {
                 } label: {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 }
-                .help("Anfrage kopieren")
+                .help(L10n.tr("Anfrage kopieren"))
             }
 
             // Preview text
@@ -168,7 +168,7 @@ private struct ExampleCard: View {
                 withAnimation(.easeInOut(duration: 0.25)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 4) {
-                    Text(expanded ? "Details ausblenden" : "So funktioniert es")
+                    Text(expanded ? L10n.tr("Details ausblenden") : L10n.tr("So funktioniert es"))
                         .font(.callout.weight(.medium))
                     Image(systemName: "chevron.right")
                         .font(.caption)

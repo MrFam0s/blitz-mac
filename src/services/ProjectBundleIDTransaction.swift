@@ -21,11 +21,11 @@ enum ProjectBundleIDTransaction {
             let metadataError = error
             // Do not overwrite a concurrent Xcode save while undoing our edit.
             guard (try? Data(contentsOf: file)) == written else {
-                throw Failure(message: "Project metadata could not be saved and the Xcode project changed meanwhile. Check the bundle ID in Xcode and Blitz Neo before building. \(metadataError.localizedDescription)")
+                throw Failure(message: L10n.tr("Project metadata could not be saved and the Xcode project changed meanwhile. Check the bundle ID in Xcode and Blitz Neo before building. \(metadataError.localizedDescription)"))
             }
             do { try original.write(to: file, options: .atomic) }
             catch {
-                throw Failure(message: "Project metadata could not be saved and the Xcode change could not be reverted. Check the bundle ID in Xcode and Blitz Neo before building. \(error.localizedDescription)")
+                throw Failure(message: L10n.tr("Project metadata could not be saved and the Xcode change could not be reverted. Check the bundle ID in Xcode and Blitz Neo before building. \(error.localizedDescription)"))
             }
             throw metadataError
         }

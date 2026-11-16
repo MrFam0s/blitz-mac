@@ -76,7 +76,7 @@ extension ASCManager {
             await ensureScreenshotLocalizationsLoaded(service: service)
             guard projectRevision == revision, !Task.isCancelled else { return false }
             guard let loc = localizations.first(where: { $0.attributes.locale == locale }) else {
-                tabError[.screenshots] = "Keine Lokalisierung für \(locale) gefunden."
+                tabError[.screenshots] = L10n.tr("Keine Lokalisierung für \(locale) gefunden.")
                 return false
             }
             do {
@@ -419,7 +419,7 @@ extension ASCManager {
                         domain: "ASCManager",
                         code: 5,
                         userInfo: [
-                            NSLocalizedDescriptionKey: "Die lokale Screenshot-Datei fehlt unter \(localPath). Füge sie erneut hinzu und speichere nochmals."
+                            NSLocalizedDescriptionKey: L10n.tr("Die lokale Screenshot-Datei fehlt unter \(localPath). Füge sie erneut hinzu und speichere nochmals.")
                         ]
                     )
                 }
@@ -428,7 +428,7 @@ extension ASCManager {
             }
             throw NSError(
                 domain: "ASCManager", code: 6,
-                userInfo: [NSLocalizedDescriptionKey: "A staged screenshot could not be resolved for re-upload. Refresh the screenshots tab and try again."]
+                userInfo: [NSLocalizedDescriptionKey: L10n.tr("A staged screenshot could not be resolved for re-upload. Refresh the screenshots tab and try again.")]
             )
         }
 
@@ -442,7 +442,7 @@ extension ASCManager {
                 domain: "ASCManager",
                 code: 1,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Der Original-Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht geladen werden. Füge ihn erneut lokal hinzu und speichere nochmals."
+                    NSLocalizedDescriptionKey: L10n.tr("Der Original-Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht geladen werden. Füge ihn erneut lokal hinzu und speichere nochmals.")
                 ]
             )
         }
@@ -463,7 +463,7 @@ extension ASCManager {
                 domain: "ASCManager",
                 code: 3,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht gelesen werden."
+                    NSLocalizedDescriptionKey: L10n.tr("Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ konnte nicht gelesen werden.")
                 ]
             )
         }
@@ -476,7 +476,7 @@ extension ASCManager {
                     domain: "ASCManager",
                     code: 4,
                     userInfo: [
-                        NSLocalizedDescriptionKey: "Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ hat die unerwartete Größe \(actualSize.width)×\(actualSize.height); erwartet wurde \(expectedWidth)×\(expectedHeight)."
+                        NSLocalizedDescriptionKey: L10n.tr("Der heruntergeladene Screenshot „\(screenshot.attributes.fileName ?? screenshot.id)“ hat die unerwartete Größe \(actualSize.width)×\(actualSize.height); erwartet wurde \(expectedWidth)×\(expectedHeight).")
                     ]
                 )
             }
@@ -498,7 +498,7 @@ extension ASCManager {
             return
         }
         guard let service else {
-            writeError = "App Store Connect ist nicht eingerichtet."
+            writeError = L10n.tr("App Store Connect ist nicht eingerichtet.")
             return
         }
 
@@ -511,7 +511,7 @@ extension ASCManager {
         guard revision == projectRevision, !Task.isCancelled else { return }
         guard let loc = localizations.first(where: { $0.attributes.locale == locale })
                 else {
-            writeError = "Keine Lokalisierungen für die Sprache '\(locale)'."
+            writeError = L10n.tr("Keine Lokalisierungen für die Sprache '\(locale)'.")
             return
         }
 
@@ -523,7 +523,7 @@ extension ASCManager {
             // Refresh the remote baseline before diffing so stale cached ASC IDs
             // don't survive server-side edits made outside Blitz.
             guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
-                throw ASCError.notFound(tabError[.screenshots] ?? "Die aktuellen Screenshots konnten nicht geprüft werden")
+                throw ASCError.notFound(tabError[.screenshots] ?? L10n.tr("Die aktuellen Screenshots konnten nicht geprüft werden"))
             }
             try checkWriteTarget(target)
             invalidateStaleTrackSnapshots(displayType: displayType, locale: loc.attributes.locale)
@@ -566,7 +566,7 @@ extension ASCManager {
 
             try checkWriteTarget(target)
             guard await loadScreenshots(locale: loc.attributes.locale, force: true) else {
-                throw ASCError.notFound("Speichern wurde ausgeführt, der Serverstand konnte aber nicht bestätigt werden. Bitte vor einem erneuten Speichern aktualisieren.")
+                throw ASCError.notFound(L10n.tr("Speichern wurde ausgeführt, der Serverstand konnte aber nicht bestätigt werden. Bitte vor einem erneuten Speichern aktualisieren."))
             }
             try checkWriteTarget(target)
             loadTrackFromASC(displayType: displayType, locale: loc.attributes.locale, overwriteUnsaved: true)
@@ -590,10 +590,10 @@ extension ASCManager {
     // MARK: - Screenshot Deletion
 
     func deleteScreenshot(screenshotId: String) async throws {
-        guard let service else { throw ASCError.notFound("App Store Connect ist nicht eingerichtet.") }
+        guard let service else { throw ASCError.notFound(L10n.tr("App Store Connect ist nicht eingerichtet.")) }
         _ = try await validateWrite(fields: ["screenshots"], using: service)
         guard localizations.contains(where: { loc in screenshotsForLocale(loc.attributes.locale).values.joined().contains { $0.id == screenshotId } }) else {
-            throw ASCError.notFound("Der Screenshot gehört nicht zur geladenen Version.")
+            throw ASCError.notFound(L10n.tr("Der Screenshot gehört nicht zur geladenen Version."))
         }
         try await service.deleteScreenshot(screenshotId: screenshotId)
     }

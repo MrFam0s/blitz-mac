@@ -33,82 +33,82 @@ struct ProjectReleaseTargetSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader(releaseTargetId == nil ? "Veröffentlichungsziel hinzufügen" : "Store-Zuordnung prüfen",
-                subtitle: "Verbinde ein natives App-Ziel mit einem bestehenden Store-Eintrag oder bereite einen separaten Eintrag vor.")
+            BlitzSetupHeader(releaseTargetId == nil ? L10n.tr("Veröffentlichungsziel hinzufügen") : L10n.tr("Store-Zuordnung prüfen"),
+                subtitle: L10n.tr("Verbinde ein natives App-Ziel mit einem bestehenden Store-Eintrag oder bereite einen separaten Eintrag vor."))
 
             ScrollView {
                 VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                    BlitzSetupField("Store-Zuordnung") {
-                        Picker("Store-Zuordnung", selection: $mode) {
-                            Text("Bestehenden Store-Eintrag verwenden").tag(Mode.existingStore)
-                            Text("Separaten Store-Eintrag vorbereiten").tag(Mode.separateStore)
+                    BlitzSetupField(L10n.tr("Store-Zuordnung")) {
+                        Picker(L10n.tr("Store-Zuordnung"), selection: $mode) {
+                            Text(L10n.tr("Bestehenden Store-Eintrag verwenden")).tag(Mode.existingStore)
+                            Text(L10n.tr("Separaten Store-Eintrag vorbereiten")).tag(Mode.separateStore)
                         }
-                        .accessibilityLabel("Store-Zuordnung")
+                        .accessibilityLabel(L10n.tr("Store-Zuordnung"))
                         .disabled(releaseTargetId != nil)
                     }
-                    BlitzSetupField("Plattform", hint: "Eine iPhone-/iPad-App auf einem Mac mit Apple-Chip bleibt ein iOS-Ziel. macOS ist für einen eigenen Mac-Build vorgesehen.") {
-                        Picker("Plattform", selection: $platform) {
+                    BlitzSetupField(L10n.tr("Plattform"), hint: L10n.tr("Eine iPhone-/iPad-App auf einem Mac mit Apple-Chip bleibt ein iOS-Ziel. macOS ist für einen eigenen Mac-Build vorgesehen.")) {
+                        Picker(L10n.tr("Plattform"), selection: $platform) {
                             ForEach(ProjectPlatform.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.segmented)
-                        .accessibilityLabel("Plattform")
+                        .accessibilityLabel(L10n.tr("Plattform"))
                         .disabled(releaseTargetId != nil)
                     }
                     if platform == .macOS {
-                        Toggle("Mac-Catalyst-Build", isOn: $isMacCatalyst)
+                        Toggle(L10n.tr("Mac-Catalyst-Build"), isOn: $isMacCatalyst)
                             .disabled(releaseTargetId != nil)
                     }
-                    BlitzSetupField("Zielname", hint: "Optionaler Name für die Auswahl in Blitz Neo.") {
-                        TextField("Zum Beispiel: Mac-App", text: $targetName)
-                            .accessibilityLabel("Zielname")
+                    BlitzSetupField(L10n.tr("Zielname"), hint: L10n.tr("Optionaler Name für die Auswahl in Blitz Neo.")) {
+                        TextField(L10n.tr("Zum Beispiel: Mac-App"), text: $targetName)
+                            .accessibilityLabel(L10n.tr("Zielname"))
                             .disabled(releaseTargetId != nil)
                     }
-                    BlitzSetupField("Xcode-Scheme") {
-                        TextField("Name des App-Schemes", text: $scheme)
-                            .accessibilityLabel("Xcode-Scheme")
+                    BlitzSetupField(L10n.tr("Xcode-Scheme")) {
+                        TextField(L10n.tr("Name des App-Schemes"), text: $scheme)
+                            .accessibilityLabel(L10n.tr("Xcode-Scheme"))
                             .disabled(releaseTargetId != nil)
                     }
-                    BlitzSetupField("Konfiguration") {
+                    BlitzSetupField(L10n.tr("Konfiguration")) {
                         TextField("Release", text: $configuration)
-                            .accessibilityLabel("Konfiguration")
+                            .accessibilityLabel(L10n.tr("Konfiguration"))
                             .disabled(releaseTargetId != nil)
                     }
 
                     Divider()
 
                     if mode == .existingStore {
-                        BlitzSetupField("Store-App") {
-                            Picker("Store-App", selection: $selectedAppID) {
-                                Text("App auswählen").tag("")
+                        BlitzSetupField(L10n.tr("Store-App")) {
+                            Picker(L10n.tr("Store-App"), selection: $selectedAppID) {
+                                Text(L10n.tr("App auswählen")).tag("")
                                 ForEach(apps) { Text($0.name).tag($0.id) }
                             }
-                            .accessibilityLabel("Store-App")
+                            .accessibilityLabel(L10n.tr("Store-App"))
                         }
                         if let app = selectedApp {
-                            BlitzSetupField("Bundle-ID") {
+                            BlitzSetupField(L10n.tr("Bundle-ID")) {
                                 Text(app.bundleId)
                                     .font(.system(.callout, design: .monospaced))
                                     .textSelection(.enabled)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            Text("App-ID: \(app.id)\nSKU: \(app.attributes.sku ?? "unbekannt")")
+                            Text(L10n.tr("App-ID: \(app.id)\nSKU: \(app.attributes.sku ?? L10n.tr("unbekannt"))"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Text("App-ID, Bundle-ID und SKU bleiben erhalten. Fehlt die Plattform bei Apple noch, lege nach dem Speichern einen Versionsentwurf für dieses Ziel an.")
+                        Text(L10n.tr("App-ID, Bundle-ID und SKU bleiben erhalten. Fehlt die Plattform bei Apple noch, lege nach dem Speichern einen Versionsentwurf für dieses Ziel an."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        BlitzSetupField("Bundle-ID", hint: "Eine separate Store-App benötigt eine eigene Bundle-ID und SKU. Name und Kennungen bestätigst du anschließend im Anlegeformular.") {
+                        BlitzSetupField(L10n.tr("Bundle-ID"), hint: L10n.tr("Eine separate Store-App benötigt eine eigene Bundle-ID und SKU. Name und Kennungen bestätigst du anschließend im Anlegeformular.")) {
                             TextField("org.beispiel.MeineApp", text: $bundleID)
                                 .font(.system(.callout, design: .monospaced))
-                                .accessibilityLabel("Bundle-ID")
+                                .accessibilityLabel(L10n.tr("Bundle-ID"))
                         }
                     }
-                    Text("Hier wird nur die lokale Zuordnung gespeichert. Bei Apple wird noch keine App angelegt oder eingereicht.")
+                    Text(L10n.tr("Hier wird nur die lokale Zuordnung gespeichert. Bei Apple wird noch keine App angelegt oder eingereicht."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -128,12 +128,12 @@ struct ProjectReleaseTargetSetupView: View {
             }
             Divider()
             HStack {
-                Button("Abbrechen") { dismiss() }
+                Button(L10n.tr("Abbrechen")) { dismiss() }
                     .buttonStyle(.bordered)
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 if busy { ProgressView().controlSize(.small) }
-                Button("Ziel speichern") { Task { await save() } }
+                Button(L10n.tr("Ziel speichern")) { Task { await save() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canSave)
             }
@@ -145,12 +145,12 @@ struct ProjectReleaseTargetSetupView: View {
     }
 
     private func load() async {
-        guard let project = appState.activeProject else { error = "Kein lokales Projekt ausgewählt."; return }
+        guard let project = appState.activeProject else { error = L10n.tr("Kein lokales Projekt ausgewählt."); return }
         capturedProjectID = project.id
         platform = project.platform == .iOS ? .macOS : .iOS
         if let releaseTargetId {
             guard let target = project.metadata.releaseTarget(id: releaseTargetId) else {
-                error = "Das gewählte Veröffentlichungsziel ist nicht mehr vorhanden. Bitte die Zielauswahl erneut öffnen."
+                error = L10n.tr("Das gewählte Veröffentlichungsziel ist nicht mehr vorhanden. Bitte die Zielauswahl erneut öffnen.")
                 return
             }
             platform = target.platform; targetName = target.name ?? ""
@@ -163,7 +163,7 @@ struct ProjectReleaseTargetSetupView: View {
         capturedCredentialRevision = appState.ascManager.credentialActivationRevision
         guard let service = appState.ascManager.service else {
             if releaseTargetId != nil {
-                error = "Bitte zuerst bei App Store Connect anmelden, damit die Store-Zuordnung geprüft werden kann."
+                error = L10n.tr("Bitte zuerst bei App Store Connect anmelden, damit die Store-Zuordnung geprüft werden kann.")
             } else {
                 mode = .separateStore
             }
@@ -223,7 +223,7 @@ struct ProjectReleaseTargetSetupView: View {
                           $0.storeBinding != nil && $0.bundleIdentifier?.caseInsensitiveCompare(bundleID) == .orderedSame
                       }) else {
                     throw NSError(domain: "BlitzReleaseTarget", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                        "Diese Bundle-ID gehört bereits zu einem Store-Eintrag. Verwende den bestehenden Eintrag oder eine andere, ausdrücklich bestätigte Bundle-ID."])
+                        L10n.tr("Diese Bundle-ID gehört bereits zu einem Store-Eintrag. Verwende den bestehenden Eintrag oder eine andere, ausdrücklich bestätigte Bundle-ID.")])
                 }
             }
             var verifiedBindings: [String: ProjectStoreBinding] = [:]

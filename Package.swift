@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "Blitz",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],

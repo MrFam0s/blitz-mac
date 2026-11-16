@@ -259,7 +259,7 @@ extension ASCManager {
                 if let target {
                     selectedScreenshotsLocale = target.attributes.locale
                     guard await loadScreenshots(locale: target.attributes.locale, force: true) else {
-                        throw ASCError.notFound(tabError[.screenshots] ?? "Screenshots konnten nicht aktualisiert werden")
+                        throw ASCError.notFound(tabError[.screenshots] ?? L10n.tr("Screenshots konnten nicht aktualisiert werden"))
                     }
                 } else { selectedScreenshotsLocale = nil }
             } else {

@@ -36,7 +36,7 @@ struct ASCManualReleaseRequest {
 
     static func requireAppOnlyScope(previous: ReleaseWorkflowRecord?) throws {
         guard let previous, previous.state != .submitted, !previous.target.reviewItems.isEmpty else { return }
-        throw ASCError.notFound("Für diese App ist bereits die gemeinsame Einreichung mit Kaufprodukten vorbereitet (Vorgang \(previous.operationID)). Bitte diesen Vorgang über die Blitz-Neo-CLI oder MCP prüfen und fortsetzen. Diese Vorschau für die App-Einreichung darf die gespeicherte Produktauswahl nicht ersetzen.")
+        throw ASCError.notFound(L10n.tr("Für diese App ist bereits die gemeinsame Einreichung mit Kaufprodukten vorbereitet (Vorgang \(previous.operationID)). Bitte diesen Vorgang über die Blitz-Neo-CLI oder MCP prüfen und fortsetzen. Diese Vorschau für die App-Einreichung darf die gespeicherte Produktauswahl nicht ersetzen."))
     }
 
     init(project: Project, captured: ASCReleaseOperationTarget, version: ASCAppStoreVersion, build: ASCBuild) throws {
@@ -52,7 +52,7 @@ struct ASCManualReleaseRequest {
         _ = try RegisteredReleaseTarget.resolve(project: project, releaseTargetID: configured.id,
             appID: captured.appId, bundleID: captured.bundleId, platform: configured.platform.ascPlatformValue, accountKey: accountKey)
         guard let rawMode = version.attributes.releaseType, let mode = ReleaseWorkflowMode(rawValue: rawMode) else {
-            throw ASCError.notFound("Die Veröffentlichungsart dieser Version ist nicht eindeutig unterstützt. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen; eine geplante Veröffentlichung wird nicht stillschweigend geändert.")
+            throw ASCError.notFound(L10n.tr("Die Veröffentlichungsart dieser Version ist nicht eindeutig unterstützt. Bitte in App Store Connect „Manuell“ oder „Nach Freigabe automatisch“ wählen; eine geplante Veröffentlichung wird nicht stillschweigend geändert."))
         }
         self.mode = mode
         self.target = ReleaseWorkflowTarget(projectID: project.id,
@@ -201,12 +201,12 @@ extension ASCManager {
         let desiredSuffix: String
         if let desiredVersionString,
            !desiredVersionString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            desiredSuffix = " bevor du Version \(desiredVersionString) anlegst"
+            desiredSuffix = L10n.tr(" bevor du Version \(desiredVersionString) anlegst")
         } else {
             desiredSuffix = ""
         }
-        return "App Store Connect enthält bereits Version \(blocker.attributes.versionString) mit dem Status „\(blockerState)“. "
-            + "Verwende diese Version oder schließe sie ab, reiche sie ein oder entferne sie\(desiredSuffix)."
+        return L10n.tr("App Store Connect enthält bereits Version \(blocker.attributes.versionString) mit dem Status „\(blockerState)“. ")
+            + L10n.tr("Verwende diese Version oder schließe sie ab, reiche sie ein oder entferne sie\(desiredSuffix).")
     }
 
     @discardableResult
@@ -309,12 +309,12 @@ extension ASCManager {
             try target.check(self)
             guard let version = ASCReleaseStatus.versions(versions, for: platform).first(where: { $0.id == versionId }),
                   ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
-                throw ASCError.notFound("Die ausgewählte Version ist nicht mehr bearbeitbar.")
+                throw ASCError.notFound(L10n.tr("Die ausgewählte Version ist nicht mehr bearbeitbar."))
             }
             let build = try await service.fetchBuild(id: buildId)
             try target.check(self)
             guard build.matchesRelease(appId: target.appId, versionString: version.attributes.versionString, platform: platform) else {
-                throw ASCError.notFound("Der Build passt nicht zu App, Plattform oder Version oder ist nicht verwendbar.")
+                throw ASCError.notFound(L10n.tr("Der Build passt nicht zu App, Plattform oder Version oder ist nicht verwendbar."))
             }
             try await service.attachBuild(versionId: versionId, buildId: buildId)
             try target.check(self)
@@ -343,7 +343,7 @@ extension ASCManager {
         guard !isCreatingVersion else { return nil }
         guard let service = serviceOverride ?? service, let target = expectedTarget ?? releaseOperationTarget(),
               target.matches(self), target.platform == nil || target.platform == platform else {
-            versionCreationError = "Keine unveränderte App oder ASC-Verbindung ausgewählt."
+            versionCreationError = L10n.tr("Keine unveränderte App oder ASC-Verbindung ausgewählt.")
             return nil
         }
         let operation = UUID()
@@ -370,7 +370,7 @@ extension ASCManager {
                 throw ASCError.notFound(error)
             }
             if let blocker = ASCReleaseStatus.currentUpdateVersion(for: platformVersions) {
-                throw ASCError.notFound("Version \(blocker.attributes.versionString) ist bereits in Vorbereitung oder Prüfung. Bitte diesen Entwurf öffnen.")
+                throw ASCError.notFound(L10n.tr("Version \(blocker.attributes.versionString) ist bereits in Vorbereitung oder Prüfung. Bitte diesen Entwurf öffnen."))
             }
             appStoreVersions = freshVersions
             // nil means default source; the empty string is an explicit “Keine”.
@@ -378,7 +378,7 @@ extension ASCManager {
             if let identifier = copyFromVersionId?.trimmingCharacters(in: .whitespacesAndNewlines) {
                 if identifier.isEmpty { sourceVersion = nil }
                 else if let source = platformVersions.first(where: { $0.id == identifier || $0.attributes.versionString == identifier }) { sourceVersion = source }
-                else { throw ASCError.notFound("Die gewählte Quellversion gehört nicht zu dieser App und Plattform.") }
+                else { throw ASCError.notFound(L10n.tr("Die gewählte Quellversion gehört nicht zu dieser App und Plattform.")) }
             } else {
                 sourceVersion = ASCReleaseStatus.currentLiveVersion(for: platformVersions)
                     ?? platformVersions.first { ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.appStoreState)) }
@@ -401,7 +401,7 @@ extension ASCManager {
                 let build = try await service.fetchBuild(id: buildId)
                 try target.check(self)
                 guard build.matchesRelease(appId: target.appId, versionString: trimmedVersion, platform: platform) else {
-                    throw ASCError.notFound("Der Build passt nicht zu App, Plattform oder neuer Version oder ist nicht verwendbar.")
+                    throw ASCError.notFound(L10n.tr("Der Build passt nicht zu App, Plattform oder neuer Version oder ist nicht verwendbar."))
                 }
                 attachedBuild = build
             }
@@ -448,7 +448,7 @@ extension ASCManager {
                 if !appStoreVersions.contains(where: { $0.id == createdVersion.id }) { appStoreVersions.insert(createdVersion, at: 0) }
                 // Preserve the created draft and report partial completion explicitly;
                 // a retry must repair it rather than create another version.
-                versionCreationError = "Entwurf \(createdVersion.attributes.versionString) wurde angelegt, aber nicht vollständig vorbereitet: \(error.localizedDescription)"
+                versionCreationError = L10n.tr("Entwurf \(createdVersion.attributes.versionString) wurde angelegt, aber nicht vollständig vorbereitet: \(error.localizedDescription)")
             } else { versionCreationError = error.localizedDescription }
             return nil
         }
@@ -478,23 +478,23 @@ extension ASCManager {
             try target.check(self)
             guard let version = ASCReleaseStatus.versions(versions, for: platform).first(where: { $0.id == versionId }),
                   ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
-                throw ASCError.notFound("Die ausgewählte Version ist nicht mehr zur Einreichung bearbeitbar.")
+                throw ASCError.notFound(L10n.tr("Die ausgewählte Version ist nicht mehr zur Einreichung bearbeitbar."))
             }
             if let expectedReleaseMode, version.attributes.releaseType != expectedReleaseMode {
-                throw ASCError.notFound("Die Veröffentlichungsart wurde seit der Vorschau geändert. Bitte die Vorschau neu öffnen und den aktuellen Stand prüfen.")
+                throw ASCError.notFound(L10n.tr("Die Veröffentlichungsart wurde seit der Vorschau geändert. Bitte die Vorschau neu öffnen und den aktuellen Stand prüfen."))
             }
             let build: ASCBuild?
             if let buildId = attachBuildId, !buildId.isEmpty { build = try await service.fetchBuild(id: buildId) }
             else { build = try await service.fetchBuildAttachedToVersion(versionId: versionId) }
             try target.check(self)
             guard let build, build.matchesRelease(appId: target.appId, versionString: version.attributes.versionString, platform: platform) else {
-                throw ASCError.notFound("Kein verwendbarer Build für diese App, Plattform und Version ausgewählt.")
+                throw ASCError.notFound(L10n.tr("Kein verwendbarer Build für diese App, Plattform und Version ausgewählt."))
             }
             if serviceOverride == nil {
                 await syncOverviewSubmissionReadiness(forceRefresh: true)
                 try target.check(self)
                 guard submissionReadiness.isComplete(selectingBuild: build) else {
-                    throw ASCError.notFound("Erforderliche Angaben fehlen oder konnten nicht frisch geprüft werden.")
+                    throw ASCError.notFound(L10n.tr("Erforderliche Angaben fehlen oder konnten nicht frisch geprüft werden."))
                 }
                 return try await submitUsingReleaseWorkflow(target: target, version: version, build: build,
                     attachBuild: attachBuildId != nil, service: service)
@@ -525,7 +525,7 @@ extension ASCManager {
         let projects = await ProjectStorage().listProjects()
         try target.check(self)
         guard let project = projects.first(where: { $0.id == projectID }) else {
-            throw ASCError.notFound("Für die Einreichung muss diese App mit ihrem lokalen Projekt verknüpft sein.")
+            throw ASCError.notFound(L10n.tr("Für die Einreichung muss diese App mit ihrem lokalen Projekt verknüpft sein."))
         }
         let request = try ASCManualReleaseRequest(project: project, captured: target, version: version, build: build)
         var isDirectory: ObjCBool = false
@@ -551,7 +551,7 @@ extension ASCManager {
                     return true
                 }
                 guard reconciled.state == .prepared || reconciled.state == .validated else {
-                    throw ASCError.notFound("Der frühere Release-Vorgang \(previous.operationID) wurde lesend abgeglichen. Er muss vor einer neuen Einreichung geklärt werden; es wurde kein weiterer Versuch gestartet.")
+                    throw ASCError.notFound(L10n.tr("Der frühere Release-Vorgang \(previous.operationID) wurde lesend abgeglichen. Er muss vor einer neuen Einreichung geklärt werden; es wurde kein weiterer Versuch gestartet."))
                 }
             }
             let prepared: ReleaseWorkflowRecord
@@ -570,20 +570,20 @@ extension ASCManager {
             try target.check(self)
             guard validated.state == .validated, validated.validation?.ready == true else {
                 let checks = validated.validation?.checkIDs.prefix(8).joined(separator: ", ") ?? ""
-                throw ASCError.notFound("Die vollständige Release-Prüfung blockiert die Einreichung." + (checks.isEmpty ? "" : " Prüfpunkte: \(checks)")
-                    + " Vorgang: \(prepared.operationID)")
+                throw ASCError.notFound(L10n.tr("Die vollständige Release-Prüfung blockiert die Einreichung.") + (checks.isEmpty ? "" : L10n.tr(" Prüfpunkte: \(checks)"))
+                    + L10n.tr(" Vorgang: \(prepared.operationID)"))
             }
             let submitted = try await workflow.submit(operationID: prepared.operationID,
                 accountKey: request.target.accountKey, confirmationDigest: validated.confirmationDigest)
             try target.check(self)
             guard submitted.state == .submitted else {
-                throw ASCError.notFound("Die Einreichung wurde angefordert, ist bei Apple aber noch nicht bestätigt. Bitte nur den Status des Vorgangs \(submitted.operationID) abgleichen; nicht erneut einreichen.")
+                throw ASCError.notFound(L10n.tr("Die Einreichung wurde angefordert, ist bei Apple aber noch nicht bestätigt. Bitte nur den Status des Vorgangs \(submitted.operationID) abgleichen; nicht erneut einreichen."))
             }
             await refreshTabData(.app)
             return true
         } catch {
             let active = try? await workflow.activeOperation(target: request.target)
-            let suffix = active.map { " Vorgang: \($0.operationID)." } ?? ""
+            let suffix = active.map { L10n.tr(" Vorgang: \($0.operationID).") } ?? ""
             throw ASCError.notFound(error.localizedDescription + suffix)
         }
     }

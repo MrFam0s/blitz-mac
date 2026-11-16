@@ -117,12 +117,12 @@ enum ProjectAppIconCatalogWriter {
 
         var errorDescription: String? {
             switch self {
-            case .invalidCatalog: return "Der App-Icon-Katalog enthält ungültige Daten."
-            case .outsideProject: return "Der App-Icon-Katalog verweist auf einen Pfad außerhalb dieses Projekts."
-            case .unsafeFilename: return "Der App-Icon-Katalog enthält einen unzulässigen Bilddateinamen."
-            case .sharedAppearanceFilename: return "Standard-Icons und Icons für bestimmte Darstellungen müssen separate Bilddateien verwenden."
-            case .invalidDimensions: return "Der App-Icon-Katalog enthält eine ungültige Bildgröße."
-            case .cannotRender: return "Das App-Icon konnte nicht gerendert werden."
+            case .invalidCatalog: return L10n.tr("Der App-Icon-Katalog enthält ungültige Daten.")
+            case .outsideProject: return L10n.tr("Der App-Icon-Katalog verweist auf einen Pfad außerhalb dieses Projekts.")
+            case .unsafeFilename: return L10n.tr("Der App-Icon-Katalog enthält einen unzulässigen Bilddateinamen.")
+            case .sharedAppearanceFilename: return L10n.tr("Standard-Icons und Icons für bestimmte Darstellungen müssen separate Bilddateien verwenden.")
+            case .invalidDimensions: return L10n.tr("Der App-Icon-Katalog enthält eine ungültige Bildgröße.")
+            case .cannotRender: return L10n.tr("Das App-Icon konnte nicht gerendert werden.")
             }
         }
     }

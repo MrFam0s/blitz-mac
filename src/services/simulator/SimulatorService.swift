@@ -38,7 +38,7 @@ actor SimulatorService: SimulatorDeviceService {
             try await Task.sleep(for: .seconds(1))
         }
         throw NSError(domain: "BlitzSimulator", code: 1,
-                      userInfo: [NSLocalizedDescriptionKey: "Timed out waiting for the selected simulator to start."])
+                      userInfo: [NSLocalizedDescriptionKey: L10n.tr("Timed out waiting for the selected simulator to start.")])
     }
 
     /// Shutdown a simulator

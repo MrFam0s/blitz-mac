@@ -13,22 +13,22 @@ struct NewProjectSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-            BlitzSetupHeader("Neues Projekt", subtitle: "Erstelle ein lokales App-Projekt. Den Eintrag in App Store Connect richtest du anschließend separat ein.")
+            BlitzSetupHeader(L10n.tr("Neues Projekt"), subtitle: L10n.tr("Erstelle ein lokales App-Projekt. Den Eintrag in App Store Connect richtest du anschließend separat ein."))
 
             Divider()
 
             VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                BlitzSetupField("Projektname", hint: "Der öffentliche App-Store-Name wird später festgelegt.") {
-                    TextField("z. B. MeineApp", text: $projectName)
-                        .accessibilityLabel("Projektname")
+                BlitzSetupField(L10n.tr("Projektname"), hint: L10n.tr("Der öffentliche App-Store-Name wird später festgelegt.")) {
+                    TextField(L10n.tr("z. B. MeineApp"), text: $projectName)
+                        .accessibilityLabel(L10n.tr("Projektname"))
                 }
-                BlitzSetupField("Plattform") {
-                    Picker("Plattform", selection: $platform) {
+                BlitzSetupField(L10n.tr("Plattform")) {
+                    Picker(L10n.tr("Plattform"), selection: $platform) {
                         Text("iOS").tag(ProjectPlatform.iOS)
                         Text("macOS").tag(ProjectPlatform.macOS)
                     }
                     .pickerStyle(.segmented)
-                    .accessibilityLabel("Plattform")
+                    .accessibilityLabel(L10n.tr("Plattform"))
                     .onChange(of: platform) { _, newPlatform in
                         // macOS only supports Swift for now
                         if newPlatform == .macOS {
@@ -36,8 +36,8 @@ struct NewProjectSheet: View {
                         }
                     }
                 }
-                BlitzSetupField("Projekttyp") {
-                    Picker("Projekttyp", selection: $projectType) {
+                BlitzSetupField(L10n.tr("Projekttyp")) {
+                    Picker(L10n.tr("Projekttyp"), selection: $projectType) {
                         if platform == .iOS {
                             Text("React Native").tag(ProjectType.reactNative)
                             Text("Swift").tag(ProjectType.swift)
@@ -45,7 +45,7 @@ struct NewProjectSheet: View {
                             Text("Swift").tag(ProjectType.swift)
                         }
                     }
-                    .accessibilityLabel("Projekttyp")
+                    .accessibilityLabel(L10n.tr("Projekttyp"))
                 }
             }
             .textFieldStyle(.roundedBorder)
@@ -60,11 +60,11 @@ struct NewProjectSheet: View {
             Divider()
 
             HStack(spacing: BlitzLayout.fieldSpacing) {
-                Button("Abbrechen") { isPresented = false }
+                Button(L10n.tr("Abbrechen")) { isPresented = false }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 if isCreating { ProgressView().controlSize(.small) }
-                Button("Projekt anlegen") {
+                Button(L10n.tr("Projekt anlegen")) {
                     Task { await createProject() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -80,7 +80,7 @@ struct NewProjectSheet: View {
     private func createProject() async {
         guard !isCreating else { return }
         guard !appState.projectSetup.isSettingUp else {
-            errorMessage = "Ein anderes Projekt wird gerade angelegt. Warte, bis der Vorgang abgeschlossen ist."
+            errorMessage = L10n.tr("Ein anderes Projekt wird gerade angelegt. Warte, bis der Vorgang abgeschlossen ist.")
             return
         }
         isCreating = true
