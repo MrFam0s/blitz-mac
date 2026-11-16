@@ -2,6 +2,30 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.76 build 91 — Apple sign-in recovery
+
+The sign-in browser has a native 30-second navigation deadline armed before the
+initial load and the Developer Portal handoff. Missing JavaScript/cookie callbacks
+are bounded separately. A stalled load or terminated WebContent process stops
+validation and offers a reload; progress no longer obscures Apple's page.
+Cancellation and navigation identity discard stale callbacks before they can
+update a replacement window or capture a session.
+
+Reload retains the same app-scoped persistent cookie store. Only the explicit
+account-switch action selects a fresh store, while cleanup targets the previous
+store without waiting for its callback. Existing installs retain their original
+store identity. Native/CLI authentication and release checks are unchanged.
+
+Validation: 654 Swift tests in 12 suites, including 20 targeted authentication and
+recovery tests, pass. Nine localization regressions and the complete 1,319-key
+DE/EN catalog audit, nine release-metadata checks and the native signed Release
+bundle pass. Offline previews built from the production coordinator confirm
+navigation timeout/failure followed by successful reload, usable input after a
+stalled secondary resource, and readable controls/messages in German/English,
+light/dark appearance at the actual 560-point dialog width. Fixture differences
+are local pages, volatile storage and a shortened two-second deadline. No real
+Apple login, cookie capture, Store write or public release is used for validation.
+
 ## 1.0.75 build 90 — regular public release
 
 Promotes the guarded resubmission correction from build 89 to a distinct public

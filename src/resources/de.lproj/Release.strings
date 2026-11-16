@@ -575,3 +575,13 @@
 "Lifestyle" = "Lifestyle";
 "Shopping" = "Shopping";
 "Navigation" = "Navigation";
+
+"Lädt das Anmeldefenster neu und behält die bestehende Browser-Anmeldung bei." = "Lädt das Anmeldefenster neu und behält die bestehende Browser-Anmeldung bei.";
+
+"Apple-Anmeldeseite wird geladen …" = "Apple-Anmeldeseite wird geladen …";
+
+"Das Anmeldefenster antwortet nicht. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten." = "Das Anmeldefenster antwortet nicht. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten.";
+
+"Die Apple-Anmeldeseite lädt zu lange. Bitte die Verbindung prüfen und erneut laden." = "Die Apple-Anmeldeseite lädt zu lange. Bitte die Verbindung prüfen und erneut laden.";
+
+"Das Anmeldefenster wurde unerwartet beendet. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten." = "Das Anmeldefenster wurde unerwartet beendet. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten.";

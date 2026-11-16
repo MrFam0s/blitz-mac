@@ -9,8 +9,9 @@ struct AppleIDLoginSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
     @State private var browserID = UUID()
-    @State private var isResettingBrowser = false
+    @State private var loadProblem: String?
     @State private var validationMessage: String?
+    @State private var browserControl = ASCWebLoginControl()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,69 +22,103 @@ struct AppleIDLoginSheet: View {
 
             Divider()
 
-            if let validationMessage {
-                Text(validationMessage)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
-            }
+            AppleIDLoginStatusView(isLoading: isLoading, loadProblem: loadProblem,
+                                   validationMessage: validationMessage)
 
-            ZStack {
-                if !isResettingBrowser {
-                    ASCWebView(
-                        isLoading: $isLoading,
-                        validationMessage: $validationMessage,
-                        requireDeveloperPortal: requireDeveloperPortal,
-                        onSessionCaptured: { session in
-                            guard !isResettingBrowser else { return }
-                            irisLog("AppleIDLoginSheet: onSessionCaptured called, \(session.cookies.count) cookies")
-                            onSessionCaptured(session)
-                            dismiss()
-                        }
-                    )
-                    .id(browserID)
-                }
-
-                if isLoading || isResettingBrowser {
-                    ProgressView(L10n.tr("App Store Connect wird geladen …"))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(.background.opacity(0.8))
-                }
-            }
+            browser
 
             Divider()
 
             HStack {
-                Button(L10n.tr("Abbrechen")) { dismiss() }
+                Button(L10n.tr("Abbrechen")) { browserControl.cancel(); dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
+                Button(L10n.tr("Erneut laden")) { reloadBrowser() }
+                    .help(L10n.tr("Lädt das Anmeldefenster neu und behält die bestehende Browser-Anmeldung bei."))
                 Button(L10n.tr("Anderen Apple-Account verwenden")) {
-                    isResettingBrowser = true
-                    Task { @MainActor in
-                        await ASCWebView.resetBrowser()
-                        isLoading = true
-                        browserID = UUID()
-                        isResettingBrowser = false
-                    }
+                    browserControl.cancel()
+                    ASCWebView.useFreshBrowserStore()
+                    reloadBrowser()
                 }
-                .disabled(isResettingBrowser)
             }
             .padding(24)
         }
         .frame(width: 560, height: 660)
         .onAppear { irisLog("AppleIDLoginSheet: sheet appeared") }
+        .onDisappear { browserControl.cancel() }
+    }
+
+    private var browser: some View {
+        let generation = browserID
+        return ASCWebView(isLoading: $isLoading, loadProblem: $loadProblem,
+                          validationMessage: $validationMessage,
+                          requireDeveloperPortal: requireDeveloperPortal,
+                          control: browserControl) { session in
+            guard browserID == generation else { return }
+            onSessionCaptured(session)
+            dismiss()
+        }
+        .id(generation)
+    }
+
+    private func reloadBrowser() {
+        browserControl.cancel()
+        validationMessage = nil
+        loadProblem = nil
+        isLoading = true
+        browserID = UUID()
+    }
+}
+
+/// Progress never obscures or intercepts Apple's sign-in form. A page may be
+/// usable while WebKit is still waiting for a slow secondary resource.
+struct AppleIDLoginStatusView: View {
+    var isLoading: Bool
+    var loadProblem: String?
+    var validationMessage: String?
+
+    var body: some View {
+        if isLoading || loadProblem != nil || validationMessage != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if let loadProblem {
+                    Label(loadProblem, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                } else if isLoading {
+                    ProgressView(L10n.tr("Apple-Anmeldeseite wird geladen …"))
+                        .controlSize(.small)
+                }
+                if let validationMessage {
+                    Text(validationMessage).foregroundStyle(.secondary)
+                }
+            }
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+        }
     }
 }
 
 // MARK: - WKWebView Wrapper
 
+@MainActor
+final class ASCWebLoginControl {
+    weak var coordinator: ASCWebView.Coordinator?
+
+    func cancel() {
+        coordinator?.cancel()
+        coordinator?.webView?.navigationDelegate = nil
+        coordinator?.webView?.stopLoading()
+    }
+}
+
 struct ASCWebView: NSViewRepresentable {
     @Binding var isLoading: Bool
+    @Binding var loadProblem: String?
     @Binding var validationMessage: String?
     var requireDeveloperPortal = false
+    var control: ASCWebLoginControl
     var onSessionCaptured: (IrisSession) -> Void
 
     // A stable, app-scoped (not shared with Safari) *persistent* data store.
@@ -97,32 +132,37 @@ struct ASCWebView: NSViewRepresentable {
     // (and Apple's device trust) across launches like a normal browser
     // would, while keeping it fully isolated from the user's actual Safari
     // data. A captured cookie is validated before it is reused outside WebKit.
-    private static let persistentStoreID = UUID(uuidString: "6F1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D")!
-
-    @MainActor static func resetBrowser() async {
-        await WKWebsiteDataStore(forIdentifier: persistentStoreID).removeData(
+    @MainActor static func useFreshBrowserStore() {
+        // A stalled cleanup callback must not hold the new login hostage. The
+        // cleanup targets only the OLD store, so late completion cannot erase
+        // cookies from the newly opened login. Native/CLI sessions are untouched.
+        let previous = ASCWebLoginStoreIdentity.rotate()
+        WKWebsiteDataStore(forIdentifier: previous).removeData(
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: .distantPast
-        )
+        ) {}
     }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = WKWebsiteDataStore(forIdentifier: Self.persistentStoreID)
+        config.websiteDataStore = WKWebsiteDataStore(forIdentifier: ASCWebLoginStoreIdentity.current())
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         context.coordinator.webView = webView
+        control.coordinator = context.coordinator
         context.coordinator.startPolling()
 
         if let url = URL(string: "https://appstoreconnect.apple.com") {
             irisLog("ASCWebView: loading initial URL \(url)")
-            webView.load(URLRequest(url: url))
+            context.coordinator.loadPage(url, in: webView)
         }
         return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        context.coordinator.parent = self
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -136,7 +176,7 @@ struct ASCWebView: NSViewRepresentable {
 
     @MainActor
     class Coordinator: NSObject, WKNavigationDelegate {
-        let parent: ASCWebView
+        var parent: ASCWebView
         weak var webView: WKWebView?
         private var hasCapture = false
         private var gate = ASCWebCaptureGate()
@@ -144,12 +184,19 @@ struct ASCWebView: NSViewRepresentable {
         private var validationTask: Task<Void, Never>?
         private var nextValidationAt = Date.distantPast
         private var expectedIdentity: ASCWebAuthentication.Identity?
+        private var navigationState = ASCWebLoginNavigation()
+        private var activeNavigation: WKNavigation?
+        private var navigationDeadline: Task<Void, Never>?
+        var navigationTimeout: Duration = .seconds(30)
 
         init(parent: ASCWebView) { self.parent = parent }
 
-        deinit { pollTimer?.invalidate(); validationTask?.cancel() }
+        deinit { pollTimer?.invalidate(); validationTask?.cancel(); navigationDeadline?.cancel() }
 
         func cancel() {
+            navigationState.cancel()
+            navigationDeadline?.cancel()
+            navigationDeadline = nil
             gate.cancel()
             pollTimer?.invalidate()
             pollTimer = nil
@@ -167,7 +214,7 @@ struct ASCWebView: NSViewRepresentable {
         private func pollSession() {
             // Persisted myacinfo alone does not prove that sign-in or 2FA has
             // completed. Never capture from idmsa or while a redirect is loading.
-            guard !hasCapture, let webView, !webView.isLoading,
+            guard !hasCapture, navigationState.canValidate, let webView, !webView.isLoading,
                   (ASCWebAuthentication.isAppStoreConnectURL(webView.url)
                     || (parent.requireDeveloperPortal && expectedIdentity != nil
                         && ASCWebAuthentication.isDeveloperPortalURL(webView.url))),
@@ -176,6 +223,7 @@ struct ASCWebView: NSViewRepresentable {
 
             validationTask = Task { @MainActor [weak self, weak webView] in
                 guard let self, let webView else { return }
+                defer { self.gate.finish(token) }
                 do {
                     let identity: ASCWebAuthentication.Identity
                     if ASCWebAuthentication.isAppStoreConnectURL(webView.url) {
@@ -190,9 +238,9 @@ struct ASCWebView: NSViewRepresentable {
                             return {status: response.status, body: await response.text()};
                         } finally { clearTimeout(timer); }
                         """
-                        let result: Any = try await withCheckedThrowingContinuation { continuation in
+                        let result: Any = try await ASCWebCallback.wait(timeout: 20) { completion in
                             webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { result in
-                                continuation.resume(with: result)
+                                completion(result)
                             }
                         }
                         guard self.gate.accepts(token), !Task.isCancelled,
@@ -211,9 +259,9 @@ struct ASCWebView: NSViewRepresentable {
                         guard let expected = self.expectedIdentity else { throw ASCWebAuthenticationError.invalidResponse }
                         identity = expected
                     }
-                    let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
+                    let cookies: [HTTPCookie] = try await ASCWebCallback.wait(timeout: 10) { completion in
                         webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-                            continuation.resume(returning: cookies)
+                            completion(.success(cookies))
                         }
                     }
                     guard self.gate.accepts(token), !Task.isCancelled else { return }
@@ -238,10 +286,10 @@ struct ASCWebView: NSViewRepresentable {
                     if !evidence.satisfies(requireDeveloperPortal: self.parent.requireDeveloperPortal) {
                         self.gate.finish(token)
                         self.nextValidationAt = Date().addingTimeInterval(10)
-                        self.parent.validationMessage = L10n.tr("App Store Connect ist bestätigt. Bitte die Anmeldung im Developer-Portal für denselben Anbieter abschließen. Eine Vertragszustimmung wird hier nicht automatisch erteilt.")
                         if ASCWebAuthentication.isAppStoreConnectURL(webView.url) {
-                            webView.load(URLRequest(url: URL(string: "https://developer.apple.com/account/")!))
+                            self.loadPage(URL(string: "https://developer.apple.com/account/")!, in: webView)
                         }
+                        self.parent.validationMessage = L10n.tr("App Store Connect ist bestätigt. Bitte die Anmeldung im Developer-Portal für denselben Anbieter abschließen. Eine Vertragszustimmung wird hier nicht automatisch erteilt.")
                         return
                     }
                     self.hasCapture = true
@@ -252,6 +300,10 @@ struct ASCWebView: NSViewRepresentable {
                     self.parent.onSessionCaptured(session)
                 } catch {
                     guard self.gate.accepts(token), !Task.isCancelled else { return }
+                    if error is ASCWebCallbackError {
+                        self.failCurrentNavigation(L10n.tr("Das Anmeldefenster antwortet nicht. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten."))
+                        return
+                    }
                     self.gate.finish(token)
                     self.nextValidationAt = Date().addingTimeInterval(10)
                     // No response bodies, cookie values, or raw subprocess errors
@@ -265,30 +317,74 @@ struct ASCWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            // The initial deadline is armed before load(), including WebContent
+            // startup that never produces a didStart callback.
+            if navigation === activeNavigation, navigationState.isLoading { return }
+            beginNavigation(navigation)
+        }
+
+        func loadPage(_ url: URL, in webView: WKWebView) {
+            beginNavigation(nil)
+            activeNavigation = webView.load(URLRequest(url: url, timeoutInterval: 30))
+        }
+
+        func beginNavigation(_ navigation: WKNavigation?) {
+            guard let generation = navigationState.start() else { return }
+            activeNavigation = navigation
+            navigationDeadline?.cancel()
             gate.invalidate()
             validationTask?.cancel()
             validationTask = nil
             nextValidationAt = .distantPast
             parent.validationMessage = nil
+            parent.loadProblem = nil
             parent.isLoading = true
+            let timeout = navigationTimeout
+            navigationDeadline = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: timeout) } catch { return }
+                guard let self, self.navigationState.token == generation,
+                      self.navigationState.isLoading else { return }
+                self.failCurrentNavigation(L10n.tr("Die Apple-Anmeldeseite lädt zu lange. Bitte die Verbindung prüfen und erneut laden."))
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard navigation === activeNavigation, let generation = navigationState.token,
+                  navigationState.finish(generation) else { return }
+            navigationDeadline?.cancel()
+            navigationDeadline = nil
             parent.isLoading = false
             pollSession()
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            navigationFailed()
+            navigationFailed(navigation)
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            navigationFailed()
+            navigationFailed(navigation)
         }
 
-        private func navigationFailed() {
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            failCurrentNavigation(L10n.tr("Das Anmeldefenster wurde unerwartet beendet. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten."))
+        }
+
+        private func navigationFailed(_ navigation: WKNavigation?) {
+            guard navigation === activeNavigation, navigationState.isLoading else { return }
+            failCurrentNavigation(ASCWebAuthenticationError.transport.errorDescription!)
+        }
+
+        private func failCurrentNavigation(_ message: String) {
+            guard let generation = navigationState.token, navigationState.fail(generation) else { return }
+            navigationDeadline?.cancel()
+            navigationDeadline = nil
+            gate.invalidate()
+            validationTask?.cancel()
+            validationTask = nil
+            webView?.stopLoading()
             parent.isLoading = false
-            parent.validationMessage = ASCWebAuthenticationError.transport.errorDescription
+            parent.validationMessage = nil
+            parent.loadProblem = message
         }
     }
 }

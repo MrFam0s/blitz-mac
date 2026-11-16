@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.76
+
+- Keep the Apple sign-in page visible and interactive while it loads. Report
+  stalled page loads or browser callbacks instead of waiting indefinitely.
+- Reload the login window without deleting its saved browser authentication.
+  Ignore late callbacks after cancellation, reload or a browser-process crash.
+- Switching accounts opens a fresh isolated browser store immediately; delayed
+  cleanup cannot erase the new account's cookies or block the new login.
+
 ## 1.0.75
 
 - Allow an explicitly prepared resubmission after App Review corrections through

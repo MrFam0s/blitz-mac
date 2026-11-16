@@ -575,3 +575,13 @@
 "Lifestyle" = "Lifestyle";
 "Shopping" = "Shopping";
 "Navigation" = "Navigation";
+
+"Lädt das Anmeldefenster neu und behält die bestehende Browser-Anmeldung bei." = "Reloads the sign-in window while keeping the existing browser sign-in.";
+
+"Apple-Anmeldeseite wird geladen …" = "Loading the Apple sign-in page…";
+
+"Das Anmeldefenster antwortet nicht. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten." = "The sign-in window is not responding. Reload it; your existing browser sign-in is retained.";
+
+"Die Apple-Anmeldeseite lädt zu lange. Bitte die Verbindung prüfen und erneut laden." = "The Apple sign-in page is taking too long to load. Check your connection and reload.";
+
+"Das Anmeldefenster wurde unerwartet beendet. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten." = "The sign-in window closed unexpectedly. Reload it; your existing browser sign-in is retained.";
