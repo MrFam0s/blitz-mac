@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.75
+
+- Allow an explicitly prepared resubmission after App Review corrections through
+  the shared release CLI and MCP workflow. Reuse the existing review and its exact
+  app, build and purchase/subscription selection; preserve the original journal.
+- Distinguish the previously acknowledged submission from the current Apple
+  review state. Unknown final-send outcomes still require read-only reconciliation.
+- Publish build 90 as a regular, signed and notarized Apple Silicon DMG release.
+  Updates are installed manually from the DMG; the legacy in-app updater does
+  not install this format.
+
+## 1.0.74
+
+- Support German and English, selected automatically from macOS or in Settings.
+- Recognize modern Xcode JSON5 projects and distinguish app targets from tests,
+  frameworks and extensions while preserving Bundle-ID spelling and case.
+- Simplify app identity selection and unify import, setup and release dialogs.
+- Inspect project paths only after confirmation, avoiding scans while typing.
+
 ## 1.0.73 — first Blitz Neo public preview
 
 - Share the maintained AmoSystems fork as an Apple Silicon download with its

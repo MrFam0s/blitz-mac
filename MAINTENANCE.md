@@ -2,6 +2,22 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.75 build 90 — regular public release
+
+Promotes the guarded resubmission correction from build 89 to a distinct public
+version. The release is distributed as a Developer ID-signed, notarized Apple
+Silicon DMG, with no prerelease flag. README, changelog and installation wording
+now describe the regular release and manual DMG update path. The existing
+ZIP/PKG updater is unchanged and does not install this DMG.
+
+The correction's app/build identity checks, exact review-item selection,
+historical journal and uncertain-write recovery remain unchanged. This release
+does not install itself locally or submit any app to App Store Connect.
+
+Validation: 641 Swift tests in 12 suites, nine release-metadata checks and nine
+localization regressions plus the complete 1,314-key catalog audit pass. The
+release metadata and publication instructions received an independent review.
+
 ## 1.0.74 build 89 — resubmission after review corrections
 
 The guarded release workflow distinguishes the original acknowledged submission

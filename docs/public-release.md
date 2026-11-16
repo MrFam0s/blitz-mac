@@ -1,7 +1,8 @@
 # Public release preparation
 
-Public downloads come from this fork's GitHub releases. The first download is
-**1.0.73, build 82**, an Apple Silicon preview. `npm run release` only prepares a
+Public downloads come from this fork's GitHub releases. **1.0.75, build 90** is
+the first regular release, following the 1.0.73 and 1.0.74 previews. Downloads
+target Apple Silicon. `npm run release` only prepares a
 DMG from an already built signed app; it does not change a version, create a tag,
 push to either remote or publish a release. Publication remains an explicit
 maintainer action. Never run the old upstream release/deployment recipe from the
@@ -32,7 +33,7 @@ only the built app plus an Applications link and a short installation note.
 It refuses to overwrite an existing artifact. License notices are embedded by
 the bundle builder from the actual Swift/Go dependencies.
 
-The legacy PKG is not the public preview format: its installation scripts have
+The legacy PKG is not the public download format: its installation scripts have
 broader Xcode/runtime setup behavior than a drag-and-drop download should have.
 Do not execute its embedded postinstall as a manual step for this download.
 Simulator creation and per-project selection inside the app remain available.
@@ -47,11 +48,11 @@ the repository. Submit through the shared ASC CLI and attach/verify the ticket
 with Apple's local tool:
 
 ```bash
-asc notarization submit --file build/public/1.0.73-build82/BlitzNeo-1.0.73-arm64.dmg --wait
-xcrun stapler staple build/public/1.0.73-build82/BlitzNeo-1.0.73-arm64.dmg
-xcrun stapler validate build/public/1.0.73-build82/BlitzNeo-1.0.73-arm64.dmg
+asc notarization submit --file build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg --wait
+xcrun stapler staple build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
+xcrun stapler validate build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
 spctl --assess --type open --context context:primary-signature --verbose=2 \
-  build/public/1.0.73-build82/BlitzNeo-1.0.73-arm64.dmg
+  build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
 ```
 
 Require Apple's status to be **Accepted** before announcing a notarized release.
@@ -74,11 +75,15 @@ include local verification logs, private state, credentials or project data.
 
 Confirm the tree is committed and pushed to this fork, create a release draft
 targeting that exact commit, and upload only the final DMG and `SHA256SUMS`.
-Review the draft, then publish it as a **prerelease** for the first public preview.
+Review the draft, then publish an authorized regular release with **prerelease
+disabled** and mark it as the latest release. Use prerelease only when a preview
+is explicitly intended.
 Do not use the upstream remote or a moving branch as an implicit release target.
 Verify the public tag, asset sizes and digests after publication.
 
 GitHub source hosting and release downloads are the distribution mechanism; no
-paid Actions or external deployment service is required. Preview releases are
-not returned by GitHub's stable `releases/latest` endpoint, so the existing
-stable auto-updater will not silently install this preview.
+paid Actions or external deployment service is required. Regular releases appear
+at GitHub's `releases/latest` endpoint. The current in-app updater only installs
+legacy ZIP/PKG packages and does not install DMGs. Keep the download DMG-only and
+document manual replacement in Applications; do not add a legacy installer merely
+to enable that updater. Preview releases remain outside the stable endpoint.

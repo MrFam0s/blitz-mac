@@ -65,7 +65,7 @@ trap 'rm -rf "$STAGE_DIR"' EXIT
 ditto "$SOURCE_APP" "$STAGE_DIR/Blitz Neo.app"
 ln -s /Applications "$STAGE_DIR/Applications"
 cat > "$STAGE_DIR/Read Me.txt" <<'TXT'
-Blitz Neo — AmoSystems public preview
+Blitz Neo — AmoSystems
 
 Drag Blitz Neo.app into Applications, then open it from there.
 Quit an existing Blitz Neo instance before replacing the app.

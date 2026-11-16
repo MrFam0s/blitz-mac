@@ -7,9 +7,9 @@ based on [Blitz](https://github.com/blitzdotdev/blitz-mac). It combines App Stor
 Connect management, an integrated coding terminal, MCP tools and simulator
 controls. This is an independent maintenance fork, not an official Blitz successor.
 
-**[Download the 1.0.73 preview](https://github.com/MrFam0s/blitz-mac/releases/tag/v1.0.73)**
-for Apple Silicon Macs. This is the first public preview of the maintenance fork,
-not a Mac App Store release. Read the release notes for the downloadable artifact,
+**[Download the latest release](https://github.com/MrFam0s/blitz-mac/releases/latest)**
+for Apple Silicon Macs. Releases are distributed through GitHub,
+not the Mac App Store. Read the release notes for the downloadable artifact,
 verification results and known limitations.
 
 [AmoSystems](https://amosystems.org/) ·
@@ -33,12 +33,12 @@ verification results and known limitations.
 
 ## Install and connect
 
-The public preview targets **Apple Silicon (arm64), macOS 14 or later**. Intel
+The public download targets **Apple Silicon (arm64), macOS 14 or later**. Intel
 builds are not included. Full Xcode and the appropriate simulator runtimes are
 needed for Apple app builds and simulator features. An internet connection is
 required for Apple services and downloading any additional development tools.
 
-1. Download the app from the [release page](https://github.com/MrFam0s/blitz-mac/releases/tag/v1.0.73),
+1. Download the DMG from the [release page](https://github.com/MrFam0s/blitz-mac/releases/latest),
    open the download and drag **Blitz Neo.app** into **Applications**. Check that
    page for signing and notarization details.
 2. Open `/Applications/Blitz Neo.app`, connect your own App Store Connect account
@@ -55,12 +55,16 @@ release does not submit itself. Final submission requires explicit confirmation
 of the exact operation and passes the same checks through the UI, CLI and MCP.
 Apple still decides whether to approve and publish the app.
 
-The drag-and-drop preview installs the native ASC and macOS MCP/CLI helpers on
+The drag-and-drop app installs the native ASC and macOS MCP/CLI helpers on
 launch. It does not install the optional iPhone MCP or `idb`, download simulator
 runtimes, or change your selected Xcode. Existing developer setups remain usable;
 a fresh Mac needs those optional device dependencies configured separately.
 Project-specific simulators and parallel development remain supported. Multiple
 simulators can share one installed runtime.
+
+To update, quit Blitz Neo and replace it using the latest DMG. The current in-app
+updater does not install DMG downloads; a regular GitHub release does not change
+that installation method.
 
 ## Identity and existing installations
 
