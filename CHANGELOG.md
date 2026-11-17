@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.78
+
+- Distinguish App Review replies, corrected review items awaiting resubmission,
+  and a confirmed queued review. Keep undated drafts visible and show incomplete
+  review data as unverified.
+- Prepare and confirm exact rejected-item corrections through the shared native,
+  CLI and MCP release workflow, then resubmit the existing review. Preserve
+  accepted items, app/build identity, product selection and the original journal.
+- Remove duplicate overview submission actions and explain the remaining step
+  consistently in German and English. Update the bundled release skill.
+
 ## 1.0.77
 
 - Show app-wide App Review messages even when Apple provides no version marker.

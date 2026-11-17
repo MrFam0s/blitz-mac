@@ -7,6 +7,9 @@ struct RejectionCardView<Footer: View>: View {
     @ViewBuilder var footer: () -> Footer
     @State private var expanded = true
 
+    private var isCurrentlyRejected: Bool { ASCReleaseStatus.rejectedStates.contains(ASCReleaseStatus.normalize(version.attributes.effectiveState)) }
+    private var cardColor: Color { isCurrentlyRejected ? .red : .secondary }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Clickable header region — toggles expansion
@@ -32,11 +35,11 @@ struct RejectionCardView<Footer: View>: View {
             }
         }
         .padding(BlitzLayout.cardInset)
-        .background(Color.red.opacity(0.04))
+        .background(cardColor.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.red.opacity(0.15), lineWidth: 1)
+                .stroke(cardColor.opacity(0.15), lineWidth: 1)
         )
     }
 
@@ -49,18 +52,13 @@ struct RejectionCardView<Footer: View>: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(expanded ? 90 : 0))
-            Image(systemName: "xmark.circle.fill")
+            Image(systemName: isCurrentlyRejected ? "xmark.circle.fill" : "clock.arrow.circlepath")
                 .font(.system(size: 15))
-                .foregroundStyle(.red)
+                .foregroundStyle(cardColor)
             VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.tr("Version \(version.attributes.versionString) abgelehnt"))
+                Text(isCurrentlyRejected ? L10n.tr("Version \(version.attributes.versionString) abgelehnt") : L10n.tr("Prüfungsverlauf für Version \(version.attributes.versionString)"))
                     .font(BlitzLayout.sectionTitle)
                     .fixedSize(horizontal: false, vertical: true)
-                if let date = version.attributes.createdDate {
-                    Text(L10n.tr("Eingereicht am \(ascShortDate(date))"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
             Spacer()
         }
@@ -70,13 +68,16 @@ struct RejectionCardView<Footer: View>: View {
 
     @ViewBuilder
     private var reviewHistory: some View {
-        if !asc.reviewSubmissions.isEmpty {
+        let submissions = asc.reviewSubmissions.filter { submission in
+            (asc.reviewSubmissionItemsBySubmissionId[submission.id] ?? []).contains { $0.appStoreVersionId == version.id }
+        }
+        if !submissions.isEmpty {
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.tr("Prüfungsverlauf"))
                     .font(BlitzLayout.sectionTitle)
 
-                ForEach(asc.reviewSubmissions.prefix(5)) { submission in
+                ForEach(submissions.prefix(5)) { submission in
                     BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
                         HStack(spacing: 8) {
                             Circle()
@@ -103,18 +104,15 @@ struct RejectionCardView<Footer: View>: View {
         let submissionItems = asc.latestSubmissionItems(forVersionId: version.id)
 
         if !submissionItems.isEmpty {
-            let rejected = submissionItems.filter { $0.attributes.state == "REJECTED" }
-            let accepted = submissionItems.filter { $0.attributes.state == "ACCEPTED" || $0.attributes.state == "APPROVED" }
-
-            if !rejected.isEmpty || !accepted.isEmpty {
+            if !submissionItems.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L10n.tr("Prüfungsbestandteile"))
                         .font(BlitzLayout.sectionTitle)
 
                     ForEach(submissionItems) { item in
                         HStack(spacing: 8) {
-                            Image(systemName: item.attributes.state == "REJECTED" ? "xmark.circle.fill" : "checkmark.circle.fill")
-                                .foregroundStyle(item.attributes.state == "REJECTED" ? .red : .green)
+                            Image(systemName: itemSymbol(item))
+                                .foregroundStyle(itemColor(item))
                                 .font(.caption)
                             Text(BlitzDisplayText.status(item.attributes.state ?? ""))
                                 .font(.callout)
@@ -131,6 +129,24 @@ struct RejectionCardView<Footer: View>: View {
                     }
                 }
             }
+        }
+    }
+
+    private func itemSymbol(_ item: ASCReviewSubmissionItem) -> String {
+        switch item.attributes.state {
+        case "REJECTED": item.attributes.resolved == true ? "checkmark.circle" : "xmark.circle.fill"
+        case "ACCEPTED", "APPROVED": "checkmark.circle.fill"
+        case "READY_FOR_REVIEW": "paperplane"
+        default: "questionmark.circle"
+        }
+    }
+
+    private func itemColor(_ item: ASCReviewSubmissionItem) -> Color {
+        switch item.attributes.state {
+        case "REJECTED": item.attributes.resolved == true ? .orange : .red
+        case "ACCEPTED", "APPROVED": .green
+        case "READY_FOR_REVIEW": .orange
+        default: .secondary
         }
     }
 

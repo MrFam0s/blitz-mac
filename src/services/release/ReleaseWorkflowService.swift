@@ -125,6 +125,16 @@ struct ReleaseWorkflowSnapshot: Equatable, Sendable {
     /// A previously submitted, rejected review whose exact complete item set has
     /// already been resolved in App Store Connect. This is never draft recovery.
     var canResubmitSubmission: Bool = false
+    var canResolveSubmission: Bool = false
+    var submissionItemStates: [String: String] = [:]
+
+    static let submittedAppleStates: Set<String> = ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE",
+        "PENDING_APPLE_RELEASE", "PROCESSING_FOR_APP_STORE", "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "ACCEPTED"]
+
+    var currentlySubmitted: Bool {
+        ["WAITING_FOR_REVIEW", "IN_REVIEW", "COMPLETING", "COMPLETE"].contains(submissionState ?? "") &&
+            Self.submittedAppleStates.contains(ASCReleaseStatus.normalize(appleState))
+    }
 
     func matchesContentDigest(_ digest: String, fingerprintVersion: Int?) -> Bool {
         if fingerprintVersion == 2 { return contentDigest == digest }
@@ -156,6 +166,7 @@ protocol ReleaseWorkflowAPI {
     var accountKey: String { get }
     func snapshot(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowSnapshot
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation
+    func readiness(_ target: ReleaseWorkflowTarget, resubmission: ReleaseResubmissionBinding?) async throws -> ReleaseWorkflowValidation
     func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws
     func submit(_ target: ReleaseWorkflowTarget, expectedContentDigest: String,
                 expectedFingerprintVersion: Int?, expectedReleaseMode: ReleaseWorkflowMode, resumingSubmissionID: String?,
@@ -166,6 +177,9 @@ protocol ReleaseWorkflowAPI {
 }
 
 extension ReleaseWorkflowAPI {
+    func readiness(_ target: ReleaseWorkflowTarget, resubmission: ReleaseResubmissionBinding?) async throws -> ReleaseWorkflowValidation {
+        try await readiness(target)
+    }
     func resubmit(_ target: ReleaseWorkflowTarget, binding: ReleaseResubmissionBinding,
                   expectedContentDigest: String, expectedFingerprintVersion: Int?, expectedReleaseMode: ReleaseWorkflowMode,
                   progress: @escaping @Sendable (ReleaseSubmissionProgress) async throws -> Void) async throws -> String? {
@@ -180,9 +194,25 @@ struct ReleaseResubmissionBinding: Codable, Equatable, Sendable {
     let submissionID: String
     let submissionItemID: String
     let reviewItemIDs: [String: String]
+    var itemIDsToResolve: [String]? = nil
+    var itemStates: [String: String]? = nil
+
+    /// State changes may only be the approved REJECTED → READY_FOR_REVIEW transitions.
+    func matches(_ snapshot: ReleaseWorkflowSnapshot) -> Bool {
+        guard snapshot.submissionID == submissionID, snapshot.submissionItemID == submissionItemID,
+              snapshot.reviewItemIDs == reviewItemIDs, snapshot.submissionItemsComplete,
+              snapshot.canResubmitSubmission || (itemIDsToResolve?.isEmpty == false && snapshot.canResolveSubmission) else { return false }
+        guard let itemStates else { return snapshot.canResubmitSubmission }
+        guard Set(itemStates.keys) == Set(snapshot.submissionItemStates.keys) else { return false }
+        return itemStates.allSatisfy { id, state in
+            snapshot.submissionItemStates[id] == state ||
+                (state == "REJECTED" && itemIDsToResolve?.contains(id) == true && snapshot.submissionItemStates[id] == "READY_FOR_REVIEW")
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
         case previousOperationID = "previousOperationId", submissionID = "submissionId"
-        case submissionItemID = "submissionItemId", reviewItemIDs
+        case submissionItemID = "submissionItemId", reviewItemIDs, itemIDsToResolve, itemStates
     }
 }
 
@@ -218,6 +248,11 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
     /// Current Apple review state, distinct from the historical local write state.
     var submissionState: String? = nil
     var resubmittableSubmissionID: String? = nil
+    var resolvableSubmissionID: String? = nil
+    var resumableResubmissionID: String? = nil
+    var submissionItemStates: [String: String]? = nil
+    var reviewOutcome: String? = nil
+    var nextAction: String? = nil
     enum CodingKeys: String, CodingKey {
         case operationID = "operationId", target, mode, versionString, buildNumber, contentDigest, confirmationDigest
         case preparedAt, updatedAt, state, validation, lastErrorCode, appleState, submissionID = "submissionId"
@@ -227,6 +262,8 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
         case contentFingerprintVersion
         case requiresLegacyRecoveryConfirmation, reviewItemIDs, resubmission, submissionState
         case resubmittableSubmissionID = "resubmittableSubmissionId"
+        case resolvableSubmissionID = "resolvableSubmissionId", resumableResubmissionID = "resumableResubmissionId"
+        case submissionItemStates, reviewOutcome, nextAction
     }
 }
 
@@ -338,9 +375,9 @@ actor ReleaseWorkflowService {
         return record
     }
 
-    /// Explicit new preparation after the user has resolved the exact rejected
-    /// review's items in Apple. Never alters Apple or edits the previous journal.
-    func prepareResubmission(operationID: String, accountKey: String, submissionID: String) async throws -> ReleaseWorkflowRecord {
+    /// Prepare a new confirmation for the exact rejected review. An explicit
+    /// resolution plan names its rejected items; preparation never writes Apple.
+    func prepareResubmission(operationID: String, accountKey: String, submissionID: String, resolveRejectedItems: Bool = false) async throws -> ReleaseWorkflowRecord {
         let previous = try load(operationID)
         try checkAccount(accountKey, target: previous.target)
         guard ReleaseWorkflowTarget.validID(submissionID) else { throw ReleaseWorkflowError.invalidTarget }
@@ -355,11 +392,13 @@ actor ReleaseWorkflowService {
         }
         let snapshot = try await api.snapshot(previous.target)
         try snapshot.check(previous.target)
-        guard canPrepareResubmission(snapshot, record: previous), let itemID = snapshot.submissionItemID else {
+        guard canPrepareResubmission(snapshot, record: previous, resolveRejectedItems: resolveRejectedItems), let itemID = snapshot.submissionItemID else {
             throw ReleaseWorkflowError.uncertainOutcome
         }
         let binding = ReleaseResubmissionBinding(previousOperationID: previous.operationID,
-            submissionID: submissionID, submissionItemID: itemID, reviewItemIDs: snapshot.reviewItemIDs)
+            submissionID: submissionID, submissionItemID: itemID, reviewItemIDs: snapshot.reviewItemIDs,
+            itemIDsToResolve: resolveRejectedItems ? snapshot.submissionItemStates.filter { $0.value == "REJECTED" }.keys.sorted() : nil,
+            itemStates: snapshot.submissionItemStates.isEmpty ? nil : snapshot.submissionItemStates)
         if active.resubmission == binding,
            active.contentDigest == snapshot.contentDigest, active.state == .prepared || active.state == .validated {
             return active
@@ -368,12 +407,14 @@ actor ReleaseWorkflowService {
         let digest = try Self.digest(Confirmation(target: previous.target, mode: previous.mode, operationID: id,
             versionString: snapshot.versionString, buildNumber: snapshot.buildNumber,
             contentDigest: snapshot.contentDigest, contentFingerprintVersion: 2, resubmission: binding))
-        let record = ReleaseWorkflowRecord(operationID: id, target: previous.target, mode: previous.mode,
+        var record = ReleaseWorkflowRecord(operationID: id, target: previous.target, mode: previous.mode,
             versionString: snapshot.versionString, buildNumber: snapshot.buildNumber,
             contentDigest: snapshot.contentDigest, confirmationDigest: digest, preparedAt: now, updatedAt: now,
             state: .prepared, appleState: snapshot.appleState, submissionID: submissionID,
             submissionItemID: itemID, contentFingerprintVersion: 2, reviewItemIDs: snapshot.reviewItemIDs,
             resubmission: binding, submissionState: snapshot.submissionState)
+        updateReviewStatus(&record, snapshot: snapshot)
+        record.nextAction = "validateResubmission"
         try save(record)
         try write(Data(id.utf8), to: activeURL(previous.target))
         return record
@@ -388,14 +429,15 @@ actor ReleaseWorkflowService {
         try snapshot.check(record.target, requirePreparedBuild: false)
         updateReviewStatus(&record, snapshot: snapshot)
         if record.submissionProgress == nil || (record.submissionID == nil && record.submissionProgress?.phase == .creatingSubmission) {
-          if snapshot.submissionItemsComplete && ((record.state == .submissionPending && snapshot.submissionState != "COMPLETE") || Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState))) {
+          if snapshot.submissionItemsComplete && ((record.state == .submissionPending && snapshot.submissionState != "COMPLETE") || snapshot.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState))) {
             record.submissionID = snapshot.submissionID ?? record.submissionID
             record.submissionItemID = snapshot.submissionItemID ?? record.submissionItemID
           }
         }
         record.resumableSubmissionID = nil
         record.requiresLegacyRecoveryConfirmation = nil
-        if Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
+        record.resumableResubmissionID = nil
+        if snapshot.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
             guard snapshot.attachedBuildID == record.target.buildID,
                   snapshot.versionString == record.versionString, snapshot.buildNumber == record.buildNumber else {
                 throw ReleaseWorkflowError.identityChanged
@@ -404,6 +446,10 @@ actor ReleaseWorkflowService {
             record.state = .submitted
             record.lastErrorCode = nil
             record.lastDiagnostic = nil
+        } else if record.state == .submissionPending, canResumeResubmission(snapshot, record: record) {
+            record.resumableResubmissionID = snapshot.submissionID
+            record.lastErrorCode = "resubmission_requires_confirmation"
+            record.nextAction = "confirmResubmissionContinuation"
         } else if record.state == .submissionPending, canResume(snapshot, record: record) {
             // This only advertises a verified draft. Resuming still needs the
             // exact draft ID plus explicit confirmation in a separate submit.
@@ -435,7 +481,7 @@ actor ReleaseWorkflowService {
         let lock = try acquire(record.target); defer { release(lock) }
         record = try requireActive(record)
         guard record.state == .prepared || record.state == .validated ||
-                (record.state == .submissionPending && record.resumableSubmissionID != nil) else { throw ReleaseWorkflowError.unsafeState }
+                (record.state == .submissionPending && (record.resumableSubmissionID != nil || record.resumableResubmissionID != nil)) else { throw ReleaseWorkflowError.unsafeState }
         return try await validateLocked(record, allowingDraft: record.state == .submissionPending ? record.resumableSubmissionID : nil)
     }
 
@@ -450,7 +496,7 @@ actor ReleaseWorkflowService {
             // Idempotency must not misrepresent a later rejection as a new submit.
             let snapshot = try await api.snapshot(record.target)
             try snapshot.check(record.target, requirePreparedBuild: false)
-            if Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
+            if snapshot.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
                 guard snapshot.attachedBuildID == record.target.buildID,
                       snapshot.versionString == record.versionString, snapshot.buildNumber == record.buildNumber else {
                     throw ReleaseWorkflowError.identityChanged
@@ -462,7 +508,7 @@ actor ReleaseWorkflowService {
             try save(record)
             return record
         }
-        guard record.resubmission == nil || (resumeSubmissionID == nil && !confirmLegacyDraftRecovery) else {
+        guard record.resubmission == nil || !confirmLegacyDraftRecovery else {
             throw ReleaseWorkflowError.unsafeState
         }
         if let resumeSubmissionID {
@@ -472,7 +518,8 @@ actor ReleaseWorkflowService {
             // a merely unknown historical outcome must not be retried.
             guard record.submissionProgress != nil || confirmLegacyDraftRecovery else { throw ReleaseWorkflowError.confirmationRequired }
             let candidate = try await api.snapshot(record.target)
-            guard canResume(candidate, record: record), candidate.submissionID == resumeSubmissionID else {
+            guard (record.resubmission == nil ? canResume(candidate, record: record) : canResumeResubmission(candidate, record: record)),
+                  candidate.submissionID == resumeSubmissionID else {
                 throw ReleaseWorkflowError.uncertainOutcome
             }
             record.submissionID = resumeSubmissionID
@@ -516,6 +563,7 @@ actor ReleaseWorkflowService {
             .init(phase: .verifyingContent, submissionID: $0, submissionItemID: record.submissionItemID)
         } ?? .init(phase: .checkingExisting)
         record.resumableSubmissionID = nil
+        record.resumableResubmissionID = nil
         record.requiresLegacyRecoveryConfirmation = nil
         record.lastDiagnostic = nil
         record.updatedAt = Date()
@@ -544,7 +592,7 @@ actor ReleaseWorkflowService {
                 throw ReleaseWorkflowError.identityChanged
             }
             updateReviewStatus(&record, snapshot: after)
-            if Self.submittedStates.contains(ASCReleaseStatus.normalize(after.appleState)) && isConfirmedSubmission(after, record: record) {
+            if after.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(after.appleState)) && isConfirmedSubmission(after, record: record) {
                 record.state = .submitted
             }
             record.updatedAt = Date()
@@ -572,6 +620,10 @@ actor ReleaseWorkflowService {
               record.submissionItemID == nil || progress.submissionItemID == nil || record.submissionItemID == progress.submissionItemID else {
             throw ReleaseWorkflowError.unsafeState
         }
+        if progress.phase == .resolvingReviewItem || progress.phase == .reviewItemResolved {
+            guard let id = progress.resolvedItemID, record.resubmission?.itemIDsToResolve?.contains(id) == true,
+                  ReleaseWorkflowTarget.validID(id) else { throw ReleaseWorkflowError.unsafeState }
+        } else if progress.resolvedItemID != nil { throw ReleaseWorkflowError.unsafeState }
         if progress.phase == .addingReviewItem || progress.phase == .reviewItemAdded {
             guard let item = progress.reviewItem, record.target.reviewItems.contains(item),
                   progress.submissionID != nil,
@@ -602,13 +654,14 @@ actor ReleaseWorkflowService {
         do {
             let before = try await api.snapshot(record.target)
             try checkUnchanged(before, record: record, allowingDraft: allowingDraft)
-            let validation = try await api.readiness(record.target)
+            let validation = try await api.readiness(record.target, resubmission: record.resubmission)
             let after = try await api.snapshot(record.target)
             try checkUnchanged(after, record: record, allowingDraft: allowingDraft)
             record.validation = validation
             record.state = input.state == .submissionPending ? .submissionPending : (validation.ready ? .validated : .prepared)
             record.lastErrorCode = validation.ready ? nil : "readiness_blocked"
-            record.appleState = after.appleState
+            updateReviewStatus(&record, snapshot: after)
+            if record.resubmission != nil { record.nextAction = validation.ready ? "confirmResubmission" : "completeReadinessChecks" }
             record.updatedAt = Date()
             try save(record)
             return record
@@ -622,6 +675,20 @@ actor ReleaseWorkflowService {
             try save(record)
             throw error
         }
+    }
+
+    private func canResumeResubmission(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
+        guard record.state == .submissionPending, let binding = record.resubmission, binding.matches(snapshot),
+              let progress = record.submissionProgress else { return false }
+        switch progress.phase {
+        case .verifyingContent, .reviewItemResolved: break
+        case .resolvingReviewItem:
+            // A read proves the resolution took effect; an unresolved item after
+            // timeout does not prove the write failed and may not be retried.
+            guard let id = progress.resolvedItemID, snapshot.submissionItemStates[id] == "READY_FOR_REVIEW" else { return false }
+        default: return false
+        }
+        return (try? checkUnchanged(snapshot, record: record)) != nil
     }
 
     private func canResume(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
@@ -647,7 +714,7 @@ actor ReleaseWorkflowService {
             case .addingReviewItem:
                 guard record.submissionID != nil, let item = progress.reviewItem,
                       snapshot.reviewItemIDs[item.key] != nil || lastWriteWasRejected(record) else { return false }
-            case .settingReleaseMode, .checkingExisting, .submitting, .acknowledged: return false
+            case .settingReleaseMode, .checkingExisting, .submitting, .acknowledged, .resolvingReviewItem, .reviewItemResolved: return false
             }
             guard record.submissionID == nil || record.submissionID == id,
                   record.submissionItemID == nil || record.submissionItemID == snapshot.submissionItemID else { return false }
@@ -689,14 +756,12 @@ actor ReleaseWorkflowService {
     private func checkUnchanged(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord, allowingDraft: String? = nil) throws {
         try snapshot.check(record.target)
         let ownResubmission = record.resubmission.map { binding in
-            snapshot.canResubmitSubmission && snapshot.submissionID == binding.submissionID &&
-                snapshot.submissionItemID == binding.submissionItemID && snapshot.reviewItemIDs == binding.reviewItemIDs &&
-                snapshot.releaseType == record.mode.rawValue
+            binding.matches(snapshot) && snapshot.releaseType == record.mode.rawValue
         } ?? false
         if record.resubmission != nil && !ownResubmission { throw ReleaseWorkflowError.uncertainOutcome }
         let ownDraft = ownResubmission || (allowingDraft != nil && snapshot.submissionID == allowingDraft && snapshot.canResumeSubmission &&
             snapshot.releaseType == record.mode.rawValue)
-        guard (ASCReleaseStatus.isEditable(snapshot.appleState) || (ownDraft && ASCReleaseStatus.normalize(snapshot.appleState) == "READY_FOR_REVIEW")), snapshot.versionString == record.versionString,
+        guard (ASCReleaseStatus.isEditable(snapshot.appleState) || (ownDraft && ["READY_FOR_REVIEW", "ACCEPTED"].contains(ASCReleaseStatus.normalize(snapshot.appleState)))), snapshot.versionString == record.versionString,
               snapshot.buildNumber == record.buildNumber, snapshot.matchesContentDigest(record.contentDigest, fingerprintVersion: record.contentFingerprintVersion) else {
             throw ReleaseWorkflowError.contentChanged
         }
@@ -704,9 +769,9 @@ actor ReleaseWorkflowService {
         if ownDraft && !knownSubmissionItemsMatch(snapshot, record: record) { throw ReleaseWorkflowError.uncertainOutcome }
     }
 
-    private func canPrepareResubmission(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
+    private func canPrepareResubmission(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord, resolveRejectedItems: Bool = false) -> Bool {
         record.state == .submitted && record.submissionProgress?.phase == .acknowledged &&
-            snapshot.canResubmitSubmission && snapshot.submissionID == record.submissionID &&
+            (snapshot.canResubmitSubmission || (resolveRejectedItems && snapshot.canResolveSubmission)) && snapshot.submissionID == record.submissionID &&
             snapshot.submissionItemID != nil && snapshot.submissionItemID == record.submissionItemID &&
             snapshot.reviewItemIDs == (record.reviewItemIDs ?? [:]) &&
             snapshot.submissionItemsComplete && snapshot.reviewProductsReady &&
@@ -719,8 +784,12 @@ actor ReleaseWorkflowService {
     private func updateReviewStatus(_ record: inout ReleaseWorkflowRecord, snapshot: ReleaseWorkflowSnapshot) {
         record.appleState = snapshot.appleState
         record.submissionState = snapshot.submissionState
+        record.submissionItemStates = snapshot.submissionItemStates
+        record.resolvableSubmissionID = snapshot.canResolveSubmission && canPrepareResubmission(snapshot, record: record, resolveRejectedItems: true) ? snapshot.submissionID : nil
+        record.reviewOutcome = snapshot.submissionState == "UNRESOLVED_ISSUES" ? "issuesUnresolved" : (snapshot.currentlySubmitted ? "submitted" : "notSubmitted")
+        record.nextAction = record.resolvableSubmissionID != nil ? "resolveReviewIssues" : (snapshot.currentlySubmitted ? "waitForApple" : "inspectReviewStatus")
         record.resubmittableSubmissionID = canPrepareResubmission(snapshot, record: record) ? snapshot.submissionID : nil
-        if record.resubmittableSubmissionID != nil { record.lastErrorCode = "resubmission_requires_preparation" }
+        if record.resubmittableSubmissionID != nil { record.lastErrorCode = "resubmission_requires_preparation"; record.nextAction = "prepareResubmission" }
         else if record.state == .submitted && snapshot.submissionState == "UNRESOLVED_ISSUES" {
             record.lastErrorCode = "review_issues_require_resolution"
         }
@@ -735,8 +804,7 @@ actor ReleaseWorkflowService {
         return try load(record.operationID)
     }
 
-    private static let submittedStates: Set<String> = ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE",
-        "PENDING_APPLE_RELEASE", "PROCESSING_FOR_APP_STORE", "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "ACCEPTED"]
+    private static let submittedStates = ReleaseWorkflowSnapshot.submittedAppleStates
 
     private struct Confirmation: Encodable {
         let target: ReleaseWorkflowTarget
@@ -786,7 +854,9 @@ actor ReleaseWorkflowService {
                   ReleaseWorkflowTarget.validID(binding.submissionID), ReleaseWorkflowTarget.validID(binding.submissionItemID),
                   record.submissionID == binding.submissionID, record.submissionItemID == binding.submissionItemID,
                   itemIDs == binding.reviewItemIDs,
-                  Set(itemIDs.keys) == Set(record.target.reviewItems.map(\.key)) else { throw ReleaseWorkflowError.unsafeState }
+                  Set(itemIDs.keys) == Set(record.target.reviewItems.map(\.key)),
+                  binding.itemIDsToResolve.map({ Set($0).count == $0.count && Set($0).isSubset(of: Set([binding.submissionItemID] + Array(binding.reviewItemIDs.values))) && $0.allSatisfy { binding.itemStates?[$0] == "REJECTED" } }) ?? true,
+                  binding.itemStates.map({ Set($0.keys) == Set([binding.submissionItemID] + Array(binding.reviewItemIDs.values)) }) ?? true else { throw ReleaseWorkflowError.unsafeState }
         }
         guard record.contentFingerprintVersion == nil || record.contentFingerprintVersion == 2 else { throw ReleaseWorkflowError.unsafeState }
         let expected = try Self.digest(Confirmation(target: record.target, mode: record.mode, operationID: record.operationID,

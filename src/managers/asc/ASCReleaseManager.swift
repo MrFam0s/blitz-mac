@@ -459,6 +459,8 @@ extension ASCManager {
     @discardableResult
     func submitForReview(attachBuildId: String? = nil, expectedTarget: ASCReleaseOperationTarget? = nil,
                          expectedReleaseMode: String? = nil,
+                         expectedReviewSubmissionID: String? = nil,
+                         resolveRejectedItems: Bool = false,
                          using serviceOverride: (any ASCReleaseSubmissionService)? = nil) async -> Bool {
         guard !isSubmitting, let service = serviceOverride ?? service,
               let target = expectedTarget ?? releaseOperationTarget(), target.matches(self),
@@ -477,7 +479,8 @@ extension ASCManager {
             let versions = try await service.fetchAppStoreVersions(appId: target.appId)
             try target.check(self)
             guard let version = ASCReleaseStatus.versions(versions, for: platform).first(where: { $0.id == versionId }),
-                  ASCReleaseStatus.isEditable(version.attributes.appStoreState) else {
+                  ASCReleaseStatus.isEditable(version.attributes.effectiveState)
+                    || (ASCReleaseStatus.normalize(version.attributes.effectiveState) == "READY_FOR_REVIEW" && attachBuildId == nil) else {
                 throw ASCError.notFound(L10n.tr("Die ausgewählte Version ist nicht mehr zur Einreichung bearbeitbar."))
             }
             if let expectedReleaseMode, version.attributes.releaseType != expectedReleaseMode {
@@ -496,8 +499,16 @@ extension ASCManager {
                 guard submissionReadiness.isComplete(selectingBuild: build) else {
                     throw ASCError.notFound(L10n.tr("Erforderliche Angaben fehlen oder konnten nicht frisch geprüft werden."))
                 }
+                let progress = ASCReviewProgress(asc: self, version: selectedVersion)
+                guard reviewSubmissionDataComplete, !progress.ambiguousSubmission,
+                      !progress.isRecovery || (progress.submissionID != nil && progress.submissionID == expectedReviewSubmissionID),
+                      expectedReviewSubmissionID == nil || progress.submissionID == expectedReviewSubmissionID,
+                      !progress.requiresResolution || resolveRejectedItems else {
+                    throw ASCError.notFound(L10n.tr("Der Prüfstatus oder die offenen Probleme haben sich geändert. Bitte die Vorschau erneut öffnen und die bestehende Einreichung bestätigen."))
+                }
                 return try await submitUsingReleaseWorkflow(target: target, version: version, build: build,
-                    attachBuild: attachBuildId != nil, service: service)
+                    attachBuild: attachBuildId != nil, expectedReviewSubmissionID: expectedReviewSubmissionID,
+                    resolveRejectedItems: resolveRejectedItems, service: service)
             }
             // Dependency-injected test doubles exercise the existing UI identity
             // gates offline. Production always uses the durable shared workflow.
@@ -519,6 +530,7 @@ extension ASCManager {
 
     private func submitUsingReleaseWorkflow(target: ASCReleaseOperationTarget, version: ASCAppStoreVersion,
                                            build: ASCBuild, attachBuild: Bool,
+                                           expectedReviewSubmissionID: String?, resolveRejectedItems: Bool,
                                            service: any ASCReleaseSubmissionService) async throws -> Bool {
         guard let credentials, DashboardSummaryStore.accountKey(for: credentials) == target.accountKey,
               let projectID = target.projectId else { throw ReleaseWorkflowError.accountChanged }
@@ -542,11 +554,11 @@ extension ASCManager {
         do {
             let previous = try await workflow.activeOperation(target: request.target)
             try ASCManualReleaseRequest.requireAppOnlyScope(previous: previous)
-            if let previous,
+            if expectedReviewSubmissionID == nil, let previous,
                previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
                 let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
                 try target.check(self)
-                if reconciled.state == .submitted, reconciled.target == request.target {
+                if reconciled.state == .submitted, reconciled.reviewOutcome == "submitted", reconciled.target == request.target {
                     await refreshTabData(.app)
                     return true
                 }
@@ -555,7 +567,35 @@ extension ASCManager {
                 }
             }
             let prepared: ReleaseWorkflowRecord
-            if attachBuild {
+            var resumeSubmissionID: String?
+            if let expectedReviewSubmissionID {
+                guard !attachBuild, let previous, previous.target == request.target, previous.target.reviewItems.isEmpty else {
+                    throw ASCError.notFound(L10n.tr("Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt."))
+                }
+                let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
+                try target.check(self)
+                guard reconciled.submissionID == expectedReviewSubmissionID else { throw ReleaseWorkflowError.identityChanged }
+                if reconciled.state == .submitted, reconciled.reviewOutcome == "submitted" {
+                    await refreshTabData(.app)
+                    return true
+                }
+                if reconciled.resubmission?.submissionID == expectedReviewSubmissionID,
+                   reconciled.state == .submissionPending, reconciled.resumableResubmissionID == expectedReviewSubmissionID {
+                    prepared = reconciled
+                    resumeSubmissionID = expectedReviewSubmissionID
+                } else if reconciled.resubmission?.submissionID == expectedReviewSubmissionID,
+                   reconciled.state == .prepared || reconciled.state == .validated {
+                    prepared = reconciled
+                } else {
+                    guard reconciled.resubmittableSubmissionID == expectedReviewSubmissionID
+                            || (resolveRejectedItems && reconciled.resolvableSubmissionID == expectedReviewSubmissionID) else {
+                        throw ReleaseWorkflowError.unsafeState
+                    }
+                    prepared = try await workflow.prepareResubmission(operationID: reconciled.operationID,
+                        accountKey: request.target.accountKey, submissionID: expectedReviewSubmissionID,
+                        resolveRejectedItems: resolveRejectedItems)
+                }
+            } else if attachBuild {
                 prepared = try await workflow.prepareAfterAttachingBuild(target: request.target, mode: request.mode, preserveReviewSelection: true) {
                     try await MainActor.run { try target.check(self) }
                     try await service.attachBuild(versionId: version.id, buildId: build.id)
@@ -568,15 +608,18 @@ extension ASCManager {
             selectedVersionBuild = build
             let validated = try await workflow.validate(operationID: prepared.operationID, accountKey: request.target.accountKey)
             try target.check(self)
-            guard validated.state == .validated, validated.validation?.ready == true else {
+            guard validated.state == .validated || (validated.state == .submissionPending
+                    && resumeSubmissionID != nil && validated.resumableResubmissionID == resumeSubmissionID),
+                  validated.validation?.ready == true else {
                 let checks = validated.validation?.checkIDs.prefix(8).joined(separator: ", ") ?? ""
                 throw ASCError.notFound(L10n.tr("Die vollständige Release-Prüfung blockiert die Einreichung.") + (checks.isEmpty ? "" : L10n.tr(" Prüfpunkte: \(checks)"))
                     + L10n.tr(" Vorgang: \(prepared.operationID)"))
             }
             let submitted = try await workflow.submit(operationID: prepared.operationID,
-                accountKey: request.target.accountKey, confirmationDigest: validated.confirmationDigest)
+                accountKey: request.target.accountKey, confirmationDigest: validated.confirmationDigest,
+                resumeSubmissionID: resumeSubmissionID)
             try target.check(self)
-            guard submitted.state == .submitted else {
+            guard submitted.state == .submitted, submitted.reviewOutcome == "submitted" else {
                 throw ASCError.notFound(L10n.tr("Die Einreichung wurde angefordert, ist bei Apple aber noch nicht bestätigt. Bitte nur den Status des Vorgangs \(submitted.operationID) abgleichen; nicht erneut einreichen."))
             }
             await refreshTabData(.app)

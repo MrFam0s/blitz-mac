@@ -116,4 +116,19 @@ struct BlitzReleaseCLITests {
         }
     }
 
+    @Test func submitSuccessRequiresConsistentCurrentAppleEvidence() throws {
+        for (record, success) in [
+            (["state": "submitted"], false),
+            (["state": "submitted", "submissionState": "COMPLETE", "appleState": "REJECTED"], false),
+            (["state": "submitted", "submissionState": "WAITING_FOR_REVIEW", "appleState": "READY_FOR_REVIEW"], false),
+            (["state": "submitted", "submissionState": "WAITING_FOR_REVIEW", "appleState": "WAITING_FOR_REVIEW", "reviewOutcome": "issuesUnresolved"], false),
+            (["state": "submitted", "submissionState": "WAITING_FOR_REVIEW", "appleState": "WAITING_FOR_REVIEW", "reviewOutcome": "submitted"], true)
+        ] {
+            let text = String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self)
+            let response = String(decoding: try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": "id",
+                "result": ["content": [["type": "text", "text": text]]]]), as: UTF8.self)
+            #expect(try BlitzReleaseCLI.output(response: response, id: "id", tool: "release_submit").failed == !success)
+        }
+    }
+
 }

@@ -9,6 +9,10 @@ struct ReleaseSubmissionContents {
     let complete: Bool
     let ready: Bool
     let referencesAppVersion: Bool
+    let itemStates: [String: String]
+    let rejectedItemIDs: [String]
+    let canResubmit: Bool
+    let canResolve: Bool
 
     init(items: [[String: Any]], target: ReleaseWorkflowTarget, submissionID: String) {
         let appKey = "appStoreVersions:\(target.versionID)"
@@ -18,6 +22,7 @@ struct ReleaseSubmissionContents {
         var found: [String: String] = [:]
         var itemIDs: Set<String> = []
         var valid = true, allReady = true, referencesVersion = false
+        var states: [String: String] = [:]
         for item in items {
             guard let id = item["id"] as? String, ReleaseWorkflowTarget.validID(id),
                   itemIDs.insert(id).inserted,
@@ -43,7 +48,9 @@ struct ReleaseSubmissionContents {
                 valid = false; continue
             }
             found[key] = id
-            if (item["attributes"] as? [String: Any])?["state"] as? String != "READY_FOR_REVIEW" { allReady = false }
+            let state = (item["attributes"] as? [String: Any])?["state"] as? String ?? "UNKNOWN"
+            states[id] = state
+            if state != "READY_FOR_REVIEW" { allReady = false }
         }
         appItemID = found[appKey]
         reviewItemIDs = found.filter { $0.key != appKey }
@@ -51,5 +58,10 @@ struct ReleaseSubmissionContents {
         complete = valid && Set(found.keys) == expected
         ready = valid && allReady
         referencesAppVersion = referencesVersion
+        itemStates = states
+        rejectedItemIDs = states.filter { $0.value == "REJECTED" }.keys.sorted()
+        let retained = Set(["READY_FOR_REVIEW", "ACCEPTED", "APPROVED"])
+        canResubmit = complete && states.values.allSatisfy { retained.contains($0) }
+        canResolve = complete && !rejectedItemIDs.isEmpty && states.values.allSatisfy { retained.contains($0) || $0 == "REJECTED" }
     }
 }

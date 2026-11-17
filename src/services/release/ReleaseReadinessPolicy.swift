@@ -76,7 +76,7 @@ enum ReleaseReadinessPolicy {
     static func normalize(report: [String: Any], exitCode: Int, target: ReleaseWorkflowTarget,
                           firstPublication: Bool, localizations: [[String: Any]],
                           web: ReleaseWebEvidence, webBindingStable: Bool,
-                          products: ReleaseProductSelection.Result? = nil) throws -> ReleaseWorkflowValidation {
+                          products: ReleaseProductSelection.Result? = nil, retainedAppVersionState: String? = nil) throws -> ReleaseWorkflowValidation {
         guard report["appId"] as? String == target.appID, report["versionId"] as? String == target.versionID,
               report["platform"] as? String == target.platform,
               let summary = report["summary"] as? [String: Any],
@@ -101,6 +101,16 @@ enum ReleaseReadinessPolicy {
 
         var normalized = checks.filter { !($0["id"] as? String == "metadata.required.whats_new" && $0["severity"] as? String == "warning") }
         var diagnostics: [ReleaseReadinessDiagnostic] = []
+        if retainedAppVersionState == "ACCEPTED" {
+            normalized.removeAll { check in
+                guard check["id"] as? String == "version.state.editable", check["severity"] as? String == "error",
+                      check["field"] as? String == "appVersionState",
+                      check["message"] as? String == "version is in non-editable state \"ACCEPTED\"" else { return false }
+                diagnostics.append(.init(id: "version.state.editable", status: "passed", source: "publicApi",
+                    reason: "accepted_app_item_retained_in_exact_resubmission"))
+                return true
+            }
+        }
         // The selected version set is a durable plan for this exact submission.
         // Fresh, complete public product evidence covers the legacy attachment
         // checks and exact READY_TO_SUBMIT notices for selected purchases. Other
@@ -108,6 +118,11 @@ enum ReleaseReadinessPolicy {
         if let products {
             normalized.removeAll { check in
                 if products.replacesAttachmentFinding(check["id"] as? String ?? "") { return true }
+                if products.coversRetainedReviewFinding(check) {
+                    diagnostics.append(.init(id: check["id"] as! String, status: "passed", source: "publicApi",
+                        reason: "retained_product_state_verified_for_explicit_resubmission"))
+                    return true
+                }
                 guard products.coversReadyToSubmitFinding(check) else { return false }
                 diagnostics.append(.init(id: check["id"] as! String, status: "passed", source: "publicApi",
                     reason: "selected_ready_to_submit_iap_verified_for_joint_review"))

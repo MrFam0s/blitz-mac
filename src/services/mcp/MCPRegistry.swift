@@ -43,13 +43,14 @@ enum MCPRegistry {
         ))
         tools.append(tool(
             name: "release_prepare_resubmission",
-            description: "Read-only preparation of a new attempt for the exact previously acknowledged review after its rejected items were resolved in Apple. Requires the old operationId, accountKey and submissionId. Preserves the original app/build/product set and release mode, binds current metadata into a new digest, and never resolves items or retries an uncertain submit. Validate and explicitly submit the returned new operation.",
+            description: "Read-only preparation for the exact previously acknowledged review. Preserves the original app/build/product set and release mode in a new operation/digest. Rejected items require resolveRejectedItems=true only after their corrections have been verified and authorized; this binds the exact item IDs to the plan without writing to Apple. Validate and explicitly submit the returned operation to resolve those items then resubmit that same review. A message reply alone proves neither resolution nor resubmission. Never retries an uncertain final submit.",
             properties: ["operationId": ["type": "string"], "accountKey": ["type": "string"],
-                         "submissionId": ["type": "string"], "releaseTargetId": ["type": "string"]],
+                         "submissionId": ["type": "string"], "releaseTargetId": ["type": "string"],
+                         "resolveRejectedItems": ["type": "boolean", "description": "Default false. Include only after verifying the rejected items' corrections and authorization to mark them resolved and resubmit. Preparation itself performs no Apple writes; inspect the returned exact resolution plan before confirming submit."]],
             required: ["operationId", "accountKey", "submissionId"]
         ))
         for (name, description) in [
-            ("release_status", "Read and reconcile a durable operation with Apple. Never replays an upload or submission. Use after a timeout or restart before any retry."),
+            ("release_status", "Read and reconcile a durable operation with Apple. Historical state=submitted is not a current queue status: inspect current Apple/submission state and the reported next action. A reply or READY_FOR_REVIEW item is not a new submission. Never replays a write. Use after timeout/restart before any retry."),
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
             ("release_submit", "Submit the exact validated operation, including only its saved IAP/subscription/group versions, after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets the prepared release mode, assembles the one exact review draft, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
         ] {

@@ -89,7 +89,7 @@ struct ASCOverview: View {
                 // Version stats + rejection card (original position)
                 versionStatsSection
 
-                // Submission Readiness (original standalone list)
+                // Submission Readiness
                 submissionReadinessSection
 
                 // Activity
@@ -493,17 +493,10 @@ struct ASCOverview: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
+        ASCReviewProgressView(progress: ASCReviewProgress(asc: asc, version: asc.selectedVersion))
+
         if let rejectionCardVersion {
-            RejectionCardView(asc: asc, version: rejectionCardVersion) {
-                HStack {
-                    Spacer()
-                    Button(L10n.tr("Erneute Einreichung vorbereiten")) {
-                        showPreview = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                }
-            }
+            RejectionCardView(asc: asc, version: rejectionCardVersion) { EmptyView() }
         }
     }
 
@@ -567,15 +560,13 @@ struct ASCOverview: View {
 
     @ViewBuilder
     private var submissionReadinessAction: some View {
-        let activeUpdateState = asc.currentUpdateVersion?.attributes.appStoreState ?? ""
-        let showStatus = asc.currentUpdateVersion != nil && !ASCReleaseStatus.isEditable(activeUpdateState)
+        let progress = ASCReviewProgress(asc: asc, version: asc.selectedVersion)
         if !asc.canCreateUpdate {
-            Button(showStatus ? L10n.tr("Status anzeigen") : L10n.tr("Zur Prüfung einreichen")) {
+            Button(progress.canPreviewSubmission ? progress.previewTitle : L10n.tr("Status anzeigen")) {
                 showPreview = true
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
-            .disabled(!showStatus && !asc.submissionReadiness.isComplete)
         }
     }
 

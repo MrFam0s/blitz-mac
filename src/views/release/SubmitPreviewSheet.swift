@@ -13,6 +13,8 @@ struct SubmitPreviewSheet: View {
 
     @State private var releaseTarget: ASCReleaseOperationTarget?
     @State private var expectedReleaseMode: String?
+    @State private var confirmedIssuesResolved = false
+    @State private var previewedSubmissionID: String?
 
     private var targetMatches: Bool { releaseTarget?.matches(asc) == true }
     private var validBuilds: [ASCBuild] {
@@ -24,8 +26,10 @@ struct SubmitPreviewSheet: View {
         guard targetMatches else { return nil }
         return asc.selectedVersion
     }
-    private var versionState: String { targetVersion?.attributes.appStoreState ?? "" }
-    private var isSubmittable: Bool { targetMatches && ASCReleaseStatus.isEditable(versionState) }
+    private var versionState: String { targetVersion?.attributes.effectiveState ?? "" }
+    private var reviewProgress: ASCReviewProgress { ASCReviewProgress(asc: asc, version: targetVersion) }
+    private var isSubmittable: Bool { targetMatches && reviewProgress.canPreviewSubmission }
+    private var preservesExistingBuild: Bool { reviewProgress.isRecovery || versionState == "READY_FOR_REVIEW" }
     private var selectedBuild: ASCBuild? { validBuilds.first { $0.id == selectedBuildId } }
 
     var body: some View {
@@ -86,10 +90,29 @@ struct SubmitPreviewSheet: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    if isSubmittable { buildSelector }
+                    if targetMatches, !isCheckingReadiness {
+                        ASCReviewProgressView(progress: reviewProgress)
+                    }
+                    if isSubmittable {
+                        if preservesExistingBuild {
+                            Label(L10n.tr("Vorhandener Build: \(selectedBuild?.attributes.version ?? "—")"), systemImage: "shippingbox")
+                                .font(.callout)
+                        } else { buildSelector }
+                        if reviewProgress.requiresResolution {
+                            Toggle(isOn: $confirmedIssuesResolved) {
+                                Text(L10n.tr("Ich habe Apples Hinweise geprüft und die abgelehnten Elemente korrigiert. Blitz darf diese Probleme als geklärt markieren und dieselbe Einreichung erneut absenden."))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
 
                     if releaseTarget != nil && !targetMatches {
                         Text(L10n.tr("Die ausgewählte App oder Version hat sich geändert. Bitte diese Vorschau schließen und erneut öffnen."))
+                            .font(.callout).foregroundStyle(.orange)
+                    }
+                    if !isCheckingReadiness, previewedSubmissionID != reviewProgress.submissionID {
+                        Text(L10n.tr("Der Prüfstatus oder die offenen Probleme haben sich geändert. Bitte die Vorschau erneut öffnen und die bestehende Einreichung bestätigen."))
                             .font(.callout).foregroundStyle(.orange)
                     }
                     if isCheckingReadiness {
@@ -135,19 +158,24 @@ struct SubmitPreviewSheet: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else if isSubmittable {
-                    Button(L10n.tr("Zur Prüfung einreichen")) {
+                    Button(reviewProgress.isRecovery ? L10n.tr("Erneut zur Prüfung einreichen") : L10n.tr("Zur Prüfung einreichen")) {
                         Task {
-                            let buildId = selectedBuildId.isEmpty ? nil : selectedBuildId
+                            let buildId = preservesExistingBuild || selectedBuildId.isEmpty ? nil : selectedBuildId
                             guard let releaseTarget, releaseTarget.matches(asc) else { return }
                             if await asc.submitForReview(attachBuildId: buildId, expectedTarget: releaseTarget,
-                                                        expectedReleaseMode: expectedReleaseMode) {
+                                                        expectedReleaseMode: expectedReleaseMode,
+                                                        expectedReviewSubmissionID: reviewProgress.isRecovery ? previewedSubmissionID : nil,
+                                                        resolveRejectedItems: reviewProgress.requiresResolution && confirmedIssuesResolved) {
                                 dismiss()
                             }
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(isCheckingReadiness || asc.isSubmitting || !asc.submissionReadiness.isComplete(selectingBuild: selectedBuild) || selectedBuild == nil
-                              || expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) == nil)
+                              || expectedReleaseMode.flatMap(ReleaseWorkflowMode.init(rawValue:)) == nil
+                              || (reviewProgress.isRecovery && reviewProgress.submissionID == nil)
+                              || (reviewProgress.requiresResolution && !confirmedIssuesResolved)
+                              || previewedSubmissionID != reviewProgress.submissionID)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -165,6 +193,7 @@ struct SubmitPreviewSheet: View {
             releaseTarget = asc.releaseOperationTarget()
             guard let releaseTarget else { return }
             expectedReleaseMode = asc.selectedVersion?.attributes.releaseType
+            previewedSubmissionID = reviewProgress.submissionID
             // The overview fetch also reloads the fully paginated build inventory.
             if let attached = asc.selectedVersionBuild, validBuilds.contains(where: { $0.id == attached.id }) {
                 selectedBuildId = attached.id

@@ -44,9 +44,15 @@ identifies the user's prepared release, including manually or Codex-edited text,
 screenshots and App Preview videos. Do not replace it with another version.
 
 When `preparedVersion` is present, fetch that exact resource and verify app,
-platform, version string and an editable state. If it is missing, belongs to
-another target or is no longer editable, stop; do not create a replacement. If it
-has already been submitted, report the verified status without submitting again.
+platform and version string. If it is missing or belongs to another target, stop;
+do not create a replacement. First inspect current review state: waiting for
+review, in review or approved means report that state without another submit.
+For an authorized continuation after rejection, route to the blitz-release skill
+resubmission path for that same review before ordinary version/build preparation
+and before the editable-state gate. Verify corrections and authorization. A reply
+or READY_FOR_REVIEW does not mean resubmitted; do not replace a noneditable
+prepared review. Only ordinary metadata/build preparation requires an editable
+version. Unknown states stop at read-only reconciliation.
 Record a baseline of its localized texts, existing What's New, screenshot order
 and checksums/asset IDs, preview-video order/asset IDs and review information in
 the private release state (exclude credentials and demo-account secrets). These
@@ -96,7 +102,7 @@ only your own lock when done. Recover a stale lock only after verifying that its
 owner no longer runs; never infer this just from elapsed time.
 
 Read saved state and query ASC fresh, including all relevant versions/builds
-(paginate). If the same update is already submitted, in review or approved, report its
+(paginate). If the same update is currently waiting for review, in review or approved, report its
 current state and stop; do not submit it again. If it is already live, use its
 verified source/build as the baseline in step 2: stop for an unchanged request,
 but allow a provably newer update rather than treating the previous release's

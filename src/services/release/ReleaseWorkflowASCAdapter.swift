@@ -112,14 +112,14 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             protected["review"] = Self.semantic(review)
             protected["reviewAttachments"] = try await all("/v1/appStoreReviewDetails/\(Self.id(review))/appStoreReviewAttachments").map(Self.semantic)
         }
+        let submission = try await submissionContext(target)
         var reviewProductsReady = true
         if !target.reviewItems.isEmpty {
-            let products = try await productSelection(target)
+            let products = try await productSelection(target, submission: submission)
             protected["jointReviewProducts"] = products.protectedContent
             reviewProductsReady = products.diagnostics.isEmpty
         }
         let fingerprints = try Self.fingerprints(protected)
-        let submission = try await submissionContext(target)
         // Protected values (including demo credentials) are hashed in memory only.
         return ReleaseWorkflowSnapshot(appID: target.appID, bundleID: target.bundleID,
             versionID: target.versionID, platform: target.platform, versionString: versionString,
@@ -131,11 +131,23 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             submissionState: submission.state, canResumeSubmission: submission.canResume, submissionItemID: submission.itemID,
             legacyContentDigests: fingerprints.legacy,
             submissionItemsComplete: submission.complete, reviewItemIDs: submission.reviewItemIDs,
-            reviewProductsReady: reviewProductsReady, canResubmitSubmission: submission.canResubmit)
+            reviewProductsReady: reviewProductsReady, canResubmitSubmission: submission.canResubmit,
+            canResolveSubmission: submission.canResolve, submissionItemStates: submission.itemStates)
     }
 
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
+        try await readiness(target, resubmission: nil)
+    }
+
+    func readiness(_ target: ReleaseWorkflowTarget, resubmission: ReleaseResubmissionBinding?) async throws -> ReleaseWorkflowValidation {
         try target.validate()
+        let recoverySnapshot: ReleaseWorkflowSnapshot?
+        if let resubmission {
+            let fresh = try await snapshot(target)
+            try fresh.check(target)
+            guard resubmission.matches(fresh) else { throw ReleaseWorkflowError.uncertainOutcome }
+            recoverySnapshot = fresh
+        } else { recoverySnapshot = nil }
         guard accountKey == target.accountKey else { throw ReleaseWorkflowError.accountChanged }
         let app = try await single("/v1/apps/\(target.appID)")
         guard app["id"] as? String == target.appID,
@@ -158,10 +170,15 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         let versions = try await all("/v1/apps/\(target.appID)/appStoreVersions")
         let firstPublication = try ReleaseReadinessPolicy.isFirstPublication(versions: versions, target: target)
         let localizations = try await all("/v1/appStoreVersions/\(target.versionID)/appStoreVersionLocalizations")
-        let products = target.reviewItems.isEmpty ? nil : try await productSelection(target)
+        let products = target.reviewItems.isEmpty ? nil : try await productSelection(target, submission: try await submissionContext(target), allowRetained: resubmission != nil)
         return try ReleaseReadinessPolicy.normalize(report: object, exitCode: payload.exitCode, target: target,
             firstPublication: firstPublication, localizations: localizations, web: payload.web,
-            webBindingStable: payload.web.matches(payload.web, target: target), products: products)
+            webBindingStable: payload.web.matches(payload.web, target: target), products: products,
+            retainedAppVersionState: recoverySnapshot.flatMap { snapshot in
+                guard let id = snapshot.submissionItemID, snapshot.submissionItemStates[id] == "ACCEPTED",
+                      snapshot.appleState == "ACCEPTED" else { return nil }
+                return "ACCEPTED"
+            })
     }
 
     func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws {
@@ -169,8 +186,10 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             "type": "appStoreVersions", "id": target.versionID, "attributes": ["releaseType": mode.rawValue]]])
     }
 
-    private func productSelection(_ target: ReleaseWorkflowTarget) async throws -> ReleaseProductSelection.Result {
-        try await ReleaseProductSelection.inspect(target: target,
+    private func productSelection(_ target: ReleaseWorkflowTarget, submission: SubmissionContext, allowRetained: Bool = true) async throws -> ReleaseProductSelection.Result {
+        let retainedStates: [String: String] = (allowRetained && (submission.canResubmit || submission.canResolve)) ?
+            submission.reviewItemIDs.compactMapValues { submission.itemStates[$0] } : [:]
+        return try await ReleaseProductSelection.inspect(target: target, retainedReviewStates: retainedStates,
             single: { try await self.optionalSingle($0) }, all: { try await self.all($0, query: $1) })
     }
 
@@ -264,25 +283,48 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         return submissionID
     }
 
-    /// A resolved rejection is a new explicitly prepared attempt, never a retry
-    /// of an unknown final request. This path cannot create or edit review items.
+    /// Only the explicitly confirmed rejected items are marked resolved. The
+    /// enclosing review and every item identity stay fixed throughout the attempt.
     func resubmit(_ target: ReleaseWorkflowTarget, binding: ReleaseResubmissionBinding,
                   expectedContentDigest: String, expectedFingerprintVersion: Int?, expectedReleaseMode: ReleaseWorkflowMode,
                   progress: @escaping @Sendable (ReleaseSubmissionProgress) async throws -> Void) async throws -> String? {
+        try target.validate()
+        let authorizedIDs = Set([binding.submissionItemID] + Array(binding.reviewItemIDs.values))
         guard ReleaseWorkflowTarget.validID(binding.submissionID), ReleaseWorkflowTarget.validID(binding.submissionItemID),
               ReleaseWorkflowTarget.validID(binding.previousOperationID),
-              Set(binding.reviewItemIDs.keys) == Set(target.reviewItems.map(\.key)) else { throw ReleaseWorkflowError.invalidTarget }
+              Set(binding.reviewItemIDs.keys) == Set(target.reviewItems.map(\.key)),
+              Set(binding.itemIDsToResolve ?? []).isSubset(of: authorizedIDs),
+              (binding.itemIDsToResolve ?? []).allSatisfy({ binding.itemStates?[$0] == "REJECTED" }) else { throw ReleaseWorkflowError.invalidTarget }
+        func checkedSnapshot() async throws -> ReleaseWorkflowSnapshot {
+            let fresh = try await snapshot(target)
+            try fresh.check(target)
+            guard fresh.matchesContentDigest(expectedContentDigest, fingerprintVersion: expectedFingerprintVersion) else {
+                throw ReleaseWorkflowError.contentChanged
+            }
+            guard binding.matches(fresh), fresh.reviewProductsReady, fresh.releaseType == expectedReleaseMode.rawValue else {
+                throw ReleaseWorkflowError.uncertainOutcome
+            }
+            return fresh
+        }
         try await progress(.init(phase: .verifyingContent, submissionID: binding.submissionID, submissionItemID: binding.submissionItemID))
-        let fresh = try await snapshot(target)
-        try fresh.check(target)
-        guard fresh.matchesContentDigest(expectedContentDigest, fingerprintVersion: expectedFingerprintVersion) else {
-            throw ReleaseWorkflowError.contentChanged
+        for id in (binding.itemIDsToResolve ?? []).sorted() {
+            let fresh = try await checkedSnapshot()
+            // A previous timed-out write may have been confirmed by read-only status.
+            if fresh.submissionItemStates[id] == "READY_FOR_REVIEW" { continue }
+            guard fresh.submissionItemStates[id] == "REJECTED" else { throw ReleaseWorkflowError.uncertainOutcome }
+            try await progress(.init(phase: .resolvingReviewItem, submissionID: binding.submissionID,
+                                     submissionItemID: binding.submissionItemID, resolvedItemID: id))
+            let result = try await request("PATCH", "/v1/reviewSubmissionItems/\(id)", body: ["data": [
+                "type": "reviewSubmissionItems", "id": id, "attributes": ["resolved": true]]])
+            guard let item = result["data"] as? [String: Any], item["id"] as? String == id,
+                  item["type"] as? String == "reviewSubmissionItems" else { throw ReleaseWorkflowAPIError.invalidResponse }
+            let after = try await checkedSnapshot()
+            guard after.submissionItemStates[id] == "READY_FOR_REVIEW" else { throw ReleaseWorkflowError.uncertainOutcome }
+            try await progress(.init(phase: .reviewItemResolved, submissionID: binding.submissionID,
+                                     submissionItemID: binding.submissionItemID, resolvedItemID: id))
         }
-        guard fresh.canResubmitSubmission, fresh.submissionID == binding.submissionID,
-              fresh.submissionItemID == binding.submissionItemID, fresh.reviewItemIDs == binding.reviewItemIDs,
-              fresh.submissionItemsComplete, fresh.reviewProductsReady, fresh.releaseType == expectedReleaseMode.rawValue else {
-            throw ReleaseWorkflowError.uncertainOutcome
-        }
+        let ready = try await checkedSnapshot()
+        guard ready.canResubmitSubmission else { throw ReleaseWorkflowError.uncertainOutcome }
         try await progress(.init(phase: .submitting, submissionID: binding.submissionID, submissionItemID: binding.submissionItemID))
         let accepted = try await request("PATCH", "/v1/reviewSubmissions/\(binding.submissionID)", body: ["data": [
             "type": "reviewSubmissions", "id": binding.submissionID, "attributes": ["submitted": true]]])
@@ -309,6 +351,8 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         var conflict = false
         var canResume = false
         var canResubmit = false
+        var canResolve = false
+        var itemStates: [String: String] = [:]
         var itemID: String?
         var complete = false
         var reviewItemIDs: [String: String] = [:]
@@ -316,7 +360,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
 
     private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> SubmissionContext {
         let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app"])
-        var matches: [(id: String, state: String, date: String, draft: Bool, resubmission: Bool, contents: ReleaseSubmissionContents)] = []
+        var matches: [(id: String, state: String, date: String, draft: Bool, resubmission: Bool, resolution: Bool, contents: ReleaseSubmissionContents)] = []
         var activeCount = 0
         for submission in submissions {
             guard let attributes = submission["attributes"] as? [String: Any],
@@ -341,16 +385,19 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
                 (forReview == nil || forReview == target.versionID)
             // UNRESOLVED_ISSUES proves a completed first review. All items must
             // already have been resolved, while the historical submitted date remains.
-            let resubmission = state == "UNRESOLVED_ISSUES" && !submittedDate.isEmpty && contents.complete && contents.ready &&
+            let resubmission = state == "UNRESOLVED_ISSUES" && !submittedDate.isEmpty && contents.canResubmit &&
                 (forReview == nil || forReview == target.versionID)
-            matches.append((id, state, submittedDate, draft, resubmission, contents))
+            let resolution = state == "UNRESOLVED_ISSUES" && !submittedDate.isEmpty && contents.canResolve &&
+                (forReview == nil || forReview == target.versionID)
+            matches.append((id, state, submittedDate, draft, resubmission, resolution, contents))
         }
         let active = matches.filter { $0.state != "COMPLETE" }
         guard active.count <= 1 else { throw ReleaseWorkflowAPIError.invalidResponse }
         let chosen = active.first ?? matches.sorted { $0.date == $1.date ? $0.id < $1.id : $0.date > $1.date }.first
         return SubmissionContext(id: chosen?.id, state: chosen?.state, conflict: activeCount > 0,
             canResume: activeCount == 1 && chosen?.draft == true,
-            canResubmit: activeCount == 1 && chosen?.resubmission == true, itemID: chosen?.contents.appItemID,
+            canResubmit: activeCount == 1 && chosen?.resubmission == true,
+            canResolve: activeCount == 1 && chosen?.resolution == true, itemStates: chosen?.contents.itemStates ?? [:], itemID: chosen?.contents.appItemID,
             complete: chosen?.contents.complete == true, reviewItemIDs: chosen?.contents.reviewItemIDs ?? [:])
     }
 

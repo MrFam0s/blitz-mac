@@ -107,3 +107,24 @@ struct ReleaseWorkflowArgumentsTests {
     #expect(schema["additionalProperties"] as? Bool == false)
     #expect(MCPRegistry.category(for: "release_prepare_resubmission") == .query)
 }
+
+@Test func rejectedItemResolutionRequiresAnExplicitBooleanPlan() throws {
+    #expect(try !ReleaseWorkflowArguments.optionalBoolean("resolveRejectedItems", arguments: [:]))
+    #expect(try ReleaseWorkflowArguments.optionalBoolean("resolveRejectedItems", arguments: ["resolveRejectedItems": true]))
+    for key in ["resolveRejectedItems", "confirm", "confirmLegacyDraftRecovery"] {
+        for invalid: Any in ["true", 1, NSNull(), ["item"]] {
+            #expect(throws: (any Error).self) {
+                try ReleaseWorkflowArguments.optionalBoolean(key, arguments: [key: invalid])
+            }
+        }
+    }
+    for name in ["release_status", "release_validate", "release_submit"] {
+        #expect(throws: (any Error).self) {
+            try ReleaseWorkflowArguments.validateKeys(name: name, arguments: ["resolveRejectedItems": true])
+        }
+    }
+    let tool = try #require(MCPRegistry.allTools().first { $0["name"] as? String == "release_prepare_resubmission" })
+    let schema = try #require(tool["inputSchema"] as? [String: Any])
+    let properties = try #require(schema["properties"] as? [String: Any])
+    #expect((properties["resolveRejectedItems"] as? [String: Any])?["type"] as? String == "boolean")
+}

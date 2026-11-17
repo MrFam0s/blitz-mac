@@ -37,6 +37,12 @@ struct ASCScreenshotReservation: Decodable, Identifiable {
 struct ASCReviewSubmission: Decodable, Identifiable {
     let id: String
 
+    static func isActive(_ state: String?) -> Bool {
+        // Unknown/absent state is potentially active: never let an older
+        // completed review hide it. Presentation and writes still fail closed.
+        !["COMPLETE", "ACCEPTED", "APPROVED", "CANCELED"].contains(ASCReleaseStatus.normalize(state))
+    }
+
     struct Attributes: Decodable {
         let state: String?
         let submittedDate: String?

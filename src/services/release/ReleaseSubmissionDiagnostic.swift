@@ -5,6 +5,7 @@ import Foundation
 enum ReleaseSubmissionPhase: String, Codable, Sendable {
     case settingReleaseMode, checkingExisting, creatingSubmission, submissionCreated
     case addingVersion, versionAdded, addingReviewItem, reviewItemAdded, verifyingContent, submitting, acknowledged
+    case resolvingReviewItem, reviewItemResolved
 }
 
 struct ReleaseSubmissionProgress: Codable, Equatable, Sendable {
@@ -13,9 +14,10 @@ struct ReleaseSubmissionProgress: Codable, Equatable, Sendable {
     var submissionItemID: String? = nil
     var reviewItem: ReleaseReviewItem? = nil
     var reviewItemID: String? = nil
+    var resolvedItemID: String? = nil
     enum CodingKeys: String, CodingKey {
         case phase, submissionID = "submissionId", submissionItemID = "submissionItemId"
-        case reviewItem, reviewItemID = "reviewItemId"
+        case reviewItem, reviewItemID = "reviewItemId", resolvedItemID = "resolvedItemId"
     }
 }
 

@@ -2,6 +2,36 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.78 build 93 — explicit review resolution and resubmission
+
+Current review/submission/item state is independent of a historical acknowledged
+operation or Resolution Center reply. The UI and MCP expose a factual next step,
+keep undated drafts, reject ambiguous or inconsistent evidence, and discard stale
+concurrent refreshes. Review pages fetch all pages with scope-preserving links.
+One overview action opens the preview; a separate confirmation performs writes.
+The progress card precedes long historical review notes.
+
+Read-only `prepare-resubmission` can explicitly plan `resolveRejectedItems` for
+verified corrections. Its fresh digest binds the exact rejected item IDs and the
+original app, build, release mode, submission and complete product selection.
+Confirmed submit resolves only those items, rechecks their states/content and
+resubmits the same review. Accepted siblings remain unchanged. Real ASC lifecycle
+findings are normalized only with matching, current, bound evidence; unrelated
+readiness issues remain blocking. Original journals are preserved. Applied
+resolution timeouts can continue the same child after a verified read; uncertain
+final sends never replay. CLI success requires consistent current Apple evidence,
+and authorization flags reject non-Boolean JSON values. Bundled skills and routing
+explain reply, item resolution and final send separately.
+
+Validation: 700 Swift tests in 14 suites, isolated ASC/helper/CLI/session tests,
+nine localization regressions plus the 1,357-key DE/EN audit, nine release metadata
+checks and skill validation pass. Independent protocol/state/recovery review is
+clear. Forty offscreen production status-component renders cover DE/EN, light/dark
+appearance, 340/680-point width, rejection with reply, prepared resubmission,
+confirmed queue, incomplete data and conflicting states. The native Release bundle and strict/deep Developer ID signature verification
+also pass. No real Store mutation or actual resubmission was used as a test.
+Public release/tag/DMG publication is not part of this local correction.
+
 ## 1.0.77 build 92 — complete App Review communication
 
 App-wide Resolution Center messages remain visible when the reviewer supplies no

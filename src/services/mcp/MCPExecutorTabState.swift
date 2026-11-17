@@ -444,6 +444,8 @@ extension MCPExecutor {
             "isSubmitting": asc.isSubmitting,
             "canCreateUpdate": asc.canCreateUpdate,
             "selectedVersionIsEditable": asc.selectedVersionIsEditable,
+            "reviewProgress": ASCReviewProgress(asc: asc, version: asc.selectedVersion).payload,
+            "reviewSubmissionDataComplete": asc.reviewSubmissionDataComplete,
         ]
         if let latestVersion = Self.versionStatePayload(asc.appStoreVersions.first) {
             result["latestVersion"] = latestVersion
@@ -541,7 +543,10 @@ extension MCPExecutor {
 
     @MainActor
     func tabStateReview(_ asc: ASCManager) -> [String: Any] {
-        var result: [String: Any] = [:]
+        var result: [String: Any] = [
+            "reviewProgress": ASCReviewProgress(asc: asc, version: asc.selectedVersion).payload,
+            "reviewSubmissionDataComplete": asc.reviewSubmissionDataComplete
+        ]
 
         if let ageRating = Self.ageRatingStatePayload(
             ageRating: asc.ageRatingDeclaration,

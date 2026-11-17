@@ -611,3 +611,30 @@
 "Der Nachrichtenabruf ist unvollständig. Bitte erneut laden." = "Der Nachrichtenabruf ist unvollständig. Bitte erneut laden.";
 
 "Die Nachrichten konnten nicht vollständig geladen werden." = "Die Nachrichten konnten nicht vollständig geladen werden.";
+
+"Noch nicht eingereicht" = "Noch nicht eingereicht";
+"Probleme vor erneuter Einreichung klären" = "Probleme vor erneuter Einreichung klären";
+"Bereit zur Prüfung – noch nicht abgesendet" = "Bereit zur Prüfung – noch nicht abgesendet";
+"Erneute Einreichung noch nicht abgesendet" = "Erneute Einreichung noch nicht abgesendet";
+"Einreichung bestätigt – wartet auf Prüfung" = "Einreichung bestätigt – wartet auf Prüfung";
+"Apple prüft die Einreichung" = "Apple prüft die Einreichung";
+"Prüfstatus nicht eindeutig bestätigt" = "Prüfstatus nicht eindeutig bestätigt";
+"Prüfe Version, Build und Store-Angaben. Erst die Bestätigung in der Vorschau sendet die Einreichung an Apple." = "Prüfe Version, Build und Store-Angaben. Erst die Bestätigung in der Vorschau sendet die Einreichung an Apple.";
+"Prüfe Apples Hinweise und behebe die offenen Punkte. Bestätige danach die geklärten Probleme und sende die bestehende Einreichung erneut ab. Eine Antwort allein führt diesen Schritt nicht aus." = "Prüfe Apples Hinweise und behebe die offenen Punkte. Bestätige danach die geklärten Probleme und sende die bestehende Einreichung erneut ab. Eine Antwort allein führt diesen Schritt nicht aus.";
+"Die Version ist für die Prüfung vorbereitet. Erst das Absenden startet die Einreichung bei Apple." = "Die Version ist für die Prüfung vorbereitet. Erst das Absenden startet die Einreichung bei Apple.";
+"Die bearbeiteten Elemente sind vorbereitet. Sende jetzt dieselbe Einreichung erneut zur App-Prüfung; ein neuer Entwurf ist dafür nicht erforderlich." = "Die bearbeiteten Elemente sind vorbereitet. Sende jetzt dieselbe Einreichung erneut zur App-Prüfung; ein neuer Entwurf ist dafür nicht erforderlich.";
+"Die Einreichung ist bei Apple eingegangen. Eine weitere Einreichung ist derzeit nicht erforderlich." = "Die Einreichung ist bei Apple eingegangen. Eine weitere Einreichung ist derzeit nicht erforderlich.";
+"Beachte den Versionsstatus für die Veröffentlichung. Frühere Rückfragen bleiben im Verlauf sichtbar." = "Beachte den Versionsstatus für die Veröffentlichung. Frühere Rückfragen bleiben im Verlauf sichtbar.";
+"Aktualisiere den Prüfstatus oder prüfe den bestehenden Vorgang in App Store Connect, bevor du erneut einreichst." = "Aktualisiere den Prüfstatus oder prüfe den bestehenden Vorgang in App Store Connect, bevor du erneut einreichst.";
+"Erneute Einreichung prüfen" = "Erneute Einreichung prüfen";
+"Letzte Nachricht: Deine Antwort vom {0}" = "Letzte Nachricht: Deine Antwort vom {0}";
+"Letzte Nachricht: Apple vom {0}" = "Letzte Nachricht: Apple vom {0}";
+"Letzte Nachricht vom {0}" = "Letzte Nachricht vom {0}";
+"Prüfungsverlauf für Version {0}" = "Prüfungsverlauf für Version {0}";
+"Vorhandener Build: {0}" = "Vorhandener Build: {0}";
+"Ich habe Apples Hinweise geprüft und die abgelehnten Elemente korrigiert. Blitz darf diese Probleme als geklärt markieren und dieselbe Einreichung erneut absenden." = "Ich habe Apples Hinweise geprüft und die abgelehnten Elemente korrigiert. Blitz darf diese Probleme als geklärt markieren und dieselbe Einreichung erneut absenden.";
+"Erneut zur Prüfung einreichen" = "Erneut zur Prüfung einreichen";
+"Der Prüfstatus oder die offenen Probleme haben sich geändert. Bitte die Vorschau erneut öffnen und die bestehende Einreichung bestätigen." = "Der Prüfstatus oder die offenen Probleme haben sich geändert. Bitte die Vorschau erneut öffnen und die bestehende Einreichung bestätigen.";
+"Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt." = "Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt.";
+
+"Apples Versionsstatus und der Status der zugehörigen Einreichung widersprechen sich. Aktualisiere beide, bevor du daraus den nächsten Schritt ableitest." = "Apples Versionsstatus und der Status der zugehörigen Einreichung widersprechen sich. Aktualisiere beide, bevor du daraus den nächsten Schritt ableitest.";

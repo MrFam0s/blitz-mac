@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 extension MCPExecutor {
     /// No UI navigation or selected-version fallback is involved in these calls.
@@ -62,15 +63,17 @@ extension MCPExecutor {
             let service = service(for: saved.target)
             switch name {
             case "release_prepare_resubmission":
-                record = try await service.prepareResubmission(operationID: id, accountKey: accountKey, submissionID: string("submissionId"))
+                record = try await service.prepareResubmission(operationID: id, accountKey: accountKey,
+                    submissionID: string("submissionId"),
+                    resolveRejectedItems: ReleaseWorkflowArguments.optionalBoolean("resolveRejectedItems", arguments: arguments))
             case "release_status": record = try await service.status(operationID: id, accountKey: accountKey)
             case "release_validate": record = try await service.validate(operationID: id, accountKey: accountKey)
             case "release_submit":
-                guard arguments["confirm"] as? Bool == true else { throw ReleaseWorkflowError.confirmationRequired }
+                guard try ReleaseWorkflowArguments.optionalBoolean("confirm", arguments: arguments) else { throw ReleaseWorkflowError.confirmationRequired }
                 record = try await service.submit(operationID: id, accountKey: accountKey,
                     confirmationDigest: try string("confirmationDigest"),
                     resumeSubmissionID: try arguments.keys.contains("resumeSubmissionId") ? string("resumeSubmissionId") : nil,
-                    confirmLegacyDraftRecovery: arguments["confirmLegacyDraftRecovery"] as? Bool ?? false)
+                    confirmLegacyDraftRecovery: ReleaseWorkflowArguments.optionalBoolean("confirmLegacyDraftRecovery", arguments: arguments))
             default: throw MCPServerService.MCPError.invalidToolArgs
             }
         }
@@ -125,7 +128,7 @@ enum ReleaseWorkflowArguments {
             allowed = ["projectId", "projectPath", "releaseTargetId", "appId", "bundleId", "platform",
                        "accountKey", "versionId", "buildId", "releaseMode", "reviewItems"]
         case "release_prepare_resubmission":
-            allowed = ["operationId", "accountKey", "releaseTargetId", "submissionId"]
+            allowed = ["operationId", "accountKey", "releaseTargetId", "submissionId", "resolveRejectedItems"]
         case "release_validate", "release_status":
             allowed = ["operationId", "accountKey", "releaseTargetId"]
         case "release_submit":
@@ -134,6 +137,14 @@ enum ReleaseWorkflowArguments {
         default: throw MCPServerService.MCPError.invalidToolArgs
         }
         guard Set(arguments.keys).isSubset(of: allowed) else { throw MCPServerService.MCPError.invalidToolArgs }
+    }
+
+    static func optionalBoolean(_ key: String, arguments: [String: Any]) throws -> Bool {
+        guard let value = arguments[key] else { return false }
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else {
+            throw MCPServerService.MCPError.invalidToolArgs
+        }
+        return number.boolValue
     }
 
     static func reviewItems(_ arguments: [String: Any]) throws -> [ReleaseReviewItem] {

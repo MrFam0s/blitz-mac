@@ -19,7 +19,8 @@ Read `~/.blitz/bin/blitz-neo release --help` first. Keep Blitz Neo running. Pref
 this CLI even when a chat has an old MCP tool list; never fall back to raw ASC/API
 submission to bypass a missing capability or a blocked check. Use the shared ASC
 CLI for builds, uploads and metadata, and the Blitz CLI for the final workflow.
-If the intended release is already submitted, reconcile/report it instead of
+If the intended release is currently waiting for review, in review or approved,
+reconcile/report its current state instead of
 creating another update. Ask only about a genuinely ambiguous target, missing
 product fact or requested change of scope, not to reconfirm this same authorized
 submission after discovering its exact version/build.
@@ -34,6 +35,12 @@ again. Copying or reading an old handoff does not authorize a different release.
 Creating a new App Store record is a separate operation. Use the confirmed identity
 handoff and `asc-app-create-ui` for that step; its successful completion does not
 authorize submitting the first version.
+
+For an authorized resubmission or review continuation of the same build, route
+to "Updated review after an acknowledged rejection" before ordinary new-version
+or build preparation. Historical `state: submitted` is not proof of current review,
+and `READY_FOR_REVIEW` is prepared but unsent. Do not replace the version/build
+or create another review merely because the ordinary editable-state gate fails.
 
 ## Establish the target and product facts
 
@@ -164,15 +171,27 @@ the existing submission and all its selected items before continuing.
 For the same already authorized app/build and selected product versions, use
 `blitz-neo release prepare-resubmission --request <JSON-file>` with the original
 acknowledged `operationId`, original `accountKey`, and exact `submissionId`.
-This reads Apple and creates a new operation/digest for current protected content;
-it does not send, resolve, remove or add review items. The old journal is preserved.
-Only a uniquely identified existing review with the exact original selection and
-all items ready for review is eligible. Follow ordinary `validate` and `submit`
-on the returned new operation and its fresh confirmation digest. Do not reuse the
-old digest. No further user approval is needed for unchanged already authorized
-release scope, but a changed app/build/product selection needs a new scoped plan.
-After sending, read back that same review and its complete item set in a submitted
-review state. An uncertain final send allows `status` only, never blind replay.
+This reads Apple and creates a fresh confirmation operation/digest for the same
+complete item set. It preserves the old journal and performs no Apple writes.
+If any selected review items remain rejected, verify their actual corrections
+first and use `resolveRejectedItems: true` only when the user authorized their
+resolution and resubmission. Inspect the exact item IDs recorded in the plan.
+A message reply never proves resolution; never mark uncorrected issues resolved.
+Accepted siblings are preserved, not resent as changed items. Missing, unknown,
+removed, foreign or ambiguous items remain blocking.
+
+Validate and explicitly submit the returned operation with its fresh digest.
+This resolves only planned rejected items, verifies their states and resubmits
+that same review. It never creates a replacement review, resets the journal or
+changes build/product selection. Existing authorization persists for unchanged
+scope; a different app/build/product set needs a new scoped plan.
+
+Report `reviewOutcome` and `nextAction` alongside current Apple/submission/item
+states. Historical `state: submitted`, a reply, and `READY_FOR_REVIEW` are not
+proof of a newly queued review. After uncertainty read `status`. Only an explicit
+`resumableResubmissionId` allows continuing that same confirmation operation with
+`resumeSubmissionId`, its unchanged digest and `confirm: true`; it proves a safe
+pre-final-send boundary. An uncertain final submit permits status only, no replay.
 
 If `status` returns `resumableSubmissionId`, it has identified a unique existing
 unsubmitted draft for this same operation. Verify that ID against the saved release

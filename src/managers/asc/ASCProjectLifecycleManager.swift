@@ -37,6 +37,7 @@ extension ASCManager {
         let selectedVersionId: String?
         let selectedVersionBuild: ASCBuild?
         let reviewSubmissions: [ASCReviewSubmission]
+        let reviewSubmissionDataComplete: Bool
         let reviewSubmissionItemsBySubmissionId: [String: [ASCReviewSubmissionItem]]
         let latestSubmissionItems: [ASCReviewSubmissionItem]
         let submissionHistoryEvents: [ASCSubmissionHistoryEvent]
@@ -96,6 +97,7 @@ extension ASCManager {
             selectedVersionId = manager.selectedVersionId
             selectedVersionBuild = manager.selectedVersionBuild
             reviewSubmissions = manager.reviewSubmissions
+            reviewSubmissionDataComplete = manager.reviewSubmissionDataComplete
             reviewSubmissionItemsBySubmissionId = manager.reviewSubmissionItemsBySubmissionId
             latestSubmissionItems = manager.latestSubmissionItems
             submissionHistoryEvents = manager.submissionHistoryEvents
@@ -148,6 +150,7 @@ extension ASCManager {
             manager.selectedVersionId = selectedVersionId
             manager.selectedVersionBuild = selectedVersionBuild
             manager.reviewSubmissions = reviewSubmissions
+            manager.reviewSubmissionDataComplete = reviewSubmissionDataComplete
             manager.reviewSubmissionItemsBySubmissionId = reviewSubmissionItemsBySubmissionId
             manager.latestSubmissionItems = latestSubmissionItems
             manager.submissionHistoryEvents = submissionHistoryEvents
@@ -448,6 +451,8 @@ extension ASCManager {
         versionCreationError = nil
         writeError = nil
         reviewSubmissions = []
+        reviewSubmissionDataComplete = false
+        reviewSubmissionRefreshID = nil
         reviewSubmissionItemsBySubmissionId = [:]
         latestSubmissionItems = []
         submissionHistoryEvents = []

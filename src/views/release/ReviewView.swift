@@ -135,14 +135,12 @@ struct ReviewView: View {
                     .background(.background.secondary)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
+                    ASCReviewProgressView(progress: ASCReviewProgress(asc: asc, version: version))
+
                     // Rejection detail — shown when rejected, or when cached feedback persists after re-submission
                     if let rejectionCardVersion,
                        rejectionCardVersion.id == version.id {
-                        RejectionCardView(asc: asc, version: rejectionCardVersion) {
-                            Text(L10n.tr("Aktualisiere die Prüfungsangaben unten und reiche die Version anschließend erneut ein."))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        RejectionCardView(asc: asc, version: rejectionCardVersion) { EmptyView() }
                     }
                 }
 

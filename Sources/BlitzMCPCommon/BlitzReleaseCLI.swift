@@ -13,7 +13,7 @@ public enum BlitzReleaseCLI {
       targets   List this explicitly named project's configured release targets.
       context   Read the explicitly requested project's current MCP target.
       prepare   Record an exact app/build and selected product versions; no Apple writes.
-      prepare-resubmission  Prepare a new attempt for an already resolved rejected review.
+      prepare-resubmission  Plan corrections and resubmission of the same rejected review.
       validate  Refresh readiness and the prepared content fingerprint.
       status    Reconcile a saved operation with Apple; no Apple writes.
       submit    Submit only a validated, unchanged operation with its digest.
@@ -37,12 +37,19 @@ public enum BlitzReleaseCLI {
     cannot prove this. No new user approval is needed for unchanged already
     authorized scope, but an unknown old submit outcome must remain blocked.
 
-    After resolving rejected items in App Store Connect, prepare-resubmission
-    accepts the previous operationId, accountKey and exact submissionId. It reads
-    Apple and creates a new operation/digest for the current metadata and the same
-    complete item set. Validate and submit that new operation normally. This never
-    resolves items, creates another review, or recovers an uncertain final submit.
-    Historical state=submitted is not a current queue status; inspect submissionState.
+    prepare-resubmission accepts the previous operationId, accountKey and exact
+    submissionId. It reads Apple and creates a new operation/digest for the same
+    app/build and complete item set. If rejected items remain, set
+    resolveRejectedItems=true only after verifying and authorizing their corrections.
+    This records the exact item IDs to resolve but performs no Apple writes.
+    Validate and explicitly submit the new operation: only its planned rejected
+    items are marked resolved, then that same review is resubmitted. Accepted items
+    remain untouched. No replacement draft is created. A reply is not resubmission.
+    Historical state=submitted is not a current queue status; inspect reviewOutcome,
+    nextAction and submissionState. READY_FOR_REVIEW still needs the final send.
+    After uncertainty, read status. Only an explicit resumableResubmissionId allows
+    continuation of that same child using resumeSubmissionId and the same digest;
+    an uncertain final send never permits replay.
 
     Preparation and validation do not authorize submission. Submission requires
     the user's instruction for the exact app, version, build and release mode.
@@ -117,8 +124,13 @@ public enum BlitzReleaseCLI {
         if !failed, messages.count == 1,
            let record = try? JSONSerialization.jsonObject(with: Data(messages[0].utf8)) as? [String: Any] {
             let currentSubmission = record["submissionState"] as? String
-            let currentReviewNotSubmitted = currentSubmission.map { !["WAITING_FOR_REVIEW", "IN_REVIEW", "COMPLETING", "COMPLETE"].contains($0) } ?? false
-            let incomplete = (tool == "release_submit" && (record["state"] as? String != "submitted" || currentReviewNotSubmitted))
+            let queueConfirmed = ["WAITING_FOR_REVIEW", "IN_REVIEW", "COMPLETING", "COMPLETE"].contains(currentSubmission ?? "")
+            let versionConfirmed = ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
+                                    "PROCESSING_FOR_APP_STORE", "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "ACCEPTED"]
+                .contains(record["appleState"] as? String ?? "")
+            let currentConfirmed = queueConfirmed && versionConfirmed &&
+                (record["reviewOutcome"] == nil || record["reviewOutcome"] as? String == "submitted")
+            let incomplete = (tool == "release_submit" && (record["state"] as? String != "submitted" || !currentConfirmed))
                 || (tool == "release_validate" && (record["validation"] as? [String: Any])?["ready"] as? Bool != true)
             return (try encode(record), incomplete)
         }

@@ -24,6 +24,15 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
   und ihre exakten Metadaten-Versionen samt nötiger neuer Abo-Gruppen als
   `reviewItems` in denselben Blitz-Vorgang aufnehmen. Keine automatische Auswahl
   aller offenen Produkte und keine getrennte direkte Einreichung.
+- **„Erneut einreichen“ / „Prüfung fortsetzen“**: Nutze den Abschnitt zur
+  Wiedervorlage im Skill `blitz-release`. Antworte nicht mit „eingereicht“, nur
+  weil eine Nachricht gesendet wurde oder ein früherer Vorgang `submitted` heißt.
+  Prüfe die aktuelle Übermittlung und ihre exakten Bestandteile. Korrigierte
+  abgelehnte Bestandteile müssen wieder bereitgestellt und dieselbe Übermittlung
+  anschließend erneut abgesendet werden. Dafür `prepare-resubmission`, `validate`
+  und das bestätigte `submit` nutzen; `resolveRejectedItems: true` nur für belegbar
+  korrigierte, zur Wiedervorlage autorisierte Bestandteile. Bei unklarem Ausgang
+  ausschließlich den bestehenden Vorgang abgleichen.
 - **„App im App Store neu erstellen“** (auch „App im AppStore neu erstellen“):
   Lies `.agents/skills/asc-app-create-ui/SKILL.md`. Prüfe zuerst lesend, ob der
   passende App-Datensatz bereits existiert. Falls nicht, nutze das Blitz-

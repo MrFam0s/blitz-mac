@@ -2147,19 +2147,18 @@ final class AppStoreConnectService {
     // MARK: - Fetch Review Submissions
 
     func fetchReviewSubmissions(appId: String) async throws -> [ASCReviewSubmission] {
-        let resp = try await get("reviewSubmissions", queryItems: [
+        let submissions = try await getAllPages("reviewSubmissions", queryItems: [
             URLQueryItem(name: "filter[app]", value: appId),
-            URLQueryItem(name: "limit", value: "10")
-        ], as: ASCPaginatedResponse<ASCReviewSubmission>.self)
-        return sortReviewSubmissions(resp.data)
+            URLQueryItem(name: "limit", value: "200")
+        ], as: ASCReviewSubmission.self)
+        return sortReviewSubmissions(submissions)
     }
 
     func fetchReviewSubmissionItems(submissionId: String) async throws -> [ASCReviewSubmissionItem] {
-        let resp = try await get("reviewSubmissions/\(submissionId)/items", queryItems: [
-            URLQueryItem(name: "limit", value: "50"),
+        try await getAllPages("reviewSubmissions/\(submissionId)/items", queryItems: [
+            URLQueryItem(name: "limit", value: "200"),
             URLQueryItem(name: "include", value: "appStoreVersion"),
-        ], as: ASCPaginatedResponse<ASCReviewSubmissionItem>.self)
-        return resp.data
+        ], as: ASCReviewSubmissionItem.self)
     }
 
     private func sortReviewSubmissions(_ submissions: [ASCReviewSubmission]) -> [ASCReviewSubmission] {
@@ -2172,6 +2171,9 @@ final class AppStoreConnectService {
         return submissions
             .enumerated()
             .sorted { lhs, rhs in
+                let lhsActive = ASCReviewSubmission.isActive(lhs.element.attributes.state)
+                let rhsActive = ASCReviewSubmission.isActive(rhs.element.attributes.state)
+                if lhsActive != rhsActive { return lhsActive }
                 let lhsDate = reviewSubmissionDate(
                     lhs.element.attributes.submittedDate,
                     fractionalFormatter: fractionalFormatter,

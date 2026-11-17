@@ -70,3 +70,21 @@ private func completeContent() -> [[String: Any]] {
         platform: "IOS", accountKey: "issuer:key", versionID: "version1", buildID: "build1")
     #expect(!ReleaseSubmissionContents(items: items, target: appOnly, submissionID: "draft1").complete)
 }
+
+
+@Test func resubmissionContentsKeepAcceptedItemsButNeverRemovedUnknownOrPartialSelections() {
+    var items = completeContent()
+    items[1]["attributes"] = ["state": "ACCEPTED"]
+    items[2]["attributes"] = ["state": "APPROVED"]
+    let ready = ReleaseSubmissionContents(items: items, target: contentTarget(), submissionID: "draft1")
+    #expect(ready.canResubmit && !ready.ready && !ready.canResolve)
+    items[0]["attributes"] = ["state": "REJECTED"]
+    let rejected = ReleaseSubmissionContents(items: items, target: contentTarget(), submissionID: "draft1")
+    #expect(!rejected.canResubmit && rejected.canResolve && rejected.rejectedItemIDs == ["item-version1"])
+    for state in ["REMOVED", "UNKNOWN", "WAITING_FOR_REVIEW"] {
+        items[0]["attributes"] = ["state": state]
+        let invalid = ReleaseSubmissionContents(items: items, target: contentTarget(), submissionID: "draft1")
+        #expect(!invalid.canResubmit && !invalid.canResolve)
+    }
+    #expect(!ReleaseSubmissionContents(items: Array(items.dropLast()), target: contentTarget(), submissionID: "draft1").canResolve)
+}

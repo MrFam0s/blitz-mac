@@ -18,6 +18,77 @@ private actor JointAdapterFixture {
     var secondActiveReview = false
     var alteredBuild = false
     var releaseMode = "MANUAL"
+    var resolutionReplyLost = false
+    var resolutionRequestApplied = false
+    var mutateAfterResolution: String?
+
+    func setMixedReviewStates(appAccepted: Bool = false) {
+        let states = appAccepted ? ["ACCEPTED", "READY_FOR_REVIEW", "READY_FOR_REVIEW", "REJECTED"] : ["REJECTED", "REJECTED", "ACCEPTED", "READY_FOR_REVIEW"]
+        for index in items.indices { items[index]["attributes"] = ["state": states[index]] }
+        syncProductStates()
+    }
+
+    private func syncProductStates() {
+        for item in items {
+            guard let state = (item["attributes"] as? [String: Any])?["state"] as? String,
+                  let relations = item["relationships"] as? [String: [String: Any]],
+                  let selected = relations.first(where: { !["reviewSubmission", "appStoreVersion"].contains($0.key) })?.value["data"] as? [String: String],
+                  let id = selected["id"] else { continue }
+            let parentCatalog = selected["type"] == "inAppPurchaseVersions" ? "/v1/apps/app1/inAppPurchasesV2" :
+                (selected["type"] == "subscriptionVersions" ? "/v1/subscriptionGroups/group1/subscriptions" : nil)
+            if let parentCatalog {
+                var parent = products.lists[parentCatalog]![0], attrs = parent["attributes"] as! [String: Any]
+                attrs["state"] = state == "REJECTED" ? "REJECTED" : (["ACCEPTED", "APPROVED"].contains(state) ? "APPROVED" : "READY_TO_SUBMIT")
+                parent["attributes"] = attrs; products.lists[parentCatalog]![0] = parent
+            }
+            for key in Array(products.singles.keys) where products.singles[key]?["id"] as? String == id {
+                var value = products.singles[key]!, attrs = value["attributes"] as! [String: Any]
+                attrs["state"] = state; value["attributes"] = attrs; products.singles[key] = value
+            }
+            for key in Array(products.lists.keys) where key.hasSuffix("/versions") {
+                products.lists[key] = products.lists[key]!.map { value in
+                    guard value["id"] as? String == id else { return value }
+                    var value = value, attrs = value["attributes"] as! [String: Any]
+                    attrs["state"] = state; value["attributes"] = attrs; return value
+                }
+            }
+        }
+    }
+
+    func configureResolution(lost: Bool = false, applied: Bool = false, alteration: String? = nil) {
+        resolutionReplyLost = lost; resolutionRequestApplied = applied; mutateAfterResolution = alteration
+    }
+
+    func currentVersionState() -> String {
+        if submitted { return "WAITING_FOR_REVIEW" }
+        if rejectedReview, let state = (items.first?["attributes"] as? [String: String])?["state"],
+           ["REJECTED", "ACCEPTED"].contains(state) { return state }
+        return items.isEmpty ? "PREPARE_FOR_SUBMISSION" : "READY_FOR_REVIEW"
+    }
+
+    func validationChecks() -> [[String: Any]] {
+        guard rejectedReview else { return [] }
+        var checks: [[String: Any]] = []
+        if currentVersionState() == "ACCEPTED" {
+            checks.append(["id": "version.state.editable", "severity": "error", "field": "appVersionState",
+                           "message": "version is in non-editable state \"ACCEPTED\""])
+        }
+        for (path, type, checkID, prefix) in [
+            ("/v1/apps/app1/inAppPurchasesV2", "inAppPurchaseV2", "iap.review_readiness.needs_attention", "IAP"),
+            ("/v1/subscriptionGroups/group1/subscriptions", "subscription", "subscriptions.review_readiness.needs_attention", "Subscription")] {
+            for parent in products.lists[path] ?? [] {
+                let state = (parent["attributes"] as? [String: Any])?["state"] as? String ?? ""
+                if ["REJECTED", "READY_TO_SUBMIT"].contains(state) {
+                    checks.append(["id": checkID, "severity": "warning", "field": "state", "resourceType": type,
+                                   "resourceId": parent["id"]!, "message": "\(prefix) \"Fixture\" is \(state)"])
+                }
+            }
+        }
+        return checks
+    }
+
+    func resolutionWrites() -> [String] { writes.filter { $0.0 == "PATCH" && $0.1.hasPrefix("/v1/reviewSubmissionItems/") }.map(\.1) }
+
 
     func resolveRejectedReview(alteration: String? = nil) {
         submitted = false; rejectedReview = true
@@ -96,11 +167,26 @@ private actor JointAdapterFixture {
                 }
                 if failItemKey == key && loseItemReply { throw URLError(.timedOut) }
                 envelope = ["data": resource("reviewSubmissionItems", id, [:], nil)]
+            } else if method == "PATCH", path.hasPrefix("/v1/reviewSubmissionItems/") {
+                let id = String(path.split(separator: "/").last!)
+                let index = try #require(items.firstIndex { $0["id"] as? String == id })
+                let data = try #require(payload["data"] as? [String: Any])
+                #expect(data["id"] as? String == id && data["type"] as? String == "reviewSubmissionItems")
+                let attributes = try #require(data["attributes"] as? [String: Bool])
+                #expect(attributes == ["resolved": true])
+                #expect((items[index]["attributes"] as? [String: Any])?["state"] as? String == "REJECTED")
+                if !resolutionReplyLost || resolutionRequestApplied {
+                    items[index]["attributes"] = ["state": "READY_FOR_REVIEW"]
+                    syncProductStates()
+                }
+                if let mutateAfterResolution { alterResolvedReview(mutateAfterResolution) }
+                if resolutionReplyLost { throw URLError(.timedOut) }
+                envelope = ["data": items[index]]
             } else if method == "PATCH", path == "/v1/reviewSubmissions/draft1" {
                 if !finalReplyLost || finalRequestApplied {
                     submitted = true; rejectedReview = false
                     products.setVersionState("WAITING_FOR_REVIEW")
-                    items = items.map { value in var value = value; value["attributes"] = ["state": "WAITING_FOR_REVIEW"]; return value }
+                    // Item state stays READY_FOR_REVIEW/ACCEPTED; queue status belongs to the submission.
                 }
                 if finalReplyLost { throw URLError(.timedOut) }
                 envelope = ["data": resource("reviewSubmissions", "draft1", [:], nil)]
@@ -108,12 +194,11 @@ private actor JointAdapterFixture {
         } else if let productEnvelope = products.response(for: path) {
             envelope = productEnvelope
         } else {
-            let appAttached = items.contains { ($0["relationships"] as? [String: Any])?["appStoreVersion"] != nil }
             switch url.path {
             case "/v1/apps/app1": envelope = ["data": resource("apps", "app1", ["bundleId": "org.example.App", "name": "App"], nil)]
             case "/v1/apps/app1/appStoreVersions":
                 envelope = ["data": [resource("appStoreVersions", "version1", ["platform": "IOS", "versionString": "1.0", "releaseType": releaseMode,
-                    "appStoreState": submitted ? "WAITING_FOR_REVIEW" : (appAttached ? "READY_FOR_REVIEW" : "PREPARE_FOR_SUBMISSION")], nil)]]
+                    "appStoreState": currentVersionState()], nil)]]
             case "/v1/appStoreVersions/version1/build": envelope = ["data": ["id": alteredBuild ? "otherBuild" : "build8", "type": "builds"]]
             case "/v1/appStoreVersions/version1/appStoreVersionLocalizations", "/v1/apps/app1/appInfos": envelope = ["data": []]
             case "/v1/appStoreVersions/version1/appStoreReviewDetail": envelope = ["data": NSNull()]
@@ -137,7 +222,7 @@ private actor JointAdapterFixture {
     func writeCounts() -> (drafts: Int, items: Int, submits: Int) {
         (writes.filter { $0.0 == "POST" && $0.1 == "/v1/reviewSubmissions" }.count,
          writes.filter { $0.1 == "/v1/reviewSubmissionItems" }.count,
-         writes.filter { $0.0 == "PATCH" }.count)
+         writes.filter { $0.0 == "PATCH" && $0.1 == "/v1/reviewSubmissions/draft1" }.count)
     }
 }
 
@@ -150,13 +235,14 @@ private func jointAdapter(_ fixture: JointAdapterFixture) -> ReleaseWorkflowASCA
             build.preReleaseVersion = .init(id: "pre1", attributes: .init(version: "1.0", platform: "IOS"))
             return build
         }, readinessReport: { target in
+            let checks = await fixture.validationChecks()
             let report: [String: Any] = ["appId": target.appID, "versionId": target.versionID, "platform": target.platform,
-                "checks": [], "summary": ["blocking": 0, "warnings": 0],
+                "checks": checks, "summary": ["blocking": checks.count, "warnings": checks.filter { $0["severity"] as? String == "warning" }.count],
                 "deep": ["checks": [], "summary": ["blocked": 0, "unverified": 0]]]
             let passed = ReleaseWebEvidence.Check(status: "passed", reason: "synthetic_fixture")
             return .init(report: try JSONSerialization.data(withJSONObject: report), web: .init(appId: target.appID,
                 bundleId: target.bundleID, bindingVerified: true, bindingReason: "synthetic_fixture", appleId: "fixture@example.invalid",
-                providerId: "provider1", programLicense: passed, businessFree: passed, businessPaid: passed), exitCode: 0)
+                providerId: "provider1", programLicense: passed, businessFree: passed, businessPaid: passed), exitCode: checks.isEmpty ? 0 : 1)
         })
 }
 
@@ -364,4 +450,110 @@ private func rejectedJointReview(_ fixture: JointAdapterFixture, root: URL) asyn
         }
         #expect(await fixture.writeCounts().submits == 1)
     }
+}
+
+
+@Test func jointResolutionRequiresNewExplicitPlanAndPreservesAcceptedSiblings() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = JointAdapterFixture()
+    let (service, old) = try await rejectedJointReview(fixture, root: root)
+    await fixture.setMixedReviewStates()
+    let status = try await service.status(operationID: old.operationID, accountKey: old.target.accountKey)
+    #expect(status.state == .submitted && status.reviewOutcome == "issuesUnresolved")
+    #expect(status.nextAction == "resolveReviewIssues" && status.resolvableSubmissionID == "draft1")
+    #expect(status.resubmittableSubmissionID == nil)
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.prepareResubmission(operationID: old.operationID, accountKey: old.target.accountKey, submissionID: "draft1")
+    }
+    let plan = try await service.prepareResubmission(operationID: old.operationID, accountKey: old.target.accountKey,
+        submissionID: "draft1", resolveRejectedItems: true)
+    #expect(plan.resubmission?.itemIDsToResolve?.count == 2)
+    #expect(await fixture.resolutionWrites().isEmpty)
+    _ = try await service.validate(operationID: plan.operationID, accountKey: plan.target.accountKey)
+    let done = try await service.submit(operationID: plan.operationID, accountKey: plan.target.accountKey, confirmationDigest: plan.confirmationDigest)
+    #expect(done.state == .submitted && done.reviewOutcome == "submitted")
+    #expect(done.submissionState == "WAITING_FOR_REVIEW")
+    let resolved = await fixture.resolutionWrites()
+    #expect(Set(resolved) == Set((plan.resubmission?.itemIDsToResolve ?? []).map { "/v1/reviewSubmissionItems/\($0)" }))
+    let counts = await fixture.writeCounts()
+    #expect(counts.drafts == 1 && counts.items == 4 && counts.submits == 2)
+}
+
+@Test func jointResolutionStopsOnChangedContentOrIdentityBeforeFinalSubmit() async throws {
+    for alteration in ["metadata", "missing", "extra", "itemIdentity", "productItemIdentity", "secondReview", "build", "mode"] {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixture = JointAdapterFixture()
+        let (service, old) = try await rejectedJointReview(fixture, root: root)
+        await fixture.setMixedReviewStates()
+        let plan = try await service.prepareResubmission(operationID: old.operationID, accountKey: old.target.accountKey,
+            submissionID: "draft1", resolveRejectedItems: true)
+        _ = try await service.validate(operationID: plan.operationID, accountKey: plan.target.accountKey)
+        await fixture.configureResolution(alteration: alteration)
+        await #expect(throws: (any Error).self) {
+            try await service.submit(operationID: plan.operationID, accountKey: plan.target.accountKey, confirmationDigest: plan.confirmationDigest)
+        }
+        #expect(await fixture.resolutionWrites().count == 1)
+        #expect(await fixture.writeCounts().submits == 1)
+    }
+}
+
+@Test func jointResolutionLostReplyOnlyContinuesAfterReadProvesAppliedAndNeverDuplicatesWrite() async throws {
+    for applied in [false, true] {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixture = JointAdapterFixture()
+        let (service, old) = try await rejectedJointReview(fixture, root: root)
+        await fixture.setMixedReviewStates()
+        let plan = try await service.prepareResubmission(operationID: old.operationID, accountKey: old.target.accountKey,
+            submissionID: "draft1", resolveRejectedItems: true)
+        _ = try await service.validate(operationID: plan.operationID, accountKey: plan.target.accountKey)
+        await fixture.configureResolution(lost: true, applied: applied)
+        await #expect(throws: ReleaseWorkflowError.self) {
+            try await service.submit(operationID: plan.operationID, accountKey: plan.target.accountKey, confirmationDigest: plan.confirmationDigest)
+        }
+        let restarted = ReleaseWorkflowService(directory: root, api: jointAdapter(fixture))
+        let status = try await restarted.status(operationID: plan.operationID, accountKey: plan.target.accountKey)
+        #expect(status.resumableResubmissionID == (applied ? "draft1" : nil))
+        #expect(status.resumableSubmissionID == nil)
+        await fixture.configureResolution()
+        if applied {
+            let done = try await restarted.submit(operationID: plan.operationID, accountKey: plan.target.accountKey,
+                confirmationDigest: plan.confirmationDigest, resumeSubmissionID: "draft1")
+            #expect(done.state == .submitted)
+            let writes = await fixture.resolutionWrites()
+            #expect(writes.count == 2 && Set(writes).count == 2)
+        } else {
+            await #expect(throws: ReleaseWorkflowError.self) {
+                try await restarted.submit(operationID: plan.operationID, accountKey: plan.target.accountKey,
+                    confirmationDigest: plan.confirmationDigest, resumeSubmissionID: "draft1")
+            }
+            #expect(await fixture.resolutionWrites().count == 1)
+        }
+    }
+}
+
+
+@Test func jointResolutionRetainsAcceptedAppWhileResolvingSubscriptionAndUsesRealStateFindings() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = JointAdapterFixture()
+    let (service, old) = try await rejectedJointReview(fixture, root: root)
+    await fixture.setMixedReviewStates(appAccepted: true)
+    let status = try await service.status(operationID: old.operationID, accountKey: old.target.accountKey)
+    #expect(status.appleState == "ACCEPTED" && status.reviewOutcome == "issuesUnresolved")
+    #expect(status.resolvableSubmissionID == "draft1")
+    let plan = try await service.prepareResubmission(operationID: old.operationID, accountKey: old.target.accountKey,
+        submissionID: "draft1", resolveRejectedItems: true)
+    let ordinary = try await jointAdapter(fixture).readiness(plan.target)
+    #expect(!ordinary.ready)
+    let checked = try await service.validate(operationID: plan.operationID, accountKey: plan.target.accountKey)
+    #expect(checked.validation?.ready == true)
+    #expect(checked.validation?.diagnostics?.contains { $0.reason == "accepted_app_item_retained_in_exact_resubmission" } == true)
+    #expect(checked.validation?.diagnostics?.contains { $0.reason == "retained_product_state_verified_for_explicit_resubmission" } == true)
+    let done = try await service.submit(operationID: plan.operationID, accountKey: plan.target.accountKey, confirmationDigest: plan.confirmationDigest)
+    #expect(done.reviewOutcome == "submitted")
+    #expect(await fixture.resolutionWrites() == ["/v1/reviewSubmissionItems/item-sub-version"])
+    #expect(await fixture.writeCounts().drafts == 1)
 }

@@ -833,3 +833,23 @@ private func legacyPending(_ record: ReleaseWorkflowRecord, root: URL, legacyDig
     }
     #expect(await fixture.writes.count == 3)
 }
+
+
+@Test func currentSubmissionOutcomeRequiresBothCurrentReviewAndVersionEvidence() {
+    for versionState in ["REJECTED", "METADATA_REJECTED", "DEVELOPER_REJECTED", "READY_FOR_REVIEW", "PREPARE_FOR_SUBMISSION", "UNKNOWN"] {
+        for reviewState in ["WAITING_FOR_REVIEW", "IN_REVIEW", "COMPLETE"] {
+            var snapshot = workflowSnapshot(state: versionState)
+            snapshot.submissionState = reviewState
+            #expect(!snapshot.currentlySubmitted)
+        }
+    }
+    for reviewState in ["UNRESOLVED_ISSUES", "READY_FOR_REVIEW", "CANCELING", "UNKNOWN"] {
+        var snapshot = workflowSnapshot(state: "ACCEPTED")
+        snapshot.submissionState = reviewState
+        #expect(!snapshot.currentlySubmitted)
+    }
+    var queued = workflowSnapshot(state: "WAITING_FOR_REVIEW")
+    #expect(queued.currentlySubmitted)
+    queued.submissionState = nil
+    #expect(!queued.currentlySubmitted)
+}

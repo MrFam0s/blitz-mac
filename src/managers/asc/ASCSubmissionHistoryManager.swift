@@ -60,14 +60,22 @@ extension ASCManager {
         let normalizedVersionId = trimmed(versionId)
         guard !normalizedVersionId.isEmpty else { return latestSubmissionItems }
 
-        for submission in reviewSubmissions {
-            let items = reviewSubmissionItemsBySubmissionId[submission.id] ?? []
-            if items.contains(where: { trimmed($0.appStoreVersionId) == normalizedVersionId }) {
-                return items
-            }
-        }
+        guard let submission = currentReviewSubmission(forVersionId: normalizedVersionId) else { return [] }
+        return reviewSubmissionItemsBySubmissionId[submission.id] ?? []
+    }
 
-        return []
+    /// Exact version membership takes precedence over dates. An undated active
+    /// draft must not be hidden by a completed historical review. Multiple active
+    /// matches are ambiguous and do not establish one actionable review.
+    func currentReviewSubmission(forVersionId versionId: String) -> ASCReviewSubmission? {
+        let matches = reviewSubmissions.filter { submission in
+            reviewSubmissionItemsBySubmissionId[submission.id]?.contains {
+                trimmed($0.appStoreVersionId) == versionId
+            } == true
+        }
+        let active = matches.filter { ASCReviewSubmission.isActive($0.attributes.state) }
+        if !active.isEmpty { return active.count == 1 ? active.first : nil }
+        return matches.max { historyDate($0.attributes.submittedDate) < historyDate($1.attributes.submittedDate) }
     }
 
     func hasRejectedSubmissionHistory(forVersionId versionId: String?) -> Bool {
@@ -108,18 +116,19 @@ extension ASCManager {
     ) async {
         let revision = projectRevision
         guard !Task.isCancelled, isCurrent?() != false else { return }
+        let requestID = UUID()
+        reviewSubmissionRefreshID = requestID
+        reviewSubmissionDataComplete = false
         await ASCUpdateLogger.shared.event("review_submission_refresh_started", metadata: [
             "appId": appId,
         ])
-        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
+        guard reviewSubmissionRefreshID == requestID, projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
 
         let submissions: [ASCReviewSubmission]
         do {
-            submissions = try await service.fetchReviewSubmissions(appId: appId).filter {
-                !trimmed($0.attributes.submittedDate).isEmpty
-            }
+            submissions = try await service.fetchReviewSubmissions(appId: appId)
         } catch {
-            guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
+            guard reviewSubmissionRefreshID == requestID, projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
             reviewSubmissions = []
             reviewSubmissionItemsBySubmissionId = [:]
             latestSubmissionItems = []
@@ -128,9 +137,10 @@ extension ASCManager {
             ])
             return
         }
-        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
+        guard reviewSubmissionRefreshID == requestID, projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
 
         guard !submissions.isEmpty else {
+            reviewSubmissionDataComplete = true
             reviewSubmissions = []
             reviewSubmissionItemsBySubmissionId = [:]
             latestSubmissionItems = []
@@ -156,15 +166,16 @@ extension ASCManager {
             }
 
             for await (submissionId, items, failure) in group {
-                itemsBySubmissionId[submissionId] = items
+                if failure == nil { itemsBySubmissionId[submissionId] = items }
                 if let failure {
                     itemFailures.append("\(submissionId): \(failure)")
                 }
             }
         }
 
-        guard projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
+        guard reviewSubmissionRefreshID == requestID, projectRevision == revision, !Task.isCancelled, isCurrent?() != false else { return }
         reviewSubmissions = submissions
+        reviewSubmissionDataComplete = itemFailures.isEmpty
         reviewSubmissionItemsBySubmissionId = itemsBySubmissionId
         latestSubmissionItems = itemsBySubmissionId[submissions.first?.id ?? ""] ?? []
         await ASCUpdateLogger.shared.event("review_submission_refresh_succeeded", metadata: [

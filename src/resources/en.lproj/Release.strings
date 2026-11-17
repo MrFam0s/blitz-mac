@@ -611,3 +611,30 @@
 "Der Nachrichtenabruf ist unvollständig. Bitte erneut laden." = "The message fetch is incomplete. Please reload.";
 
 "Die Nachrichten konnten nicht vollständig geladen werden." = "The messages could not be loaded completely.";
+
+"Noch nicht eingereicht" = "Not submitted yet";
+"Probleme vor erneuter Einreichung klären" = "Resolve issues before resubmitting";
+"Bereit zur Prüfung – noch nicht abgesendet" = "Ready for Review — not submitted yet";
+"Erneute Einreichung noch nicht abgesendet" = "Resubmission not sent yet";
+"Einreichung bestätigt – wartet auf Prüfung" = "Submission confirmed — waiting for review";
+"Apple prüft die Einreichung" = "Apple is reviewing the submission";
+"Prüfstatus nicht eindeutig bestätigt" = "Review status not clearly confirmed";
+"Prüfe Version, Build und Store-Angaben. Erst die Bestätigung in der Vorschau sendet die Einreichung an Apple." = "Check the version, build and Store information. Only confirmation in the preview sends the submission to Apple.";
+"Prüfe Apples Hinweise und behebe die offenen Punkte. Bestätige danach die geklärten Probleme und sende die bestehende Einreichung erneut ab. Eine Antwort allein führt diesen Schritt nicht aus." = "Review Apple's feedback and address the outstanding issues. Then confirm the resolved issues and resubmit the existing submission. A reply alone does not perform this step.";
+"Die Version ist für die Prüfung vorbereitet. Erst das Absenden startet die Einreichung bei Apple." = "The version is prepared for review. It is only submitted to Apple when you send it.";
+"Die bearbeiteten Elemente sind vorbereitet. Sende jetzt dieselbe Einreichung erneut zur App-Prüfung; ein neuer Entwurf ist dafür nicht erforderlich." = "The updated items are prepared. Resubmit this same submission to App Review; no new draft is needed.";
+"Die Einreichung ist bei Apple eingegangen. Eine weitere Einreichung ist derzeit nicht erforderlich." = "Apple has received the submission. No further submission is currently needed.";
+"Beachte den Versionsstatus für die Veröffentlichung. Frühere Rückfragen bleiben im Verlauf sichtbar." = "Check the version status for publication. Earlier questions remain visible in the history.";
+"Aktualisiere den Prüfstatus oder prüfe den bestehenden Vorgang in App Store Connect, bevor du erneut einreichst." = "Refresh the review status or inspect the existing submission in App Store Connect before resubmitting.";
+"Erneute Einreichung prüfen" = "Review resubmission";
+"Letzte Nachricht: Deine Antwort vom {0}" = "Latest message: your reply on {0}";
+"Letzte Nachricht: Apple vom {0}" = "Latest message: Apple on {0}";
+"Letzte Nachricht vom {0}" = "Latest message on {0}";
+"Prüfungsverlauf für Version {0}" = "Review history for version {0}";
+"Vorhandener Build: {0}" = "Existing build: {0}";
+"Ich habe Apples Hinweise geprüft und die abgelehnten Elemente korrigiert. Blitz darf diese Probleme als geklärt markieren und dieselbe Einreichung erneut absenden." = "I have reviewed Apple's feedback and corrected the rejected items. Blitz may mark these issues as resolved and resubmit the same submission.";
+"Erneut zur Prüfung einreichen" = "Resubmit for review";
+"Der Prüfstatus oder die offenen Probleme haben sich geändert. Bitte die Vorschau erneut öffnen und die bestehende Einreichung bestätigen." = "The review status or outstanding issues have changed. Reopen the preview and confirm the existing submission.";
+"Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt." = "The existing submission does not clearly match this release operation. Inspect the saved operation using the CLI or MCP; no new draft was created.";
+
+"Apples Versionsstatus und der Status der zugehörigen Einreichung widersprechen sich. Aktualisiere beide, bevor du daraus den nächsten Schritt ableitest." = "Apple’s version status and the associated submission status conflict. Refresh both before deciding the next step.";

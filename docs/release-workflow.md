@@ -322,21 +322,34 @@ If the rejected item is explicitly updated for review in App Store Connect,
 `READY_FOR_REVIEW` means prepared, not sent; the enclosing review may still be
 `UNRESOLVED_ISSUES` and retain its original submission date.
 
-Use the separate `prepare-resubmission` command for this state. Its request names
-the acknowledged original `operationId`, original `accountKey`, and exact
-`submissionId`. It reads Apple, preserves the old journal, and records a new
-operation with the same app, platform, build, release mode and selected product
-versions. Updated review notes and other current protected content receive a new
-confirmation digest. This command neither resolves rejected items nor sends them.
+Use `prepare-resubmission` with the acknowledged original `operationId`, original
+`accountKey`, and exact `submissionId`. It reads Apple, preserves the old journal,
+and records a fresh confirmation operation with the same app, platform, build,
+release mode and exact selected product versions. Current protected content gets
+a new digest. Preparation performs no Apple writes.
 
-The existing review must contain exactly the original app and product versions,
-with every item ready for review. No foreign, missing, removed or still-rejected
-item is accepted. The normal `validate` and explicitly confirmed `submit` steps
-then operate on the new operation. Submission sends only the existing review;
-it cannot create another review or attach additional items. Read back the same
-review and all selected items in an actual submitted review state before reporting
-success. After an uncertain send, use `status` only; never repeat the send to
-work around a timeout. The unsubmitted-draft recovery path remains separate.
+If rejected items still need updating, first verify that their actual issues have
+been corrected and that the user authorized continuing this exact release. Pass
+`"resolveRejectedItems": true` to include their exact review-item IDs in the plan.
+Without this option, rejected items remain blocked. Inspect the returned binding:
+a reply alone is never evidence that an issue was fixed, and the option is not a
+readiness waiver. Accepted siblings remain untouched. Unknown, foreign, missing,
+removed or ambiguous items fail closed.
+
+Run `validate` and explicitly confirmed `submit` on the new operation/digest.
+Submission rechecks identity, content, mode, readiness and the complete item set,
+marks only planned rejected items resolved, verifies their resulting states, then
+sends the same review. It cannot create another review, replace the build or add
+items. Report current `reviewOutcome`, `nextAction`, `appleState`, `submissionState`
+and `submissionItemStates`; historical `state: submitted` is not current success.
+`READY_FOR_REVIEW` means prepared but unsent. Confirm the same enclosing review
+has reached a submitted state before reporting resubmission.
+
+After uncertainty use `status`. Only `resumableResubmissionId` explicitly permits
+continuing the same confirmation operation via `submit.resumeSubmissionId` and
+its unchanged digest. It proves the earlier attempt stopped before final send;
+an uncertain final-send outcome remains read-only and must never be replayed.
+The ordinary unsubmitted-draft recovery path remains separate.
 
 Apple documents the item-update and final resubmission steps in
 [Manage a submission with unresolved issues](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/manage-a-submission-with-unresolved-issues).

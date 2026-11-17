@@ -193,18 +193,20 @@ private func integrityBuild(_ id: String = "build") -> ASCBuild {
     let onRead: () -> Void
     var onBuildRead: (() -> Void)?
     var candidateBuild = integrityMatchedBuild()
+    var versionState = "PREPARE_FOR_SUBMISSION"
+    var attachedBuild: ASCBuild?
     init(onRead: @escaping () -> Void = {}) { self.onRead = onRead }
     func fetchAppStoreVersions(appId: String) async throws -> [ASCAppStoreVersion] {
         calls.append("versions")
         onRead()
-        return [integrityVersion("draft", number: "1.10", state: "PREPARE_FOR_SUBMISSION"), integrityVersion()]
+        return [integrityVersion("draft", number: "1.10", state: versionState), integrityVersion()]
     }
     func fetchBuild(id: String) async throws -> ASCBuild {
         calls.append("build")
         onBuildRead?()
         return candidateBuild
     }
-    func fetchBuildAttachedToVersion(versionId: String) async throws -> ASCBuild? { calls.append("attached"); return integrityBuild() }
+    func fetchBuildAttachedToVersion(versionId: String) async throws -> ASCBuild? { calls.append("attached"); return attachedBuild ?? integrityBuild() }
     func attachBuild(versionId: String, buildId: String) async throws { calls.append("attach") }
     func submitForReview(appId: String, versionId: String) async throws { calls.append("submit") }
 }
@@ -260,4 +262,22 @@ private func integrityMatchedBuild(app: String = "app", marketing: String = "1.1
     #expect(service.calls == ["versions", "build", "attach", "submit"])
     #expect(manager.selectedVersionBuild?.id == "build")
     #expect(!manager.isSubmitting)
+}
+
+@MainActor @Test func readyForReviewPreservesAttachedBuildAndReachesSubmissionGate() async {
+    let manager = integrityManager(draft: true), service = IntegritySubmissionService()
+    service.versionState = "READY_FOR_REVIEW"
+    service.attachedBuild = integrityMatchedBuild()
+    #expect(await manager.submitForReview(using: service))
+    #expect(service.calls == ["versions", "attached", "submit"])
+}
+
+@MainActor @Test func readyForReviewRejectsReplacingBuildBeforeAnyMutation() async {
+    let manager = integrityManager(draft: true), service = IntegritySubmissionService()
+    service.versionState = "READY_FOR_REVIEW"
+    service.attachedBuild = integrityMatchedBuild()
+    #expect(await manager.submitForReview(attachBuildId: "build", using: service) == false)
+    #expect(service.calls == ["versions"])
+    #expect(await manager.attachBuild(buildId: "build", using: service) == false)
+    #expect(service.calls == ["versions", "versions"])
 }

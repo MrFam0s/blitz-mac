@@ -14,6 +14,22 @@ enum ReleaseProductSelection {
         let attachmentEvidence: [String: String]
         /// Parent IDs verified as ready within this explicit, fully checked plan.
         let readyIAPIDs: Set<String>
+        /// Exact parent states of retained items in the confirmed existing review.
+        var retainedProductStates: [String: String] = [:]
+
+        func coversRetainedReviewFinding(_ check: [String: Any]) -> Bool {
+            guard diagnostics.isEmpty, check["severity"] as? String == "warning", check["field"] as? String == "state",
+                  let type = check["resourceType"] as? String, let id = check["resourceId"] as? String,
+                  let state = retainedProductStates["\(type):\(id)"], ["REJECTED", "READY_TO_SUBMIT"].contains(state),
+                  let message = check["message"] as? String else { return false }
+            let expectedID: String, prefix: String
+            switch type {
+            case "inAppPurchaseV2": expectedID = "iap.review_readiness.needs_attention"; prefix = "IAP "
+            case "subscription": expectedID = "subscriptions.review_readiness.needs_attention"; prefix = "Subscription "
+            default: return false
+            }
+            return check["id"] as? String == expectedID && message.hasPrefix(prefix) && message.hasSuffix(" is \(state)")
+        }
 
         func coversReadyToSubmitFinding(_ check: [String: Any]) -> Bool {
             guard diagnostics.isEmpty, attachmentEvidence["iap.first_type_app_version_attachment"] != nil,
@@ -36,15 +52,16 @@ enum ReleaseProductSelection {
         }
     }
 
-    static func inspect(target: ReleaseWorkflowTarget, single: @escaping Single,
+    static func inspect(target: ReleaseWorkflowTarget, retainedReviewStates: [String: String] = [:], single: @escaping Single,
                         all: @escaping All) async throws -> Result {
         try target.validate()
         guard !target.reviewItems.isEmpty else { return .init(protectedContent: [], diagnostics: [], attachmentEvidence: [:], readyIAPIDs: []) }
-        return try await Reader(target: target, single: single, all: all).inspect()
+        return try await Reader(target: target, retainedReviewStates: retainedReviewStates, single: single, all: all).inspect()
     }
 
     private final class Reader {
         let target: ReleaseWorkflowTarget
+        let retainedReviewStates: [String: String]
         let single: Single
         let all: All
         var cachedLists: [String: [[String: Any]]] = [:]
@@ -52,12 +69,13 @@ enum ReleaseProductSelection {
         var selectedParents: Set<String> = []
         var selectedIAPTypes: Set<String> = []
         var readyIAPIDs: Set<String> = []
+        var retainedProductStates: [String: String] = [:]
         var selectedSubscriptionGroups: Set<String> = []
         var selectedGroupIDs: Set<String> = []
         var groupHistory: [String: [[String: Any]]] = [:]
 
-        init(target: ReleaseWorkflowTarget, single: @escaping Single, all: @escaping All) {
-            self.target = target; self.single = single; self.all = all
+        init(target: ReleaseWorkflowTarget, retainedReviewStates: [String: String], single: @escaping Single, all: @escaping All) {
+            self.target = target; self.retainedReviewStates = retainedReviewStates; self.single = single; self.all = all
         }
 
         func inspect() async throws -> Result {
@@ -125,6 +143,10 @@ enum ReleaseProductSelection {
                         issue(item.key, "product_identity_incomplete", status: "blocked")
                     }
                     let state = Self.text(attributes["state"])
+                    if let retained = retainedReviewStates[item.key], ["READY_FOR_REVIEW", "REJECTED", "ACCEPTED", "APPROVED"].contains(retained) {
+                        let type = item.type == .inAppPurchaseVersions ? "inAppPurchaseV2" : "subscription"
+                        retainedProductStates["\(type):\(parentID)"] = state
+                    }
                     if !Self.catalogStates.contains(state) { issue(item.key, "product_state_unverified") }
                     if ["MISSING_METADATA", "WAITING_FOR_UPLOAD", "PROCESSING_CONTENT", "DEVELOPER_ACTION_NEEDED"].contains(state) {
                         issue(item.key, "product_metadata_incomplete", status: "blocked")
@@ -182,7 +204,7 @@ enum ReleaseProductSelection {
                 } else { issue("catalog", "subscription_attachment_coverage_unverified") }
             }
             return .init(protectedContent: protected, diagnostics: diagnostics, attachmentEvidence: evidence,
-                readyIAPIDs: diagnostics.isEmpty ? readyIAPIDs : [])
+                readyIAPIDs: diagnostics.isEmpty ? readyIAPIDs : [], retainedProductStates: diagnostics.isEmpty ? retainedProductStates : [:])
         }
 
         private func list(_ path: String, type: String, query: [String: String] = [:]) async throws -> [[String: Any]] {
@@ -205,7 +227,10 @@ enum ReleaseProductSelection {
                   Self.knownHistory(history), Self.versionStates.contains(Self.text(attrs["state"])) else {
                 issue(key, "version_history_unverified"); return
             }
-            if !["PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW"].contains(Self.text(attrs["state"])) {
+            let retained = retainedReviewStates[key]
+            let retainedStateMatches = (retained == "REJECTED" && Self.text(attrs["state"]) == "REJECTED") ||
+                (["ACCEPTED", "APPROVED"].contains(retained ?? "") && ["ACCEPTED", "APPROVED"].contains(Self.text(attrs["state"])))
+            if !["PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW"].contains(Self.text(attrs["state"])) && !retainedStateMatches {
                 issue(key, "version_not_editable", status: "blocked")
             }
             if history.contains(where: { (Self.attributes($0)["version"] as? Int ?? 0) > number ||

@@ -81,6 +81,9 @@ final class ASCManager {
 
     // Review submission history (for rejection tracking)
     var reviewSubmissions: [ASCReviewSubmission] = []
+    /// True only after the complete review/item collection was refreshed successfully.
+    var reviewSubmissionDataComplete = false
+    var reviewSubmissionRefreshID: UUID?
     var reviewSubmissionItemsBySubmissionId: [String: [ASCReviewSubmissionItem]] = [:]
     var latestSubmissionItems: [ASCReviewSubmissionItem] = []
     var submissionHistoryEvents: [ASCSubmissionHistoryEvent] = []
