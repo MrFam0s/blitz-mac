@@ -1466,40 +1466,30 @@ extension MCPExecutor {
             }
 
             asc.loadCachedFeedback(appId: appId, versionString: version)
-            let cycles = asc.feedbackCycles(forVersionString: version)
-            if !cycles.isEmpty {
-                let payload = cycles.map { cycle -> [String: Any] in
-                    let reasons = cycle.reasons.map { reason in
-                        ["section": reason.section, "description": reason.description, "code": reason.code]
-                    }
-                    let messages = cycle.messages.map { message -> [String: String] in
-                        var msg = ["body": message.body]
-                        if let date = message.createdAt { msg["date"] = date }
-                        return msg
-                    }
-                    return [
-                        "id": cycle.id,
-                        "version": cycle.versionString ?? version,
-                        "submissionId": cycle.submissionId ?? "",
-                        "occurredAt": cycle.occurredAt,
-                        "source": cycle.source,
-                        "reasons": reasons,
-                        "messages": messages
-                    ]
-                }
-                return [
-                    "appId": appId,
-                    "version": version,
-                    "cycles": payload,
-                    "source": "archive"
-                ]
-            }
-
-            return [
-                "error": "No rejection feedback cached for version \(version). The user needs to sign in with their Apple ID in the ASC Overview tab to fetch feedback.",
+            let candidates = asc.releaseVersions.filter { $0.attributes.versionString == version }
+            let selectedVersion = candidates.count == 1 ? candidates[0] : nil
+            let selection = asc.feedbackSelection(for: selectedVersion)
+            var result: [String: Any] = [
                 "appId": appId,
-                "version": version
+                "version": version,
+                "versionId": selectedVersion?.id as Any? ?? NSNull(),
+                "cycles": IrisFeedbackSelection.payload(selection.matched),
+                "unassignedCycles": IrisFeedbackSelection.payload(selection.unassigned),
+                "source": "archive",
+                "isLoading": asc.isLoadingIrisFeedback,
+                "status": selection.matched.isEmpty ? (selection.unassigned.isEmpty ? "unavailable" : "unassigned") : "available"
             ]
+            if let error = asc.irisFeedbackError { result["refreshError"] = error }
+            if let lastFetch = asc.irisLastFetchedAtByAppId[appId] {
+                result["lastSuccessfulFetchAt"] = ISO8601DateFormatter().string(from: lastFetch)
+            }
+            if !selection.unassigned.isEmpty {
+                result["unassignedNotice"] = "App-wide communication is available, but its exact version/platform association is unconfirmed. Do not treat it as evidence about the requested version."
+            }
+            if !selection.hasMessages {
+                result["message"] = "No matching or unassigned messages are currently available in the local archive. This does not prove that Apple has no feedback. Refresh the review view; sign in only if authentication is missing or expired."
+            }
+            return result
         }
         return mcpJSON(raw)
     }

@@ -104,9 +104,10 @@ extension ASCManager {
         isLoadingIrisFeedback = true
         irisFeedbackError = nil
 
+        var completedFetch = false
         defer {
             if target.matches(self) {
-                irisLastFetchedAtByAppId[appId] = Date()
+                if completedFetch { irisLastFetchedAtByAppId[appId] = Date() }
                 isLoadingIrisFeedback = false
                 rebuildSubmissionHistory(appId: appId)
                 irisLog("ASCManager.fetchRejectionFeedback: done")
@@ -118,8 +119,9 @@ extension ASCManager {
             guard target.matches(self) else { return }
             var threadsById: [String: IrisResolutionCenterThread] = [:]
             for page in threadPages {
+                let pageThreads = try JSONDecoder().decode(IrisListResponse<IrisResolutionCenterThread>.self, from: page.data).data
+                _ = try IrisArchiveStore.project(appId: appId, pages: [page])
                 try IrisArchiveStore.recordRawResponse(appId: appId, scopeKey: page.url, data: page.data)
-                let pageThreads = (try? JSONDecoder().decode(IrisListResponse<IrisResolutionCenterThread>.self, from: page.data).data) ?? []
                 for thread in pageThreads {
                     threadsById[thread.id] = thread
                 }
@@ -140,6 +142,7 @@ extension ASCManager {
                         group.cancelAll()
                         throw CancellationError()
                     }
+                    _ = try IrisArchiveStore.project(appId: appId, pages: pages)
                     for page in pages {
                         try IrisArchiveStore.recordRawResponse(appId: appId, scopeKey: page.url, data: page.data)
                     }
@@ -150,6 +153,7 @@ extension ASCManager {
             let projection = try IrisArchiveStore.rebuildProjection(appId: appId)
             resolutionCenterThreads = threads
             applyIrisProjection(projection, focusVersionString: target.focusVersionString)
+            completedFetch = true
         } catch let error as IrisError {
             guard target.matches(self) else { return }
             irisLog("ASCManager.fetchRejectionFeedback: IrisError: \(error)")
@@ -167,14 +171,22 @@ extension ASCManager {
         }
     }
 
-    func feedbackCycles(forVersionString versionString: String?) -> [IrisFeedbackCycle] {
-        let targetVersion = versionString.map(trimmed)
-        guard let targetVersion, !targetVersion.isEmpty else { return irisFeedbackCycles }
-        return irisFeedbackCycles.filter { trimmed($0.versionString) == targetVersion }
+    func feedbackSelection(for version: ASCAppStoreVersion?) -> IrisFeedbackSelection {
+        IrisFeedbackSelection(cycles: irisFeedbackCycles, version: version, knownVersions: appStoreVersions)
     }
 
-    func hasIrisFeedback(forVersionString versionString: String?) -> Bool {
-        !feedbackCycles(forVersionString: versionString).isEmpty
+    func feedbackCycles(forVersionString versionString: String?) -> [IrisFeedbackCycle] {
+        guard let versionString else { return irisFeedbackCycles }
+        let candidates = releaseVersions.filter { trimmed($0.attributes.versionString) == trimmed(versionString) }
+        guard candidates.count == 1 else { return [] }
+        return feedbackSelection(for: candidates[0]).matched
+    }
+
+    func hasIrisFeedback(for version: ASCAppStoreVersion) -> Bool {
+        // Informational app-wide threads are not a rejection event.
+        feedbackSelection(for: version).matched.contains {
+            !$0.reasons.isEmpty && IrisFeedbackSelection.versionIDs(for: $0, knownVersions: appStoreVersions).count == 1
+        }
     }
 
     func latestFeedbackCycle(forVersionString versionString: String?) -> IrisFeedbackCycle? {
@@ -192,15 +204,18 @@ extension ASCManager {
         if let rejectedVersion = latestRejectedSubmissionVersion(from: versions) {
             return rejectedVersion
         }
-        if let versionString = latestFeedbackCycle(forVersionString: nil)?.versionString {
-            return versions.first(where: { $0.attributes.versionString == versionString })
+        for cycle in irisFeedbackCycles where !cycle.reasons.isEmpty {
+            let ids = IrisFeedbackSelection.versionIDs(for: cycle, knownVersions: appStoreVersions)
+            guard ids.count == 1 else { continue }
+            if let version = versions.first(where: { ids.contains($0.id) }) { return version }
         }
         if let rejectedEvent = submissionHistoryEvents.first(where: { $0.eventType == .rejected }) {
-            if let versionId = rejectedEvent.versionId,
-               let version = versions.first(where: { $0.id == versionId }) {
-                return version
+            if let versionId = rejectedEvent.versionId {
+                return versions.first(where: { $0.id == versionId })
             }
-            return versions.first(where: { $0.attributes.versionString == rejectedEvent.versionString })
+            let candidates = appStoreVersions.filter { $0.attributes.versionString == rejectedEvent.versionString }
+            guard candidates.count == 1 else { return nil }
+            return versions.first(where: { $0.id == candidates[0].id })
         }
         return nil
     }
@@ -459,6 +474,27 @@ struct IrisResolutionCenterThread: Decodable, Identifiable {
 struct IrisResolutionCenterMessage: Decodable, Identifiable {
     let id: String
     let attributes: Attributes
+    var relationships: Relationships? = nil
+
+    var sender: IrisFeedbackCycle.Message.Sender {
+        guard let actor = relationships?.fromActor?.data else { return .unknown }
+        guard actor.type == "actors" else { return .unknown }
+        if actor.id == "APPLE" { return .apple }
+        if actor.id.hasPrefix("USER:") { return .developer }
+        return .unknown
+    }
+
+    struct Relationships: Decodable {
+        let fromActor: ActorRelationship?
+
+        struct ActorRelationship: Decodable {
+            let data: Actor?
+        }
+        struct Actor: Decodable {
+            let type: String
+            let id: String
+        }
+    }
 
     struct Attributes: Decodable {
         let messageBody: String?

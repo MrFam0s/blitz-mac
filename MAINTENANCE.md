@@ -2,6 +2,32 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.77 build 92 — complete App Review communication
+
+App-wide Resolution Center messages remain visible when the reviewer supplies no
+English version marker. Explicit Apple version relationships take precedence;
+ambiguous or absent version/platform links appear in a separate conversation
+section and MCP result, without inventing a version or submission ID. Reviewer
+messages and developer replies retain their actual actor roles. Informational or
+multi-version threads do not create assumed version-rejection events or headers.
+
+Existing projections migrate from the unchanged raw archive. Failed legacy
+migration retains content but discards unverified target claims. Strict page
+parsing and pagination failures remain errors; failed refreshes preserve cached
+messages and do not establish a successful-fetch timestamp. The native request
+uses the app-wide version relationship query supported by the pinned ASC client.
+
+Validation: 670 Swift tests in 13 suites pass, including archive migration,
+missing/ambiguous version markers, exact platform identity, actor preservation,
+malformed-page failures and unchanged release guards. All isolated ASC/helper,
+CLI-validation and session tests pass. Nine localization regressions plus the
+1,332-key DE/EN audit, nine release-metadata checks and the native Release bundle
+with strict/deep Developer ID verification pass. Independent review is clear.
+The real feedback component was rendered offscreen at 340/680 points in DE/EN,
+light/dark appearance, including cached-data errors, expired authentication,
+empty results and unknown senders. Live UI automation was unavailable; no Apple
+mutation or new login was performed. No public release/tag is part of this fix.
+
 ## 1.0.76 build 91 — Apple sign-in recovery
 
 The sign-in browser has a native 30-second navigation deadline armed before the

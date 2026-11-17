@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.77
+
+- Show app-wide App Review messages even when Apple provides no version marker.
+  Keep unassigned conversations separate from confirmed version/platform matches.
+- Read Apple's version relationships and distinguish reviewer messages from
+  developer replies. Recover this metadata from existing local archives.
+- Preserve cached messages during refresh failures and provide explicit refresh
+  and App Store Connect actions instead of incorrectly reporting no feedback.
+
 ## 1.0.76
 
 - Keep the Apple sign-in page visible and interactive while it loads. Report

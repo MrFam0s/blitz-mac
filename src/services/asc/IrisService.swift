@@ -43,16 +43,28 @@ actor IrisService {
 
     // MARK: - Public API
 
+    // Match the app-wide query supported by the pinned ASC client. Asking for
+    // version relationships avoids guessing from prose in a reviewer's message.
+    nonisolated static func resolutionCenterThreadsURL(appId: String) -> URL {
+        var components = URLComponents(string: "\(baseURL)/apps/\(appId)/resolutionCenterThreads")!
+        components.queryItems = [
+            URLQueryItem(name: "include", value: "appStoreVersions,app,appMessageThreadDetail,build,betaBackgroundAssetReviewSubmission"),
+            URLQueryItem(name: "limit[appStoreVersions]", value: "2000"),
+            URLQueryItem(name: "filter[threadType]", value: "REJECTION_BINARY,REJECTION_METADATA,REJECTION_REVIEW_SUBMISSION,APP_MESSAGE_ARC,APP_MESSAGE_ARB,APP_MESSAGE_COMM,APP_MESSAGE_INFORMATIONAL")
+        ]
+        return components.url!
+    }
+
     func fetchResolutionCenterThreadPages(appId: String) async throws -> [IrisRawPage] {
-        let url = "\(Self.baseURL)/apps/\(appId)/resolutionCenterThreads"
+        let url = Self.resolutionCenterThreadsURL(appId: appId).absoluteString
         irisLog("IrisService: fetchResolutionCenterThreadPages appId=\(appId)")
         return try await fetchAllPages(startingAt: url)
     }
 
     func fetchResolutionCenterThreads(appId: String) async throws -> [IrisResolutionCenterThread] {
         let pages = try await fetchResolutionCenterThreadPages(appId: appId)
-        let threads = pages.flatMap { page in
-            (try? JSONDecoder().decode(IrisListResponse<IrisResolutionCenterThread>.self, from: page.data).data) ?? []
+        let threads = try pages.flatMap { page in
+            try JSONDecoder().decode(IrisListResponse<IrisResolutionCenterThread>.self, from: page.data).data
         }
         irisLog("IrisService: fetchResolutionCenterThreads got \(threads.count) threads")
         return threads
@@ -105,20 +117,21 @@ actor IrisService {
 
         while let currentURL = nextURL {
             guard seenURLs.insert(currentURL).inserted else {
-                irisLog("IrisService.fetchAllPages: stopping on repeated next URL \(currentURL)")
-                break
+                throw IrisError.requestFailed(0, L10n.tr("Der Nachrichtenabruf ist unvollständig. Bitte erneut laden."))
             }
 
             let data = try await getRaw(currentURL)
             pages.append(IrisRawPage(url: currentURL, data: data))
-            nextURL = nextURLString(from: data)
+            nextURL = try nextURLString(from: data)
         }
 
         return pages
     }
 
     private func getRaw(_ urlString: String) async throws -> Data {
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: urlString), url.scheme == "https",
+              url.host == "appstoreconnect.apple.com", url.user == nil, url.password == nil,
+              url.port == nil || url.port == 443, url.path.hasPrefix("/iris/") else {
             irisLog("IrisService.get: invalid URL \(urlString)")
             throw IrisError.requestFailed(0, "Invalid URL: \(urlString)")
         }
@@ -143,19 +156,11 @@ actor IrisService {
         irisLog("IrisService.get: HTTP \(httpResponse.statusCode), body length=\(data.count)")
 
         if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            irisLog("IrisService.get: auth error, body=\(String(body.prefix(500)))")
             throw IrisError.sessionExpired
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            irisLog("IrisService.get: error \(httpResponse.statusCode), body=\(String(body.prefix(1000)))")
-            throw IrisError.requestFailed(httpResponse.statusCode, body)
-        }
-
-        if let bodyStr = String(data: data, encoding: .utf8) {
-            irisLog("IrisService.get: response body=\(String(bodyStr.prefix(2000)))")
+            throw IrisError.requestFailed(httpResponse.statusCode, L10n.tr("Die Nachrichten konnten nicht vollständig geladen werden."))
         }
 
         return data
@@ -173,8 +178,8 @@ actor IrisService {
         }
     }
 
-    private func nextURLString(from data: Data) -> String? {
-        (try? JSONDecoder().decode(IrisLinksResponse.self, from: data).links?.next)
+    private func nextURLString(from data: Data) throws -> String? {
+        (try JSONDecoder().decode(IrisLinksResponse.self, from: data).links?.next)
             .flatMap { $0.isEmpty ? nil : $0 }
     }
 }

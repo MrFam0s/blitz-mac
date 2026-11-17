@@ -182,201 +182,26 @@ struct RejectionCardView<Footer: View>: View {
         }
     }
 
-    // MARK: - Apple's Feedback
+    // MARK: - Review conversation
 
-    @ViewBuilder
     private var appleFeedbackSection: some View {
-        let cycles = asc.feedbackCycles(forVersionString: version.attributes.versionString)
-
-        Divider()
-
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.tr("Rückmeldung von Apple"))
-                .font(BlitzLayout.sectionTitle)
-
-            if asc.isLoadingIrisFeedback && cycles.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L10n.tr("Rückmeldung wird geladen …"))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else if !cycles.isEmpty {
-                feedbackCyclesView(cycles)
-            } else if let error = asc.irisFeedbackError {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                signInPrompt
-            } else {
-                signInPrompt
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var signInPrompt: some View {
-        switch asc.irisSessionState {
-        case .noSession, .unknown:
-            signInCard(
-                icon: "person.badge.key",
-                message: L10n.tr("Melde dich mit deinem Apple-Account an, um die ausführliche Rückmeldung zur Prüfung zu sehen."),
-                buttonTitle: L10n.tr("Anmelden"),
-                color: .secondary
+        let selection = asc.feedbackSelection(for: version)
+        return VStack(alignment: .leading, spacing: 10) {
+            Divider()
+            IrisFeedbackSection(
+                matched: selection.matched,
+                unassigned: selection.unassigned,
+                isLoading: asc.isLoadingIrisFeedback,
+                error: asc.irisFeedbackError,
+                sessionState: asc.irisSessionState,
+                hasSuccessfulFetch: asc.app.map { asc.irisLastFetchedAtByAppId[$0.id] != nil } ?? false,
+                appStoreURL: asc.app.flatMap {
+                    URL(string: "https://appstoreconnect.apple.com/apps/\($0.id)/distribution/reviewsubmissions")
+                },
+                reload: { Task { await asc.fetchRejectionFeedback(force: true) } },
+                signIn: { asc.showAppleIDLogin = true }
             )
-        case .expired:
-            signInCard(
-                icon: "clock.badge.exclamationmark",
-                message: L10n.tr("Die Apple-Anmeldung ist abgelaufen."),
-                buttonTitle: L10n.tr("Erneut anmelden"),
-                color: .orange
-            )
-        case .valid:
-            Text(L10n.tr("Keine Rückmeldung zur Ablehnung im Resolution Center gefunden."))
-                .font(.callout)
-                .foregroundStyle(.secondary)
         }
-    }
-
-    private func signInCard(icon: String, message: String, buttonTitle: String, color: Color) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                signInExplanation(icon: icon, message: message, color: color)
-                    .frame(width: 260, alignment: .leading)
-                Spacer(minLength: 0)
-                signInButton(buttonTitle).fixedSize()
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                signInExplanation(icon: icon, message: message, color: color)
-                HStack {
-                    Spacer(minLength: 0)
-                    signInButton(buttonTitle)
-                }
-            }
-        }
-        .padding(BlitzLayout.cardInset)
-        .background(.background.tertiary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func signInExplanation(icon: String, message: String, color: Color) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 15))
-                .foregroundStyle(color)
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private func signInButton(_ title: String) -> some View {
-        Button(title) { asc.showAppleIDLogin = true }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-    }
-
-    @ViewBuilder
-    private func feedbackCyclesView(_ cycles: [IrisFeedbackCycle]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(cycles) { cycle in
-                feedbackCycleView(cycle)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func feedbackCycleView(_ cycle: IrisFeedbackCycle) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            BlitzFlowLayout(horizontalSpacing: 12, verticalSpacing: 4) {
-                if let submissionId = cycle.submissionId, !submissionId.isEmpty {
-                    Text(submissionId)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                        .help(submissionId)
-                } else {
-                    Text(L10n.tr("Archivierter Verlauf"))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                Text(ascLongDate(cycle.occurredAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            if !cycle.reasons.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(cycle.reasons) { reason in
-                        reasonCard(section: reason.section, description: reason.description, code: reason.code)
-                    }
-                }
-            }
-            if !cycle.messages.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.tr("Nachrichten des Prüfteams"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(cycle.messages) { msg in
-                        messageCard(body: msg.body, date: msg.createdAt)
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .background(.background.tertiary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    // MARK: - Card Helpers
-
-    private func reasonCard(section: String?, description: String?, code: String?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let section, !section.isEmpty {
-                Text(section)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.red)
-            }
-            if let desc = description, !desc.isEmpty {
-                Text(desc)
-                    .font(.callout)
-                    .textSelection(.enabled)
-            }
-            if let code, !code.isEmpty {
-                Text("Code: \(code)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-
-    private func messageCard(body: String?, date: String?) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let body, !body.isEmpty {
-                Text(body)
-                    .font(.callout)
-                    .textSelection(.enabled)
-            }
-            if let date {
-                Text(ascLongDate(date))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.tertiary)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     // MARK: - Submission State Helpers

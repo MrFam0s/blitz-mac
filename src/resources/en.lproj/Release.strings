@@ -585,3 +585,29 @@
 "Die Apple-Anmeldeseite lädt zu lange. Bitte die Verbindung prüfen und erneut laden." = "The Apple sign-in page is taking too long to load. Check your connection and reload.";
 
 "Das Anmeldefenster wurde unerwartet beendet. Bitte erneut laden; die bestehende Browser-Anmeldung bleibt erhalten." = "The sign-in window closed unexpectedly. Reload it; your existing browser sign-in is retained.";
+
+"Kommunikation mit Apple" = "Conversation with Apple";
+
+"Nachrichten ohne eindeutige Versionszuordnung" = "Messages without a confirmed version association";
+
+"Diese Nachrichten gehören zur App. Sie lassen sich keiner Version oder Plattform eindeutig zuordnen." = "These messages belong to the app. They cannot be uniquely associated with a version or platform.";
+
+"Melde dich mit deinem Apple-Account an, um die Nachrichten zu aktualisieren." = "Sign in with your Apple account to refresh the messages.";
+
+"Beim letzten Abruf wurden keine passenden Nachrichten geladen. Den vollständigen Verlauf findest du in App Store Connect." = "The last refresh loaded no matching messages. You can check the full conversation in App Store Connect.";
+
+"Für diese Ansicht sind noch keine Nachrichten geladen. Aktualisiere den Verlauf oder öffne App Store Connect." = "No messages have been loaded for this view yet. Refresh the conversation or open App Store Connect.";
+
+"Nachrichten aktualisieren" = "Refresh messages";
+
+"Kein Nachrichtentext verfügbar." = "No message text available.";
+
+"Apple" = "Apple";
+
+"Deine Antwort" = "Your reply";
+
+"Nachricht" = "Message";
+
+"Der Nachrichtenabruf ist unvollständig. Bitte erneut laden." = "The message fetch is incomplete. Please reload.";
+
+"Die Nachrichten konnten nicht vollständig geladen werden." = "The messages could not be loaded completely.";

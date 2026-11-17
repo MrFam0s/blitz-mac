@@ -474,15 +474,17 @@ extension MCPExecutor {
         if let error = asc.submissionError {
             result["submissionError"] = error
         }
-        if let cycle = asc.latestFeedbackCycle(forVersionString: nil) {
-            result["rejectionFeedback"] = [
-                "version": cycle.versionString ?? "",
-                "reasonCount": cycle.reasons.count,
-                "messageCount": cycle.messages.count,
-                "cycleCount": asc.irisFeedbackCycles.count,
-                "hint": "Use get_rejection_feedback tool for full details"
-            ]
-        }
+        let feedback = asc.feedbackSelection(for: asc.selectedVersion)
+        result["rejectionFeedback"] = [
+            "version": asc.selectedVersion?.attributes.versionString ?? "",
+            "versionId": asc.selectedVersion?.id as Any? ?? NSNull(),
+            "cycleCount": feedback.matched.count,
+            "messageCount": feedback.matched.reduce(0) { $0 + $1.messages.count },
+            "unassignedCycleCount": feedback.unassigned.count,
+            "unassignedMessageCount": feedback.unassigned.reduce(0) { $0 + $1.messages.count },
+            "isLoading": asc.isLoadingIrisFeedback,
+            "hint": "Use get_rejection_feedback for matched and separately unassigned app-wide communication"
+        ]
         return result
     }
 

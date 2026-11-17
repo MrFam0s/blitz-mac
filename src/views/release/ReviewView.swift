@@ -672,7 +672,7 @@ struct ReviewView: View {
         if asc.hasRejectedSubmissionHistory(forVersionId: version.id) {
             return true
         }
-        if asc.hasIrisFeedback(forVersionString: version.attributes.versionString) {
+        if asc.hasIrisFeedback(for: version) {
             return true
         }
         return false

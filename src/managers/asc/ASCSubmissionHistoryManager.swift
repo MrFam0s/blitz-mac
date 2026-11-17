@@ -28,24 +28,26 @@ extension ASCManager {
             )
         }
 
-        let rejectionEvents = irisFeedbackCycles.compactMap { cycle -> ASCSubmissionHistoryEvent? in
-            let versionString = cycle.versionString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !versionString.isEmpty else { return nil }
-            return ASCSubmissionHistoryEvent(
-                id: "iris:\(cycle.id)",
-                versionId: versionId(
-                    for: versionString,
-                    submissionId: cycle.submissionId
-                ),
-                versionString: versionString,
-                eventType: .rejected,
-                appleState: "REJECTED",
-                occurredAt: cycle.occurredAt,
-                source: .irisFeedback,
-                accuracy: .derived,
-                submissionId: cycle.submissionId,
-                note: cycle.primaryReasonSection
-            )
+        let rejectionEvents = irisFeedbackCycles.flatMap { cycle -> [ASCSubmissionHistoryEvent] in
+            // App-wide questions/replies do not establish a rejection for a
+            // selected version, nor does a matching iOS/macOS version number.
+            guard !cycle.reasons.isEmpty else { return [] }
+            let ids = IrisFeedbackSelection.versionIDs(for: cycle, knownVersions: appStoreVersions)
+            guard ids.count == 1 else { return [] }
+            return appStoreVersions.filter { ids.contains($0.id) }.map { version in
+                ASCSubmissionHistoryEvent(
+                    id: "iris:\(cycle.id):\(version.id)",
+                    versionId: version.id,
+                    versionString: version.attributes.versionString,
+                    eventType: .rejected,
+                    appleState: "REJECTED",
+                    occurredAt: cycle.occurredAt,
+                    source: .irisFeedback,
+                    accuracy: .derived,
+                    submissionId: cycle.submissionId,
+                    note: cycle.primaryReasonSection
+                )
+            }
         }
 
         submissionHistoryEvents = (submissionEvents + rejectionEvents)
@@ -196,22 +198,10 @@ extension ASCManager {
            let version = appStoreVersions.first(where: { $0.id == versionId }) {
             return version.attributes.versionString
         }
-        return irisFeedbackCycles.first(where: { $0.submissionId == submissionId })?.versionString
-    }
-
-    private func versionId(
-        for versionString: String,
-        submissionId: String?
-    ) -> String? {
-        if let submissionId,
-           let versionId = reviewSubmissionItemsBySubmissionId[submissionId]?
-            .compactMap(\.appStoreVersionId)
-            .first {
-            return versionId
-        }
-        if let version = appStoreVersions.first(where: { $0.attributes.versionString == versionString }) {
-            return version.id
-        }
-        return nil
+        guard let submissionId, !trimmed(submissionId).isEmpty,
+              let cycle = irisFeedbackCycles.first(where: { $0.submissionId == submissionId }) else { return nil }
+        let ids = IrisFeedbackSelection.versionIDs(for: cycle, knownVersions: appStoreVersions)
+        guard ids.count == 1 else { return nil }
+        return appStoreVersions.first(where: { ids.contains($0.id) })?.attributes.versionString
     }
 }
