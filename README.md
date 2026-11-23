@@ -88,7 +88,7 @@ See [MAINTENANCE.md](MAINTENANCE.md) for the exact pinned toolchain, helper
 provenance, validation history and platform-specific limitations.
 
 Source builds require Xcode with the macOS SDK and Swift tools, Python 3,
-**Go 1.27.3 or newer** as required by the pinned ASC `go.mod`, and the exact
+**Go 1.27.4 or newer** as required by the pinned ASC `go.mod`, and the exact
 **Node 26.13.1 / npm 12.2.2** pair in
 [config/node-toolchain.json](config/node-toolchain.json). See
 [Node setup](docs/node-toolchain.md) for toolchain selection. `GO` can select a Go

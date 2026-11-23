@@ -2,14 +2,29 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
-## Prepared ASC 7.2.0 update — human review required
+## 1.0.79 build 94 — regular release with ASC 7.2.0
+
+The reviewed ASC update in PR #3 was explicitly approved and merged. This release
+advances the app version/build to 1.0.79 (94), updates the public packaging notes
+and corrects the README's Go toolchain prerequisite to 1.27.4. It also includes
+the previously local 1.0.76–1.0.78 authentication and review-flow corrections.
+The identical application/adapter source already passed 700 Swift tests, 1,563
+top-level Go tests and the full 2,015-case CLI comparison. Release metadata,
+signed packaging and notarization were verified separately. All nine release
+metadata tests pass. Apple accepted notarization `90ac107c-14e0-4595-babd-49840e531e8e`;
+ticket stapling/validation, strict/deep signatures, and Gatekeeper assessment
+of both DMG and its read-only mounted app pass. Final DMG SHA-256:
+`2291f479b4a4737cf303b71b540bc080fd13b6f677dbde54a2c82af797deffb3`.
+The installed app is replaced from this verified artifact with a rollback copy.
+
+## ASC 7.2.0 integration validation
 
 The shared app/CLI helper advances from official ASC 6.6.1
 (`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`) to stable 7.2.0
 (`1bf81d53a6cd04e7364bee6e2f15a85ba52ac463`). GitHub release metadata,
 the annotated tag `a55f0afd068405860ab2c12f1537ec610643d476` and its
 peeled commit agree. The source submodule remains unmodified. The app version
-and build number stay unchanged while this update is prepared for review.
+and build number remained unchanged during the initial update preparation.
 
 ASC 7 moves readiness checks to explicit command dependencies and changes
 internal session-cache and HTTP-client signatures. The small Blitz overlay now
@@ -48,8 +63,10 @@ Validation on macOS 27.2.1 / Xcode 27.2 / Swift 6.4.2 / Go 1.27.4:
   bundle; the helper inside that signed bundle also passes the isolated protocol
   and CLI checks. No UI or device run was needed for this adapter-only update.
 
-No Store mutation, device test, app installation, release publication, merge or
-global Codex/Blitz configuration change is part of this preparation.
+The initial update preparation performed no Store mutation, device test, app
+installation, release publication, merge or global Codex/Blitz configuration
+change. The subsequent 1.0.79 publication and local installation were explicitly
+authorized separately.
 
 ## 1.0.78 build 93 — explicit review resolution and resubmission
 

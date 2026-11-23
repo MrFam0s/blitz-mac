@@ -1,7 +1,8 @@
 # Public release preparation
 
-Public downloads come from this fork's GitHub releases. **1.0.75, build 90** is
-the first regular release, following the 1.0.73 and 1.0.74 previews. Downloads
+Public downloads come from this fork's GitHub releases. The current release is
+**1.0.79, build 94**, with ASC 7.2.0. Version 1.0.75 was the first regular
+release, following the 1.0.73 and 1.0.74 previews. Downloads
 target Apple Silicon. `npm run release` only prepares a
 DMG from an already built signed app; it does not change a version, create a tag,
 push to either remote or publish a release. Publication remains an explicit
@@ -48,11 +49,11 @@ the repository. Submit through the shared ASC CLI and attach/verify the ticket
 with Apple's local tool:
 
 ```bash
-asc notarization submit --file build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg --wait
-xcrun stapler staple build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
-xcrun stapler validate build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
+asc notarization submit --file build/public/1.0.79-build94/BlitzNeo-1.0.79-arm64.dmg --wait
+xcrun stapler staple build/public/1.0.79-build94/BlitzNeo-1.0.79-arm64.dmg
+xcrun stapler validate build/public/1.0.79-build94/BlitzNeo-1.0.79-arm64.dmg
 spctl --assess --type open --context context:primary-signature --verbose=2 \
-  build/public/1.0.75-build90/BlitzNeo-1.0.75-arm64.dmg
+  build/public/1.0.79-build94/BlitzNeo-1.0.79-arm64.dmg
 ```
 
 Require Apple's status to be **Accepted** before announcing a notarized release.

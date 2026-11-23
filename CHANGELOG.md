@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.79
+
+- Update the shared ASC app/CLI helper from 6.6.1 to 7.2.0, retaining the Blitz
+  protocol adapter and selected-account binding.
+- Adapt readiness and session import to ASC 7 and prevent inherited token
+  commands or web brokers from overriding the app account.
+- Publish build 94 as a regular Apple Silicon DMG, including the login recovery,
+  complete review communication and guarded resubmission fixes from 1.0.76–1.0.78.
+
 ## 1.0.78
 
 - Distinguish App Review replies, corrected review items awaiting resubmission,
