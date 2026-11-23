@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
+	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/validate"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/validation"
 	webcore "github.com/rudrankriyam/App-Store-Connect-CLI/internal/web"
@@ -53,9 +54,14 @@ type releaseReadinessDependencies struct {
 }
 
 func releaseReadiness(ctx context.Context, p ReleaseReadinessParams) (releaseReadinessResult, error) {
+	deps := shared.DefaultDeps()
 	return collectReleaseReadiness(ctx, p, releaseReadinessDependencies{
-		buildReport: validate.BuildReadinessReport,
-		resume:      webcore.ResumeLastCachedSessionWithoutPersist,
+		buildReport: func(ctx context.Context, opts validate.ReadinessOptions) (validation.Report, error) {
+			return validate.BuildReadinessReportWith(ctx, deps, opts)
+		},
+		resume: func(ctx context.Context) (*webcore.AuthSession, bool, error) {
+			return webcore.ResumeLastCachedSessionWithoutPersist(ctx, deps.HTTPTransport())
+		},
 		newWebClient: func(session *webcore.AuthSession) releaseWebClient {
 			// Never let an old cached Developer Portal team override the current
 			// ASC provider. Upstream resolves the fresh team list by that provider.

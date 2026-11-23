@@ -70,7 +70,8 @@ private func importFixture() -> IrisSession {
     process.executableURL = URL(fileURLWithPath: helper)
     // Omit --validate only in this isolated parser test with fictitious cookies.
     process.arguments = ["__ascd_run_cli__", "web", "auth", "import", "--file", file.path, "--overwrite"]
-    var env = ProcessInfo.processInfo.environment
+    // This exercises the production CLI parser with fictional cookies only.
+    var env = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("ASC_") }
     env["ASC_WEB_SESSION_CACHE_DIR"] = root.appendingPathComponent("cache").path
     env["ASC_WEB_SESSION_CACHE_BACKEND"] = "file"
     env["ASC_BYPASS_KEYCHAIN"] = "1"

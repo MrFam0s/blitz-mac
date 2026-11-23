@@ -10,6 +10,10 @@ case "$TEST_JOBS" in
 esac
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
+# Never inherit an external token command, broker or another account into tests.
+unset ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY ASC_PRIVATE_KEY_PATH ASC_PRIVATE_KEY_B64
+unset ASC_BEARER_TOKEN ASC_BEARER_TOKEN_COMMAND ASC_KEY_TYPE ASC_PROFILE
+unset ASC_WEB_BROKER_URL ASC_WEB_BROKER_TOKEN
 export ASC_CONFIG_PATH="$TEST_DIR/absent-config.json"
 export ASC_BYPASS_KEYCHAIN=1 ASC_TELEMETRY_DISABLED=1 ASC_SKILLS_AUTO_CHECK=0
 export GOMAXPROCS="$TEST_JOBS"
@@ -19,9 +23,9 @@ TEST_OVERLAY="$(python3 "$ROOT_DIR/scripts/prepare-asc-test-overlay.py" \
     --stage-dir "$ROOT_DIR/.build/asc-source" --output-dir "$TEST_DIR/overlay")"
 (
     cd "$ROOT_DIR/.build/asc-source"
-    "$GO_BINARY" test -p "$TEST_JOBS" -parallel "$TEST_JOBS" -count=1 -timeout=5m \
+    "$GO_BINARY" test -p 1 -parallel "$TEST_JOBS" -count=1 -timeout=5m \
         -overlay "$TEST_OVERLAY" ./internal/asc ./internal/helper ./internal/cli/validate ./cmd/ascd
-    "$GO_BINARY" test -p "$TEST_JOBS" -parallel "$TEST_JOBS" -count=1 -timeout=2m \
+    "$GO_BINARY" test -p 1 -parallel "$TEST_JOBS" -count=1 -timeout=2m \
         -run '^TestBlitz(ReleaseTeam|Session)' ./internal/web
 )
 python3 "$ROOT_DIR/scripts/verify-asc-helper.py" "$HELPER_PATH"

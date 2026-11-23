@@ -34,6 +34,9 @@ import Testing
         "ASC_PRIVATE_KEY_B64": "OTHER-BASE64",
         "ASC_BEARER_TOKEN": "OTHER-ACCOUNT-TOKEN",
         "ASC_KEY_TYPE": "enterprise",
+        "ASC_BEARER_TOKEN_COMMAND": "external-token-command",
+        "ASC_WEB_BROKER_URL": "https://other-account.invalid",
+        "ASC_WEB_BROKER_TOKEN": "OTHER-BROKER-TOKEN",
         "ASC_BYPASS_KEYCHAIN": "0",
         "ASC_TELEMETRY_DISABLED": "1",
         "ASC_WEB_SESSION_CACHE_DIR": "/tmp/web-cache-fixture",
@@ -46,6 +49,9 @@ import Testing
     )
     #expect(environment["ASC_BEARER_TOKEN"] == nil)
     #expect(environment["ASC_KEY_TYPE"] == nil)
+    #expect(environment["ASC_BEARER_TOKEN_COMMAND"] == nil)
+    #expect(environment["ASC_WEB_BROKER_URL"] == nil)
+    #expect(environment["ASC_WEB_BROKER_TOKEN"] == nil)
     #expect(environment["ASC_KEY_ID"] == credentials.keyId)
     #expect(environment["ASC_ISSUER_ID"] == credentials.issuerId)
     #expect(environment["ASC_PRIVATE_KEY"] == credentials.privateKey)
@@ -66,4 +72,7 @@ import Testing
             Set(environment.map { "\($0.key)=\($0.value)" }))
     #expect(inherited["ASC_BEARER_TOKEN"] == "OTHER-ACCOUNT-TOKEN")
     #expect(inherited["ASC_KEY_TYPE"] == "enterprise")
+    #expect(inherited["ASC_BEARER_TOKEN_COMMAND"] == "external-token-command")
+    #expect(inherited["ASC_WEB_BROKER_URL"] == "https://other-account.invalid")
+    #expect(inherited["ASC_WEB_BROKER_TOKEN"] == "OTHER-BROKER-TOKEN")
 }
