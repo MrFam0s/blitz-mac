@@ -1,12 +1,14 @@
 # ASC integration in Blitz
 
-Blitz Neo builds official ASC **6.6.1**, commit
-`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`, from
+Blitz Neo builds official ASC **7.2.0**, commit
+`1bf81d53a6cd04e7364bee6e2f15a85ba52ac463`, from
 https://github.com/rorkai/App-Store-Connect-CLI.
 
 The upstream source is an unmodified pinned submodule. `scripts/build-asc-helper.sh`
 exports it into `.build/asc-source`, adds this overlay and builds `cmd/ascd`.
-Go must satisfy upstream's `go.mod` (currently Go 1.27.3).
+Go must satisfy upstream's `go.mod` (currently Go 1.27.0 with the patched Go 1.27.4 toolchain).
+Use Go 1.27.4 or newer in that release line, rather than building with 1.27.3;
+the upstream toolchain directive includes a `net/http` security correction.
 
 This adapter originates from the former Blitz ASC fork, commit
 `c17dc0836359dc272ad4df9521dc4b642e1dd13f` at
@@ -28,10 +30,11 @@ not contend on a process-wide stdout-capture lock. CLI mode keeps normal output.
 The upstream CLI retains its own current retry/error behavior.
 
 The app daemon pins authentication to the key selected in Blitz. It removes
-inherited `ASC_BEARER_TOKEN` and `ASC_KEY_TYPE` before starting the helper, so
-`cli.exec` uploads cannot silently use a different account or the Enterprise API
-while `session.request` uses the selected App Store Connect key. Direct terminal
-CLI execution keeps its explicit caller environment, including these new modes.
+inherited `ASC_BEARER_TOKEN`, `ASC_BEARER_TOKEN_COMMAND`, `ASC_KEY_TYPE`,
+`ASC_WEB_BROKER_URL` and `ASC_WEB_BROKER_TOKEN` before starting the helper.
+Neither a token provider nor a web-session broker may silently replace the
+selected API account or the verified local web session. Direct terminal CLI
+execution keeps its explicit caller environment, including these modes.
 
 Optional upstream FIDO2 support is not compiled into this helper. Official ASC
 macOS releases enable `-tags fido2` and statically link additional native
@@ -75,7 +78,7 @@ identity conflicts, interrupted persistence and concurrent cache changes.
 ## Bound release readiness
 
 `release.readiness` is a fixed, read-only protocol operation for an explicit
-app/bundle/version/platform. It uses upstream's `BuildReadinessReport` with
+app/bundle/version/platform. It uses upstream's `BuildReadinessReportWith` and explicit `shared.DefaultDeps()` with
 strict public validation, including deep public IAP and pricing checks. The
 small `internal/cli/validate/blitz_release.go` addition applies the unchanged
 upstream private checks to one web client, after that client has returned the
@@ -111,7 +114,7 @@ addition to the transport and CLI compatibility checks above.
 
 ## Upstream test-only stdout capture workaround
 
-ASC 6.6.1's `captureXcodeCloudStdout` writes to an `os.Pipe` synchronously
+ASC 7.2.0's `captureXcodeCloudStdout` writes to an `os.Pipe` synchronously
 before draining it. The wide Xcode Cloud table can fill that pipe on macOS and
 deadlock the otherwise unchanged `internal/asc` tests. The existing upstream
 `captureStdout` already drains concurrently and closes both descriptors.
@@ -125,7 +128,8 @@ review or remove the workaround when advancing the ASC pin.
 
 `scripts/test-asc-helper.sh` runs the generator's offline regression tests, builds
 the helper, and applies that test overlay with bounded parallelism (default 2,
-`BLITZ_ASC_TEST_JOBS` accepts 1–4). It includes `internal/asc`, `internal/helper`,
+`BLITZ_ASC_TEST_JOBS` accepts 1–4). Packages run sequentially so Go process
+and package parallelism do not multiply that CPU budget. It includes `internal/asc`, `internal/helper`,
 `internal/cli/validate` and the `TestBlitzReleaseTeam`/`TestBlitzSession` web regressions. To
 reuse an existing staging tree without rebuilding:
 
@@ -134,7 +138,7 @@ test_overlay_dir="$(mktemp -d)"
 test_overlay="$(python3 scripts/prepare-asc-test-overlay.py \
   --stage-dir .build/asc-source --output-dir "$test_overlay_dir")"
 # Keep the same isolated ASC_CONFIG_PATH and authentication-free test environment.
-(cd .build/asc-source && go test -p 2 -parallel 2 -count=1 \
+(cd .build/asc-source && GOMAXPROCS=2 go test -p 1 -parallel 2 -count=1 \
   -overlay "$test_overlay" ./internal/asc)
 rm -rf "$test_overlay_dir"
 ```

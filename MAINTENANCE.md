@@ -2,6 +2,55 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## Prepared ASC 7.2.0 update — human review required
+
+The shared app/CLI helper advances from official ASC 6.6.1
+(`d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b`) to stable 7.2.0
+(`1bf81d53a6cd04e7364bee6e2f15a85ba52ac463`). GitHub release metadata,
+the annotated tag `a55f0afd068405860ab2c12f1537ec610643d476` and its
+peeled commit agree. The source submodule remains unmodified. The app version
+and build number stay unchanged while this update is prepared for review.
+
+ASC 7 moves readiness checks to explicit command dependencies and changes
+internal session-cache and HTTP-client signatures. The small Blitz overlay now
+uses these interfaces while retaining provider/team verification, cache
+compare-and-swap, and raw HTTP status/header/body semantics. The full CLI tree
+still runs through the same upstream entry point as direct terminal commands.
+Inherited token commands and web-session brokers are removed from the app's
+daemon environment so they cannot override the selected account. Explicit
+terminal configuration is unchanged. The existing environment regression first
+failed for all three new overrides, then passed with the filter. Offline tests
+also exclude inherited account and broker configuration.
+
+Release notes for 7.0.0, 7.1.0 and 7.2.0 were reviewed. Relevant improvements
+include unreleased app-information selection, initial-release metadata handling,
+review diagnostics, TestFlight tester/group handling and territory-specific IAP
+pricing. The existing Xcode Cloud stdout test workaround is still required;
+both upstream helper bodies were rechecked, and only a temporary Go test overlay
+is used. Optional FIDO2 support remains outside this helper build.
+
+The upstream module declares Go 1.27.0 with toolchain Go 1.27.4. The official
+Go 1.27.4 darwin/arm64 archive was installed only under this project's work area
+and verified against go.dev's SHA-256:
+`91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4`.
+Validation on macOS 27.2.1 / Xcode 27.2 / Swift 6.4.2 / Go 1.27.4:
+- Isolated `scripts/test-asc-helper.sh` passes: 1,563 top-level Go tests,
+  including the full 2,015-case CLI comparison; transport, readiness, session
+  import and protocol/version/`cli.exec` checks pass. No tests were skipped.
+- `swift test --build-system native --jobs 4` passes all 700 tests in 14 suites,
+  with `BLITZ_TEST_ASCD` pointing to the new helper. The real parser regression
+  uses fictional cookies and a temporary cache.
+- Independent source/integration review found no remaining actionable defect.
+- `BLITZ_SWIFT_BUILD_SYSTEM=native BLITZ_BUILD_JOBS=4 bash scripts/bundle.sh release`
+  passes with `BLITZ_ASCD_PATH` pointing to the newly built helper. The unchanged
+  iPhone MCP archive was reused after checksum/lock/toolchain/pin verification.
+- Strict/deep `codesign` verification passes for the Apple Silicon Developer ID
+  bundle; the helper inside that signed bundle also passes the isolated protocol
+  and CLI checks. No UI or device run was needed for this adapter-only update.
+
+No Store mutation, device test, app installation, release publication, merge or
+global Codex/Blitz configuration change is part of this preparation.
+
 ## 1.0.78 build 93 — explicit review resolution and resubmission
 
 Current review/submission/item state is independent of a historical acknowledged

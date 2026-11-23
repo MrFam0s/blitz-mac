@@ -7,8 +7,8 @@ STAGE_DIR="$ROOT_DIR/.build/asc-source"
 OUTPUT_DIR="$ROOT_DIR/.build/ascd-helper"
 GO_BINARY="${GO:-go}"
 MACOS_MINIMUM="$(cat "$ROOT_DIR/config/macos-deployment-target.txt")"
-ASC_VERSION="6.6.1"
-ASC_COMMIT="d8ccc609bb0bcb3a4fd169c5fee388d5ba02018b"
+ASC_VERSION="7.2.0"
+ASC_COMMIT="1bf81d53a6cd04e7364bee6e2f15a85ba52ac463"
 
 if [ ! -f "$SOURCE_DIR/go.mod" ] || [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" != "$ASC_COMMIT" ]; then
     echo "ERROR: Initialize the pinned ASC submodule: git submodule update --init --recursive" >&2

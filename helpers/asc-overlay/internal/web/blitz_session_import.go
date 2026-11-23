@@ -95,7 +95,7 @@ func importBlitzSession(ctx context.Context, p BlitzSessionImportParams, validat
 		if err != nil {
 			return err
 		}
-		existing, exists, err = readSessionBySelection(selection, key)
+		existing, _, exists, err = readSessionBySelection(selection, key)
 		return err
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func importBlitzSession(ctx context.Context, p BlitzSessionImportParams, validat
 		if !reflect.DeepEqual(before, after) {
 			return errBlitzSessionChanged
 		}
-		_, _, selectedKey, selected, err := readLastSessionBySelectionWithOrigin(selection)
+		_, _, selectedKey, selected, err := readLastSessionBySelection(selection)
 		if err != nil {
 			return err
 		}
@@ -305,7 +305,7 @@ func validateBlitzSession(ctx context.Context, source persistedSession, expected
 	}
 	tracker := newSessionCookieTrackingJarWithCached(jar, &source)
 	importJar := newBlitzImportCookieJar(tracker, source)
-	client := newWebHTTPClient(importJar)
+	client := newWebHTTPClient(importJar, http.DefaultTransport)
 	info, err := sessionInfoFetcher(ctx, client)
 	if err != nil {
 		out.receipt.ASC = BlitzSessionEvidence{"unverified", "asc_validation_unavailable"}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a test-only Go overlay for ASC 6.6.1's synchronous stdout capture.
+"""Create a test-only Go overlay for ASC 7.2.0's synchronous stdout capture.
 
 The pinned source and production build remain untouched. Stop on upstream drift
 so a later ASC update must explicitly remove or re-review this workaround.

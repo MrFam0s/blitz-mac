@@ -261,7 +261,7 @@ func TestBlitzSessionImportDoesNotEraseIndependentKeychainSession(t *testing.T) 
 	}
 	mirror.ProviderID, mirror.DeveloperTeamID = 123, "DEVTEAM"
 	key := webSessionCacheKey(blitzImportEmail)
-	if err := writeMergedSessionToKeychain(key, mirror, nil); err != nil {
+	if err := writeSessionToKeychain(key, mirror); err != nil {
 		t.Fatal(err)
 	}
 	blitzImportPersist(t, "file-partial", false)

@@ -379,7 +379,7 @@ actor ASCDaemonClient {
     }
 
     /// The app's daemon and its CLI subprocesses must use the selected ASC key.
-    /// Inherited token/Enterprise modes must not override that account or API host.
+    /// Inherited token providers or web brokers must not override that account or session.
     nonisolated static func credentialEnvironment(
         credentials: ASCCredentials,
         inherited: [String: String]
@@ -391,6 +391,9 @@ actor ASCDaemonClient {
         environment["ASC_PRIVATE_KEY_PATH"] = nil
         environment["ASC_PRIVATE_KEY_B64"] = nil
         environment["ASC_BEARER_TOKEN"] = nil
+        environment["ASC_BEARER_TOKEN_COMMAND"] = nil
+        environment["ASC_WEB_BROKER_URL"] = nil
+        environment["ASC_WEB_BROKER_TOKEN"] = nil
         environment["ASC_KEY_TYPE"] = nil
         environment["ASC_BYPASS_KEYCHAIN"] = "1"
         return environment
