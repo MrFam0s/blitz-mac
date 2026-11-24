@@ -376,7 +376,8 @@ private actor WorkflowSnapshotFixture {
                 object = ["data": versions]
             case "/v1/appStoreVersions/version1/build": object = ["data": ["id": "build1"]]
             case "/v1/appStoreVersions/version1/appStoreVersionLocalizations":
-                object = ["data": [["id": "loc1", "attributes": ["locale": "de-DE", "description": changedText ? "New" : "Original"]]]]
+                object = ["data": [["id": "loc1", "attributes": ["locale": "de-DE", "description": changedText ? "New" : "Original",
+                    "whatsNew": "Die Trainingssteuerung ist jetzt beim Training erreichbar."]]]]
                 if foreignPage { object["links"] = ["next": "https://foreign.invalid/v1/appStoreVersions/version1/appStoreVersionLocalizations?limit=200"] }
             case "/v1/appStoreVersionLocalizations/loc1/appScreenshotSets":
                 object = ["data": [["id": "set1", "attributes": ["screenshotDisplayType": "APP_IPHONE_67"]]]]
@@ -556,7 +557,8 @@ private func fixtureAdapter(_ fixture: WorkflowSnapshotFixture) -> ReleaseWorkfl
     await fixture.configurePlatformlessDraft(.init())
     let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
     let record = try await service.prepare(target: workflowTarget(root), mode: .manual)
-    _ = try await service.validate(operationID: record.operationID, accountKey: record.target.accountKey)
+    let validated = try await service.validate(operationID: record.operationID, accountKey: record.target.accountKey)
+    try #require(validated.validation?.ready == true)
     await fixture.interruptNextDraft()
     await #expect(throws: ReleaseWorkflowError.self) {
         try await service.submit(operationID: record.operationID, accountKey: record.target.accountKey,
