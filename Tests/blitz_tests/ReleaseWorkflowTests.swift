@@ -287,20 +287,27 @@ private actor WorkflowSnapshotFixture {
         var containsItem = false
         var omitPlatform = false
         var versionType = "appStoreVersions"
+        var detailID: String?
+        var detailPlatform: String?
+        var detailAppID = "app1"
 
-        func submission(id: String) -> [String: Any] {
-            var relationships = ["app": ["data": ["type": "apps", "id": "app1"]]]
-            if let versionID {
+        func submission(id: String, includeVersion: Bool, detail: Bool = false) -> [String: Any] {
+            var relationships = ["app": ["data": ["type": "apps", "id": detail ? detailAppID : "app1"]]]
+            if includeVersion, let versionID {
                 relationships["appStoreVersionForReview"] = ["data": ["type": versionType, "id": versionID]]
             }
             var attributes: [String: Any] = ["state": state, "submittedDate": submittedDate as Any? ?? NSNull()]
             if !omitPlatform { attributes["platform"] = NSNull() }
-            return ["type": "reviewSubmissions", "id": id, "attributes": attributes, "relationships": relationships]
+            if detail, let detailPlatform { attributes["platform"] = detailPlatform }
+            return ["type": "reviewSubmissions", "id": detail ? (detailID ?? id) : id,
+                    "attributes": attributes, "relationships": relationships]
         }
     }
 
     var platformlessDraft: PlatformlessDraft?
     func configurePlatformlessDraft(_ value: PlatformlessDraft) { platformlessDraft = value }
+    var interruptAfterCreatingDraft = false
+    func interruptNextDraft() { interruptAfterCreatingDraft = true }
     var reversedScreenshots = false
     var changedText = false
     var foreignPage = false
@@ -382,22 +389,38 @@ private actor WorkflowSnapshotFixture {
             case "/v1/appStoreVersions/version1/appStoreReviewDetail": object = [:]; code = 404
             case "/v1/reviewSubmissions":
                 #expect(url.queryItems?.contains(URLQueryItem(name: "filter[app]", value: "app1")) == true)
+                if createdDraft && interruptAfterCreatingDraft {
+                    interruptAfterCreatingDraft = false
+                    throw URLError(.timedOut)
+                }
+                let includes = url.queryItems?.first { $0.name == "include" }?.value?.split(separator: ",") ?? []
+                #expect(includes == ["app"])
+                let includeVersion = includes.contains("appStoreVersionForReview")
                 var list: [[String: Any]] = []
                 if let platformlessDraft {
-                    let includes = url.queryItems?.first { $0.name == "include" }?.value?.split(separator: ",") ?? []
-                    #expect(includes.contains("appStoreVersionForReview") && includes.contains("app"))
-                    list = ["old-draft-a", "old-draft-b"].map(platformlessDraft.submission(id:))
+                    list = ["old-draft-a", "old-draft-b"].map { platformlessDraft.submission(id: $0, includeVersion: includeVersion) }
                 }
                 if existingSubmission || createdDraft {
+                    var relationships = ["app": ["data": ["id": "app1", "type": "apps"]]]
+                    if includeVersion {
+                        // Apple also returns the public version here for a new, empty draft.
+                        relationships["appStoreVersionForReview"] = ["data": ["id": addedVersion ? "version1" : "previous-version", "type": "appStoreVersions"]]
+                    }
                     list.append(["id": existingSubmission ? "existing-submission" : "submission1",
                         "attributes": ["platform": "IOS", "state": submitted ? "WAITING_FOR_REVIEW" : "READY_FOR_REVIEW"],
-                        "relationships": ["app": ["data": ["id": "app1", "type": "apps"]]]])
+                        "relationships": relationships])
                 }
                 if completedHistory {
                     list.append(["id": "old-withdrawn", "attributes": ["platform": "IOS", "state": "COMPLETE", "submittedDate": "2026-11-11T20:16:05Z"],
                         "relationships": ["app": ["data": ["id": "app1", "type": "apps"]]]])
                 }
                 object = ["data": list]
+            case "/v1/reviewSubmissions/old-draft-a", "/v1/reviewSubmissions/old-draft-b":
+                let includes = url.queryItems?.first { $0.name == "include" }?.value?.split(separator: ",") ?? []
+                #expect(Set(includes) == ["app", "appStoreVersionForReview"])
+                let draft = try #require(platformlessDraft)
+                let id = try #require(url.path.split(separator: "/").last)
+                object = ["data": draft.submission(id: String(id), includeVersion: includes.contains("appStoreVersionForReview"), detail: true)]
             case "/v1/reviewSubmissions/old-draft-a/items", "/v1/reviewSubmissions/old-draft-b/items":
                 let items: [[String: Any]] = platformlessDraft?.containsItem == true
                     ? [["type": "reviewSubmissionItems", "id": "unexpected", "relationships": ["appEvent": ["data": ["type": "appEvents", "id": "event1"]]]]]
@@ -512,7 +535,8 @@ private func fixtureAdapter(_ fixture: WorkflowSnapshotFixture) -> ReleaseWorkfl
         .init(versionID: nil), .init(versionID: "version1"), .init(versionID: "unknown-version"),
         .init(versionState: "PREPARE_FOR_SUBMISSION"), .init(state: "WAITING_FOR_REVIEW"),
         .init(submittedDate: "2026-11-01T12:00:00Z"), .init(containsItem: true),
-        .init(omitPlatform: true), .init(versionType: "appEvents")
+        .init(omitPlatform: true), .init(versionType: "appEvents"), .init(detailID: "swapped-id"),
+        .init(detailPlatform: "IOS"), .init(detailAppID: "other-app")
     ]
     for draft in cases {
         let fixture = WorkflowSnapshotFixture(), target = workflowTarget(workflowDirectory())
@@ -524,6 +548,42 @@ private func fixtureAdapter(_ fixture: WorkflowSnapshotFixture) -> ReleaseWorkfl
         }
         #expect(await fixture.writes.isEmpty)
     }
+}
+
+@Test func releaseWorkflowResumesItsEmptyDraftAlongsidePlatformlessPublishedDrafts() async throws {
+    let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = WorkflowSnapshotFixture()
+    await fixture.configurePlatformlessDraft(.init())
+    let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let record = try await service.prepare(target: workflowTarget(root), mode: .manual)
+    _ = try await service.validate(operationID: record.operationID, accountKey: record.target.accountKey)
+    await fixture.interruptNextDraft()
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.submit(operationID: record.operationID, accountKey: record.target.accountKey,
+                                 confirmationDigest: record.confirmationDigest)
+    }
+
+    let restarted = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let status = try await restarted.status(operationID: record.operationID, accountKey: record.target.accountKey)
+    #expect(status.submissionProgress?.phase == .submissionCreated)
+    #expect(status.resumableSubmissionID == "submission1")
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.submit(operationID: record.operationID, accountKey: record.target.accountKey,
+                                   confirmationDigest: record.confirmationDigest, resumeSubmissionID: "old-draft-a")
+    }
+    #expect(await fixture.writes.map(\.path) == ["/v1/reviewSubmissions"])
+    let done = try await restarted.submit(operationID: record.operationID, accountKey: record.target.accountKey,
+                                          confirmationDigest: record.confirmationDigest, resumeSubmissionID: "submission1")
+    #expect(done.state == .submitted && done.submissionID == "submission1" && done.submissionItemID == "item1")
+    #expect(done.submissionState == "WAITING_FOR_REVIEW")
+    let writes = await fixture.writes
+    #expect(writes.map(\.path) == ["/v1/reviewSubmissions", "/v1/reviewSubmissionItems", "/v1/reviewSubmissions/submission1"])
+    let item = try #require(writes.first { $0.path == "/v1/reviewSubmissionItems" }?.body)
+    let payload = try #require(JSONSerialization.jsonObject(with: item) as? [String: Any])
+    let data = try #require(payload["data"] as? [String: Any])
+    let links = try #require(data["relationships"] as? [String: [String: [String: String]]])
+    #expect(links == ["reviewSubmission": ["data": ["type": "reviewSubmissions", "id": "submission1"]],
+                      "appStoreVersion": ["data": ["type": "appStoreVersions", "id": "version1"]]])
 }
 
 @Test func releaseWorkflowAdapterDoesNotConfirmIfContentChangesAfterSubmissionItem() async throws {

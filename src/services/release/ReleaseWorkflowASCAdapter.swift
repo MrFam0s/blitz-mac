@@ -359,7 +359,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
     }
 
     private func submissionContext(_ target: ReleaseWorkflowTarget, appVersions: [[String: Any]]? = nil) async throws -> SubmissionContext {
-        let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app,appStoreVersionForReview"])
+        let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app"])
         var matches: [(id: String, state: String, date: String, draft: Bool, resubmission: Bool, resolution: Bool, contents: ReleaseSubmissionContents)] = []
         var activeCount = 0
         var versions = appVersions
@@ -375,10 +375,21 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             let items = try await all("/v1/reviewSubmissions/\(id)/items", query: ["include": includes])
             if platform == nil {
                 // Apple can retain undated, empty drafts for an already released version with a null platform.
-                guard attributes["platform"] is NSNull, attributes["submittedDate"] is NSNull,
+                guard submission["type"] as? String == "reviewSubmissions",
+                      attributes["platform"] is NSNull, attributes["submittedDate"] is NSNull,
                       state == "READY_FOR_REVIEW", items.isEmpty,
-                      Self.relationshipID(submission, "app", type: "apps") == target.appID,
-                      let oldID = Self.relationshipID(submission, "appStoreVersionForReview", type: "appStoreVersions"),
+                      Self.relationshipID(submission, "app", type: "apps") == target.appID else {
+                    throw ReleaseWorkflowAPIError.invalidResponse
+                }
+                // On a newly created platform-specific draft Apple may expand this relationship to the live version.
+                // Request it only to corroborate the identity of a platformless draft.
+                let detail = try await single("/v1/reviewSubmissions/\(id)?include=app,appStoreVersionForReview")
+                guard detail["type"] as? String == "reviewSubmissions", detail["id"] as? String == id,
+                      Self.relationshipID(detail, "app", type: "apps") == target.appID,
+                      let detailAttributes = detail["attributes"] as? [String: Any],
+                      detailAttributes["platform"] is NSNull, detailAttributes["submittedDate"] is NSNull,
+                      detailAttributes["state"] as? String == state,
+                      let oldID = Self.relationshipID(detail, "appStoreVersionForReview", type: "appStoreVersions"),
                       oldID != target.versionID else { throw ReleaseWorkflowAPIError.invalidResponse }
                 if versions == nil { versions = try await all("/v1/apps/\(target.appID)/appStoreVersions") }
                 guard let versions, Self.isPublishedPredecessor(oldID, of: target, in: versions) else {
