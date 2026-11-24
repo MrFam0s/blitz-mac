@@ -58,7 +58,7 @@ jobs:
       - name: Build release bundle
         env:
           APPLE_SIGNING_IDENTITY: '-'
-          BLITZ_IPHONE_MCP_TARBALL: ${{ github.workspace }}/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz
+          BLITZ_IPHONE_MCP_TARBALL: ${{ github.workspace }}/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.2.tgz
           BLITZ_ASCD_PATH: ${{ github.workspace }}/.build/ascd-helper/ascd
         run: bash scripts/bundle.sh release
       - name: Verify installed helper contract and app signature

@@ -216,6 +216,7 @@ final class ASCManager {
     static let overviewScreenshotFieldLabels: Set<String> = [
         "Mac Screenshots",
         "iPhone Screenshots",
+        "iPhone Duo Screenshots",
         "iPad Screenshots"
     ]
 }

@@ -4,7 +4,7 @@ import json
 from pathlib import Path, PurePosixPath
 import tarfile
 
-VERSION = '0.1.18-blitz.1'
+VERSION = '0.1.18-blitz.2'
 COMMIT = '3259f756279cd8cb6bc507b46369111fb5672fa2'
 
 

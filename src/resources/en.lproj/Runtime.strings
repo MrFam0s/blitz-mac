@@ -311,3 +311,14 @@
 "Das Veröffentlichungsziel enthält widersprüchliche Store- oder Projektkennungen." = "The release target contains conflicting Store or project identifiers.";
 "Dieses Veröffentlichungsziel ist bereits vorhanden. Bitte das vorhandene Ziel auswählen." = "This release target already exists. Select the existing target.";
 "Die Bundle-ID einer bestätigten Store-Zuordnung kann nicht geändert werden. Lege dafür ein separates Veröffentlichungsziel an." = "The bundle ID of a confirmed Store association cannot be changed. Create a separate release target for it.";
+"In Xcode öffnen" = "Open in Xcode";
+"Die Touch-Koordinaten sind für diese Ansicht nicht eindeutig. Verwende die Gerätesteuerung in Xcode." = "Touch coordinates are ambiguous for this view. Use the device controls in Xcode.";
+"Screenshot sichern …" = "Save Screenshot…";
+"Das aktive Simulator-Display ist noch nicht eindeutig. Öffne die App im Simulator und versuche es erneut." = "The active simulator display is not yet clear. Open the app in the simulator and try again.";
+"Das Simulator-Display hat sich während der Aufnahme geändert. Bitte nimm den Screenshot erneut auf." = "The simulator display changed during capture. Take the screenshot again.";
+"Faltposition" = "Device pose";
+"Geschlossen" = "Closed";
+"Teilweise geöffnet" = "Partially open";
+"Geöffnet" = "Open";
+"Wähle den laufenden iPhone-Duo-Simulator dieses Projekts." = "Select this project's running iPhone Duo simulator.";
+"Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode." = "The device pose is unavailable in this Device Hub window. Open the device in Xcode.";

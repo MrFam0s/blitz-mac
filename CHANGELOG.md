@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.0.80
+## 1.0.80 (build 100)
+
+- Use a project’s selected iPhone or iPad simulator in Blitz. On iPhone Duo,
+  change the fold position and interact with the active display in a flat preview.
+  The camera button saves a full-resolution PNG.
+- App chats can request a Duo pose and capture the active, outer or inner display.
+  The screenshot preview and touch coordinates follow the orientation of that display.
+- Import outer and inner screenshots into one iPhone Duo set per Store language.
+  Blitz validates the four native sizes and keeps same-named images separate.
+
+## 1.0.80 (build 99)
 
 - Sort dashboard apps by name, status or date in either direction and remember
   the selection. Dates use changes observed by Blitz, falling back to the newest

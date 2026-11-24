@@ -240,15 +240,17 @@ import Testing
 
     manager.trackSlots[manager.screenshotTrackKey(displayType: "APP_IPHONE_67", locale: locale)] =
         [stagedSlot] + Array(repeating: nil, count: 9)
+    manager.trackSlots[manager.screenshotTrackKey(displayType: "APP_IPHONE_DUO", locale: locale)] =
+        [stagedSlot] + Array(repeating: nil, count: 9)
     manager.trackSlots[manager.screenshotTrackKey(displayType: "APP_IPAD_PRO_3GEN_129", locale: locale)] =
         [stagedSlot] + Array(repeating: nil, count: 9)
 
     let displayTypes = MCPExecutor.screenshotSaveDisplayTypes(
         requestedDisplayType: nil,
         locale: locale,
-        projectDisplayTypes: ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129"],
+        projectDisplayTypes: ["APP_IPHONE_67", "APP_IPHONE_DUO", "APP_IPAD_PRO_3GEN_129"],
         asc: manager
     )
 
-    #expect(displayTypes == ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129"])
+    #expect(displayTypes == ["APP_IPHONE_67", "APP_IPHONE_DUO", "APP_IPAD_PRO_3GEN_129"])
 }

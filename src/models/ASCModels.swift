@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import CryptoKit
 import AppKit
 
 // MARK: - Credentials
@@ -264,6 +265,22 @@ struct ASCVersionLocalization: Codable, Identifiable {
 
 // MARK: - ScreenshotSet
 
+enum ScreenshotDeviceType: String, CaseIterable, Identifiable {
+    case iPhone = "APP_IPHONE_67"
+    case iPhoneDuo = "APP_IPHONE_DUO"
+    case iPad = "APP_IPAD_PRO_3GEN_129"
+    case mac = "APP_DESKTOP"
+
+    var id: String { rawValue }
+
+    static func types(for platform: ProjectPlatform) -> [Self] {
+        switch platform {
+        case .iOS: [.iPhone, .iPhoneDuo, .iPad]
+        case .macOS: [.mac]
+        }
+    }
+}
+
 struct ASCScreenshotSet: Codable, Identifiable {
     let id: String
     let attributes: Attributes
@@ -282,6 +299,7 @@ struct ASCScreenshot: Codable, Identifiable {
 
     struct Attributes: Codable {
         let fileName: String?
+        var sourceFileChecksum: String? = nil
         let fileSize: Int?
         let imageAsset: ImageAsset?
         let assetDeliveryState: AssetDeliveryState?
@@ -301,6 +319,20 @@ struct ASCScreenshot: Codable, Identifiable {
                 let description: String?
             }
         }
+    }
+
+    /// App Store Connect uses the MD5 of the original file for screenshot delivery.
+    static func sourceChecksum(_ bytes: Data) -> String {
+        Insecure.MD5.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func storedSource(in directory: URL) -> URL? {
+        guard let name = attributes.fileName, (name as NSString).lastPathComponent == name,
+              name != ".", name != "..", !name.isEmpty,
+              let checksum = attributes.sourceFileChecksum?.lowercased(),
+              checksum.utf8.count == 32, checksum.allSatisfy(\.isHexDigit) else { return nil }
+        let source = directory.appendingPathComponent(checksum).appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: source.path) ? source : nil
     }
 
     private var fileFormat: String {

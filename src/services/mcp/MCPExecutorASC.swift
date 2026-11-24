@@ -1,7 +1,6 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import AppKit
 import Foundation
-import ImageIO
 
 extension MCPExecutor {
     // MARK: - ASC Form Tools
@@ -170,13 +169,8 @@ extension MCPExecutor {
 
     private func screenshotsDisplayTypesForActiveProject() async -> [String] {
         await MainActor.run {
-            switch appState.ascManager.releasePlatform {
-            case .iOS:
-                return ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129"]
-            case .macOS:
-                return ["APP_DESKTOP"]
-            case nil: return []
-            }
+            guard let platform = appState.ascManager.releasePlatform else { return [] }
+            return ScreenshotDeviceType.types(for: platform).map(\.rawValue)
         }
     }
 
@@ -799,85 +793,6 @@ extension MCPExecutor {
         return nil
     }
 
-    private func decodeScreenshotImage(at url: URL) -> NSImage? {
-        if let image = NSImage(contentsOf: url), !image.representations.isEmpty {
-            return image
-        }
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-    }
-
-    private func pngData(for image: NSImage) -> Data? {
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else {
-            return nil
-        }
-        return bitmap.representation(using: .png, properties: [:])
-    }
-
-    private func importScreenshotToProjectStore(
-        sourcePath: String,
-        fileNameOverride: String?,
-        projectId: String
-    ) throws -> (storedPath: String, storedFileName: String) {
-        let expanded = (sourcePath as NSString).expandingTildeInPath
-        guard FileManager.default.fileExists(atPath: expanded) else {
-            throw NSError(domain: "BlitzMCP", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "file not found at \(expanded)"
-            ])
-        }
-
-        let sourceURL = URL(fileURLWithPath: expanded)
-        let requestedFileName = fileNameOverride?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let sourceExtension = sourceURL.pathExtension.lowercased()
-        let normalizedFileName: String
-        if let requestedFileName, !requestedFileName.isEmpty {
-            if sourceExtension == "png" {
-                normalizedFileName = requestedFileName
-            } else {
-                let baseName = URL(fileURLWithPath: requestedFileName)
-                    .deletingPathExtension()
-                    .lastPathComponent
-                normalizedFileName = baseName + ".png"
-            }
-        } else if sourceExtension == "png" {
-            normalizedFileName = sourceURL.lastPathComponent
-        } else {
-            normalizedFileName = sourceURL.deletingPathExtension().lastPathComponent + ".png"
-        }
-
-        let destDir = BlitzPaths.screenshots(projectId: projectId)
-        let fm = FileManager.default
-        try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-        let destURL = destDir.appendingPathComponent(normalizedFileName)
-
-        if fm.fileExists(atPath: destURL.path) {
-            try fm.removeItem(at: destURL)
-        }
-
-        if sourceExtension == "png" {
-            try fm.copyItem(at: sourceURL, to: destURL)
-        } else {
-            guard let image = decodeScreenshotImage(at: sourceURL) else {
-                throw NSError(domain: "BlitzMCP", code: 2, userInfo: [
-                    NSLocalizedDescriptionKey: "unsupported format or could not load image at \(expanded)"
-                ])
-            }
-            guard let pngData = pngData(for: image) else {
-                throw NSError(domain: "BlitzMCP", code: 3, userInfo: [
-                    NSLocalizedDescriptionKey: "failed to convert image to PNG"
-                ])
-            }
-            try pngData.write(to: destURL)
-        }
-
-        return (destURL.path, normalizedFileName)
-    }
-
     func executeScreenshotsPutTrackSlot(_ args: [String: Any]) async throws -> [String: Any] {
         guard let sourcePath = args["sourcePath"] as? String else {
             throw MCPServerService.MCPError.invalidToolArgs
@@ -900,12 +815,13 @@ extension MCPExecutor {
             return mcpText("Error: no active project")
         }
 
-        let storedAsset: (storedPath: String, storedFileName: String)
+        let storedAsset: URL
         do {
-            storedAsset = try importScreenshotToProjectStore(
-                sourcePath: sourcePath,
-                fileNameOverride: args["fileName"] as? String,
-                projectId: projectId
+            storedAsset = try ASCManager.storeScreenshot(
+                from: URL(fileURLWithPath: (sourcePath as NSString).expandingTildeInPath),
+                in: BlitzPaths.screenshots(projectId: projectId),
+                displayType: displayType,
+                fileName: args["fileName"] as? String
             )
         } catch {
             return mcpText("Error: \(error.localizedDescription)")
@@ -915,7 +831,7 @@ extension MCPExecutor {
             appState.ascManager.addAssetToTrack(
                 displayType: displayType,
                 slotIndex: slotIndex,
-                localPath: storedAsset.storedPath,
+                localPath: storedAsset.path,
                 locale: locale
             )
         }
@@ -927,7 +843,7 @@ extension MCPExecutor {
             "slot": slotRaw,
             "locale": locale,
             "displayType": displayType,
-            "fileName": storedAsset.storedFileName,
+            "fileName": storedAsset.lastPathComponent,
         ])
     }
 

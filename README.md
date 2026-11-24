@@ -62,6 +62,21 @@ a fresh Mac needs those optional device dependencies configured separately.
 Project-specific simulators and parallel development remain supported. Multiple
 simulators can share one installed runtime.
 
+For simulator control from a chat, install the matching Xcode simulator runtime,
+the `idb` CLI and `idb_companion`. If you already have the [Blitz Node runtime](docs/node-toolchain.md),
+install or update the iPhone MCP from the downloaded app, then reconnect your MCP client:
+
+```bash
+resources="/Applications/Blitz Neo.app/Contents/Resources"
+bash "$resources/pkg-scripts/install-iphone-mcp.sh" "$HOME/.blitz/node-runtime" "$resources"/iphone-mcp/*.tgz
+```
+
+Select the project's simulator with `blitz_macos.simulator_select_device` and pass its UDID to
+`blitz-iphone` for taps, swipes and screenshots. On iPhone Duo, `blitz_macos.simulator_set_pose`
+changes the fold position using macOS Accessibility permission. `get_screenshot` captures the
+active display. If your Codex configuration has an `enabled_tools` list for `blitz_macos`,
+include `simulator_set_pose` there to expose it to the chat.
+
 To update, quit Blitz Neo and replace it using the latest DMG. The current in-app
 updater does not install DMG downloads; a regular GitHub release does not change
 that installation method.

@@ -424,7 +424,8 @@ PATCH /v1/appScreenshots/<SCREENSHOT_ID>
 ```
 
 **Screenshot display types:**
-- `APP_IPHONE_67` — 6.9" iPhone (mandatory)
+- `APP_IPHONE_67` — large iPhone display
+- `APP_IPHONE_DUO` — outer display (1398×2034) and inner display (2007×2853), including their landscape dimensions. Both displays share one set per localization. Apple requires Duo screenshots starting in April 2027 for apps built with the iOS 27.1 SDK or later. [Apple screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
 - `APP_IPAD_PRO_3GEN_129` — 12.9" iPad Pro (if universal)
 
 ---

@@ -35,6 +35,27 @@ enum DeviceHubScreenGeometry {
         return rect
     }
 
+    struct Viewport: Equatable, Sendable {
+        let crop: CGRect
+        let windowSize: CGSize
+
+        var contentSize: CGSize {
+            CGSize(width: crop.width * windowSize.width, height: crop.height * windowSize.height)
+        }
+
+        /// The compact window can rotate, resize or show a perspective projection.
+        /// Only map linear touch coordinates when the visible surface matches the active display.
+        func orientedPoints(for native: CGSize) -> CGSize? {
+            let content = contentSize
+            guard content.width > 0, content.height > 0, native.width > 0, native.height > 0 else { return nil }
+            let rotated = (content.width > content.height) != (native.width > native.height)
+            let points = rotated ? CGSize(width: native.height, height: native.width) : native
+            let ratio = (content.width / content.height) / (points.width / points.height)
+            guard abs(ratio - 1) < 0.01 else { return nil }
+            return points
+        }
+    }
+
     static func matchesWindow(_ lhs: CGRect, _ rhs: CGRect, tolerance: CGFloat = 2) -> Bool {
         abs(lhs.minX - rhs.minX) < tolerance && abs(lhs.minY - rhs.minY) < tolerance
             && abs(lhs.width - rhs.width) < tolerance && abs(lhs.height - rhs.height) < tolerance

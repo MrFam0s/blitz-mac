@@ -3,10 +3,11 @@ import SwiftUI
 
 struct DeviceSelectorView: View {
     @Bindable var appState: AppState
+    @State private var viewerError: String?
 
     private var supportedSimulators: [SimulatorInfo] {
         appState.simulatorManager.simulators.filter {
-            SimulatorConfigDatabase.isSupported($0.displayName)
+            $0.supportsAppInteraction
         }
     }
 
@@ -35,6 +36,30 @@ struct DeviceSelectorView: View {
 
             Divider()
 
+            if let udid = appState.simulatorManager.bootedDeviceId {
+                if let projectId = appState.activeProjectId,
+                   supportedSimulators.contains(where: { $0.udid == udid && $0.deviceTypeIdentifier == SimulatorPose.deviceType }) {
+                    Section(L10n.tr("Faltposition")) {
+                        ForEach(SimulatorPose.allCases, id: \.self) { pose in
+                            Button(pose.label) {
+                                Task {
+                                    do { try await pose.request(in: appState, projectId: projectId, udid: udid) }
+                                    catch { viewerError = error.localizedDescription }
+                                }
+                            }
+                        }
+                    }
+                }
+                Button(L10n.tr("In Xcode öffnen")) {
+                    Task {
+                        do {
+                            try await SimulatorService().openSimulatorApp(udid: udid, inBackground: false)
+                        } catch {
+                            viewerError = error.localizedDescription
+                        }
+                    }
+                }
+            }
             Button(L10n.tr("Geräteliste aktualisieren")) {
                 Task { await appState.simulatorManager.loadSimulators() }
             }
@@ -54,6 +79,11 @@ struct DeviceSelectorView: View {
                         .scaleEffect(0.6)
                 }
             }
+        }
+        .alert(L10n.tr("Simulator"), isPresented: Binding(
+            get: { viewerError != nil }, set: { if !$0 { viewerError = nil } }
+        )) {} message: {
+            Text(viewerError ?? "")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()

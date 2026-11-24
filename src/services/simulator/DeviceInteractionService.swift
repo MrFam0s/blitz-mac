@@ -1,8 +1,21 @@
+import CoreGraphics
 import Foundation
 
 /// Handles device interactions (tap, swipe, text, button, key) via idb/WDA
 actor DeviceInteractionService {
     private let idb = IDBClient()
+
+    func activeScreenSize(udid: String) async throws -> CGSize {
+        try await SimctlClient().activeScreenSize(udid: udid, accessibility: idb)
+    }
+
+    func captureActiveScreen(udid: String, screens: [SimulatorScreen]?) async throws -> (image: CGImage, points: CGSize) {
+        try await SimctlClient().captureActiveScreen(udid: udid, accessibility: idb, screens: screens)
+    }
+
+    func applicationScreenSize(udid: String) async throws -> CGSize {
+        try await SimctlClient().activeTouchSize(udid: udid, accessibility: idb)
+    }
 
     func shutdown() async { await idb.shutdown() }
 

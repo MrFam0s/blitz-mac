@@ -311,3 +311,14 @@
 "Das Veröffentlichungsziel enthält widersprüchliche Store- oder Projektkennungen." = "Das Veröffentlichungsziel enthält widersprüchliche Store- oder Projektkennungen.";
 "Dieses Veröffentlichungsziel ist bereits vorhanden. Bitte das vorhandene Ziel auswählen." = "Dieses Veröffentlichungsziel ist bereits vorhanden. Bitte das vorhandene Ziel auswählen.";
 "Die Bundle-ID einer bestätigten Store-Zuordnung kann nicht geändert werden. Lege dafür ein separates Veröffentlichungsziel an." = "Die Bundle-ID einer bestätigten Store-Zuordnung kann nicht geändert werden. Lege dafür ein separates Veröffentlichungsziel an.";
+"In Xcode öffnen" = "In Xcode öffnen";
+"Die Touch-Koordinaten sind für diese Ansicht nicht eindeutig. Verwende die Gerätesteuerung in Xcode." = "Die Touch-Koordinaten sind für diese Ansicht nicht eindeutig. Verwende die Gerätesteuerung in Xcode.";
+"Screenshot sichern …" = "Screenshot sichern …";
+"Das aktive Simulator-Display ist noch nicht eindeutig. Öffne die App im Simulator und versuche es erneut." = "Das aktive Simulator-Display ist noch nicht eindeutig. Öffne die App im Simulator und versuche es erneut.";
+"Das Simulator-Display hat sich während der Aufnahme geändert. Bitte nimm den Screenshot erneut auf." = "Das Simulator-Display hat sich während der Aufnahme geändert. Bitte nimm den Screenshot erneut auf.";
+"Faltposition" = "Faltposition";
+"Geschlossen" = "Geschlossen";
+"Teilweise geöffnet" = "Teilweise geöffnet";
+"Geöffnet" = "Geöffnet";
+"Wähle den laufenden iPhone-Duo-Simulator dieses Projekts." = "Wähle den laufenden iPhone-Duo-Simulator dieses Projekts.";
+"Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode." = "Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode.";

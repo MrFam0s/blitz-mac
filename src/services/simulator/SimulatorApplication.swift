@@ -23,11 +23,12 @@ struct SimulatorApplication: Equatable {
         return application
     }
 
-    func openArguments(udid: String) throws -> [String] {
+    func openArguments(udid: String, inBackground: Bool = true) throws -> [String] {
         guard let id = UUID(uuidString: udid) else { throw LaunchError.invalidDevice }
+        let arguments = (inBackground ? ["-g"] : []) + ["-a", url.path]
         switch kind {
         case .simulator:
-            return ["-g", "-a", url.path, "--args", "-CurrentDeviceUDID", id.uuidString]
+            return arguments + ["--args", "-CurrentDeviceUDID", id.uuidString]
         case .deviceHub:
             // Device Hub's registered devices URL handler opens a compact device window.
             var destination = URLComponents()
@@ -36,7 +37,7 @@ struct SimulatorApplication: Equatable {
             destination.path = "/device/open"
             destination.queryItems = [URLQueryItem(name: "id", value: id.uuidString)]
             guard let target = destination.url else { throw LaunchError.invalidDevice }
-            return ["-g", "-a", url.path, target.absoluteString]
+            return arguments + [target.absoluteString]
         }
     }
 

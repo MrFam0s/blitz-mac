@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import ImageIO
+import UniformTypeIdentifiers
 
 // MARK: - Screenshots Manager
 // Extension containing screenshot-related functionality for ASCManager
@@ -10,6 +11,9 @@ extension ASCManager {
         "APP_IPHONE_67": [
             (1260, 2736), (1290, 2796), (1320, 2868),
             (2736, 1260), (2796, 1290), (2868, 1320),
+        ],
+        "APP_IPHONE_DUO": [
+            (1398, 2034), (2034, 1398), (2007, 2853), (2853, 2007),
         ],
         "APP_IPAD_PRO_3GEN_129": [
             (2048, 2732), (2064, 2752),
@@ -206,7 +210,7 @@ extension ASCManager {
 
     func orderedKnownScreenshotDisplayTypes(
         for locale: String,
-        preferredOrder: [String] = ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]
+        preferredOrder: [String] = ScreenshotDeviceType.allCases.map(\.rawValue)
     ) -> [String] {
         let known = trackDisplayTypes(for: locale)
         let preferred = preferredOrder.filter { known.contains($0) }
@@ -267,6 +271,10 @@ extension ASCManager {
     }
 
     private func resolvedLocalSourcePath(for screenshot: ASCScreenshot, previousSlots: [TrackSlot?]) -> String? {
+        if let projectId = appState?.activeProjectId,
+           let source = screenshot.storedSource(in: BlitzPaths.screenshots(projectId: projectId)) {
+            return source.path
+        }
         let targetFileName = screenshot.attributes.fileName?.lowercased()
 
         func matches(_ slot: TrackSlot) -> Bool {
@@ -600,6 +608,81 @@ extension ASCManager {
 
     // MARK: - Track Management
 
+    /// CoreSimulator can emit fully opaque RGBA. App Store Connect also rejects
+    /// the *presence* of an alpha channel, so remove it without changing visible pixels.
+    private nonisolated static func opaqueDuoPNG(_ image: CGImage) throws -> Data {
+        let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let failure = NSError(domain: "ASCManager", code: 9, userInfo: [
+            NSLocalizedDescriptionKey: L10n.tr("Das Duo-Bild konnte nicht als deckendes PNG gespeichert werden.")
+        ])
+        let rgb = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpaceCreateDeviceRGB()
+        let rowBytes = image.width * 4
+        let layout = CGBitmapInfo.byteOrder32Big
+        guard let context = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: rowBytes, space: rgb,
+                                      bitmapInfo: layout.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue),
+              let bytes = context.data?.assumingMemoryBound(to: UInt8.self) else { throw failure }
+        context.setBlendMode(.copy)
+        context.draw(image, in: bounds)
+        if stride(from: 3, to: rowBytes * image.height, by: 4).contains(where: { bytes[$0] != 255 }) {
+            throw NSError(domain: "ASCManager", code: 10, userInfo: [NSLocalizedDescriptionKey:
+                L10n.tr("Der Duo-Screenshot enthält transparente Pixel. Exportiere ihn mit einem deckenden Hintergrund.")])
+        }
+        let png = NSMutableData()
+        guard let provider = context.makeImage()?.dataProvider,
+              let result = CGImage(width: image.width, height: image.height, bitsPerComponent: 8,
+                                   bitsPerPixel: 32, bytesPerRow: rowBytes, space: rgb,
+                                   bitmapInfo: layout.union(CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)),
+                                   provider: provider, decode: nil, shouldInterpolate: false, intent: image.renderingIntent),
+              let encoder = CGImageDestinationCreateWithData(png, UTType.png.identifier as CFString, 1, nil)
+        else { throw failure }
+        CGImageDestinationAddImage(encoder, result, nil)
+        guard CGImageDestinationFinalize(encoder) else { throw failure }
+        return png as Data
+    }
+
+    /// Keep images immutable across tracks: an outer and an inner capture can share a filename.
+    nonisolated static func storeScreenshot(
+        from source: URL, in directory: URL, displayType: String, fileName: String? = nil
+    ) throws -> URL {
+        let original = try Data(contentsOf: source)
+        guard let imageSource = CGImageSourceCreateWithData(original as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+            throw NSError(domain: "ASCManager", code: 7, userInfo: [
+                NSLocalizedDescriptionKey: L10n.tr("\(source.lastPathComponent): Nicht unterstütztes Format oder Bild nicht lesbar")
+            ])
+        }
+        if let error = validateDimensions(width: image.width, height: image.height, displayType: displayType) {
+            throw NSError(domain: "ASCManager", code: 8, userInfo: [NSLocalizedDescriptionKey: error])
+        }
+        let data: Data
+        if displayType == ScreenshotDeviceType.iPhoneDuo.rawValue,
+           [.first, .last, .premultipliedFirst, .premultipliedLast, .alphaOnly].contains(image.alphaInfo) {
+            data = try opaqueDuoPNG(image)
+        } else if CGImageSourceGetType(imageSource) as String? == UTType.png.identifier {
+            data = original
+        } else {
+            guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
+                throw NSError(domain: "ASCManager", code: 9, userInfo: [
+                    NSLocalizedDescriptionKey: L10n.tr("\(source.lastPathComponent): Umwandlung in PNG fehlgeschlagen")
+                ])
+            }
+            data = png
+        }
+
+        let requested = fileName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = requested.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0).lastPathComponent } ?? source.lastPathComponent
+        let basename = (name as NSString).deletingPathExtension
+        let pngName = (name as NSString).pathExtension.lowercased() == "png" ? name : basename + ".png"
+        let hash = ASCScreenshot.sourceChecksum(data)
+        let folder = directory.appendingPathComponent(hash, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appendingPathComponent(pngName)
+        try data.write(to: destination, options: .atomic)
+        return destination
+    }
+
+
     @discardableResult
     func addAssetToTrack(
         displayType: String,
@@ -753,6 +836,8 @@ extension ASCManager {
         switch displayType.trimmingCharacters(in: .whitespacesAndNewlines) {
         case "APP_IPHONE_67":
             return "1260×2736, 1290×2796, or 1320×2868 (portrait or landscape)"
+        case "APP_IPHONE_DUO":
+            return L10n.tr("1398×2034 außen oder 2007×2853 innen (Hoch- oder Querformat)")
         case "APP_IPAD_PRO_3GEN_129":
             return "2048×2732 or 2064×2752 (portrait or landscape)"
         case "APP_DESKTOP":
@@ -766,6 +851,8 @@ extension ASCManager {
         switch displayType {
         case "APP_IPHONE_67":
             return "iPhone"
+        case "APP_IPHONE_DUO":
+            return "iPhone Duo"
         case "APP_IPAD_PRO_3GEN_129":
             return "iPad"
         case "APP_DESKTOP":

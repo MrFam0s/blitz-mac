@@ -1811,7 +1811,7 @@ final class AppStoreConnectService {
                 "id": screenshotId,
                 "attributes": [
                     "uploaded": true,
-                    "sourceFileChecksum": reserved.data.attributes.sourceFileChecksum ?? ""
+                    "sourceFileChecksum": ASCScreenshot.sourceChecksum(fileData)
                 ]
             ]
         ]

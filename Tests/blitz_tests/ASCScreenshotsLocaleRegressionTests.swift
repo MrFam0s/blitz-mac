@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import AppKit
+import ImageIO
 @testable import Blitz
 
 @MainActor
@@ -306,9 +307,12 @@ import AppKit
     ]
 
     let usSet = makeScreenshotSet(id: "set-us", displayType: "APP_IPHONE_67", count: 1)
+    let duo = makeScreenshotSet(id: "duo-us", displayType: "APP_IPHONE_DUO", count: 2)
+    #expect(manager.submissionReadiness.fields.first { $0.label == "iPhone Duo Screenshots" }?.required == false)
+    #expect(!manager.submissionReadiness.missingRequired.contains { $0.label == "iPhone Duo Screenshots" })
     manager.updateScreenshotCache(
         locale: "en-US",
-        sets: [usSet],
+        sets: [usSet, duo],
         screenshots: [usSet.id: [makeScreenshot(id: "shot-us", fileName: "us.png")]]
     )
 
@@ -318,6 +322,7 @@ import AppKit
     let iphoneField = readiness.fields.first { $0.label == "iPhone Screenshots" }
 
     #expect(iphoneField?.value == "1 screenshot(s)")
+    #expect(readiness.fields.first { $0.label == "iPhone Duo Screenshots" }?.value == "2 screenshot(s)")
 }
 
 @MainActor
@@ -401,6 +406,86 @@ import AppKit
             displayType: "APP_IPHONE_67"
         ) == nil
     )
+}
+
+@Test func duoScreenshotDimensionsMatchBothDisplaysAndOrientations() {
+    let valid = [(1398, 2034), (2034, 1398), (2007, 2853), (2853, 2007)]
+    for (width, height) in valid {
+        #expect(ASCManager.validateDimensions(width: width, height: height, displayType: "APP_IPHONE_DUO") == nil)
+        #expect(ASCManager.validateDimensions(width: width, height: height, displayType: "APP_IPHONE_67") != nil)
+    }
+    for (width, height) in [(1320, 2868), (1398, 2853), (0, 0)] {
+        #expect(ASCManager.validateDimensions(width: width, height: height, displayType: "APP_IPHONE_DUO") != nil)
+    }
+    #expect(ScreenshotDeviceType.types(for: .iOS) == [.iPhone, .iPhoneDuo, .iPad])
+    #expect(ScreenshotDeviceType.types(for: .macOS) == [.mac])
+}
+
+@MainActor @Test func duoImportKeepsSameNamedInnerAndOuterScreenshots() throws {
+    let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: temp) }
+    let manager = editableScreenshotManager()
+    let originalPaths = try [(1398, 2034), (2853, 2007)].map { width, height in
+        try writeValidScreenshotPNG(width: width, height: height, fileName: "\(temp.lastPathComponent)/\(width).png")
+    }
+    var stored: [URL] = []
+    for (index, path) in originalPaths.enumerated() {
+        let url = try ASCManager.storeScreenshot(
+            from: URL(fileURLWithPath: path), in: temp, displayType: "APP_IPHONE_DUO", fileName: "01.png"
+        )
+        #expect(url.lastPathComponent == "01.png")
+        #expect(manager.addAssetToTrack(displayType: "APP_IPHONE_DUO", slotIndex: index, localPath: url.path) == nil)
+        var attributes = makeScreenshot(id: "remote", fileName: "01.png").attributes
+        attributes.sourceFileChecksum = ASCScreenshot.sourceChecksum(try Data(contentsOf: url))
+        let remote = ASCScreenshot(id: "remote", attributes: attributes)
+        #expect(remote.storedSource(in: temp) == url)
+        stored.append(url)
+    }
+    #expect(stored[0] != stored[1])
+    let storedImage = try #require(CGImageSourceCreateWithURL(stored[0] as CFURL, nil))
+    let properties = try #require(CGImageSourceCopyPropertiesAtIndex(storedImage, 0, nil) as? [CFString: Any])
+    #expect(properties[kCGImagePropertyHasAlpha] as? Bool != true)
+    #expect(properties[kCGImagePropertyPixelWidth] as? Int == 1398)
+    let transparentPath = try writeValidScreenshotPNG(width: 1398, height: 2034,
+        fileName: "\(temp.lastPathComponent)/transparent.png", fill: .clear)
+    #expect(throws: (any Error).self) {
+        try ASCManager.storeScreenshot(from: URL(fileURLWithPath: transparentPath), in: temp, displayType: "APP_IPHONE_DUO")
+    }
+    #expect(manager.trackSlotsForDisplayType("APP_IPHONE_DUO").compactMap { $0?.localPath } == stored.map(\.path))
+    #expect(manager.trackSlotsForDisplayType("APP_IPHONE_67").allSatisfy { $0 == nil })
+}
+
+@Test func duoUploadCreatesCorrectSetAndCommitsChecksumOfOriginalBytes() async throws {
+    let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+    try Data("abc".utf8).write(to: source)
+    defer { try? FileManager.default.removeItem(at: source) }
+    let service = AppStoreConnectService { method, path, _, body in
+        let request = try body.flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        let resource = request?["data"] as? [String: Any]
+        let attributes = resource?["attributes"] as? [String: Any]
+        let json: String
+        switch (method, path) {
+        case ("GET", "/v1/appStoreVersionLocalizations/locale/appScreenshotSets"):
+            json = #"{"data":[]}"#
+        case ("POST", "/v1/appScreenshotSets"):
+            #expect(attributes?["screenshotDisplayType"] as? String == "APP_IPHONE_DUO")
+            json = #"{"data":{"id":"duo","attributes":{"screenshotDisplayType":"APP_IPHONE_DUO"}}}"#
+        case ("POST", "/v1/appScreenshots"):
+            let relationships = resource?["relationships"] as? [String: [String: [String: String]]]
+            #expect(relationships?["appScreenshotSet"]?["data"]?["id"] == "duo")
+            #expect(attributes?["fileSize"] as? Int == 3)
+            json = #"{"data":{"id":"shot","attributes":{"uploadOperations":[]}}}"#
+        case ("PATCH", "/v1/appScreenshots/shot"):
+            #expect(attributes?["sourceFileChecksum"] as? String == "900150983cd24fb0d6963f7d28e17f72")
+            #expect(attributes?["uploaded"] as? Bool == true)
+            json = "{}"
+        default:
+            throw NSError(domain: "Unexpected mock request", code: 1)
+        }
+        return .init(statusCode: 200, headers: [:], contentType: "application/json", body: Data(json.utf8))
+    }
+    try await service.uploadScreenshot(localizationId: "locale", path: source.path, displayType: "APP_IPHONE_DUO")
 }
 
 @Test func screenshotDimensionSummaryMatchesHelperCatalog() {
@@ -514,7 +599,7 @@ private func makeTestImage() -> NSImage {
     return image
 }
 
-private func writeValidScreenshotPNG(width: Int, height: Int, fileName: String) throws -> String {
+private func writeValidScreenshotPNG(width: Int, height: Int, fileName: String, fill: NSColor = .white) throws -> String {
     let rep = NSBitmapImageRep(
         bitmapDataPlanes: nil,
         pixelsWide: width,
@@ -533,7 +618,7 @@ private func writeValidScreenshotPNG(width: Int, height: Int, fileName: String) 
 
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    NSColor.white.setFill()
+    fill.setFill()
     NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
     NSGraphicsContext.restoreGraphicsState()
 

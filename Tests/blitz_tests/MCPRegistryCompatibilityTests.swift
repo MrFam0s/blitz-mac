@@ -49,13 +49,14 @@ struct MCPRegistryCompatibilityTests {
         #expect(MCPRegistry.category(for: "asc_reopen_app_setup") == .query)
     }
 
-    @Test func screenshotRegistryUsesDirectTrackTools() {
+    @Test func screenshotRegistryUsesDirectTrackTools() throws {
         let tools = MCPRegistry.allTools()
         #expect(tool(named: "screenshots_add_asset", in: tools) == nil)
         #expect(tool(named: "screenshots_set_track", in: tools) == nil)
-        #expect(tool(named: "screenshots_put_track_slot", in: tools) != nil)
-        #expect(tool(named: "screenshots_remove_track_slot", in: tools) != nil)
-        #expect(tool(named: "screenshots_reorder_track", in: tools) != nil)
+        for name in ["screenshots_put_track_slot", "screenshots_remove_track_slot", "screenshots_reorder_track", "screenshots_save"] {
+            let entry = try #require(tool(named: name, in: tools))
+            #expect(enumValues(for: "displayType", in: entry) == ["APP_IPHONE_67", "APP_IPHONE_DUO", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"])
+        }
     }
 
     private func tool(named name: String, in tools: [[String: Any]]) -> [String: Any]? {

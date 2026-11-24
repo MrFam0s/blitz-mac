@@ -547,6 +547,9 @@
 "Zuvor abgelehnt" = "Previously Rejected";
 "[Developer-Portal](https://developer.apple.com/account/resources/identifiers/list)." = "[Developer Portal](https://developer.apple.com/account/resources/identifiers/list).";
 "iPad-Screenshots" = "iPad screenshots";
+"1398×2034 außen oder 2007×2853 innen (Hoch- oder Querformat)" = "1398×2034 outer or 2007×2853 inner (portrait or landscape)";
+"Screenshots für iPhone Duo" = "iPhone Duo screenshots";
+"Ab April 2027 verlangt Apple für Apps, die mit dem iOS-27.1-SDK oder neuer gebaut wurden, Screenshots für iPhone Duo." = "Starting in April 2027, Apple requires iPhone Duo screenshots for apps built with the iOS 27.1 SDK or later.";
 "iPhone-Screenshots" = "iPhone screenshots";
 "org.beispiel.MeineApp" = "org.example.MyApp";
 "unbekannt" = "unknown";
@@ -638,3 +641,5 @@
 "Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt." = "The existing submission does not clearly match this release operation. Inspect the saved operation using the CLI or MCP; no new draft was created.";
 
 "Apples Versionsstatus und der Status der zugehörigen Einreichung widersprechen sich. Aktualisiere beide, bevor du daraus den nächsten Schritt ableitest." = "Apple’s version status and the associated submission status conflict. Refresh both before deciding the next step.";
+"Das Duo-Bild konnte nicht als deckendes PNG gespeichert werden." = "The Duo image could not be saved as an opaque PNG.";
+"Der Duo-Screenshot enthält transparente Pixel. Exportiere ihn mit einem deckenden Hintergrund." = "The Duo screenshot contains transparent pixels. Export it with an opaque background.";

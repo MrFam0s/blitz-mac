@@ -2,6 +2,20 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.80 build 100 — simulator controls and iPhone Duo
+
+Projects can select an installed iPhone or iPad simulator. Duo previews, touch
+input and full-resolution screenshots follow the active display. The native MCP
+can change the fold position of the selected project device. The bundled iPhone
+MCP is 0.1.18-blitz.2. Store screenshot sets accept the native inner and outer
+sizes in either orientation. The three fold positions were exercised on a
+dedicated iOS 27.2 simulator, including a tap on the far side of the open display.
+
+All 723 Swift tests passed, as did 22 Node and seven Python iPhone MCP tests,
+17 installer tests, 13 packaging tests and nine release metadata tests. Both
+the stapled Apple Silicon DMG and its app passed Gatekeeper assessment.
+The DMG SHA-256 is `d554ec9bb48e878e54eac154d05483911d8c92e8c3baa81c5c7c8d44d4730f4f`.
+
 ## 1.0.80 build 99 — dashboard platform groups and sorting
 
 The Apple Silicon DMG packages the dashboard changes tested in builds 95–98.
@@ -1621,7 +1635,7 @@ Build the package before bundling to reuse it:
 # Exact Node/npm pair from config/node-toolchain.json on PATH
 bash scripts/build-iphone-mcp.sh
 python3 scripts/test-iphone-mcp-installer.py
-BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz" \
+BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.2.tgz" \
 BLITZ_SWIFT_BUILD_SYSTEM=native CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
 ```
 

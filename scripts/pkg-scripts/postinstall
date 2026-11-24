@@ -95,7 +95,7 @@ BLITZ_NODE_DIR="$CONSOLE_HOME/.blitz/node-runtime"
 NODE_DIR="$BLITZ_NODE_DIR/bin"
 NPM_BIN="$NODE_DIR/npm"
 IPHONE_MCP_BIN="$NODE_DIR/iphone-mcp"
-IPHONE_MCP_PACKAGE="$RESOURCES_DIR/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz"
+IPHONE_MCP_PACKAGE="$RESOURCES_DIR/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.2.tgz"
 NODE_MANIFEST="$RESOURCES_DIR/node-toolchain.json"
 NODE_INSTALLER="$RESOURCES_DIR/pkg-scripts/install-node-runtime.py"
 

@@ -28,8 +28,12 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private(set) var frameSize: CGSize = .zero
     private(set) var isCapturing = false
     private(set) var frameCount: Int = 0
-    private(set) var deviceScreenRect: CGRect?
-    var onGeometryChange: (@MainActor @Sendable (CGRect?) -> Void)?
+    enum Geometry: Sendable {
+        case classic
+        case deviceHub(DeviceHubScreenGeometry.Viewport?)
+        case failed(CaptureError)
+    }
+    var onGeometryChange: (@MainActor @Sendable (Geometry) async -> Void)?
     var onTouchAvailabilityChange: (@MainActor @Sendable (Bool) -> Void)?
 
     /// Callback when a new frame arrives
@@ -115,20 +119,26 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
            let app = window.owningApplication {
             let selectedWindowID = window.windowID
-            deviceScreenRect = try await DeviceHubScreenGeometry.waitForScreen {
-                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                guard let refreshed = content.windows.first(where: { $0.windowID == selectedWindowID }) else {
-                    throw CaptureError.deviceScreenNotFound
+            do {
+                let rect = try await DeviceHubScreenGeometry.waitForScreen {
+                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                    guard let refreshed = content.windows.first(where: { $0.windowID == selectedWindowID }) else {
+                        throw CaptureError.deviceScreenNotFound
+                    }
+                    window = refreshed
+                    return try DeviceHubScreenGeometry.screenRect(
+                        processID: app.processID, windowTitle: refreshed.title ?? "", windowFrame: refreshed.frame)
                 }
-                window = refreshed
-                return try DeviceHubScreenGeometry.screenRect(
-                    processID: app.processID, windowTitle: refreshed.title ?? "", windowFrame: refreshed.frame)
+                await onGeometryChange?(.deviceHub(.init(crop: rect, windowSize: window.frame.size)))
+            } catch CaptureError.deviceScreenNotFound {
+                // AX can become available after the stream starts. The periodic
+                // geometry check enables touches once it identifies one surface.
+                await onGeometryChange?(.deviceHub(nil))
             }
         } else {
-            deviceScreenRect = nil
+            await onGeometryChange?(.classic)
         }
         currentWindow = window
-        await onGeometryChange?(deviceScreenRect)
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
@@ -191,8 +201,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         stream = nil
         streamOutput = nil
         currentWindow = nil
-        deviceScreenRect = nil
-        await onGeometryChange?(nil)
+        await onGeometryChange?(.classic)
         isCapturing = false
         clearLatestFrame()
     }
@@ -203,6 +212,19 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         frameLock.unlock()
     }
 
+    /// Read the same window again at the point of input. The user may have
+    /// changed the hinge or rotated the device since the last resize poll.
+    @MainActor func currentDeviceHubViewport() async -> DeviceHubScreenGeometry.Viewport? {
+        guard let expectedStream = stream, let windowID = currentWindow?.windowID,
+              let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+              stream === expectedStream,
+              let window = content.windows.first(where: { $0.windowID == windowID }),
+              let app = window.owningApplication, app.bundleIdentifier == "com.apple.dt.Devices",
+              let rect = try? DeviceHubScreenGeometry.screenRect(processID: app.processID,
+                  windowTitle: window.title ?? "", windowFrame: window.frame) else { return nil }
+        return .init(crop: rect, windowSize: window.frame.size)
+    }
+
     /// Refresh only the selected window after capture permission has been granted.
     @MainActor private func checkForResize() async {
         guard !resizeCheckRunning, isCapturing, let previous = currentWindow,
@@ -210,44 +232,32 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         resizeCheckRunning = true
         defer { resizeCheckRunning = false }
         // Permission has already been granted. Refresh this exact window's geometry.
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
-              var window = content.windows.first(where: { $0.windowID == previous.windowID }),
-              stream === expectedStream else { return }
+        let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard stream === expectedStream else { return }
+        guard let window = content?.windows.first(where: { $0.windowID == previous.windowID }) else {
+            onTouchAvailabilityChange?(false)
+            return
+        }
         if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
            let app = window.owningApplication {
             do {
-                let rect: CGRect
-                do {
-                    rect = try DeviceHubScreenGeometry.screenRect(processID: app.processID,
-                        windowTitle: window.title ?? "", windowFrame: window.frame)
-                } catch SimulatorCaptureService.CaptureError.deviceScreenNotFound {
-                    // Device Hub can temporarily replace its remote AX tree even
-                    // without resizing. Suspend touches while refreshing the bounds.
-                    onTouchAvailabilityChange?(false)
-                    rect = try await DeviceHubScreenGeometry.waitForScreen {
-                        guard self.stream === expectedStream else { throw CancellationError() }
-                        let refreshed = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                        guard let candidate = refreshed.windows.first(where: { $0.windowID == previous.windowID }) else {
-                            throw CaptureError.deviceScreenNotFound
-                        }
-                        window = candidate
-                        return try DeviceHubScreenGeometry.screenRect(processID: app.processID,
-                            windowTitle: candidate.title ?? "", windowFrame: candidate.frame)
-                    }
-                }
-                guard stream === expectedStream else { return }
-                deviceScreenRect = rect
-                onGeometryChange?(rect)
-                onTouchAvailabilityChange?(true)
+                let rect = try DeviceHubScreenGeometry.screenRect(processID: app.processID,
+                    windowTitle: window.title ?? "", windowFrame: window.frame)
+                await onGeometryChange?(.deviceHub(.init(crop: rect, windowSize: window.frame.size)))
+            } catch CaptureError.deviceScreenNotFound {
+                // When Device Hub replaces its remote screen, its AX geometry may
+                // briefly disappear. Keep the stream and recover on the next poll.
+                onTouchAvailabilityChange?(false)
+                return
             } catch {
                 guard stream === expectedStream else { return }
-                // Stop rather than keep accepting touches with stale screen bounds.
                 await stopCapture()
-                await onGeometryChange?(.zero)
+                await onGeometryChange?(.failed(error as? CaptureError ?? .deviceScreenNotFound))
                 return
             }
         }
         guard stream === expectedStream else { return }
+        onTouchAvailabilityChange?(true)
         currentWindow = window
 
         let scale: CGFloat = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2.0 }

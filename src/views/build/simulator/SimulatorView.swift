@@ -2,40 +2,44 @@
 import SwiftUI
 import MetalKit
 import SwiftTerm
+import UniformTypeIdentifiers
 
 /// Main Build tab view — simulator frame display + touch interaction
 struct SimulatorView: View {
     @Bindable var appState: AppState
 
     private var stream: SimulatorStreamManager { appState.simulatorStream }
-    @State private var deviceInteraction = DeviceInteractionService()
+    @State private var screenshotError: String?
+    @State private var savingScreenshot = false
     @State private var keyMonitor: Any?
 
-    /// Get the device config for the currently booted simulator
-    private var deviceConfig: SimulatorDeviceConfig {
-        let name = appState.simulatorManager.simulators
-            .first(where: { $0.udid == appState.simulatorManager.bootedDeviceId })?
-            .displayName
-        let config = SimulatorConfigDatabase.config(for: name)
-        guard let rect = stream.deviceScreenRect else { return config }
-        let landscape = rect.width * frameSize.width > rect.height * frameSize.height
-        return SimulatorDeviceConfig(toolbarHeight: 0, toolbarOffset: 0,
-                                     widthPoints: landscape ? config.heightPoints : config.widthPoints,
-                                     heightPoints: landscape ? config.widthPoints : config.heightPoints,
-                                     borderX: 0, borderY: 0)
+    private var deviceConfig: SimulatorDeviceConfig? {
+        if stream.usesNativePreview || stream.usesDeviceHub {
+            guard let points = stream.devicePointSize else { return nil }
+            return SimulatorDeviceConfig(toolbarHeight: 0, toolbarOffset: 0,
+                                         widthPoints: points.width, heightPoints: points.height,
+                                         borderX: 0, borderY: 0)
+        }
+        guard let device = appState.simulatorManager.simulators.first(where: {
+            $0.udid == appState.simulatorManager.bootedDeviceId
+        }) else { return nil }
+        return device.legacyConfig
     }
 
     /// Current frame dimensions from the capture (pixels)
-    private var frameSize: CGSize { stream.captureService.frameSize }
+    private var frameSize: CGSize {
+        if let image = stream.nativeImage { return CGSize(width: image.width, height: image.height) }
+        return stream.captureService.frameSize
+    }
 
     /// Compute the crop rect from device config + current frame size.
     /// Only crops the toolbar — bezels remain visible (matches blitz-cn).
     private var cropRect: (x: Double, y: Double, w: Double, h: Double) {
-        if let rect = stream.deviceScreenRect {
+        if let rect = stream.viewport?.crop {
             return (rect.minX, rect.minY, rect.width, rect.height)
         }
         let size = frameSize
-        guard size.width > 0, size.height > 0 else {
+        guard size.width > 0, size.height > 0, let deviceConfig else {
             return (0, 0, 1, 1)
         }
         return SimulatorConfigDatabase.cropRect(
@@ -47,55 +51,76 @@ struct SimulatorView: View {
 
     /// Aspect ratio of the crop region (full width × height-minus-toolbar).
     private var cropAspectRatio: CGFloat {
-        let size = frameSize
-        guard size.width > 0, size.height > 0 else {
-            return deviceConfig.widthPoints / deviceConfig.heightPoints
+        if let content = stream.viewport?.contentSize, content.height > 0 {
+            return content.width / content.height
         }
+        let size = frameSize
+        let fallback = deviceConfig.map { $0.widthPoints / $0.heightPoints } ?? 1
+        guard size.width > 0, size.height > 0 else { return fallback }
         let crop = cropRect
         let cropW = crop.w * size.width
         let cropH = crop.h * size.height
         guard cropH > 0 else {
-            return deviceConfig.widthPoints / deviceConfig.heightPoints
+            return fallback
         }
         return cropW / cropH
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            if let renderer = stream.renderer, stream.isCapturing {
+            if stream.isCapturing {
                 ZStack {
                     Color.black
 
-                    MetalFrameView(
-                        renderer: renderer,
-                        captureService: stream.captureService,
-                        cursor: nil,
-                        cropRect: cropRect
-                    )
+                    Group {
+                        if stream.usesNativePreview {
+                            if let image = stream.nativeImage {
+                                Image(decorative: image, scale: 1).resizable()
+                            } else {
+                                ProgressView()
+                            }
+                        } else if let renderer = stream.renderer {
+                            MetalFrameView(renderer: renderer, captureService: stream.captureService,
+                                           cursor: nil, cropRect: cropRect)
+                        }
+                    }
                     .aspectRatio(cropAspectRatio, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 32))
-                    .overlay(
-                        TouchOverlayView(
-                            deviceConfig: deviceConfig,
-                            frameWidth: Int(frameSize.width),
-                            frameHeight: Int(frameSize.height),
-                            onTap: { x, y in
-                                sendInput(.tap(x: x, y: y))
-                            },
-                            onSwipe: { fx, fy, tx, ty, duration, delta in
-                                sendInput(.swipe(fromX: fx, fromY: fy, toX: tx, toY: ty,
-                                                 duration: duration, delta: Double(delta)))
-                            },
-                            gestureVisualization: appState.gestureVisualization,
-                            activeDeviceID: appState.simulatorManager.bootedDeviceId,
-                            skin: appState.selectedOverlaySkin
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 32))
-                        .allowsHitTesting(stream.isTouchReady)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: stream.usesNativePreview ? 0 : 32))
+                    .overlay {
+                        if let deviceConfig {
+                            let viewport = stream.viewport
+                            TouchOverlayView(
+                                deviceConfig: deviceConfig,
+                                frameWidth: Int(frameSize.width),
+                                frameHeight: Int(frameSize.height),
+                                onTap: { x, y in
+                                    sendTouch(.tap(x: x, y: y), config: deviceConfig, viewport: viewport)
+                                },
+                                onSwipe: { fx, fy, tx, ty, duration, delta in
+                                    sendTouch(.swipe(fromX: fx, fromY: fy, toX: tx, toY: ty,
+                                                     duration: duration, delta: Double(delta)),
+                                              config: deviceConfig, viewport: viewport)
+                                },
+                                gestureVisualization: appState.gestureVisualization,
+                                activeDeviceID: appState.simulatorManager.bootedDeviceId,
+                                skin: appState.selectedOverlaySkin
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: stream.usesNativePreview ? 0 : 32))
+                            .allowsHitTesting(stream.isTouchReady)
+                            .id(stream.geometryRevision)
+                        }
+                    }
                     .padding(16)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if let error = stream.errorMessage, stream.usesNativePreview {
+                    Text(error).font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+                } else if deviceConfig == nil && !stream.usesNativePreview {
+                    Text(L10n.tr("Die Touch-Koordinaten sind für diese Ansicht nicht eindeutig. Verwende die Gerätesteuerung in Xcode."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
             } else if let errorMessage = appState.simulatorManager.errorMessage ?? stream.errorMessage {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
@@ -185,18 +210,30 @@ struct SimulatorView: View {
             await appState.startProjectSimulator()
         }
         .onAppear {
-            deviceInteraction = DeviceInteractionService()
             stream.ensureRenderer()
             installKeyMonitor()
         }
         .onDisappear {
             removeKeyMonitor()
-            let interaction = deviceInteraction
-            Task { await interaction.shutdown() }
+            if let session = stream.interaction {
+                Task {
+                    guard stream.interaction === session else { return }
+                    await stream.pauseStream()
+                }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 DeviceSelectorView(appState: appState)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: saveScreenshot) {
+                    Image(systemName: "camera")
+                }
+                .help(L10n.tr("Screenshot sichern …"))
+                .accessibilityLabel(L10n.tr("Screenshot sichern …"))
+                .disabled(appState.simulatorManager.bootedDeviceId == nil || savingScreenshot)
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -228,13 +265,50 @@ struct SimulatorView: View {
             }
 
         }
+        .alert(L10n.tr("Screenshot sichern …"), isPresented: Binding(
+            get: { screenshotError != nil }, set: { if !$0 { screenshotError = nil } }
+        )) {} message: {
+            Text(screenshotError ?? "")
+        }
+    }
+
+    @MainActor private func saveScreenshot() {
+        guard !savingScreenshot, let udid = appState.simulatorManager.bootedDeviceId else { return }
+        let project = appState.activeProjectId
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "Screenshot.png"
+        panel.title = L10n.tr("Screenshot sichern …")
+        guard panel.runModal() == .OK, let destination = panel.url,
+              appState.activeProjectId == project, appState.simulatorManager.bootedDeviceId == udid else { return }
+        savingScreenshot = true
+        Task {
+            defer { savingScreenshot = false }
+            do {
+                try await SimctlClient().screenshot(udid: udid, path: destination.path)
+            } catch {
+                screenshotError = error.localizedDescription
+            }
+        }
+    }
+
+    private func sendTouch(_ action: DeviceAction, config: SimulatorDeviceConfig,
+                           viewport: DeviceHubScreenGeometry.Viewport?) {
+        guard let udid = appState.simulatorManager.bootedDeviceId else { return }
+        guard let interaction = stream.interaction else { return }
+        let points = CGSize(width: config.widthPoints, height: config.heightPoints)
+        Task {
+            guard await stream.acceptsTouch(udid: udid, viewport: viewport, points: points),
+                  appState.simulatorManager.bootedDeviceId == udid else { return }
+            _ = try? await interaction.execute(action, udid: udid)
+        }
     }
 
     private func sendInput(_ action: DeviceAction) {
         guard let udid = appState.simulatorManager.bootedDeviceId else { return }
         // Capture the originating session and device before scheduling. A late
         // task must never pick up a newly selected project's service or UDID.
-        let interaction = deviceInteraction
+        guard let interaction = stream.interaction else { return }
         Task { _ = try? await interaction.execute(action, udid: udid) }
     }
 
@@ -279,7 +353,7 @@ struct SimulatorView: View {
                 return event
             }
 
-            let interaction = deviceInteraction
+            guard let interaction = stream.interaction else { return event }
             if let hidCode = Self.hidKeycodes[event.keyCode] {
                 Task { _ = try? await interaction.execute(.key(.keycode(hidCode)), udid: udid) }
                 return nil // consumed

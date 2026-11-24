@@ -11,4 +11,4 @@ from iphone_mcp_archive import verify
 
 verify(sys.argv[1], json.loads((root / 'config/node-toolchain.json').read_text()),
        root / 'helpers/iphone-mcp-overlay/maintenance.patch')
-print('iPhone MCP 0.1.18-blitz.1: checksum, lock, toolchain and pinned source verified')
+print('iPhone MCP 0.1.18-blitz.2: checksum, lock, toolchain and pinned source verified')

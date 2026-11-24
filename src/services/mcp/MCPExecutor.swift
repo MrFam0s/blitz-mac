@@ -417,6 +417,13 @@ actor MCPExecutor {
             return await executeSimulatorListDevices()
         case "simulator_select_device":
             return try await executeSimulatorSelectDevice(arguments)
+        case "simulator_set_pose":
+            guard let projectId = arguments["projectId"] as? String, let udid = arguments["udid"] as? String,
+                  let raw = arguments["pose"] as? String, let pose = SimulatorPose(rawValue: raw) else {
+                throw MCPServerService.MCPError.invalidToolArgs
+            }
+            try await pose.request(in: appState, projectId: projectId, udid: udid)
+            return mcpJSON(["requestedPose": pose.rawValue, "udid": udid, "projectId": projectId])
 
         case "settings_get":
             return await executeSettingsGet()

@@ -23,7 +23,7 @@ SCRIPT = SCRIPTS / 'pkg-scripts/install-iphone-mcp.sh'
 CLI = '''#!/usr/bin/env node
 process.stdin.on('data', data => {
  const request=JSON.parse(data.toString().trim());
- process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{serverInfo:{version:'0.1.18-blitz.1'}}})+'\\n');
+ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{serverInfo:{version:'0.1.18-blitz.2'}}})+'\\n');
 });
 process.stdin.on('end',()=>process.exit(0));
 '''

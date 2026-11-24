@@ -66,6 +66,7 @@ Static definitions for all ~31 MCP tools. Returns `[[String: Any]]` for the `too
 | `project_close`           | Close current project                                           | **Yes**   |
 | `simulator_list_devices`  | List simulators + physical devices                              | No        |
 | `simulator_select_device` | Select/boot a simulator by UDID                                 | **Yes**   |
+| `simulator_set_pose`      | Request a fold position on the project’s selected iPhone Duo     | **Yes**   |
 | `simulator_start_streaming` | Start screen capture stream                                   | **Yes**   |
 | `simulator_stop_streaming`  | Stop screen capture stream                                    | **Yes**   |
 | `simulator_press_home`    | Press home button                                               | No        |

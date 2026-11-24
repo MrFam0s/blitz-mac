@@ -80,7 +80,7 @@ final class SimulatorManager {
         await loadSimulators()
         guard token == revision, !Task.isCancelled, errorMessage == nil else { return false }
         guard let device = simulators.first(where: { $0.udid == udid }),
-              SimulatorConfigDatabase.isSupported(device.displayName) else {
+              device.supportsAppInteraction else {
             errorMessage = L10n.tr("Dieser Simulator ist nicht verfügbar oder wird nicht unterstützt. Wähle ein anderes Gerät.")
             return false
         }
@@ -114,7 +114,7 @@ final class SimulatorManager {
         guard token == revision, !Task.isCancelled, errorMessage == nil else { return false }
         guard let selectedDeviceID else { return false }
         guard let device = simulators.first(where: { $0.udid == selectedDeviceID }),
-              SimulatorConfigDatabase.isSupported(device.displayName) else {
+              device.supportsAppInteraction else {
             errorMessage = L10n.tr("Der gespeicherte Simulator ist nicht verfügbar. Wähle ein anderes Gerät für dieses Projekt.")
             return false
         }

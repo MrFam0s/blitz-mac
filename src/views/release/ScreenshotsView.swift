@@ -1,52 +1,24 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import ImageIO
 
 // MARK: - Models
 
-private enum ScreenshotDeviceType: String, CaseIterable, Identifiable {
-    case iPhone
-    case iPad
-    case mac
-
-    var id: String { rawValue }
-
+private extension ScreenshotDeviceType {
     var label: String {
         switch self {
         case .iPhone: "iPhone 6.7\""
+        case .iPhoneDuo: "iPhone Duo"
         case .iPad: "iPad Pro 12.9\""
         case .mac: "Mac"
         }
     }
 
-    var ascDisplayType: String {
-        switch self {
-        case .iPhone: "APP_IPHONE_67"
-        case .iPad: "APP_IPAD_PRO_3GEN_129"
-        case .mac: "APP_DESKTOP"
-        }
-    }
-
-    var dimensionLabel: String {
-        ASCManager.screenshotDimensionSummary(displayType: ascDisplayType) ?? L10n.tr("Nicht unterstützte Größe")
-    }
-
     var placeholderAspectRatio: CGFloat {
         switch self {
-        case .iPhone: return 9.0 / 19.5
-        case .iPad: return 3.0 / 4.0
-        case .mac: return 16.0 / 10.0
-        }
-    }
-
-    func validateDimensions(width: Int, height: Int) -> Bool {
-        ASCManager.validateDimensions(width: width, height: height, displayType: ascDisplayType) == nil
-    }
-
-    static func types(for platform: ProjectPlatform) -> [ScreenshotDeviceType] {
-        switch platform {
-        case .iOS: return [.iPhone, .iPad]
-        case .macOS: return [.mac]
+        case .iPhone: 9.0 / 19.5
+        case .iPhoneDuo: 1398.0 / 2034.0
+        case .iPad: 3.0 / 4.0
+        case .mac: 16.0 / 10.0
         }
     }
 }
@@ -187,7 +159,7 @@ struct ScreenshotsView: View {
     }
 
     private var selectedDisplayType: String {
-        selectedDevice.ascDisplayType
+        selectedDevice.rawValue
     }
 
     private var savedTrack: [TrackSlot?] {
@@ -619,7 +591,8 @@ struct ScreenshotsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 240)
+            .fixedSize()
+            .help(ASCManager.screenshotDimensionSummary(displayType: selectedDisplayType) ?? selectedDevice.label)
         }
     }
 
@@ -1023,67 +996,16 @@ struct ScreenshotsView: View {
             return
         }
 
-        let destDir = BlitzPaths.screenshots(projectId: projectId)
-        let fm = FileManager.default
-        try? fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-
-        let ext = url.pathExtension.lowercased()
-        var destPath: String?
-
-        if ext == "png" {
-            let dest = destDir.appendingPathComponent(url.lastPathComponent)
-            do {
-                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-                try fm.copyItem(at: url, to: dest)
-                destPath = dest.path
-            } catch {
-                importError = "\(url.lastPathComponent): \(error.localizedDescription)"
-                return
-            }
-        } else {
-            guard let image = loadImage(from: url) else {
-                importError = L10n.tr("\(url.lastPathComponent): Nicht unterstütztes Format oder Bild nicht lesbar")
-                return
-            }
-            let pngName = url.deletingPathExtension().lastPathComponent + ".png"
-            let dest = destDir.appendingPathComponent(pngName)
-            do {
-                guard let tiff = image.tiffRepresentation,
-                      let bitmap = NSBitmapImageRep(data: tiff),
-                      let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                    importError = L10n.tr("\(url.lastPathComponent): Umwandlung in PNG fehlgeschlagen")
-                    return
-                }
-                if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
-                try pngData.write(to: dest)
-                destPath = dest.path
-            } catch {
-                importError = "\(url.lastPathComponent): \(error.localizedDescription)"
-                return
-            }
+        do {
+            let stored = try ASCManager.storeScreenshot(
+                from: url, in: BlitzPaths.screenshots(projectId: projectId), displayType: selectedDisplayType
+            )
+            importError = asc.addAssetToTrack(
+                displayType: selectedDisplayType, slotIndex: slotIndex, localPath: stored.path, locale: currentLocale
+            )
+        } catch {
+            importError = error.localizedDescription
         }
-
-        guard let path = destPath else { return }
-
-        if let error = asc.addAssetToTrack(
-            displayType: selectedDisplayType,
-            slotIndex: slotIndex,
-            localPath: path,
-            locale: currentLocale
-        ) {
-            importError = error
-        }
-    }
-
-    private func loadImage(from url: URL) -> NSImage? {
-        if let image = NSImage(contentsOf: url), !image.representations.isEmpty {
-            return image
-        }
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            return nil
-        }
-        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
     private func handleFinderDrop(_ providers: [NSItemProvider]) -> Bool {

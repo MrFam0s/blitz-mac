@@ -19,6 +19,7 @@ enum BlitzDisplayText {
             "Demo Account Name": "Demokonto: Benutzername",
             "Demo Account Password": "Demokonto: Passwort",
             "App Icon": "App-Symbol", "Mac Screenshots": "Mac-Screenshots",
+            "iPhone Duo Screenshots": "Screenshots für iPhone Duo",
             "iPhone Screenshots": "iPhone-Screenshots", "iPad Screenshots": "iPad-Screenshots",
             "Privacy Nutrition Labels": "App-Datenschutz", "What's New": "Neuigkeiten",
         ]
@@ -77,7 +78,7 @@ enum BlitzDisplayText {
         case "Age Rating", "App Icon", "Pricing":
             let labels: [String: L10n.Message] = ["Configured": "Eingerichtet", "Set": "Festgelegt", "Free": "Kostenlos"]
             return labels[value].map(L10n.tr) ?? value
-        case "Mac Screenshots", "iPhone Screenshots", "iPad Screenshots":
+        case "Mac Screenshots", "iPhone Screenshots", "iPhone Duo Screenshots", "iPad Screenshots":
             if value.hasSuffix(" screenshot(s)"), let count = Int(value.dropLast(" screenshot(s)".count)) {
                 return "\(count) " + (count == 1 ? "Screenshot" : "Screenshots")
             }
@@ -96,6 +97,9 @@ enum BlitzDisplayText {
     /// The backend hint is an agent instruction, not interface copy. Keep it
     /// intact for the release tools and show only the relevant explanation here.
     static func readinessHint(field: String) -> String? {
+        if field == "iPhone Duo Screenshots" {
+            return L10n.tr("Ab April 2027 verlangt Apple für Apps, die mit dem iOS-27.1-SDK oder neuer gebaut wurden, Screenshots für iPhone Duo.")
+        }
         if field == "In-App Purchases & Subscriptions" {
             return L10n.tr("Wähle die Kaufprodukte, die gemeinsam mit dieser App-Version eingereicht werden sollen. Die Übersicht bestätigt noch nicht, dass sie vollständig und der Einreichung zugeordnet sind.")
         }

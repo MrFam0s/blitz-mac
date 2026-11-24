@@ -48,7 +48,7 @@ JS
     # package-lock.json below so installation uses the same npm ci contract.
     npm pack --ignore-scripts --pack-destination "$OUTPUT_DIR" >/dev/null
 )
-PACKAGE="$OUTPUT_DIR/blitzdev-iphone-mcp-0.1.18-blitz.1.tgz"
+PACKAGE="$OUTPUT_DIR/blitzdev-iphone-mcp-0.1.18-blitz.2.tgz"
 python3 "$ROOT_DIR/scripts/pack-iphone-mcp.py" "$STAGE_DIR" "$PACKAGE" "$ROOT_DIR/config/node-toolchain.json"
 python3 "$ROOT_DIR/scripts/verify-iphone-mcp.py" "$PACKAGE" >&2
 printf '%s\n' "$PACKAGE"

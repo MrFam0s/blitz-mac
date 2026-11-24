@@ -41,35 +41,14 @@ struct SimulatorConfigDatabase {
         return file.devices
     }()
 
-    /// Device names from the JSON config (used to filter the simulator list).
-    static let supportedDeviceNames: Set<String> = Set(devices.keys)
-
-    /// Whether a simulator name matches a supported device (fuzzy).
-    static func isSupported(_ simulatorName: String) -> Bool {
-        if devices[simulatorName] != nil { return true }
-        return devices.keys.contains { simulatorName.contains($0) }
-    }
-
-    /// Fallback config (iPhone 16 values).
-    static let fallbackConfig = SimulatorDeviceConfig(
-        toolbarHeight: 40, toolbarOffset: 7.0,
-        widthPoints: 393, heightPoints: 852,
-        borderX: 21.0, borderY: 21.0
-    )
-
-    /// Get config for a device by name (exact then fuzzy match).
-    static func config(for deviceName: String?) -> SimulatorDeviceConfig {
-        guard let name = deviceName else { return fallbackConfig }
-
-        if let config = devices[name] { return config }
-
-        // Fuzzy: longer keys first so "iPhone 16 Pro" matches before "iPhone 16"
-        let sorted = devices.keys.sorted { $0.count > $1.count }
-        for key in sorted {
-            if name.contains(key) { return devices[key]! }
-        }
-
-        return fallbackConfig
+    /// Only the classic Simulator window needs model-specific bezel calibration.
+    static func legacyConfig(for deviceName: String, isCustomName: Bool = false) -> SimulatorDeviceConfig? {
+        if let exact = devices[deviceName] { return exact }
+        // Older inventories can omit deviceTypeIdentifier. Keep a project's
+        // custom prefix, but never calibrate an unknown model as its predecessor.
+        guard isCustomName else { return nil }
+        let model = devices.keys.filter { deviceName.hasSuffix(" " + $0) }.max { $0.count < $1.count }
+        return model.flatMap { devices[$0] }
     }
 
     // MARK: - Crop rect (toolbar-only crop, matches blitz-cn)
@@ -166,6 +145,18 @@ struct SimulatorInfo: Identifiable, Hashable {
 
     var id: String { udid }
     var isBooted: Bool { state == "Booted" }
+
+    var legacyConfig: SimulatorDeviceConfig? {
+        SimulatorConfigDatabase.legacyConfig(for: displayName, isCustomName: deviceTypeIdentifier == nil)
+    }
+
+    var supportsAppInteraction: Bool {
+        // Project simulator names are editable. Read the underlying device family.
+        let model = displayName
+        return model == "iPhone" || model.hasPrefix("iPhone ") ||
+               model == "iPad" || model.hasPrefix("iPad ") ||
+               (deviceTypeIdentifier == nil && legacyConfig != nil)
+    }
 
     var displayName: String {
         // Extract device type from identifier like "com.apple.CoreSimulator.SimDeviceType.iPhone-16"

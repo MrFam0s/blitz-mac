@@ -1,19 +1,36 @@
+diff --git a/AGENT.md b/AGENT.md
+index 4bb53c9..de1cba5 100644
+--- a/AGENT.md
++++ b/AGENT.md
+@@ -94,10 +94,11 @@ Execute multiple actions in sequence.
+
+ ### get_screenshot
+
+-Capture a PNG screenshot. Returns file path.
++Capture a native PNG screenshot. Returns its path and a preview scaled to logical coordinates.
+
+ **Params:**
+ - `udid` (optional)
++- `display` (optional): `automatic` (default), `outer`, or `inner`. A Duo simulator captures its active display. Choose the matching pose in Device Hub before explicitly requesting an outer or inner capture.
+
+ ### list_devices
+
 diff --git a/package-lock.json b/package-lock.json
-index d6a1828..294d4fb 100644
+index d6a1828..9f19c6b 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -1,15 +1,14 @@
  {
    "name": "@blitzdev/iphone-mcp",
 -  "version": "0.1.18",
-+  "version": "0.1.18-blitz.1",
++  "version": "0.1.18-blitz.2",
    "lockfileVersion": 3,
    "requires": true,
    "packages": {
      "": {
        "name": "@blitzdev/iphone-mcp",
 -      "version": "0.1.18",
-+      "version": "0.1.18-blitz.1",
++      "version": "0.1.18-blitz.2",
        "license": "MIT",
        "dependencies": {
 -        "@blitzdev/iphone-mcp": "^0.1.15",
@@ -80,14 +97,14 @@ index d6a1828..294d4fb 100644
          "url": "https://github.com/sponsors/colinhacks"
        }
 diff --git a/package.json b/package.json
-index 560497c..c3c05d0 100644
+index 560497c..1f6d121 100644
 --- a/package.json
 +++ b/package.json
 @@ -1,6 +1,6 @@
  {
    "name": "@blitzdev/iphone-mcp",
 -  "version": "0.1.18",
-+  "version": "0.1.18-blitz.1",
++  "version": "0.1.18-blitz.2",
    "description": "MCP server for controlling iOS simulators and physical iPhones",
    "type": "module",
    "license": "MIT",
@@ -126,7 +143,7 @@ index 2d23678..5ba9d4e 100644
 +  return getIDBClient(udid === 'booted' ? await resolveBootedUdid() : udid)
  }
 diff --git a/src/idb/ax-scan-client.ts b/src/idb/ax-scan-client.ts
-index 2fc2f5c..ef4da41 100644
+index 2fc2f5c..6586272 100644
 --- a/src/idb/ax-scan-client.ts
 +++ b/src/idb/ax-scan-client.ts
 @@ -1,65 +1,5 @@
@@ -194,13 +211,13 @@ index 2fc2f5c..ef4da41 100644
 -}
 +import { getIDBClient } from './idb-client.js'
 +import type { ScanRegion, ScanCommand, UIElement } from '../types.js'
- 
+
  export function regionToCommand(
    region: ScanRegion,
-@@ -89,185 +29,32 @@ export function regionToCommand(
+@@ -89,185 +29,33 @@ export function regionToCommand(
    }
  }
- 
+
 +// Use the same pinned companion and bounded requests as input. The old native
 +// scanner links legacy IDB frameworks and can hang before READY on new Xcode.
  export class AXScanClient {
@@ -344,11 +361,11 @@ index 2fc2f5c..ef4da41 100644
 -  async getScreenSize(): Promise<{ width: number; height: number }> {
 -    await this.ensureStarted()
 -    return { width: this.screenWidth, height: this.screenHeight }
-+  async getScreenSize(): Promise<{width: number; height: number}> {
-+    return getIDBClient(this.udid).getScreenSize()
++  async getScreenSize(hierarchy?: unknown): Promise<{width: number; height: number}> {
++    return getIDBClient(this.udid).getScreenSize(hierarchy)
    }
 -
-   async scan(region: ScanRegion, gridStep = 25): Promise<unknown[]> {
+-  async scan(region: ScanRegion, gridStep = 25): Promise<unknown[]> {
 -    await this.ensureStarted()
 -
 -    if (!this.axScanAvailable || !this.proc) {
@@ -369,6 +386,7 @@ index 2fc2f5c..ef4da41 100644
 -  private async fallbackScan(): Promise<unknown[]> {
 -    log('AXScan', 'log', `[${this.udid}] Using idb describe-all fallback`)
 -    const { getIDBClient } = await import('./idb-client.js')
++  async scan(region: ScanRegion): Promise<{elements: unknown[]; width: number; height: number}> {
      const client = getIDBClient(this.udid)
 -    const result = await client.describeAll(false)
 -    return Array.isArray(result) ? result : [result]
@@ -391,24 +409,25 @@ index 2fc2f5c..ef4da41 100644
 -    await Promise.all(instances.map(i => i.shutdown()))
 +    const raw = await client.describeAll(false)
 +    const elements = Array.isArray(raw) ? raw : [raw]
-+    if (region === 'full') return elements
-+    const { width, height } = await this.getScreenSize()
++    const { width, height } = await this.getScreenSize(raw)
++    if (region === 'full') return {elements, width, height}
 +    const bounds = regionToCommand(region, width, height, 0)
-+    return elements.filter((element: UIElement) => {
++    const filtered = elements.filter((element: UIElement) => {
 +      const frame = element.frame
 +      if (!frame) return false
 +      const x = frame.x + frame.width / 2, y = frame.y + frame.height / 2
 +      return x >= bounds.x_start && x <= bounds.x_end && y >= bounds.y_start && y <= bounds.y_end
 +    })
++    return {elements: filtered, width, height}
    }
 +  async shutdown(): Promise<void> { AXScanClient.instances.delete(this.udid) }
 +  static async shutdownAll(): Promise<void> { AXScanClient.instances.clear() }
  }
 diff --git a/src/idb/idb-client.ts b/src/idb/idb-client.ts
-index 631594e..a5d073b 100644
+index 631594e..e7d94d2 100644
 --- a/src/idb/idb-client.ts
 +++ b/src/idb/idb-client.ts
-@@ -1,43 +1,34 @@
+@@ -1,43 +1,35 @@
 -import { spawn, type ChildProcess, exec, execFile } from 'child_process'
 -import { promisify } from 'util'
 -import { existsSync } from 'fs'
@@ -433,6 +452,7 @@ index 631594e..a5d073b 100644
 +import { fileURLToPath } from 'node:url'
 +import { homedir } from 'node:os'
 +import { setTimeout as delay } from 'node:timers/promises'
++import { applicationSize, integratedScreens, selectScreen, type DisplayChoice, type ScreenSize } from './simulator-display.js'
 +import { simulatorEnv } from './simulator-env.js'
 +
 +const execute = promisify(execFile)
@@ -444,7 +464,7 @@ index 631594e..a5d073b 100644
 +  }
 +  return fallback
  }
- 
+
 -function resolveCompanionPath(): string | null {
 -  const mcpCompanion = join(homedir(), '.blitz-iphone-mcp', 'idb-companion', 'bin', 'idb_companion')
 -  if (existsSync(mcpCompanion)) return mcpCompanion
@@ -457,7 +477,7 @@ index 631594e..a5d073b 100644
 +  if (devices.length !== 1) throw new Error('Multiple simulators are booted; provide an explicit udid')
 +  return devices[0].udid
  }
- 
+
 -const IDB_PATH = resolveIdbPath()
 -const IDB_COMPANION_PATH = resolveCompanionPath()
 -
@@ -476,12 +496,12 @@ index 631594e..a5d073b 100644
 +    { env: simulatorEnv(), timeout: 10000 })
 +  return selectBootedSimulator(JSON.parse(stdout))
  }
- 
+
  function parseSimctlAppList(raw: string): { bundleId: string; name: string; type: 'System' | 'User' }[] {
-@@ -56,250 +47,216 @@ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type
+@@ -56,250 +48,260 @@ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type
    return apps
  }
- 
+
 +export interface IDBOptions {
 +  idbPath?: string
 +  companionPath?: string
@@ -516,14 +536,14 @@ index 631594e..a5d073b 100644
 +    this.companionPath = options.companionPath ?? resolvePath('idb-companion/bin/idb_companion', 'idb_companion')
 +    this.pythonPath = options.pythonPath ?? resolvePath('python/bin/python3', 'python3')
 +  }
- 
+
 -  private constructor(udid: string) {
 -    this.udid = udid
 +  static getInstance(udid = 'booted'): IDBClient {
 +    if (!this.instances.has(udid)) this.instances.set(udid, new IDBClient(udid))
 +    return this.instances.get(udid)!
    }
- 
+
 -  private resolvedUdid: string | null = null
 +  private async resolvedUdid(): Promise<string> {
 +    if (this.closed) throw new Error('IDB client is closed')
@@ -531,7 +551,7 @@ index 631594e..a5d073b 100644
 +    if (!UUID.test(udid)) throw new Error('Invalid simulator udid')
 +    return udid
 +  }
- 
+
 -  private async getResolvedUdid(): Promise<string> {
 -    if (this.resolvedUdid) return this.resolvedUdid
 -    if (this.udid === 'booted') {
@@ -549,7 +569,7 @@ index 631594e..a5d073b 100644
 +    this.queue = result.catch(() => {})
 +    return result
    }
- 
+
 -  static getInstance(udid: string = 'booted'): IDBClient {
 -    if (!IDBClient.instances.has(udid)) {
 -      IDBClient.instances.set(udid, new IDBClient(udid))
@@ -571,7 +591,7 @@ index 631594e..a5d073b 100644
 -    return IDBClient.instances.get(udid)!
 +    if (directory) await rm(directory, { recursive: true, force: true })
    }
- 
+
 -  private async startShell(): Promise<void> {
 -    if (this.shellProcess || this.isShuttingDown) return
 -
@@ -623,7 +643,7 @@ index 631594e..a5d073b 100644
 +      throw error
 +    }
 +  }
- 
+
 -      if (text.includes('Connection refused')) {
 -        this.companionKillAttempts++
 -        if (this.companionKillAttempts > IDBClient.MAX_COMPANION_KILL_ATTEMPTS) {
@@ -699,7 +719,7 @@ index 631594e..a5d073b 100644
 -    if (stderr) log('IDBClient', 'log', `[${this.udid}] stderr: ${stderr}`)
 -    return stdout.trim()
    }
- 
+
    async shutdown(): Promise<void> {
 -    if (this.isShuttingDown) return
 -    log('IDBClient', 'log', `[${this.udid}] Shutting down...`)
@@ -724,7 +744,7 @@ index 631594e..a5d073b 100644
 +    await this.stopCompanion()
 +    if (IDBClient.instances.get(this.udid) === this) IDBClient.instances.delete(this.udid)
    }
- 
+
    async tap(x: number, y: number, duration?: number): Promise<void> {
 -    let args = `ui tap ${x} ${y}`
 -    if (duration !== undefined) args += ` --duration ${duration}`
@@ -796,7 +816,33 @@ index 631594e..a5d073b 100644
    async describePoint(x: number, y: number, nested?: boolean): Promise<unknown> {
 -    let args = `ui describe-point ${Math.round(x)} ${Math.round(y)} --json`
 -    if (nested) args += ' --nested'
--
++    return JSON.parse(await this.run(['ui', 'describe-point', String(Math.round(x)), String(Math.round(y)),
++      '--json', ...(nested ? ['--nested'] : [])]))
++  }
++  async getScreenSize(hierarchy?: unknown): Promise<ScreenSize> {
++    const frame = applicationSize(hierarchy ?? await this.describeAll(false))
++    if (frame) {
++      const screens = await this.connectedScreens(await this.resolvedUdid())
++      if (!screens.length) return frame
++      const screen = selectScreen(screens, 'automatic', frame)
++      const shortEdge = Math.min(frame.width, frame.height), longEdge = Math.max(frame.width, frame.height)
++      if (screen.orientation?.startsWith('Landscape')) return {width:longEdge, height:shortEdge}
++      if (screen.orientation?.startsWith('Portrait')) return {width:shortEdge, height:longEdge}
++      return frame
++    }
++    const description = JSON.parse(await this.run(['describe', '--json']))
++    const dimensions = description.screen_dimensions
++    const width = dimensions?.width_points ?? dimensions?.width / dimensions?.density
++    const height = dimensions?.height_points ?? dimensions?.height / dimensions?.density
++    if (!(width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height))) {
++      throw new Error('IDB did not return valid simulator screen dimensions')
++    }
++    return { width, height }
++  }
++  async screenshot(): Promise<Buffer> {
++    return (await this.captureScreenshot('automatic')).png
++  }
+
 -    let output = ''
 -    try {
 -      output = await this.runDirect(args)
@@ -805,21 +851,17 @@ index 631594e..a5d073b 100644
 -      return JSON.parse(output)
 -    } catch (error) {
 -      throw new Error(`Failed to parse UI description at point (${x}, ${y}). Raw output: ${output.substring(0, 300)}`)
-+    return JSON.parse(await this.run(['ui', 'describe-point', String(Math.round(x)), String(Math.round(y)),
-+      '--json', ...(nested ? ['--nested'] : [])]))
-+  }
-+  async getScreenSize(): Promise<{ width: number; height: number }> {
-+    const description = JSON.parse(await this.run(['describe', '--json']))
-+    const dimensions = description.screen_dimensions
-+    const width = dimensions?.width_points ?? dimensions?.width / dimensions?.density
-+    const height = dimensions?.height_points ?? dimensions?.height / dimensions?.density
-+    if (!(width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height))) {
-+      throw new Error('IDB did not return valid simulator screen dimensions')
++  private async connectedScreens(udid: string) {
++    const {stdout} = await execute('xcrun', ['simctl', 'io', udid, 'enumerate'],
++      {env: this.env, timeout: 10000, signal: this.controller.signal})
++    const screens = integratedScreens(stdout)
++    if (!screens.length && /Connected Screens:/.test(stdout)) {
++      throw new Error('CoreSimulator did not report an available integrated display')
      }
-+    return { width, height }
++    return screens
    }
--
-   async screenshot(): Promise<Buffer> {
+
+-  async screenshot(): Promise<Buffer> {
 -    const resolvedUdid = await this.getResolvedUdid()
 -    const filePath = join(tmpdir(), `blitz-idb-screenshot-${Date.now()}.png`)
 -    const execFileAsync = promisify(execFile)
@@ -831,16 +873,36 @@ index 631594e..a5d073b 100644
 -    const buffer = await readFile(filePath)
 -    await unlink(filePath).catch(() => {})
 -    return buffer
++  async captureScreenshot(choice: DisplayChoice): Promise<{png: Buffer; scale?: number}> {
 +    const udid = await this.resolvedUdid()
++    const io = ['simctl', 'io', udid]
++    const options = {env: this.env, timeout: 10000, signal: this.controller.signal}
++    const screens = await this.connectedScreens(udid)
++    // Older Xcodes do not enumerate named screens; keep simctl's default there.
++    if (!screens.length && choice !== 'automatic') throw new Error('CoreSimulator did not report an available integrated display')
++    const resolveScreen = async () => {
++      if (!screens.length) return undefined
++      let frame: ScreenSize | undefined
++      if (screens.length > 1) {
++        try { frame = applicationSize(await this.describeAll(false)) } catch {
++          throw new Error('The active simulator display is unavailable. Wake the simulator or finish changing its pose in Device Hub, then retry.')
++        }
++      }
++      return selectScreen(screens, choice, frame)
++    }
++    const screen = await resolveScreen()
 +    const directory = await mkdtemp('/tmp/blitz-mcp-image-')
 +    const file = join(directory, 'screen.png')
 +    try {
-+      await execute('xcrun', ['simctl', 'io', udid, 'screenshot', '--type=png', file],
-+        { env: this.env, timeout: 10000, signal: this.controller.signal })
-+      return await readFile(file)
++      const display = screen ? [`--display=${screen.id}`] : []
++      await execute('xcrun', [...io, 'screenshot', '--type=png', ...display, file], options)
++      if (screens.length > 1 && (await resolveScreen())?.id !== screen?.id) {
++        throw new Error('The simulator changed displays during capture. Retry once its pose is stable.')
++      }
++      return {png: await readFile(file), scale: screen?.scale}
 +    } finally { await rm(directory, { recursive: true, force: true }) }
    }
--
+
    async listApps(): Promise<{ bundleId: string; name: string; type: 'System' | 'User' }[]> {
 -    const resolvedUdid = await this.getResolvedUdid()
 -    const { stdout } = await execAsync(`xcrun simctl listapps ${resolvedUdid}`)
@@ -896,6 +958,68 @@ index 631594e..a5d073b 100644
 +for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 +  process.once(signal, () => { shutdownAllIDBClients().finally(() => process.exit(0)) })
  }
+diff --git a/src/idb/simulator-display.ts b/src/idb/simulator-display.ts
+new file mode 100644
+index 0000000..ad6c33c
+--- /dev/null
++++ b/src/idb/simulator-display.ts
+@@ -0,0 +1,56 @@
++export type DisplayChoice = 'automatic' | 'outer' | 'inner'
++export type ScreenSize = {width: number; height: number}
++
++export type IntegratedScreen = {
++  id: string
++  name: string
++  width: number
++  height: number
++  scale: number
++  orientation?: string
++}
++
++/** Read the connected-screen descriptors, excluding framebuffers and external screens. */
++export function integratedScreens(inventory: string): IntegratedScreen[] {
++  const screens: IntegratedScreen[] = []
++  for (const block of inventory.split(/^\s*Screen ID: /m).slice(1)) {
++    const [descriptor] = block.split(/^\s*(?:\(\d+\) .+:|Port:)\s*$/m)
++    if (!/^\s*Screen Type: Integrated\s*$/m.test(descriptor)) continue
++    const id = /^(\d+)[ \t]*\r?\n/.exec(descriptor)?.[1]
++    const name = /^\s*Device Name: (\S+)\s*$/m.exec(descriptor)?.[1]
++    const pixels = /^\s*Pixel Size: \{(\d+),\s*(\d+)\}\s*$/m.exec(descriptor)
++    const scale = Number(/^\s*Preferred UI Scale: ([\d.]+)\s*$/m.exec(descriptor)?.[1])
++    if (!id || !name || !pixels || !(scale > 0 && Number.isFinite(scale)) || !Number(pixels[1]) || !Number(pixels[2])) {
++      throw new Error('CoreSimulator returned incomplete dimensions for an integrated display')
++    }
++    const orientation = /^\s*UI Orientation: ([^\r\n]+)/m.exec(descriptor)?.[1].trim()
++    screens.push({ id, name, width: Number(pixels[1]) / scale, height: Number(pixels[2]) / scale, scale, orientation })
++  }
++  return screens
++}
++
++/** IDB's flattened or nested hierarchy starts with the foreground application. Its
++ * full-screen frame identifies the screen in UIKit points, but IDB can report
++ * that frame in portrait even when its children are laid out in landscape. */
++export function applicationSize(hierarchy: unknown): ScreenSize | undefined {
++  const roots = (Array.isArray(hierarchy) ? hierarchy : [hierarchy]).filter(node => node?.type === 'Application')
++  if (roots.length !== 1) return undefined
++  const frame = roots[0].frame
++  if (!frame || frame.x !== 0 || frame.y !== 0 || !Number.isFinite(frame.width) || !Number.isFinite(frame.height)
++      || frame.width <= 0 || frame.height <= 0) return undefined
++  return {width: frame.width, height: frame.height}
++}
++
++export function selectScreen(screens: IntegratedScreen[], choice: DisplayChoice, frame?: ScreenSize): IntegratedScreen {
++  const duo = screens.length === 2 && screens.some(screen => screen.name === 'primary') && screens.some(screen => screen.name === 'primary-1')
++  if (choice !== 'automatic' && !duo) throw new Error('Outer/inner selection requires an iPhone Duo simulator')
++  if (screens.length === 1) return screens[0]
++  const matches = frame ? screens.filter(screen => (screen.width === frame.width && screen.height === frame.height)
++    || (screen.width === frame.height && screen.height === frame.width)) : []
++  if (matches.length !== 1) throw new Error('The active simulator display could not be identified. Finish opening or closing the device in Device Hub, then retry.')
++  const active = matches[0]
++  if (choice !== 'automatic' && active.name !== (choice === 'outer' ? 'primary' : 'primary-1')) {
++    throw new Error(`The ${choice} display is inactive. ${choice === 'inner' ? 'Open' : 'Close'} the simulator in Device Hub and retry.`)
++  }
++  return active
++}
 diff --git a/src/idb/simulator-env.ts b/src/idb/simulator-env.ts
 new file mode 100644
 index 0000000..9cf44ec
@@ -1020,7 +1144,7 @@ index a74f65f..e517c88 100644
  import { createViewerServer } from './viewer/server.js'
 +import { shutdownAllIDBClients } from './idb/idb-client.js'
  import { log } from './logger.js'
- 
+
  const DEFAULT_VIEWER_PORT = 5150
 @@ -20,6 +21,12 @@ export async function startServer(): Promise<void> {
    const server = createMcpServer(viewerPort)
@@ -1032,11 +1156,11 @@ index a74f65f..e517c88 100644
 +    // viewer HTTP server would otherwise keep Node alive.
 +    void shutdownAllIDBClients().finally(() => process.exit(0))
 +  }
- 
+
    log('Server', 'log', `MCP server running (stdio).${viewerPort ? ` Viewer at http://localhost:${viewerPort}` : ''}`)
  }
 diff --git a/src/mcp-server.ts b/src/mcp-server.ts
-index bbad780..a57ad8a 100644
+index bbad780..97571ee 100644
 --- a/src/mcp-server.ts
 +++ b/src/mcp-server.ts
 @@ -3,6 +3,7 @@ import { z } from 'zod'
@@ -1056,11 +1180,12 @@ index bbad780..a57ad8a 100644
 +import { getIDBClient } from './idb/idb-client.js'
  import { log } from './logger.js'
  import { emitTapGestureVisualization, emitSwipeGestureVisualization } from './gesture-visualization.js'
- 
-@@ -63,23 +65,8 @@ const singleActionSchema = z.object({
+
+@@ -62,45 +64,16 @@ const singleActionSchema = z.object({
+   params: z.record(z.string(), z.unknown()).describe('Action-specific parameters'),
  })
- 
- const referenceFrameCache = new Map<string, Promise<{ width: number; height: number }>>()
+
+-const referenceFrameCache = new Map<string, Promise<{ width: number; height: number }>>()
 -const BOOTED_UDID_CACHE_TTL_MS = 5_000
 -let cachedBootedUdid: { value: string; expiresAtMs: number } | null = null
 -
@@ -1080,18 +1205,67 @@ index bbad780..a57ad8a 100644
 -  return resolvedUdid
 +  return udid === 'booted' ? await resolveBootedUdid() : udid
  }
- 
+
  async function resolveReferenceFrame(udid: string): Promise<{ width: number; height: number }> {
-@@ -150,7 +137,7 @@ async function emitVisualizationForAction(params: {
+-  const cached = referenceFrameCache.get(udid)
+-  if (cached) return cached
+-
+-  const pending = (async () => {
+-    if (isPhysicalDeviceUdid(udid)) {
+-      const client = await getDeviceClient(udid) as unknown as WDAClient
+-      return await client.getWindowSize()
+-    }
+-
+-    const axClient = AXScanClient.getInstance(udid)
+-    return await axClient.getScreenSize()
+-  })().catch((error) => {
+-    referenceFrameCache.delete(udid)
+-    throw error
+-  })
+-
+-  referenceFrameCache.set(udid, pending)
+-  return await pending
++  if (isPhysicalDeviceUdid(udid)) {
++    const client = await getDeviceClient(udid) as WDAClient
++    return client.getWindowSize()
++  }
++  return getIDBClient(udid).getScreenSize()
+ }
+
+ async function emitVisualizationForAction(params: {
+@@ -150,7 +123,7 @@ async function emitVisualizationForAction(params: {
  export function createMcpServer(viewerPort: number) {
    const server = new McpServer({
      name: '@blitzdev/iphone-mcp',
 -    version: '0.1.0',
-+    version: '0.1.18-blitz.1',
++    version: '0.1.18-blitz.2',
    })
- 
+
    server.registerTool(
-@@ -213,11 +200,11 @@ Actions available:
+@@ -175,19 +148,9 @@ For finding tappable elements specifically, prefer scan_ui instead.`,
+         const client = await getDeviceClient(resolvedUdid)
+         const raw = await client.describeAll(nested)
+
+-        let screenWidth = 393, screenHeight = 852
+-        try {
+-          if (isPhysicalDeviceUdid(resolvedUdid)) {
+-            const size = await (client as unknown as WDAClient).getWindowSize()
+-            screenWidth = size.width
+-            screenHeight = size.height
+-          } else {
+-            const axClient = AXScanClient.getInstance(resolvedUdid)
+-            const size = await axClient.getScreenSize()
+-            screenWidth = size.width
+-            screenHeight = size.height
+-          }
+-        } catch { /* use defaults */ }
++        const {width: screenWidth, height: screenHeight} = isPhysicalDeviceUdid(resolvedUdid)
++          ? await (client as WDAClient).getWindowSize().catch(() => ({width: 393, height: 852}))
++          : await getIDBClient(resolvedUdid).getScreenSize(raw)
+
+         const rawArray = Array.isArray(raw) ? raw : [raw]
+         const filtered = applyDescribeScreenFilters(rawArray as UIElement[], screenWidth, screenHeight)
+@@ -213,11 +176,11 @@ Actions available:
  - tap: Tap at coordinates { x, y, duration? }
  - swipe: Swipe gesture { fromX, fromY, toX, toY, duration?, delta? }
  - button: Press button { button: 'HOME'|'LOCK'|'SIDE_BUTTON'|'APPLE_PAY'|'SIRI', duration? }
@@ -1099,21 +1273,32 @@ index bbad780..a57ad8a 100644
 +- input-text: Type text { text }. Simulator text supports the active German QWERTZ (including umlauts) and US QWERTY keyboards. Unsupported layouts/characters fail before any text is sent; no clipboard is used.
  - key: Press key { key: number (HID keycode) | string (character), duration? }
  - key-sequence: Press key sequence { keySequence: (number|string)[] }
- 
+
 -Use describe_after to see the screen state after the action.`,
 +Use describe_after to verify the screen state after the action. Text is sent as keyboard input, so iOS autocorrection and smart punctuation still apply.`,
        inputSchema: {
          action: z.enum(['tap', 'swipe', 'button', 'input-text', 'key', 'key-sequence']).describe('Type of action'),
          params: z.record(z.string(), z.unknown()).describe('Action parameters (depends on action type)'),
-@@ -424,38 +411,36 @@ Use describe_after to see the screen state after all actions complete.`,
-     async ({ udid = 'booted' }) => {
+@@ -416,46 +379,50 @@ Use describe_after to see the screen state after all actions complete.`,
+   server.registerTool(
+     'get_screenshot',
+     {
+-      description: 'Capture a screenshot of the current iPhone screen. Returns the file path to a PNG image.',
++      description: 'Capture the active display as a native-resolution PNG. The inline preview uses touch coordinates.',
+       inputSchema: {
+         udid: z.string().optional().describe('Device identifier (default: "booted")'),
++        display: z.enum(['automatic', 'outer', 'inner']).optional().describe('Defaults to the active display. Outer and inner require an iPhone Duo simulator in the corresponding pose.'),
+       },
+     },
+-    async ({ udid = 'booted' }) => {
++    async ({ udid = 'booted', display = 'automatic' }) => {
        log('MCP', 'log', `get_screenshot udid=${udid}`)
        try {
 -        const timestamp = Date.now()
 +        const timestamp = randomUUID()
          const rawFile = path.join(os.tmpdir(), `blitz-screenshot-${timestamp}.png`)
          const resizedFile = path.join(os.tmpdir(), `blitz-screenshot-${timestamp}-sm.png`)
- 
+
 -        if (isPhysicalDeviceUdid(udid)) {
 -          const client = await getDeviceClient(udid)
 -          const pngBuffer = await client.screenshot()
@@ -1125,12 +1310,16 @@ index bbad780..a57ad8a 100644
 -              else resolve()
 -            })
 -          })
--        }
 +        const resolvedUdid = await resolveActionUdid(udid)
-+        const client = await getDeviceClient(resolvedUdid)
-+        const pngBuffer = await client.screenshot()
-+        await fs.writeFile(rawFile, pngBuffer, { mode: 0o600 })
- 
++        const physical = isPhysicalDeviceUdid(resolvedUdid)
++        if (physical && display !== 'automatic') {
++          throw new Error('A physical iPhone captures its active screen. Use automatic or omit display.')
+         }
++        const capture = physical
++          ? {png: await (await getDeviceClient(resolvedUdid)).screenshot(), scale: 3}
++          : await getIDBClient(resolvedUdid).captureScreenshot(display)
++        await fs.writeFile(rawFile, capture.png, { mode: 0o600 })
+
          const sizeOutput = await new Promise<string>((resolve, reject) => {
 -          execFile('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', rawFile], { timeout: 5000 }, (error, stdout) => {
 +          execFile('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', rawFile], { env: simulatorEnv(), timeout: 5000 }, (error, stdout) => {
@@ -1142,9 +1331,9 @@ index bbad780..a57ad8a 100644
          const heightMatch = sizeOutput.match(/pixelHeight:\s*(\d+)/)
 -        const targetWidth = Math.round(Number(widthMatch![1]) / 3)
 -        const targetHeight = Math.round(Number(heightMatch![1]) / 3)
-+        let targetWidth = Math.round(Number(widthMatch![1]) / 3)
-+        let targetHeight = Math.round(Number(heightMatch![1]) / 3)
-+        if (!isPhysicalDeviceUdid(resolvedUdid)) {
++        let targetWidth = Math.round(Number(widthMatch![1]) / (capture.scale ?? 3))
++        let targetHeight = Math.round(Number(heightMatch![1]) / (capture.scale ?? 3))
++        if (!capture.scale) {
 +          const size = await getIDBClient(resolvedUdid).getScreenSize()
 +          const landscape = Number(widthMatch![1]) > Number(heightMatch![1])
 +          targetWidth = landscape ? Math.max(size.width, size.height) : Math.min(size.width, size.height)
@@ -1153,26 +1342,44 @@ index bbad780..a57ad8a 100644
          await new Promise<void>((resolve, reject) => {
            execFile(
              'sips',
-             ['--resampleWidth', String(targetWidth), '--resampleHeight', String(targetHeight), rawFile, '--out', resizedFile],
+-            ['--resampleWidth', String(targetWidth), '--resampleHeight', String(targetHeight), rawFile, '--out', resizedFile],
 -            { timeout: 5000 },
++            ['--resampleHeightWidth', String(targetHeight), String(targetWidth), rawFile, '--out', resizedFile],
 +            { env: simulatorEnv(), timeout: 5000 },
              (error) => {
                if (error) reject(error)
                else resolve()
-@@ -490,10 +475,8 @@ Use the "query" parameter to search for a specific element by label (e.g. "Add t
- 
+@@ -490,10 +457,8 @@ Use the "query" parameter to search for a specific element by label (e.g. "Add t
+
  Without a query, returns all visible interactive elements on screen.
- 
+
 -Region options optimize scan time:
 -- "top-left" / "top-right" / "bottom-left" / "bottom-right": ~250ms
 -- "top-half" / "bottom-half": ~500ms
 -- "full": ~1s (entire screen)
 +Region options limit results to the selected portion of the screen.
 +Simulator scans use the maintained IDB accessibility hierarchy.
- 
+
  For the complete element tree (all types), use describe_screen instead.`,
        inputSchema: {
-@@ -557,7 +540,7 @@ For the complete element tree (all types), use describe_screen instead.`,
+@@ -521,12 +486,10 @@ For the complete element tree (all types), use describe_screen instead.`,
+           } catch { /* use defaults */ }
+         } else {
+           const client = AXScanClient.getInstance(resolvedUdid)
+-          rawElements = await client.scan(region as ScanRegion)
+-          try {
+-            const size = await client.getScreenSize()
+-            screenWidth = size.width
+-            screenHeight = size.height
+-          } catch { /* use defaults */ }
++          const scan = await client.scan(region as ScanRegion)
++          rawElements = scan.elements
++          screenWidth = scan.width
++          screenHeight = scan.height
+         }
+
+         const { elements, warning } = applyScanUiFilters(rawElements as UIElement[], screenWidth, screenHeight, query)
+@@ -557,7 +520,7 @@ For the complete element tree (all types), use describe_screen instead.`,
          let simulators: { udid: string; name: string; state: string }[] = []
          try {
            const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
@@ -1188,7 +1395,7 @@ index 5a09743..fb104ea 100644
 @@ -17,19 +17,26 @@ export interface PhysicalDevice {
    wdaRunning: boolean
  }
- 
+
 +// Xcode 27 includes simulators in devicectl output. They are not USB devices.
 +export function isPhysicalIOSDevice(device: {hardwareProperties?: {reality?: string; platform?: string; udid?: string}; connectionProperties?: {transportType?: string}}): boolean {
 +  const hardware = device.hardwareProperties
@@ -1198,7 +1405,7 @@ index 5a09743..fb104ea 100644
 +
  export async function listPhysicalDevices(): Promise<PhysicalDevice[]> {
    const devices: Map<string, PhysicalDevice> = new Map()
- 
+
    try {
 -    const { stdout } = await execAsync('xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null', { env: childEnv() })
 +    const { stdout } = await execAsync('xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null', { env: childEnv(), timeout: 10000, maxBuffer: 8 * 1024 * 1024 })
@@ -1206,27 +1413,27 @@ index 5a09743..fb104ea 100644
      if (jsonStart < 0) throw new Error('No JSON in devicectl output')
      const json = JSON.parse(stdout.substring(jsonStart))
      const deviceList = json?.result?.devices ?? []
- 
+
      for (const d of deviceList) {
 -      const udid = d.hardwareProperties?.udid ?? d.identifier
 -      if (!udid) continue
 +      if (!isPhysicalIOSDevice(d)) continue
 +      const udid = d.hardwareProperties.udid
- 
+
        if (d.connectionProperties?.transportType === 'localNetwork' && !d.hardwareProperties?.platform?.includes('iOS')) {
          continue
 @@ -56,7 +63,7 @@ export async function listPhysicalDevices(): Promise<PhysicalDevice[]> {
- 
+
    if (devices.size === 0) {
      try {
 -      const { stdout } = await execAsync('system_profiler SPUSBDataType -json 2>/dev/null', { env: childEnv() })
 +      const { stdout } = await execAsync('system_profiler SPUSBDataType -json 2>/dev/null', { env: childEnv(), timeout: 10000, maxBuffer: 8 * 1024 * 1024 })
        const json = JSON.parse(stdout)
        const usbItems = json?.SPUSBDataType ?? []
- 
+
 diff --git a/tests/idb-client.test.mjs b/tests/idb-client.test.mjs
 new file mode 100644
-index 0000000..8bdf13c
+index 0000000..9f04254
 --- /dev/null
 +++ b/tests/idb-client.test.mjs
 @@ -0,0 +1,207 @@
@@ -1404,7 +1611,7 @@ index 0000000..8bdf13c
 +      try {
 +        const message=JSON.parse(buffer.split('\n')[0]);
 +        assert.equal(message.id,1);
-+        assert.equal(message.result.serverInfo.version,'0.1.18-blitz.1');
++        assert.equal(message.result.serverInfo.version,'0.1.18-blitz.2');
 +        cleanup();resolve();
 +      } catch(error){fail(error)}
 +    };
@@ -1437,6 +1644,137 @@ index 0000000..8bdf13c
 +  const result=await Promise.race([exited,delay(2000).then(()=>{throw new Error('EOF cleanup timed out')})]);
 +  assert.equal(result.code,0);
 +});
+diff --git a/tests/simulator-display.test.mjs b/tests/simulator-display.test.mjs
+new file mode 100644
+index 0000000..aa1d179
+--- /dev/null
++++ b/tests/simulator-display.test.mjs
+@@ -0,0 +1,125 @@
++import assert from 'node:assert/strict'
++import test from 'node:test'
++import {execFileSync} from 'node:child_process'
++import {fileURLToPath} from 'node:url'
++import {Client} from '@modelcontextprotocol/sdk/client/index.js'
++import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js'
++import {createMcpServer} from '../dist/mcp-server.js'
++import {applyDescribeScreenFilters} from '../dist/ui-filters.js'
++import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises'
++import {tmpdir} from 'node:os'
++import {join} from 'node:path'
++import {IDBClient} from '../dist/idb/idb-client.js'
++import {applicationSize, integratedScreens, selectScreen} from '../dist/idb/simulator-display.js'
++
++function lcd(id, name, type, width, height, scale) {
++  return `    (${id}) LCD:
++        Screen ID: ${id}
++        Name: LCD
++        Device Name: ${name}
++        Screen Type: ${type}
++        Pixel Size: {${width}, ${height}}
++        Preferred UI Scale: ${scale}
++        UI Orientation: Portrait\n`
++}
++const header = 'Port:\n    Class: DisplayAdapter\n    Power state: On\n    Connected Screens:\n'
++const outer = lcd(1, 'primary', 'Integrated', 1398, 2034, 3)
++const inner = lcd(3, 'primary-1', 'Integrated', 2007, 2853, 3)
++const external = lcd(2, 'external-0', 'TVOut', 720, 480, 1)
++const screens = integratedScreens(header + outer + external + inner)
++
++function hierarchy(width, height) {
++  return [{type:'Application', frame:{x:0, y:0, width, height}}, {type:'Button', frame:{x:0, y:0, width:10, height:10}}]
++}
++
++test('Duo screen selection uses connected integrated displays and the current app frame', () => {
++  assert.equal(screens.length, 2)
++  assert.equal(selectScreen(screens, 'automatic', applicationSize(hierarchy(466,678))).id, '1')
++  for (const size of [[951,669],[669,951]]) {
++    assert.equal(selectScreen(screens, 'inner', applicationSize(hierarchy(...size))).id, '3')
++  }
++  assert.throws(() => selectScreen(screens, 'outer', {width:951,height:669}), /outer display is inactive/)
++  assert.throws(() => selectScreen(screens, 'inner', {width:466,height:678}), /inner display is inactive/)
++  assert.throws(() => selectScreen(screens, 'automatic', {width:393,height:852}), /could not be identified/)
++  assert.throws(() => selectScreen([screens[0], {...screens[0], id:'3'}], 'automatic', {width:466,height:678}), /could not be identified/)
++  assert.equal(selectScreen([screens[0]], 'automatic').id, '1')
++  assert.throws(() => selectScreen([screens[0]], 'outer'), /requires an iPhone Duo/)
++  assert.equal(applicationSize([{type:'Window',frame:{x:0,y:0,width:466,height:678}}]), undefined)
++  assert.equal(applicationSize([...hierarchy(466,678),...hierarchy(951,669)]), undefined)
++})
++
++test('malformed integrated descriptors fail closed; ordinary and legacy inventories are distinguishable', () => {
++  assert.deepEqual(integratedScreens('Class: Display\nPower state: On\n'), [])
++  assert.throws(() => integratedScreens(header + outer.replace('Preferred UI Scale: 3','Preferred UI Scale: 0')), /incomplete/)
++  assert.equal(integratedScreens(header + outer + external)[0].scale, 3)
++})
++
++test('screenshot command uses exact device and display, verifies pose after capture and preserves the legacy path', async t => {
++  const directory = await mkdtemp(join(tmpdir(), 'blitz-mcp-displays-'))
++  const udid = '00000000-0000-4000-8000-000000000001'
++  const inventoryFile = join(directory, 'inventory')
++  const log = join(directory, 'captures')
++  const fake = `#!${process.execPath}
++const fs = require('node:fs')
++const args = process.argv.slice(2)
++if (args.slice(0,3).join(' ') !== 'simctl io ${udid}') process.exit(2)
++if (args[3] === 'enumerate') process.stdout.write(fs.readFileSync(${JSON.stringify(inventoryFile)}))
++else if (args[3] === 'screenshot') {
++  fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(args.slice(4,-1)) + '\\n')
++  fs.writeFileSync(args.at(-1), 'native image fixture')
++} else process.exit(2)
++`
++  await writeFile(join(directory,'xcrun'),fake,{mode:0o755})
++  const client = new IDBClient(udid,{environment:{PATH:directory}})
++  t.after(async () => {await client.shutdown(); await rm(directory,{recursive:true,force:true})})
++  // Settings reports a portrait Application frame while its buttons follow the landscape display.
++  await writeFile(inventoryFile, header + outer + external + inner.replace('UI Orientation: Portrait', 'UI Orientation: Landscape Left'))
++  const size = await client.getScreenSize(hierarchy(669,951))
++  assert.deepEqual(size, {width:951,height:669})
++  const edgeButton = {type:'Button', AXLabel:'Edge', frame:{x:850,y:170,width:50,height:35}}
++  assert.deepEqual(applyDescribeScreenFilters([edgeButton],size.width,size.height), [edgeButton])
++  assert.deepEqual(await client.getScreenSize(hierarchy(678,466)), {width:466,height:678})
++  let frames = [hierarchy(951,669),hierarchy(951,669)]
++  client.describeAll = async () => frames.shift()
++  const result = await client.captureScreenshot('inner')
++  assert.equal(result.png.toString(),'native image fixture')
++  assert.equal(result.scale,3)
++  frames = [hierarchy(466,678),hierarchy(951,669)]
++  await assert.rejects(client.captureScreenshot('automatic'),/changed displays/)
++  frames = [hierarchy(466,678)]
++  await assert.rejects(client.captureScreenshot('inner'),/inactive/)
++  await writeFile(inventoryFile,'Port:\n    Class: Display\n')
++  assert.equal((await client.screenshot()).toString(),'native image fixture')
++  await assert.rejects(client.captureScreenshot('inner'),/integrated display/)
++  const commands = (await readFile(log,'utf8')).trim().split('\n').map(JSON.parse)
++  assert.deepEqual(commands, [['--type=png','--display=3'],['--type=png','--display=1'],['--type=png']])
++})
++
++test('get_screenshot returns an inline PNG in touch points and retains the native capture', {skip: process.platform !== 'darwin'}, async t => {
++  const udid = '00000000-0000-4000-8000-000000000002'
++  const directory = await mkdtemp(join(tmpdir(), 'blitz-mcp-preview-'))
++  t.after(() => rm(directory, {recursive:true, force:true}))
++  const simulator = IDBClient.getInstance(udid)
++  t.after(() => simulator.shutdown())
++  const server = createMcpServer(0)
++  const client = new Client({name:'preview-test', version:'1.0.0'})
++  const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
++  t.after(async () => {await client.close(); await server.close()})
++  await server.connect(serverTransport)
++  await client.connect(clientTransport)
++  const fixture = fileURLToPath(new URL('../BlitzBlue.png', import.meta.url))
++  const nativeFile = join(directory, 'native.png')
++  for (const [width,height] of [[1398,2034], [2853,2007]]) {
++    execFileSync('/usr/bin/sips',['-z',String(height),String(width),fixture,'--out',nativeFile])
++    const png = await readFile(nativeFile)
++    simulator.captureScreenshot = async () => ({png,scale:3})
++    const {content, isError} = await client.callTool({name:'get_screenshot', arguments:{udid}})
++    assert.ok(!isError, content[0]?.text)
++    const nativePath = content.find(block => block.type === 'text').text
++    t.after(() => Promise.all([nativePath,nativePath.replace(/\.png$/, '-sm.png')].map(file => rm(file,{force:true}))))
++    assert.deepEqual(await readFile(nativePath),png)
++    const inline = Buffer.from(content.find(block => block.type === 'image').data, 'base64')
++    assert.equal(inline.toString('ascii',12,16),'IHDR')
++    assert.deepEqual([inline.readUInt32BE(16),inline.readUInt32BE(20)],[width/3,height/3])
++  }
++})
 diff --git a/tests/test_type_text.py b/tests/test_type_text.py
 new file mode 100644
 index 0000000..cecf6df

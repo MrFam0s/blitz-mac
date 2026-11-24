@@ -131,7 +131,10 @@ extension MCPExecutor {
                     "udid": sim.udid,
                     "name": sim.name,
                     "state": sim.state,
-                    "isBooted": sim.isBooted
+                    "isBooted": sim.isBooted,
+                    "supportsDevicePose": sim.deviceTypeIdentifier == SimulatorPose.deviceType,
+                    "isSelectedForProject": appState.simulatorManager.projectID == appState.activeProjectId
+                        && appState.activeProjectId != nil && appState.simulatorManager.selectedDeviceID == sim.udid
                 ]
             }
         }

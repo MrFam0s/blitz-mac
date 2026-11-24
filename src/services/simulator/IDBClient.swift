@@ -240,6 +240,11 @@ actor IDBClient {
         try await runDirect(udid: udid, ["ui", "describe-all", "--udid", udid])
     }
 
+    func applicationScreenSize(udid: String) async throws -> CGSize {
+        let json = try await runDirect(udid: udid, ["ui", "describe-all", "--nested", "--json", "--udid", udid])
+        return try SimulatorScreen.applicationSize(from: Data(json.utf8))
+    }
+
     /// Describe the element at a specific point
     func describePoint(udid: String, x: Int, y: Int) async throws -> String {
         try await runDirect(udid: udid, ["ui", "describe-point", "\(x)", "\(y)", "--udid", udid])

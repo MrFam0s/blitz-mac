@@ -85,6 +85,46 @@ import Testing
     #expect(await driver.bootCalls == ["mine"])
 }
 
+@MainActor
+@Test func simulatorAcceptsRenamedDuoAndNewIPadsAndRejectsOtherFamilies() async {
+    let project = simProject("ios")
+    func device(_ id: String, type: String) -> SimctlClient.SimctlDevice {
+        .init(udid: id, name: "iPhone 17 misleading project name", state: "Booted", isAvailable: true,
+              deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType." + type, lastBootedAt: nil)
+    }
+    let service = SimulatorTestDriver(devices: [
+        device("duo", type: "iPhone-Duo"), device("ipad", type: "iPad-Pro-future"),
+        device("watch", type: "Apple-Watch-Series-12"), device("tv", type: "Apple-TV-4K")
+    ])
+    var selections: [String] = []
+    let manager = SimulatorManager(service: service, saveSelection: { _, id in selections.append(id) })
+    #expect(await manager.selectDevice("duo", for: project))
+    #expect(await manager.selectDevice("ipad", for: project))
+    #expect(await manager.selectDevice("watch", for: project) == false)
+    #expect(await manager.selectDevice("tv", for: project) == false)
+    #expect(selections == ["duo", "ipad"])
+    #expect(await service.bootCalls.isEmpty)
+}
+
+@Test func deviceHubUsesTheActiveScreenAndItsCurrentOrientationForTouches() {
+    let outer = CGSize(width: 466, height: 678)
+    let inner = CGSize(width: 669, height: 951)
+    let crop = CGRect(x: 0.05, y: 0.05, width: 0.9, height: 0.9)
+    let closed = DeviceHubScreenGeometry.Viewport(crop: crop, windowSize: outer)
+    let open = DeviceHubScreenGeometry.Viewport(crop: crop, windowSize: CGSize(width: 951, height: 669))
+    #expect(closed.orientedPoints(for: outer) == outer)
+    #expect(open.orientedPoints(for: inner) == CGSize(width: 951, height: 669))
+    #expect(closed.orientedPoints(for: inner) == nil)
+    #expect(open.orientedPoints(for: outer) == nil)
+    #expect(open.orientedPoints(for: .zero) == nil)
+    #expect(SimulatorConfigDatabase.legacyConfig(for: "iPhone 17") != nil)
+    #expect(SimulatorConfigDatabase.legacyConfig(for: "iPhone Duo") == nil)
+    let legacy = SimulatorInfo(udid: "old", name: "Project iPhone 16 Pro", state: "Shutdown",
+                               deviceTypeIdentifier: nil, lastBootedAt: nil)
+    #expect(legacy.supportsAppInteraction)
+    #expect(legacy.legacyConfig?.widthPoints == 402)
+}
+
 @Test func simulatorCaptureSelectsOnlyTheRequestedUnambiguousWindow() {
     let titles = ["Other App iPhone 17 — iOS 27", "My App iPhone 17 — iOS 27", "iPhone 17 Pro — iOS 27"]
     #expect(SimulatorCaptureService.matchingWindowIndex(titles: titles, deviceName: "My App iPhone 17") == 1)
@@ -105,6 +145,7 @@ import Testing
     let arguments = try newViewer.openArguments(udid: id)
     #expect(Array(arguments.prefix(3)) == ["-g", "-a", hub])
     let url = try #require(URLComponents(string: arguments[3]))
+    #expect(try newViewer.openArguments(udid: id, inBackground: false) == ["-a", hub, arguments[3]])
     #expect(url.scheme == "devices")
     #expect(url.path == "/device/open")
     #expect(url.queryItems == [URLQueryItem(name: "id", value: id)])

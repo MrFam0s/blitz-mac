@@ -170,6 +170,17 @@ enum MCPRegistry {
         ))
 
 
+        tools.append(tool(
+            name: "simulator_set_pose",
+            description: "Request a fold position in Xcode Device Hub for the active project's selected, booted iPhone Duo. The system transition is asynchronous.",
+            properties: [
+                "projectId": ["type": "string", "description": "Intended active Blitz project ID"],
+                "udid": ["type": "string", "description": "Selected iPhone Duo simulator UDID"],
+                "pose": ["type": "string", "enum": SimulatorPose.allCases.map(\.rawValue)]
+            ],
+            required: ["projectId", "udid", "pose"]
+        ))
+
         // -- Settings --
         tools.append(tool(
             name: "settings_get",
@@ -299,7 +310,7 @@ enum MCPRegistry {
             properties: [
                 "sourcePath": ["type": "string", "description": "Absolute path to the source image file"],
                 "slotIndex": ["type": "integer", "description": "Track slot position (1-10)"],
-                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
+                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ScreenshotDeviceType.allCases.map(\.rawValue)],
                 "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."],
                 "fileName": ["type": "string", "description": "Optional stored file name for the imported image (defaults to the source file name, converting to .png when needed)"]
             ],
@@ -311,7 +322,7 @@ enum MCPRegistry {
             description: "Remove the screenshot currently staged in a specific track slot (1-10). If you are targeting a specific locale, call screenshots_switch_localization first.",
             properties: [
                 "slotIndex": ["type": "integer", "description": "Track slot position (1-10)"],
-                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
+                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ScreenshotDeviceType.allCases.map(\.rawValue)],
                 "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: ["slotIndex"]
@@ -326,7 +337,7 @@ enum MCPRegistry {
                     "description": "Exactly 10 integers containing each slot index 0 through 9 once. The value at each position says which current slot moves there.",
                     "items": ["type": "integer"] as [String: Any]
                 ] as [String: Any],
-                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
+                "displayType": ["type": "string", "description": "Display type (default APP_IPHONE_67)", "enum": ScreenshotDeviceType.allCases.map(\.rawValue)],
                 "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: ["order"]
@@ -336,7 +347,7 @@ enum MCPRegistry {
             name: "screenshots_save",
             description: "Save screenshot track changes to App Store Connect. If displayType is provided, syncs that device family only; otherwise it syncs every prepared/staged device family for the current locale. If you are targeting a specific locale, call screenshots_switch_localization first.",
             properties: [
-                "displayType": ["type": "string", "description": "Optional display type. Omit it to sync every prepared/staged device family for the selected locale.", "enum": ["APP_IPHONE_67", "APP_IPAD_PRO_3GEN_129", "APP_DESKTOP"]],
+                "displayType": ["type": "string", "description": "Optional display type. Omit it to sync every prepared/staged device family for the selected locale.", "enum": ScreenshotDeviceType.allCases.map(\.rawValue)],
                 "locale": ["type": "string", "description": "Locale code. Must match the currently selected screenshots locale in Blitz Neo."]
             ],
             required: []
@@ -516,7 +527,7 @@ enum MCPRegistry {
         // Mutations
         case "project_open", "project_create", "project_import", "project_close":
             return .projectMutation
-        case "simulator_select_device":
+        case "simulator_select_device", "simulator_set_pose":
             return .simulatorControl
         case "settings_update", "settings_save":
             return .settingsMutation

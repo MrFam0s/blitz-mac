@@ -67,6 +67,7 @@ extension ASCManager {
         let macScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_DESKTOP" }
         let isMacApp = releasePlatform == .macOS
         let iphoneScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_IPHONE_67" }
+        let duoScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == ScreenshotDeviceType.iPhoneDuo.rawValue }
         let ipadScreenshots = readinessScreenshotSets.first { $0.attributes.screenshotDisplayType == "APP_IPAD_PRO_3GEN_129" }
 
         let privacyUrl: String? = app.map {
@@ -135,6 +136,12 @@ extension ASCManager {
             let iphoneCount = validCount(for: iphoneScreenshots)
             let ipadCount = validCount(for: ipadScreenshots)
             fields.append(readinessField(label: "iPhone Screenshots", value: iphoneCount > 0 ? "\(iphoneCount) screenshot(s)" : nil))
+            let duoCount = validCount(for: duoScreenshots)
+            fields.append(readinessField(
+                label: "iPhone Duo Screenshots", value: duoCount > 0 ? "\(duoCount) screenshot(s)" : nil,
+                required: false,
+                hint: "Starting in April 2027, Apple requires iPhone Duo screenshots for apps built with the iOS 27.1 SDK or later."
+            ))
             fields.append(readinessField(label: "iPad Screenshots", value: ipadCount > 0 ? "\(ipadCount) screenshot(s)" : nil))
         }
 
