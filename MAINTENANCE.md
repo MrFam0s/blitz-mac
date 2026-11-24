@@ -6,6 +6,12 @@ from `main` as `chore/asc-<version>` and open a draft pull request against
 `main` for review. The working branch can be deleted after the merge.
 Published versions are identified by their release tags.
 
+## 1.0.85 build 105 — release from main
+
+The update dialog resolves CHANGELOG.md through GitHub's default branch. It
+matches the requested version in headings with or without a build number. When
+multiple builds share a version, it uses the most recent entry.
+
 ## 1.0.84 build 104 — manual simulator startup
 
 When the Simulator tab appears, Blitz checks the current CoreSimulator inventory

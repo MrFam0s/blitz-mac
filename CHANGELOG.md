@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.85 (build 105)
+
+- The update dialog reads release notes from the default branch and displays
+  entries whose version heading includes a build number.
+- When you return to the Simulator tab, a stopped device waits for **Start
+  simulator**. Blitz can reconnect to a running device and show its preview.
+- Blitz and its iPhone MCP can identify the active iPhone Duo display when
+  taking screenshots in book posture with a compatible AXe installation.
+
 ## 1.0.84 (build 104)
 
 - Returning to the Simulator tab reconnects to the running project simulator
