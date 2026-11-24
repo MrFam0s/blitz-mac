@@ -20,7 +20,10 @@ final class SimulatorManager {
     private let saveSelection: (Project, String) throws -> Void
 
     var bootedDeviceId: String? {
-        simulators.first { $0.udid == selectedDeviceID && $0.isBooted }?.udid
+        guard let selectedDeviceID else { return nil }
+        return simulators.first {
+            $0.isBooted && $0.udid.caseInsensitiveCompare(selectedDeviceID) == .orderedSame && $0.supportsAppInteraction
+        }?.udid
     }
 
     init(
@@ -49,19 +52,31 @@ final class SimulatorManager {
         errorMessage = nil
     }
 
-    func loadSimulators() async {
+    @discardableResult
+    func loadSimulators() async -> Bool {
         let token = revision
         do {
             let devices = try await service.listDevices()
-            guard token == revision, !Task.isCancelled else { return }
+            guard token == revision, !Task.isCancelled else { return false }
             simulators = devices.map {
                 SimulatorInfo(udid: $0.udid, name: $0.name, state: $0.state,
                               deviceTypeIdentifier: $0.deviceTypeIdentifier, lastBootedAt: $0.lastBootedAt)
             }
+            return true
         } catch {
-            guard token == revision, !Task.isCancelled else { return }
+            guard token == revision, !Task.isCancelled else { return false }
             errorMessage = L10n.tr("Simulatoren konnten nicht geladen werden. Prüfe, ob Xcode installiert ist, und versuche es erneut.")
+            return false
         }
+    }
+
+    /// Tab navigation observes CoreSimulator. Only an explicit user action may boot a device.
+    func runningDeviceForPreview(in project: Project?) async -> String? {
+        activate(project: project)
+        guard project?.platform == .iOS else { return nil }
+        errorMessage = nil
+        guard await loadSimulators(), projectID == project?.id else { return nil }
+        return bootedDeviceId
     }
 
     /// An explicit choice is persisted before starting it. A failed boot can be retried.
@@ -79,19 +94,19 @@ final class SimulatorManager {
         errorMessage = nil
         await loadSimulators()
         guard token == revision, !Task.isCancelled, errorMessage == nil else { return false }
-        guard let device = simulators.first(where: { $0.udid == udid }),
+        guard let device = simulators.first(where: { $0.udid.caseInsensitiveCompare(udid) == .orderedSame }),
               device.supportsAppInteraction else {
             errorMessage = L10n.tr("Dieser Simulator ist nicht verfügbar oder wird nicht unterstützt. Wähle ein anderes Gerät.")
             return false
         }
         do {
-            try saveSelection(project, udid)
+            try saveSelection(project, device.udid)
         } catch {
             errorMessage = L10n.tr("Der Simulator für dieses Projekt konnte nicht gespeichert werden: \(error.localizedDescription)")
             return false
         }
-        savedSelections[project.id] = udid
-        selectedDeviceID = udid
+        savedSelections[project.id] = device.udid
+        selectedDeviceID = device.udid
         isBooting = false
         return await startSelectedDevice(for: project)
     }
@@ -113,7 +128,7 @@ final class SimulatorManager {
         await loadSimulators()
         guard token == revision, !Task.isCancelled, errorMessage == nil else { return false }
         guard let selectedDeviceID else { return false }
-        guard let device = simulators.first(where: { $0.udid == selectedDeviceID }),
+        guard let device = simulators.first(where: { $0.udid.caseInsensitiveCompare(selectedDeviceID) == .orderedSame }),
               device.supportsAppInteraction else {
             errorMessage = L10n.tr("Der gespeicherte Simulator ist nicht verfügbar. Wähle ein anderes Gerät für dieses Projekt.")
             return false

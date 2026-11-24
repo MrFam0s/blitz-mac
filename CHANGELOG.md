@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.84 (build 104)
+
+- Returning to the Simulator tab reconnects to the running project simulator
+  when its preview is available. Use **Start simulator** to boot a stopped
+  device or **Open preview** to reopen its viewer window.
+
 ## 1.0.83 (build 103)
 
 - Blitz and its iPhone MCP use a compatible AXe to identify the active iPhone

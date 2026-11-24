@@ -15,6 +15,55 @@ import Testing
 }
 
 @MainActor
+@Test func simulatorTabReturnRefreshesTheSelectedDeviceAndWaitsForManualStart() async {
+    let deviceID = "57BA8890-220C-40A2-A056-2C87BBA09B8D"
+    let parallel = simDevice("other", booted: true)
+    let driver = SimulatorTestDriver(devices: [parallel, simDevice(deviceID, booted: true)])
+    let manager = SimulatorManager(service: driver, saveSelection: { _, _ in
+        Issue.record("Returning to the tab must preserve the saved selection")
+    })
+    let project = simProject("ios", selected: deviceID.lowercased())
+    #expect(await manager.runningDeviceForPreview(in: project) == deviceID)
+
+    // The project simulator was shut down outside Blitz while another tab was open.
+    await driver.replaceInventory(with: [parallel, simDevice(deviceID)])
+    #expect(await manager.runningDeviceForPreview(in: project) == nil)
+    #expect(manager.bootedDeviceId == nil)
+    #expect(manager.selectedDeviceID == deviceID.lowercased())
+    #expect(await driver.bootCalls.isEmpty)
+
+    #expect(await manager.startSelectedDevice(for: project))
+    #expect(await manager.runningDeviceForPreview(in: project) == deviceID)
+    #expect(await driver.bootCalls == [deviceID])
+}
+
+@MainActor
+@Test func simulatorTabReturnRequiresAConfirmedInventoryAfterLookupFailure() async {
+    let driver = SimulatorTestDriver(devices: [simDevice("mine", booted: true)])
+    let manager = SimulatorManager(service: driver, saveSelection: { _, _ in })
+    let project = simProject("ios", selected: "mine")
+    #expect(await manager.runningDeviceForPreview(in: project) == "mine")
+    await driver.failNextListing()
+    #expect(await manager.runningDeviceForPreview(in: project) == nil)
+    #expect(await manager.runningDeviceForPreview(in: project) == "mine")
+    #expect(await driver.bootCalls.isEmpty)
+}
+
+@MainActor
+@Test func simulatorTabReturnRequiresAnIOSProjectAndItsOwnDeviceSelection() async {
+    let driver = SimulatorTestDriver(devices: [simDevice("other", booted: true)])
+    let manager = SimulatorManager(service: driver, saveSelection: { _, _ in })
+    let mac = Project(id: "mac", metadata: BlitzProjectMetadata(name: "Mac", type: .swift,
+        platform: .macOS, simulatorUDID: "other"), path: "/tmp/mac")
+
+    #expect(await manager.runningDeviceForPreview(in: nil) == nil)
+    #expect(await manager.runningDeviceForPreview(in: mac) == nil)
+    #expect(await manager.runningDeviceForPreview(in: simProject("new")) == nil)
+    #expect(await manager.runningDeviceForPreview(in: simProject("deleted", selected: "gone")) == nil)
+    #expect(await driver.bootCalls.isEmpty)
+}
+
+@MainActor
 @Test func simulatorSelectionIsSavedPerProjectAndKeepsOtherDevicesRunning() async {
     let driver = SimulatorTestDriver(devices: [simDevice("other", booted: true), simDevice("mine")])
     var saved: [String: String] = [:]
@@ -103,6 +152,7 @@ import Testing
     #expect(await manager.selectDevice("ipad", for: project))
     #expect(await manager.selectDevice("watch", for: project) == false)
     #expect(await manager.selectDevice("tv", for: project) == false)
+    #expect(await manager.runningDeviceForPreview(in: simProject("legacy", selected: "watch")) == nil)
     #expect(selections == ["duo", "ipad"])
     #expect(await service.bootCalls.isEmpty)
 }
@@ -346,10 +396,19 @@ private actor SimulatorTestDriver: SimulatorDeviceService {
     var devices: [SimctlClient.SimctlDevice]
     var bootCalls: [String] = []
     let delayBoot: Bool
+    private var failListing = false
     private var bootWaiter: CheckedContinuation<Void, Never>?
     private var finishWaiter: CheckedContinuation<Void, Never>?
     init(devices: [SimctlClient.SimctlDevice], delayBoot: Bool = false) { self.devices = devices; self.delayBoot = delayBoot }
-    func listDevices() async throws -> [SimctlClient.SimctlDevice] { devices }
+    func replaceInventory(with devices: [SimctlClient.SimctlDevice]) { self.devices = devices }
+    func failNextListing() { failListing = true }
+    func listDevices() async throws -> [SimctlClient.SimctlDevice] {
+        if failListing {
+            failListing = false
+            throw CocoaError(.fileReadUnknown)
+        }
+        return devices
+    }
     func bootInBackground(udid: String) async throws {
         bootCalls.append(udid)
         bootWaiter?.resume(); bootWaiter = nil

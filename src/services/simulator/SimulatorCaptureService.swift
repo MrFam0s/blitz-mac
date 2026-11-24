@@ -82,10 +82,8 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         return matches.count == 1 ? matches.first : nil
     }
 
-    /// Start capturing the simulator window.
-    /// Calls SCShareableContent exactly ONCE. If the window isn't visible yet,
-    /// retries the query up to 10 times (1s apart).
-    @MainActor func startCapture(deviceName: String, viewer: SimulatorApplication.Kind, retryForWindow: Bool = true) async throws {
+    /// Wait for a newly opened viewer, or look once when returning to the tab.
+    @MainActor func startCapture(deviceName: String, viewers: [SimulatorApplication.Kind], retryForWindow: Bool) async throws {
         guard !isCapturing else {
             logger.warning("Already capturing")
             return
@@ -96,7 +94,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         // A failing WindowServer connection or an empty capture source is distinct from TCC denial.
         let initialContent: SCShareableContent
         do {
-            initialContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            initialContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: retryForWindow)
         } catch {
             logger.error("SCShareableContent failed: \(error.localizedDescription)")
             throw CaptureError.classify(error)
@@ -105,7 +103,13 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         // Step 2: Look for the simulator window. If not found, retry (re-querying
         // SCShareableContent is safe AFTER the first successful call — TCC won't re-prompt
         // for the same process once granted).
-        var window = findSimulatorWindow(in: initialContent, deviceName: deviceName, viewer: viewer)
+        func matchingWindow(in content: SCShareableContent) -> SCWindow? {
+            for viewer in viewers {
+                if let window = findSimulatorWindow(in: content, deviceName: deviceName, viewer: viewer) { return window }
+            }
+            return nil
+        }
+        var window = matchingWindow(in: initialContent)
 
         if window == nil && retryForWindow {
             let maxAttempts = 10
@@ -115,7 +119,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
                 do {
                     let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                    window = findSimulatorWindow(in: content, deviceName: deviceName, viewer: viewer)
+                    window = matchingWindow(in: content)
                     if window != nil { break }
                 } catch {
                     throw CaptureError.classify(error)
@@ -124,7 +128,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         }
 
         guard var window, let owner = window.owningApplication else {
-            throw CaptureError.simulatorWindowNotFound
+            throw retryForWindow ? CaptureError.simulatorWindowNotFound : CaptureError.simulatorWindowClosed
         }
 
         try Task.checkCancellation()

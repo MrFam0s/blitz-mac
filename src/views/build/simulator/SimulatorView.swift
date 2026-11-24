@@ -222,8 +222,7 @@ struct SimulatorView: View {
 
         }
         .task(id: appState.activeProjectId) {
-            guard interruptedPreview == nil else { return }
-            await appState.startProjectSimulator()
+            await appState.showRunningProjectSimulator()
         }
         .onAppear {
             stream.ensureRenderer()

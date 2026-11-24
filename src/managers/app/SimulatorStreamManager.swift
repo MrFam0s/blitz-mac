@@ -31,6 +31,10 @@ final class SimulatorStreamManager {
     private var selectedDeviceID: String?
     private var fallbackScreens: [SimulatorScreen]?
 
+    func isPreviewing(_ udid: String) -> Bool {
+        isCapturing && selectedDeviceID?.caseInsensitiveCompare(udid) == .orderedSame
+    }
+
     init(listDevices: @escaping @Sendable () async throws -> [SimctlClient.SimctlDevice] = { try await SimctlClient().listDevices() },
          previewVisible: @escaping @MainActor () -> Bool = {
         NSApp?.windows.contains { $0.canBecomeMain && $0.occlusionState.contains(.visible) } == true
@@ -65,6 +69,14 @@ final class SimulatorStreamManager {
     static func deviceHasStopped(udid: String, in devices: [SimctlClient.SimctlDevice]?) -> Bool {
         guard let devices else { return false }
         return !devices.contains { $0.udid.caseInsensitiveCompare(udid) == .orderedSame && $0.isBooted }
+    }
+
+    /// An explicit start captures the viewer it opened. A passive visit can attach
+    /// to an existing window in either viewer, subject to its current permissions.
+    static func windowViewers(openIfNeeded: Bool, accessibilityAllowed: Bool,
+                              openPreferred: () async throws -> SimulatorApplication.Kind) async throws -> [SimulatorApplication.Kind] {
+        if openIfNeeded { return [try await openPreferred()] }
+        return accessibilityAllowed ? [.deviceHub, .simulator] : [.simulator]
     }
 
     private func endWindowCapture(_ error: Error, deviceID: String, session: DeviceInteractionService) async {
@@ -128,8 +140,8 @@ final class SimulatorStreamManager {
         }
     }
 
-    /// Full start: ensure renderer, open Simulator.app, connect SCStream.
-    func startStreaming(bootedDeviceId: String?) async {
+    /// Tab navigation may attach a preview, while an explicit start may also open its viewer.
+    func startStreaming(bootedDeviceId: String?, openViewerIfNeeded: Bool = true) async {
         guard !isCapturing, interaction == nil else { return }
         guard let bootedDeviceId else {
             statusMessage = nil
@@ -147,7 +159,7 @@ final class SimulatorStreamManager {
         needsScreenRecordingPermission = false
         needsAccessibilityPermission = false
         isPaused = false
-        statusMessage = L10n.tr("Simulator wird geöffnet …")
+        statusMessage = openViewerIfNeeded ? L10n.tr("Simulator wird geöffnet …") : nil
         let service = SimulatorService()
         do {
             let devices = try await listDevices()
@@ -161,6 +173,7 @@ final class SimulatorStreamManager {
             }
             let screens = try? await SimctlClient().integratedScreens(udid: bootedDeviceId)
             let accessibilityAllowed = AXIsProcessTrusted()
+            let screenRecordingAllowed = CGPreflightScreenCaptureAccess()
             // A classic Simulator window requires no AX lookup to determine its bounds.
             let viewer = try? await service.viewer(preferred: accessibilityAllowed ? .deviceHub : .simulator)
             guard interaction === session, !Task.isCancelled else { throw CancellationError() }
@@ -169,23 +182,33 @@ final class SimulatorStreamManager {
             fallbackScreens = screens?.isEmpty == false ? screens : nil
             let duplicateName = devices.filter { $0.isBooted && $0.name == device.name }.count != 1
             if Self.prefersNativePreview(deviceType: device.deviceTypeIdentifier, integratedScreenCount: screens?.count ?? 0,
-                                         viewer: viewer?.kind, screenRecordingAllowed: CGPreflightScreenCaptureAccess(),
+                                         viewer: viewer?.kind, screenRecordingAllowed: screenRecordingAllowed,
                                          accessibilityAllowed: accessibilityAllowed) || (duplicateName && fallbackScreens != nil) {
                 let topology = device.deviceTypeIdentifier == SimulatorPose.deviceType && (screens?.count ?? 0) < 2 ? nil : screens
                 startNativePreview(udid: bootedDeviceId, session: session, screens: topology)
                 return
             }
-            ensureRenderer()
+            // Querying shareable content can ask for screen recording. Defer that decision
+            // to an explicit start when the device has no native preview available.
+            if !openViewerIfNeeded && !screenRecordingAllowed {
+                statusMessage = nil
+                await closeInteraction()
+                return
+            }
             guard !duplicateName else {
                 throw SimulatorCaptureService.CaptureError.ambiguousSimulatorName
             }
             guard interaction === session else { return }
-            guard let viewer else { throw SimulatorApplication.LaunchError.viewerUnavailable }
-            try await service.openSimulatorApp(udid: bootedDeviceId, using: viewer)
+            let viewers = try await Self.windowViewers(openIfNeeded: openViewerIfNeeded, accessibilityAllowed: accessibilityAllowed) {
+                guard let viewer else { throw SimulatorApplication.LaunchError.viewerUnavailable }
+                try await service.openSimulatorApp(udid: bootedDeviceId, using: viewer)
+                return viewer.kind
+            }
             try Task.checkCancellation()
             guard interaction === session else { return }
+            ensureRenderer()
             statusMessage = L10n.tr("Verbindung mit \(device.name) wird hergestellt …")
-            try await capture.startCapture(deviceName: device.name, viewer: viewer.kind, retryForWindow: true)
+            try await capture.startCapture(deviceName: device.name, viewers: viewers, retryForWindow: openViewerIfNeeded)
             try Task.checkCancellation()
         } catch {
             await capture.stopCapture()
@@ -327,9 +350,9 @@ final class SimulatorStreamManager {
         await capture.stopCapture()
     }
 
-    /// Resume: restart SCStream after a pause. No window retry needed since sim is already running.
+    /// Reattach after a pause only to a still-running device and an existing viewer.
     func resumeStream() async {
         guard isPaused else { return }
-        await startStreaming(bootedDeviceId: selectedDeviceID)
+        await startStreaming(bootedDeviceId: selectedDeviceID, openViewerIfNeeded: false)
     }
 }

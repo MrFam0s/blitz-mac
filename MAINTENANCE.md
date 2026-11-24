@@ -2,6 +2,13 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.84 build 104 — manual simulator startup
+
+When the Simulator tab appears, Blitz checks the current CoreSimulator inventory
+for the project's selected device. A running device can supply its native
+framebuffer or an existing viewer window. Starting the device and opening a
+viewer window require an explicit action.
+
 ## 1.0.83 build 103 — iPhone Duo screenshot capture
 
 The native export and iPhone MCP 0.1.18-blitz.3 bind each AXe capture to the

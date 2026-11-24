@@ -181,34 +181,61 @@ final class AppState {
 
     private var simulatorActionTask: Task<Bool, Never>?
     private var simulatorActionRevision = 0
+    private enum SimulatorAction: Equatable {
+        case previewRunning, start, select(String)
+    }
+
+    func showRunningProjectSimulator() async {
+        let projectID = activeProjectId
+        let revision = simulatorActionRevision
+        // An explicit start or selection already in progress takes precedence over navigation.
+        _ = await simulatorActionTask?.value
+        guard revision == simulatorActionRevision, activeProjectId == projectID,
+              activeTab == .app, activeAppSubTab == .simulator, !Task.isCancelled else { return }
+        await updateProjectSimulator(.previewRunning)
+    }
+
+    @discardableResult
+    func startProjectSimulator(selecting udid: String? = nil) async -> Bool {
+        await updateProjectSimulator(udid.map(SimulatorAction.select) ?? .start)
+    }
 
     /// Serialize stream changes so a late capture cannot take over a new project.
     @discardableResult
-    func startProjectSimulator(selecting udid: String? = nil) async -> Bool {
+    private func updateProjectSimulator(_ action: SimulatorAction) async -> Bool {
+        let project = activeProject
         simulatorActionRevision += 1
         let token = simulatorActionRevision
         let previous = simulatorActionTask
         previous?.cancel()
-        _ = await previous?.value
-        guard token == simulatorActionRevision, !Task.isCancelled else { return false }
-        let project = activeProject
         let task = Task { @MainActor in
+            _ = await previous?.value
+            guard token == simulatorActionRevision, activeProjectId == project?.id, !Task.isCancelled else { return false }
             simulatorManager.activate(project: project)
+            let runningDevice = action == .previewRunning ? await simulatorManager.runningDeviceForPreview(in: project) : nil
+            guard activeProjectId == project?.id, !Task.isCancelled else { return false }
+            if let runningDevice, simulatorStream.isPreviewing(runningDevice) { return true }
             await simulatorStream.stopStreaming()
             guard activeProjectId == project?.id, !Task.isCancelled else { return false }
-            let started: Bool
-            if let udid {
-                started = await simulatorManager.selectDevice(udid, for: project)
-            } else {
-                started = await simulatorManager.startSelectedDevice(for: project)
+            let device: String?
+            switch action {
+            case .previewRunning:
+                device = runningDevice
+            case .start:
+                guard await simulatorManager.startSelectedDevice(for: project) else { return false }
+                device = simulatorManager.bootedDeviceId
+            case .select(let udid):
+                guard await simulatorManager.selectDevice(udid, for: project) else { return false }
+                device = simulatorManager.bootedDeviceId
             }
-            guard started, activeProjectId == project?.id, !Task.isCancelled else { return false }
+            guard let device, activeProjectId == project?.id, !Task.isCancelled else { return false }
             if activeTab == .app && activeAppSubTab == .simulator {
-                await simulatorStream.startStreaming(bootedDeviceId: simulatorManager.bootedDeviceId)
+                await simulatorStream.startStreaming(bootedDeviceId: device, openViewerIfNeeded: action != .previewRunning)
             }
             return !Task.isCancelled
         }
         simulatorActionTask = task
+        defer { if simulatorActionRevision == token { simulatorActionTask = nil } }
         return await withTaskCancellationHandler {
             await task.value
         } onCancel: {
