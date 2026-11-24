@@ -2,6 +2,16 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.83 build 103 — iPhone Duo screenshot capture
+
+The native export and iPhone MCP 0.1.18-blitz.3 bind each AXe capture to the
+selected simulator, its boot session and the active display's ID and UUID.
+Both validate the capture receipt and PNG dimensions before returning the image.
+The Simulator tab distinguishes a stopped project device from a closed preview
+window. Reopening the preview is explicit. The two idle states were rendered
+in German and English. All 737 Swift tests, 30 iPhone MCP tests and 45 installer,
+packaging and Node runtime tests passed.
+
 ## 1.0.82 build 102 — simulator hinge control via AXe
 
 The app and the macOS MCP can operate the selected project simulator by UDID
@@ -1665,7 +1675,7 @@ Build the package before bundling to reuse it:
 # Exact Node/npm pair from config/node-toolchain.json on PATH
 bash scripts/build-iphone-mcp.sh
 python3 scripts/test-iphone-mcp-installer.py
-BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.2.tgz" \
+BLITZ_IPHONE_MCP_TARBALL="$PWD/.build/iphone-mcp/blitzdev-iphone-mcp-0.1.18-blitz.3.tgz" \
 BLITZ_SWIFT_BUILD_SYSTEM=native CODESIGN_TIMESTAMP=none bash scripts/bundle.sh release
 ```
 

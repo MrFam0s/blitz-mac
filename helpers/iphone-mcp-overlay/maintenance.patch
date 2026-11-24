@@ -1,5 +1,5 @@
 diff --git a/AGENT.md b/AGENT.md
-index 4bb53c9..de1cba5 100644
+index 4bb53c9..ee579fd 100644
 --- a/AGENT.md
 +++ b/AGENT.md
 @@ -94,10 +94,11 @@ Execute multiple actions in sequence.
@@ -11,26 +11,26 @@ index 4bb53c9..de1cba5 100644
 
  **Params:**
  - `udid` (optional)
-+- `display` (optional): `automatic` (default), `outer`, or `inner`. A Duo simulator captures its active display. Choose the matching pose in Device Hub before explicitly requesting an outer or inner capture.
++- `display` (optional): `automatic` (default), `outer`, or `inner`. A Duo simulator captures its active display. With compatible AXe installed, the native PNG and touch-point preview are bound to the active panel of the requested simulator. The tool returns its role, ID, UUID, and simulator UDID in `structuredContent.display`. An explicit request for an inactive panel fails.
 
  ### list_devices
 
 diff --git a/package-lock.json b/package-lock.json
-index d6a1828..9f19c6b 100644
+index d6a1828..a8ea3c3 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -1,15 +1,14 @@
  {
    "name": "@blitzdev/iphone-mcp",
 -  "version": "0.1.18",
-+  "version": "0.1.18-blitz.2",
++  "version": "0.1.18-blitz.3",
    "lockfileVersion": 3,
    "requires": true,
    "packages": {
      "": {
        "name": "@blitzdev/iphone-mcp",
 -      "version": "0.1.18",
-+      "version": "0.1.18-blitz.2",
++      "version": "0.1.18-blitz.3",
        "license": "MIT",
        "dependencies": {
 -        "@blitzdev/iphone-mcp": "^0.1.15",
@@ -97,14 +97,14 @@ index d6a1828..9f19c6b 100644
          "url": "https://github.com/sponsors/colinhacks"
        }
 diff --git a/package.json b/package.json
-index 560497c..1f6d121 100644
+index 560497c..3ef4458 100644
 --- a/package.json
 +++ b/package.json
 @@ -1,6 +1,6 @@
  {
    "name": "@blitzdev/iphone-mcp",
 -  "version": "0.1.18",
-+  "version": "0.1.18-blitz.2",
++  "version": "0.1.18-blitz.3",
    "description": "MCP server for controlling iOS simulators and physical iPhones",
    "type": "module",
    "license": "MIT",
@@ -423,11 +423,159 @@ index 2fc2f5c..6586272 100644
 +  async shutdown(): Promise<void> { AXScanClient.instances.delete(this.udid) }
 +  static async shutdownAll(): Promise<void> { AXScanClient.instances.clear() }
  }
+diff --git a/src/idb/axe-screens.ts b/src/idb/axe-screens.ts
+new file mode 100644
+index 0000000..54cf19e
+--- /dev/null
++++ b/src/idb/axe-screens.ts
+@@ -0,0 +1,142 @@
++import { execFile } from 'node:child_process'
++import { existsSync } from 'node:fs'
++import { readFile } from 'node:fs/promises'
++import { homedir } from 'node:os'
++import { join } from 'node:path'
++import { promisify } from 'node:util'
++import { z } from 'zod'
++import type { IntegratedScreen } from './simulator-display.js'
++
++const execute = promisify(execFile)
++const identifier = z.string().uuid()
++const screenID = z.number().int().nonnegative()
++const boot = z.string().regex(/^\d+:\d+:\d+$/)
++const rotation = z.enum(['rot0', 'rot90', 'rot180', 'rot270'])
++const positive = z.number().positive().finite()
++const panel = z.object({
++  active: z.literal(true), primary: z.boolean(),
++  identity: z.object({ displayID: screenID, uniqueID: identifier }),
++  nativePixelWidth: positive, nativePixelHeight: positive, pointScale: positive,
++  nativeOrientation: rotation, currentOrientation: rotation
++})
++const inventory = z.object({
++  command: z.literal('displays'), didError: z.literal(false),
++  data: z.object({ result: z.object({requestedSimulatorUDID: identifier, bootIdentity: boot, activePanel: panel}) })
++})
++const observation = z.object({
++  simulatorUDID: identifier, bootIdentity: boot, screenID, screenUniqueID: identifier,
++  rotation: z.number(), scale: positive
++})
++const snap = z.object({ observation })
++const receipt = z.object({
++  command: z.literal('screenshot'), didError: z.literal(false),
++  data: z.object({result: z.object({before: snap, after: snap, width: positive, height: positive})})
++})
++type ActiveScreen = {
++  executable: string; udid: string; bootIdentity: string; id: number; uuid: string; role: 'outer' | 'inner'
++  scale: number; rotation: number; pixelWidth: number; pixelHeight: number; width: number; height: number
++}
++export type CapturedDisplay = Pick<ActiveScreen, 'udid' | 'id' | 'uuid' | 'role'>
++
++export class AXeScreens {
++  private paths: string[]
++  constructor(private env: NodeJS.ProcessEnv, private signal: AbortSignal, paths?: string[]) {
++    this.paths = paths ?? ['/opt/homebrew/bin/axe', '/usr/local/bin/axe', join(homedir(), '.local/bin/axe'), '/opt/local/bin/axe']
++  }
++
++  private async run(path: string, args: string[]) {
++    let stdout: string | undefined
++    let stderr: string | undefined
++    let failure: {stdout?: string; stderr?: string; killed?: boolean} | undefined
++    try {
++      const output = await execute(path, ['--output', 'json', ...args],
++        {env: this.env, signal: this.signal, timeout: 20000})
++      stdout = output.stdout
++      stderr = output.stderr
++    } catch (error) {
++      this.signal.throwIfAborted()
++      failure = error as NonNullable<typeof failure>
++      stdout = failure.stdout
++      stderr = failure.stderr
++    }
++
++    const operation = args[0] === 'displays' ? 'identify the active simulator display' : 'capture the active simulator display'
++    const summary = `AXe could not ${operation}`
++    for (const stream of [stdout, stderr]) {
++      if (!stream) continue
++      let response
++      try { response = JSON.parse(stream) } catch { continue }
++      if (response?.didError === true) {
++        const code = typeof response.error?.code === 'string' ? ` [${response.error.code}]` : ''
++        const detail = typeof response.error?.message === 'string' ? `: ${response.error.message}` : ''
++        throw new Error(`${summary}${code}${detail}`)
++      }
++      if (!failure && stream === stdout && response?.didError === false) return response
++    }
++    throw new Error(failure?.killed ? `${summary} within 20 seconds` : summary)
++  }
++
++  private async supportedExecutable() {
++    for (const path of this.paths) {
++      if (!existsSync(path)) continue
++      // Older AXe builds may print general help and return zero for unknown options.
++      let help
++      try { help = await this.run(path, ['screenshot', '--help-hidden']) }
++      catch { this.signal.throwIfAborted(); continue }
++      if (help?.didError === false && Array.isArray(help.data?.messages)
++          && help.data.messages.some((msg: unknown) => typeof msg === 'string'
++            && msg.split('\n').some(line => line.startsWith('USAGE: axe screenshot ')
++              && ['--screen-id ', '--screen-uuid ', '--expected-boot '].every(flag => line.includes(flag))))) return path
++    }
++    return undefined
++  }
++
++  async activeScreen(udid: string, screens: IntegratedScreen[]): Promise<ActiveScreen | undefined> {
++    const executable = await this.supportedExecutable()
++    if (!executable) return undefined
++    const output = await this.run(executable, ['displays', '--udid', udid, '--verbose'])
++    const reply = inventory.safeParse(output)
++    if (!reply.success || reply.data.data.result.requestedSimulatorUDID.toLowerCase() !== udid.toLowerCase()) {
++      throw new Error('AXe did not confirm an active display and boot for the selected simulator')
++    }
++    const {bootIdentity, activePanel} = reply.data.data.result
++    const {displayID: id, uniqueID: uuid} = activePanel.identity
++    const role = activePanel.primary ? 'outer' : 'inner'
++    const name = activePanel.primary ? 'primary' : 'primary-1'
++    if (!screens.some(screen => screen.id === String(id) && screen.name === name)) {
++      throw new Error('The active AXe panel does not match the selected Duo display inventory')
++    }
++    const scale = activePanel.pointScale
++    const rotation = Number(activePanel.currentOrientation.slice(3))
++    const quarterTurn = (rotation - Number(activePanel.nativeOrientation.slice(3))) % 180 !== 0
++    const pixelWidth = quarterTurn ? activePanel.nativePixelHeight : activePanel.nativePixelWidth
++    const pixelHeight = quarterTurn ? activePanel.nativePixelWidth : activePanel.nativePixelHeight
++    return {executable, udid, bootIdentity, id, uuid, role, scale, rotation, pixelWidth, pixelHeight,
++      width: pixelWidth / scale, height: pixelHeight / scale}
++  }
++
++  async capture(screen: ActiveScreen, file: string): Promise<Buffer> {
++    const output = await this.run(screen.executable, ['screenshot', '--udid', screen.udid,
++      '--screen-id', String(screen.id), '--screen-uuid', screen.uuid, '--expected-boot', screen.bootIdentity,
++      '--output', file, '--verbose'])
++    const parsed = receipt.safeParse(output)
++    if (!parsed.success) throw new Error('AXe did not confirm a display-bound screenshot')
++    const {before, after, width, height} = parsed.data.data.result
++    for (const {observation: seen} of [before, after]) {
++      if (seen.simulatorUDID.toLowerCase() !== screen.udid.toLowerCase() || seen.bootIdentity !== screen.bootIdentity
++          || seen.screenID !== screen.id || seen.screenUniqueID.toLowerCase() !== screen.uuid.toLowerCase()
++          || seen.scale !== screen.scale || seen.rotation !== screen.rotation) {
++        throw new Error('The simulator, boot, orientation or active display changed during capture')
++      }
++    }
++    if (width !== screen.pixelWidth || height !== screen.pixelHeight) {
++      throw new Error('The captured dimensions do not match the measured active display')
++    }
++    const png = await readFile(file)
++    if (png.length < 24 || !png.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
++        || png.toString('ascii', 12, 16) !== 'IHDR' || png.readUInt32BE(16) !== width || png.readUInt32BE(20) !== height) {
++      throw new Error('The saved PNG dimensions do not match the AXe capture receipt')
++    }
++    return png
++  }
++}
 diff --git a/src/idb/idb-client.ts b/src/idb/idb-client.ts
-index 631594e..e7d94d2 100644
+index 631594e..12407fe 100644
 --- a/src/idb/idb-client.ts
 +++ b/src/idb/idb-client.ts
-@@ -1,43 +1,35 @@
+@@ -1,43 +1,36 @@
 -import { spawn, type ChildProcess, exec, execFile } from 'child_process'
 -import { promisify } from 'util'
 -import { existsSync } from 'fs'
@@ -452,7 +600,8 @@ index 631594e..e7d94d2 100644
 +import { fileURLToPath } from 'node:url'
 +import { homedir } from 'node:os'
 +import { setTimeout as delay } from 'node:timers/promises'
-+import { applicationSize, integratedScreens, selectScreen, type DisplayChoice, type ScreenSize } from './simulator-display.js'
++import { AXeScreens, type CapturedDisplay } from './axe-screens.js'
++import { applicationSize, hasDuoPanels, integratedScreens, selectScreen, type DisplayChoice, type ScreenSize } from './simulator-display.js'
 +import { simulatorEnv } from './simulator-env.js'
 +
 +const execute = promisify(execFile)
@@ -498,7 +647,7 @@ index 631594e..e7d94d2 100644
  }
 
  function parseSimctlAppList(raw: string): { bundleId: string; name: string; type: 'System' | 'User' }[] {
-@@ -56,250 +48,260 @@ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type
+@@ -56,250 +49,276 @@ function parseSimctlAppList(raw: string): { bundleId: string; name: string; type
    return apps
  }
 
@@ -506,6 +655,7 @@ index 631594e..e7d94d2 100644
 +  idbPath?: string
 +  companionPath?: string
 +  pythonPath?: string
++  axePaths?: string[]
 +  environment?: NodeJS.ProcessEnv
 +  startupTimeoutMs?: number
 +  commandTimeoutMs?: number
@@ -525,6 +675,7 @@ index 631594e..e7d94d2 100644
 +  private closed = false
 +  private queue: Promise<unknown> = Promise.resolve()
 +  private controller = new AbortController()
++  private readonly axe: AXeScreens
 +  private readonly env: NodeJS.ProcessEnv
 +  private readonly idbPath: string
 +  private readonly companionPath: string
@@ -532,6 +683,7 @@ index 631594e..e7d94d2 100644
 +
 +  constructor(private udid: string, private options: IDBOptions = {}) {
 +    this.env = simulatorEnv(options.environment)
++    this.axe = new AXeScreens(this.env, this.controller.signal, options.axePaths)
 +    this.idbPath = options.idbPath ?? resolvePath('python/bin/idb', 'idb')
 +    this.companionPath = options.companionPath ?? resolvePath('idb-companion/bin/idb_companion', 'idb_companion')
 +    this.pythonPath = options.pythonPath ?? resolvePath('python/bin/python3', 'python3')
@@ -820,9 +972,14 @@ index 631594e..e7d94d2 100644
 +      '--json', ...(nested ? ['--nested'] : [])]))
 +  }
 +  async getScreenSize(hierarchy?: unknown): Promise<ScreenSize> {
++    const udid = await this.resolvedUdid()
++    const screens = await this.connectedScreens(udid)
++    if (hasDuoPanels(screens)) {
++      const active = await this.axe.activeScreen(udid, screens)
++      if (active) return {width: active.width, height: active.height}
++    }
 +    const frame = applicationSize(hierarchy ?? await this.describeAll(false))
 +    if (frame) {
-+      const screens = await this.connectedScreens(await this.resolvedUdid())
 +      if (!screens.length) return frame
 +      const screen = selectScreen(screens, 'automatic', frame)
 +      const shortEdge = Math.min(frame.width, frame.height), longEdge = Math.max(frame.width, frame.height)
@@ -873,7 +1030,7 @@ index 631594e..e7d94d2 100644
 -    const buffer = await readFile(filePath)
 -    await unlink(filePath).catch(() => {})
 -    return buffer
-+  async captureScreenshot(choice: DisplayChoice): Promise<{png: Buffer; scale?: number}> {
++  async captureScreenshot(choice: DisplayChoice): Promise<{png: Buffer; scale?: number; display?: CapturedDisplay}> {
 +    const udid = await this.resolvedUdid()
 +    const io = ['simctl', 'io', udid]
 +    const options = {env: this.env, timeout: 10000, signal: this.controller.signal}
@@ -890,10 +1047,18 @@ index 631594e..e7d94d2 100644
 +      }
 +      return selectScreen(screens, choice, frame)
 +    }
-+    const screen = await resolveScreen()
 +    const directory = await mkdtemp('/tmp/blitz-mcp-image-')
 +    const file = join(directory, 'screen.png')
 +    try {
++      if (hasDuoPanels(screens)) {
++        const active = await this.axe.activeScreen(udid, screens)
++        if (active) {
++          if (choice !== 'automatic' && active.role !== choice) throw new Error(`The ${choice} display is inactive`)
++          const png = await this.axe.capture(active, file)
++          return {png, scale: active.scale, display: {udid, id: active.id, uuid: active.uuid, role: active.role}}
++        }
++      }
++      const screen = await resolveScreen()
 +      const display = screen ? [`--display=${screen.id}`] : []
 +      await execute('xcrun', [...io, 'screenshot', '--type=png', ...display, file], options)
 +      if (screens.length > 1 && (await resolveScreen())?.id !== screen?.id) {
@@ -960,10 +1125,10 @@ index 631594e..e7d94d2 100644
  }
 diff --git a/src/idb/simulator-display.ts b/src/idb/simulator-display.ts
 new file mode 100644
-index 0000000..ad6c33c
+index 0000000..bef8c1c
 --- /dev/null
 +++ b/src/idb/simulator-display.ts
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,59 @@
 +export type DisplayChoice = 'automatic' | 'outer' | 'inner'
 +export type ScreenSize = {width: number; height: number}
 +
@@ -1007,9 +1172,12 @@ index 0000000..ad6c33c
 +  return {width: frame.width, height: frame.height}
 +}
 +
++export function hasDuoPanels(screens: IntegratedScreen[]): boolean {
++  return screens.length === 2 && screens.some(screen => screen.name === 'primary') && screens.some(screen => screen.name === 'primary-1')
++}
++
 +export function selectScreen(screens: IntegratedScreen[], choice: DisplayChoice, frame?: ScreenSize): IntegratedScreen {
-+  const duo = screens.length === 2 && screens.some(screen => screen.name === 'primary') && screens.some(screen => screen.name === 'primary-1')
-+  if (choice !== 'automatic' && !duo) throw new Error('Outer/inner selection requires an iPhone Duo simulator')
++  if (choice !== 'automatic' && !hasDuoPanels(screens)) throw new Error('Outer/inner selection requires an iPhone Duo simulator')
 +  if (screens.length === 1) return screens[0]
 +  const matches = frame ? screens.filter(screen => (screen.width === frame.width && screen.height === frame.height)
 +    || (screen.width === frame.height && screen.height === frame.width)) : []
@@ -1160,7 +1328,7 @@ index a74f65f..e517c88 100644
    log('Server', 'log', `MCP server running (stdio).${viewerPort ? ` Viewer at http://localhost:${viewerPort}` : ''}`)
  }
 diff --git a/src/mcp-server.ts b/src/mcp-server.ts
-index bbad780..97571ee 100644
+index bbad780..28a0cf7 100644
 --- a/src/mcp-server.ts
 +++ b/src/mcp-server.ts
 @@ -3,6 +3,7 @@ import { z } from 'zod'
@@ -1238,7 +1406,7 @@ index bbad780..97571ee 100644
    const server = new McpServer({
      name: '@blitzdev/iphone-mcp',
 -    version: '0.1.0',
-+    version: '0.1.18-blitz.2',
++    version: '0.1.18-blitz.3',
    })
 
    server.registerTool(
@@ -1287,7 +1455,7 @@ index bbad780..97571ee 100644
 +      description: 'Capture the active display as a native-resolution PNG. The inline preview uses touch coordinates.',
        inputSchema: {
          udid: z.string().optional().describe('Device identifier (default: "booted")'),
-+        display: z.enum(['automatic', 'outer', 'inner']).optional().describe('Defaults to the active display. Outer and inner require an iPhone Duo simulator in the corresponding pose.'),
++        display: z.enum(['automatic', 'outer', 'inner']).optional().describe('Defaults to the active display. On iPhone Duo, outer or inner requires that panel to be active at capture.'),
        },
      },
 -    async ({ udid = 'booted' }) => {
@@ -1316,7 +1484,7 @@ index bbad780..97571ee 100644
 +          throw new Error('A physical iPhone captures its active screen. Use automatic or omit display.')
          }
 +        const capture = physical
-+          ? {png: await (await getDeviceClient(resolvedUdid)).screenshot(), scale: 3}
++          ? {png: await (await getDeviceClient(resolvedUdid)).screenshot(), scale: 3, display: undefined}
 +          : await getIDBClient(resolvedUdid).captureScreenshot(display)
 +        await fs.writeFile(rawFile, capture.png, { mode: 0o600 })
 
@@ -1349,7 +1517,15 @@ index bbad780..97571ee 100644
              (error) => {
                if (error) reject(error)
                else resolve()
-@@ -490,10 +457,8 @@ Use the "query" parameter to search for a specific element by label (e.g. "Add t
+@@ -464,6 +431,7 @@ Use describe_after to see the screen state after all actions complete.`,
+         })
+
+         return {
++          ...(capture.display && {structuredContent: {display: capture.display}}),
+           content: [
+             { type: 'text' as const, text: rawFile },
+             { type: 'image' as const, data: (await fs.readFile(resizedFile)).toString('base64'), mimeType: 'image/png' },
+@@ -490,10 +458,8 @@ Use the "query" parameter to search for a specific element by label (e.g. "Add t
 
  Without a query, returns all visible interactive elements on screen.
 
@@ -1362,7 +1538,7 @@ index bbad780..97571ee 100644
 
  For the complete element tree (all types), use describe_screen instead.`,
        inputSchema: {
-@@ -521,12 +486,10 @@ For the complete element tree (all types), use describe_screen instead.`,
+@@ -521,12 +487,10 @@ For the complete element tree (all types), use describe_screen instead.`,
            } catch { /* use defaults */ }
          } else {
            const client = AXScanClient.getInstance(resolvedUdid)
@@ -1379,7 +1555,7 @@ index bbad780..97571ee 100644
          }
 
          const { elements, warning } = applyScanUiFilters(rawElements as UIElement[], screenWidth, screenHeight, query)
-@@ -557,7 +520,7 @@ For the complete element tree (all types), use describe_screen instead.`,
+@@ -557,7 +521,7 @@ For the complete element tree (all types), use describe_screen instead.`,
          let simulators: { udid: string; name: string; state: string }[] = []
          try {
            const { stdout } = await new Promise<{ stdout: string }>((resolve, reject) => {
@@ -1433,10 +1609,10 @@ index 5a09743..fb104ea 100644
 
 diff --git a/tests/idb-client.test.mjs b/tests/idb-client.test.mjs
 new file mode 100644
-index 0000000..9f04254
+index 0000000..6caea41
 --- /dev/null
 +++ b/tests/idb-client.test.mjs
-@@ -0,0 +1,207 @@
+@@ -0,0 +1,209 @@
 +import test from 'node:test';
 +import assert from 'node:assert/strict';
 +import {mkdtemp, writeFile, readFile, rm, stat} from 'node:fs/promises';
@@ -1476,8 +1652,9 @@ index 0000000..9f04254
 +}
 +`;
 +  const fake=join(root,'helper.mjs');await writeFile(fake,source,{mode:0o755});
++  await writeFile(join(root,'xcrun'), '#!/bin/sh\nexit 0\n',{mode:0o755});
 +  const client=new IDBClient(UDID,{idbPath:fake,companionPath:fake,pythonPath:fake,
-+    environment:{PATH:process.env.PATH,HOME:root,OPENAI_API_KEY:'test-only',PYTHONPATH:'test-only',IDB_SECRET:'test-only'},...options});
++    environment:{PATH:root+':'+process.env.PATH,HOME:root,OPENAI_API_KEY:'test-only',PYTHONPATH:'test-only',IDB_SECRET:'test-only'},...options});
 +  t.after(async()=>{await client.shutdown();await rm(root,{recursive:true,force:true});});
 +  const events=async()=>existsSync(record)?(await readFile(record,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse):[];
 +  return {client,events,root,fake};
@@ -1524,7 +1701,8 @@ index 0000000..9f04254
 +test('timeout releases owned helpers and leaves unrelated processes alive',async t=>{
 +  const foreign=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
 +  t.after(()=>foreign.kill());
-+  const {client,events}=await fixture(t,{commandTimeoutMs:80});
++  // Give the fixture process time to start before timing out its deliberately hung action.
++  const {client,events}=await fixture(t,{commandTimeoutMs:1200});
 +  await assert.rejects(client.tap(888,2),/timed out/);
 +  assert.equal(foreign.exitCode,null);assert.equal(foreign.signalCode,null);
 +  const all=await events();assert.equal(all.filter(x=>x.kind==='start').length,1);
@@ -1611,7 +1789,7 @@ index 0000000..9f04254
 +      try {
 +        const message=JSON.parse(buffer.split('\n')[0]);
 +        assert.equal(message.id,1);
-+        assert.equal(message.result.serverInfo.version,'0.1.18-blitz.2');
++        assert.equal(message.result.serverInfo.version,'0.1.18-blitz.3');
 +        cleanup();resolve();
 +      } catch(error){fail(error)}
 +    };
@@ -1646,10 +1824,10 @@ index 0000000..9f04254
 +});
 diff --git a/tests/simulator-display.test.mjs b/tests/simulator-display.test.mjs
 new file mode 100644
-index 0000000..aa1d179
+index 0000000..82229b7
 --- /dev/null
 +++ b/tests/simulator-display.test.mjs
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,199 @@
 +import assert from 'node:assert/strict'
 +import test from 'node:test'
 +import {execFileSync} from 'node:child_process'
@@ -1722,7 +1900,12 @@ index 0000000..aa1d179
 +} else process.exit(2)
 +`
 +  await writeFile(join(directory,'xcrun'),fake,{mode:0o755})
-+  const client = new IDBClient(udid,{environment:{PATH:directory}})
++  const incompatibleAXe = join(directory,'old-axe')
++  await writeFile(incompatibleAXe,`#!${process.execPath}
++if (process.argv.at(-1) !== '--help-hidden') process.exit(2)
++console.log(JSON.stringify({didError:false,data:{messages:['USAGE: axe screenshot [--screen-id <id>] [--screen-uuid <uuid>]']}}))
++`,{mode:0o755})
++  const client = new IDBClient(udid,{environment:{PATH:directory},axePaths:[incompatibleAXe]})
 +  t.after(async () => {await client.shutdown(); await rm(directory,{recursive:true,force:true})})
 +  // Settings reports a portrait Application frame while its buttons follow the landscape display.
 +  await writeFile(inventoryFile, header + outer + external + inner.replace('UI Orientation: Portrait', 'UI Orientation: Landscape Left'))
@@ -1764,9 +1947,11 @@ index 0000000..aa1d179
 +  for (const [width,height] of [[1398,2034], [2853,2007]]) {
 +    execFileSync('/usr/bin/sips',['-z',String(height),String(width),fixture,'--out',nativeFile])
 +    const png = await readFile(nativeFile)
-+    simulator.captureScreenshot = async () => ({png,scale:3})
-+    const {content, isError} = await client.callTool({name:'get_screenshot', arguments:{udid}})
++    const display = {udid, id:width === 1398 ? 1 : 3, uuid:'00000000-0000-4000-8000-000000000043', role:width === 1398 ? 'outer' : 'inner'}
++    simulator.captureScreenshot = async () => ({png,scale:3,display})
++    const {content, structuredContent, isError} = await client.callTool({name:'get_screenshot', arguments:{udid}})
 +    assert.ok(!isError, content[0]?.text)
++    assert.deepEqual(structuredContent,{display})
 +    const nativePath = content.find(block => block.type === 'text').text
 +    t.after(() => Promise.all([nativePath,nativePath.replace(/\.png$/, '-sm.png')].map(file => rm(file,{force:true}))))
 +    assert.deepEqual(await readFile(nativePath),png)
@@ -1774,6 +1959,73 @@ index 0000000..aa1d179
 +    assert.equal(inline.toString('ascii',12,16),'IHDR')
 +    assert.deepEqual([inline.readUInt32BE(16),inline.readUInt32BE(20)],[width/3,height/3])
 +  }
++})
++
++test('Duo uses the measured panel for book posture even when the app window is offset and letterboxed', async t => {
++  const directory = await mkdtemp(join(tmpdir(), 'blitz-mcp-bound-screen-'))
++  const udid = '00000000-0000-4000-8000-000000000001'
++  const uuid = '00000000-0000-4000-8000-000000000003'
++  const boot = '101:1000:999'
++  const axe = join(directory,'axe'), modeFile = join(directory,'mode'), calls = join(directory,'calls')
++  await writeFile(modeFile,'ok')
++  await writeFile(calls,'')
++  const fake = `#!${process.execPath}
++const fs=require('node:fs'), args=process.argv.slice(2), value=key=>args[args.lastIndexOf(key)+1]
++const udid=${JSON.stringify(udid)}, uuid=${JSON.stringify(uuid)}, boot=${JSON.stringify(boot)}
++const mode=fs.readFileSync(${JSON.stringify(modeFile)},'utf8')
++const log=name=>fs.appendFileSync(${JSON.stringify(calls)},name+'\\n')
++const output=(command,result)=>console.log(JSON.stringify({command,didError:false,data:{result}}))
++if(process.argv[1].endsWith('xcrun')) {
++  if(JSON.stringify(args)!==JSON.stringify(['simctl','io',udid,'enumerate'])) {log('unbound capture');process.exit(2)}
++  process.stdout.write(${JSON.stringify(header+outer+inner)})
++} else if(args.at(-1)==='--help-hidden') {
++  const usage='USAGE: axe screenshot --udid <udid> [--screen-id <id>] [--screen-uuid <uuid>] [--expected-boot <boot>]'
++  console.log(JSON.stringify({command:'axe',didError:false,data:{messages:[usage]}}))
++} else if(args[2]==='displays' && value('--udid')===udid) {
++  output('displays',{requestedSimulatorUDID:mode==='wrong device'?uuid:udid,bootIdentity:boot,activePanel:{active:true,primary:mode==='mismatched panel',
++    identity:{displayID:3,uniqueID:uuid},currentOrientation:'rot90',nativeOrientation:'rot0',nativePixelWidth:2007,nativePixelHeight:2853,pointScale:3}})
++} else if(args[2]==='screenshot') {
++  log('bound capture')
++  if(value('--udid')!==udid||value('--screen-id')!=='3'||value('--screen-uuid')!==uuid||value('--expected-boot')!==boot||!args.includes('--verbose')) process.exit(1)
++  if(mode==='command failure') process.exit(1)
++  if(mode.startsWith('timeout')) {
++    const stream=mode==='timeout stderr'?2:1
++    fs.writeSync(stream,JSON.stringify({command:'screenshot',didError:true,error:{code:'timeout',message:'Display did not settle'},data:{}}))
++    process.exit(mode==='timeout zero'?0:1)
++  }
++  const png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png)
++  png.write('IHDR',12);png.writeUInt32BE(mode==='invalid PNG'||mode==='wrong pixels'?2500:2853,16);png.writeUInt32BE(2007,20);fs.writeFileSync(value('--output'),png)
++  const obs={simulatorUDID:udid,bootIdentity:boot,screenID:3,screenUniqueID:uuid,rotation:mode==='half turn'?270:90,scale:3}
++  output('screenshot',{before:{observation:obs},after:{observation:{...obs,
++    bootIdentity:mode==='reboot'?'55:6:7':boot,screenUniqueID:mode==='different screen'?udid:uuid,rotation:mode==='rotated'?0:obs.rotation}},
++    width:mode==='wrong pixels'?2500:2853,height:2007})
++} else process.exit(2)
++`
++  await writeFile(axe,fake,{mode:0o755})
++  await writeFile(join(directory,'xcrun'),fake,{mode:0o755})
++  const client=new IDBClient(udid,{environment:{PATH:directory},axePaths:[axe]})
++  t.after(async()=>{await client.shutdown();await rm(directory,{recursive:true,force:true})})
++  client.describeAll=async()=>{throw Error('The screenshot must not depend on the IDB app frame')}
++  const frame=[{type:'Application',frame:{x:37,y:129,width:425,height:674}}]
++  assert.deepEqual(await client.getScreenSize(frame),{width:951,height:669})
++  for(const choice of ['automatic','inner']) {
++    const capture=await client.captureScreenshot(choice)
++    assert.deepEqual(capture.display,{udid,id:3,uuid,role:'inner'})
++    assert.equal(capture.scale,3)
++    assert.equal(capture.png.readUInt32BE(16),2853)
++  }
++  await assert.rejects(client.captureScreenshot('outer'),/outer display is inactive/)
++  await writeFile(modeFile,'command failure')
++  await assert.rejects(client.captureScreenshot('automatic'), {message:'AXe could not capture the active simulator display'})
++  for (const scenario of ['timeout stdout','timeout stderr','timeout zero']) {
++    await writeFile(modeFile,scenario)
++    await assert.rejects(client.captureScreenshot('automatic'), {message:'AXe could not capture the active simulator display [timeout]: Display did not settle'})
++  }
++  for(const scenario of ['wrong device','mismatched panel','reboot','different screen','rotated','half turn','wrong pixels','invalid PNG']) {
++    await writeFile(modeFile,scenario)
++    await assert.rejects(client.captureScreenshot('automatic'))
++  }
++  assert.deepEqual((await readFile(calls,'utf8')).trim().split('\n'),Array(12).fill('bound capture'))
 +})
 diff --git a/tests/test_type_text.py b/tests/test_type_text.py
 new file mode 100644

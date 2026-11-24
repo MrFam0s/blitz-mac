@@ -232,6 +232,7 @@
 "Setting up signing…" = "Setting up signing…";
 "Shader compile failed: {0}" = "Shader compile failed: {0}";
 "Simulator wird geöffnet …" = "Opening simulator …";
+"Simulator" = "Simulator";
 "Simulatoren konnten nicht geladen werden. Prüfe, ob Xcode installiert ist, und versuche es erneut." = "Could not load simulators. Check that Xcode is installed and try again.";
 "Sitzung konnte nicht gespeichert werden: {0}" = "Could not save session: {0}";
 "Sitzung konnte nicht im Schlüsselbund gespeichert werden (Status: {0})" = "Could not save session in Keychain (status: {0})";
@@ -324,3 +325,5 @@
 "Für die Faltposition benötigt Blitz Neo AXe mit Hinge-Unterstützung oder die macOS-Bedienungshilfen-Freigabe für den Device Hub." = "To adjust the hinge, Blitz Neo needs AXe with hinge support or macOS Accessibility access for Device Hub.";
 "AXe konnte die Faltposition für diesen Projektsimulator nicht bestätigen. Prüfe den aktuellen Winkel vor einem weiteren Versuch." = "AXe could not confirm the hinge position for this project simulator. Check the current angle before trying again.";
 "Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode." = "The device pose is unavailable in this Device Hub window. Open the device in Xcode.";
+"Der Simulator wurde beendet." = "The simulator has shut down.";
+"Das Simulatorfenster wurde geschlossen." = "The simulator window was closed.";

@@ -4,17 +4,20 @@ import Foundation
 @MainActor
 @Observable
 final class SimulatorStreamManager {
-    let captureService = SimulatorCaptureService()
+    private(set) var captureService = SimulatorCaptureService()
     private(set) var interaction: DeviceInteractionService?
     private(set) var usesNativePreview = false
     private(set) var nativeImage: CGImage?
     private var nativePreviewTask: Task<Void, Never>?
     private let previewVisible: @MainActor () -> Bool
+    private let listDevices: @Sendable () async throws -> [SimctlClient.SimctlDevice]
     var renderer: MetalRenderer?
     var isCapturing = false
     var errorMessage: String?
     private(set) var needsScreenRecordingPermission = false
     private(set) var needsAccessibilityPermission = false
+    private(set) var stoppedDeviceID: String?
+    private(set) var closedWindowDeviceID: String?
     private(set) var usesDeviceHub = false
     private(set) var viewport: DeviceHubScreenGeometry.Viewport?
     private(set) var devicePointSize: CGSize?
@@ -26,22 +29,67 @@ final class SimulatorStreamManager {
 
     private var rendererInitialized = false
     private var selectedDeviceID: String?
+    private var fallbackScreens: [SimulatorScreen]?
 
-    init(previewVisible: @escaping @MainActor () -> Bool = {
+    init(listDevices: @escaping @Sendable () async throws -> [SimctlClient.SimctlDevice] = { try await SimctlClient().listDevices() },
+         previewVisible: @escaping @MainActor () -> Bool = {
         NSApp?.windows.contains { $0.canBecomeMain && $0.occlusionState.contains(.visible) } == true
     }) {
         self.previewVisible = previewVisible
-        captureService.onTouchAvailabilityChange = { [weak self] ready in
-            guard let self else { return }
+        self.listDevices = listDevices
+    }
+
+    private func windowCapture(for session: DeviceInteractionService) -> SimulatorCaptureService {
+        let capture = SimulatorCaptureService()
+        capture.onTouchAvailabilityChange = { [weak self, weak session] ready in
+            guard let self, let session, self.interaction === session else { return }
             self.isTouchReady = ready
             if !ready, self.devicePointSize != nil {
                 self.geometryRevision += 1
                 self.devicePointSize = nil
             }
         }
-        captureService.onGeometryChange = { [weak self] state in
-            await self?.updateGeometry(state)
+        capture.onGeometryChange = { [weak self, weak session] state in
+            guard let self, let session, self.interaction === session else { return }
+            await self.updateGeometry(state)
         }
+        return capture
+    }
+
+    static func prefersNativePreview(deviceType: String?, integratedScreenCount: Int, viewer: SimulatorApplication.Kind?,
+                                     screenRecordingAllowed: Bool, accessibilityAllowed: Bool) -> Bool {
+        if deviceType == SimulatorPose.deviceType || integratedScreenCount > 1 { return true }
+        return integratedScreenCount == 1 && (viewer == nil || !screenRecordingAllowed || (viewer == .deviceHub && !accessibilityAllowed))
+    }
+
+    static func deviceHasStopped(udid: String, in devices: [SimctlClient.SimctlDevice]?) -> Bool {
+        guard let devices else { return false }
+        return !devices.contains { $0.udid.caseInsensitiveCompare(udid) == .orderedSame && $0.isBooted }
+    }
+
+    private func endWindowCapture(_ error: Error, deviceID: String, session: DeviceInteractionService) async {
+        isTouchReady = false
+        let devices = try? await listDevices()
+        guard interaction === session, !Task.isCancelled else { return }
+        let failure = error as? SimulatorCaptureService.CaptureError
+        isCapturing = false
+        statusMessage = nil
+        errorMessage = nil
+        needsAccessibilityPermission = false
+        needsScreenRecordingPermission = false
+        if Self.deviceHasStopped(udid: deviceID, in: devices) {
+            stoppedDeviceID = deviceID
+        } else if case .simulatorWindowClosed = failure {
+            closedWindowDeviceID = deviceID
+        } else if let fallbackScreens, failure?.requiresAccessibilityPermission == true || failure?.requiresScreenRecordingPermission == true {
+            startNativePreview(udid: deviceID, session: session, screens: fallbackScreens)
+            return
+        } else {
+            errorMessage = error.localizedDescription
+            needsAccessibilityPermission = failure?.requiresAccessibilityPermission == true
+            needsScreenRecordingPermission = failure?.requiresScreenRecordingPermission == true
+        }
+        await closeInteraction()
     }
 
     private func updateGeometry(_ state: SimulatorCaptureService.Geometry) async {
@@ -54,10 +102,9 @@ final class SimulatorStreamManager {
             usesDeviceHub = false
             visible = nil
         case .failed(let error):
-            isCapturing = false
-            errorMessage = error.localizedDescription
-            if case .accessibilityDenied = error { needsAccessibilityPermission = true }
-            await closeInteraction()
+            if let selectedDeviceID, let interaction {
+                await endWindowCapture(error, deviceID: selectedDeviceID, session: interaction)
+            }
             return
         }
         guard viewport != visible || devicePointSize == nil else { return }
@@ -89,56 +136,71 @@ final class SimulatorStreamManager {
             return
         }
         let session = DeviceInteractionService()
+        let capture = windowCapture(for: session)
+        captureService = capture
         interaction = session
         selectedDeviceID = bootedDeviceId
 
         errorMessage = nil
+        stoppedDeviceID = nil
+        closedWindowDeviceID = nil
         needsScreenRecordingPermission = false
         needsAccessibilityPermission = false
         isPaused = false
         statusMessage = L10n.tr("Simulator wird geöffnet …")
         let service = SimulatorService()
         do {
-            let devices = try await service.listDevices()
-            guard let device = devices.first(where: { $0.udid == bootedDeviceId && $0.isBooted }) else {
-                throw SimulatorCaptureService.CaptureError.simulatorWindowNotFound
+            let devices = try await listDevices()
+            try Task.checkCancellation()
+            guard interaction === session else { return }
+            guard let device = devices.first(where: { $0.udid.caseInsensitiveCompare(bootedDeviceId) == .orderedSame && $0.isBooted }) else {
+                stoppedDeviceID = bootedDeviceId
+                statusMessage = nil
+                await closeInteraction()
+                return
             }
             let screens = try? await SimctlClient().integratedScreens(udid: bootedDeviceId)
+            let accessibilityAllowed = AXIsProcessTrusted()
+            // A classic Simulator window requires no AX lookup to determine its bounds.
+            let viewer = try? await service.viewer(preferred: accessibilityAllowed ? .deviceHub : .simulator)
             guard interaction === session, !Task.isCancelled else { throw CancellationError() }
             // During first boot CoreSimulator may advertise a known Duo before
             // both screen descriptors appear. Keep retrying its native displays.
-            if (screens?.count ?? 0) > 1 || device.deviceTypeIdentifier == "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" {
-                startNativePreview(udid: bootedDeviceId, session: session, screens: screens)
+            fallbackScreens = screens?.isEmpty == false ? screens : nil
+            let duplicateName = devices.filter { $0.isBooted && $0.name == device.name }.count != 1
+            if Self.prefersNativePreview(deviceType: device.deviceTypeIdentifier, integratedScreenCount: screens?.count ?? 0,
+                                         viewer: viewer?.kind, screenRecordingAllowed: CGPreflightScreenCaptureAccess(),
+                                         accessibilityAllowed: accessibilityAllowed) || (duplicateName && fallbackScreens != nil) {
+                let topology = device.deviceTypeIdentifier == SimulatorPose.deviceType && (screens?.count ?? 0) < 2 ? nil : screens
+                startNativePreview(udid: bootedDeviceId, session: session, screens: topology)
                 return
             }
             ensureRenderer()
-            guard devices.filter({ $0.isBooted && $0.name == device.name }).count == 1 else {
+            guard !duplicateName else {
                 throw SimulatorCaptureService.CaptureError.ambiguousSimulatorName
             }
             guard interaction === session else { return }
-            try await service.openSimulatorApp(udid: bootedDeviceId)
+            guard let viewer else { throw SimulatorApplication.LaunchError.viewerUnavailable }
+            try await service.openSimulatorApp(udid: bootedDeviceId, using: viewer)
             try Task.checkCancellation()
             guard interaction === session else { return }
             statusMessage = L10n.tr("Verbindung mit \(device.name) wird hergestellt …")
-            try await captureService.startCapture(deviceName: device.name, retryForWindow: true)
+            try await capture.startCapture(deviceName: device.name, viewer: viewer.kind, retryForWindow: true)
             try Task.checkCancellation()
         } catch {
+            await capture.stopCapture()
             guard interaction === session else { return }
-            await closeInteraction()
-            if Task.isCancelled { await captureService.stopCapture() }
-            else {
-                errorMessage = error.localizedDescription
-                needsScreenRecordingPermission = (error as? SimulatorCaptureService.CaptureError)?.requiresScreenRecordingPermission == true
-                if case SimulatorCaptureService.CaptureError.accessibilityDenied = error {
-                    needsAccessibilityPermission = true
-                }
+            if Task.isCancelled {
+                statusMessage = nil
+                await closeInteraction()
+            } else if !(error is CancellationError) {
+                await endWindowCapture(error, deviceID: bootedDeviceId, session: session)
             }
-            statusMessage = nil
             return
         }
 
         guard interaction === session else {
-            if interaction == nil { await captureService.stopCapture() }
+            await capture.stopCapture()
             return
         }
         if captureService.isCapturing {
@@ -151,9 +213,11 @@ final class SimulatorStreamManager {
     /// can belong to either display. Use the verified, flat device framebuffer.
     private func startNativePreview(udid: String, session: DeviceInteractionService, screens: [SimulatorScreen]?) {
         usesNativePreview = true
+        usesDeviceHub = false
+        viewport = nil
+        errorMessage = nil
         isCapturing = true
         statusMessage = nil
-        let knownScreens = (screens?.count ?? 0) > 1 ? screens : nil
         let previewVisible = self.previewVisible
         nativePreviewTask = Task { [weak self] in
             var failures = 0
@@ -161,7 +225,7 @@ final class SimulatorStreamManager {
                 // Sampling a hidden or completely obscured window adds no visible frames.
                 if previewVisible() {
                     do {
-                        let frame = try await session.captureActiveScreen(udid: udid, screens: knownScreens)
+                        let frame = try await session.captureActiveScreen(udid: udid, screens: screens)
                         guard let self, !Task.isCancelled, self.interaction === session else { return }
                         if self.devicePointSize != frame.points { self.geometryRevision += 1 }
                         self.devicePointSize = frame.points
@@ -175,6 +239,16 @@ final class SimulatorStreamManager {
                         self.devicePointSize = nil
                         self.nativeImage = nil
                         self.isTouchReady = false
+                        let devices = try? await self.listDevices()
+                        guard !Task.isCancelled, self.interaction === session else { return }
+                        if Self.deviceHasStopped(udid: udid, in: devices) {
+                            self.stoppedDeviceID = udid
+                            self.isCapturing = false
+                            self.errorMessage = nil
+                            self.nativePreviewTask = nil // Leaving from this task; never await its own value.
+                            await self.closeInteraction()
+                            return
+                        }
                         self.errorMessage = error.localizedDescription
                         failures = min(failures + 1, 4)
                     }
@@ -217,6 +291,9 @@ final class SimulatorStreamManager {
         interaction = nil
         geometryRevision += 1
         usesNativePreview = false
+        fallbackScreens = nil
+        usesDeviceHub = false
+        viewport = nil
         nativeImage = nil
         devicePointSize = nil
         isTouchReady = false
@@ -226,8 +303,7 @@ final class SimulatorStreamManager {
 
     /// Full stop: stop SCStream, clear state.
     func stopStreaming() async {
-        await closeInteraction()
-        await captureService.stopCapture()
+        let capture = captureService
         isCapturing = false
         isPaused = false
         statusMessage = nil
@@ -235,15 +311,20 @@ final class SimulatorStreamManager {
         needsScreenRecordingPermission = false
         needsAccessibilityPermission = false
         selectedDeviceID = nil
+        stoppedDeviceID = nil
+        closedWindowDeviceID = nil
+        await closeInteraction()
+        await capture.stopCapture()
     }
 
     /// Pause: stop SCStream but keep simulator booted. Lightweight for tab switches.
     func pauseStream() async {
         guard isCapturing || interaction != nil else { return }
+        let capture = captureService
         isPaused = true
-        await closeInteraction()
-        await captureService.stopCapture()
         isCapturing = false
+        await closeInteraction()
+        await capture.stopCapture()
     }
 
     /// Resume: restart SCStream after a pause. No window retry needed since sim is already running.

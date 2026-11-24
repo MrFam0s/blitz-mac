@@ -72,6 +72,7 @@ struct SimctlClient: Sendable {
 
     func activeTouchSize(udid: String, accessibility: IDBClient) async throws -> CGSize {
         let screens = try await integratedScreens(udid: udid)
+        if screens.count == 1, let points = screens[0].orientedPoints { return points }
         let root = try await accessibility.applicationScreenSize(udid: udid)
         let active = try SimulatorScreen.active(in: screens, applicationSize: root)
         guard let points = active.orientedPoints else { throw SimulatorScreen.ScreenError.ambiguous }
@@ -82,6 +83,18 @@ struct SimctlClient: Sendable {
     func captureActiveScreen(
         udid: String, accessibility: IDBClient, screens: [SimulatorScreen]? = nil
     ) async throws -> (image: CGImage, points: CGSize) {
+        // A conventional device has one physical touch surface. App accessibility
+        // frames can be inset, or absent entirely when the test app has exited.
+        if let screens, screens.count == 1, let screen = screens.first {
+            let data = try await framebufferPNG(udid: udid, screen: screen)
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw SimulatorScreen.ScreenError.changed }
+            let points = CGSize(width: CGFloat(image.width) / screen.scale, height: CGFloat(image.height) / screen.scale)
+            guard points == screen.points || points == CGSize(width: screen.points.height, height: screen.points.width) else {
+                throw SimulatorScreen.ScreenError.changed
+            }
+            return (image, points)
+        }
         let descriptors: [SimulatorScreen]
         if let screens { descriptors = screens } else { descriptors = try await integratedScreens(udid: udid) }
         let capture = try await activePNG(udid: udid, accessibility: accessibility, screens: descriptors)
@@ -91,15 +104,20 @@ struct SimctlClient: Sendable {
         return (image, capture.points)
     }
 
+    private func framebufferPNG(udid: String, screen: SimulatorScreen) async throws -> Data {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try await ProcessRunner.run("xcrun", arguments: ["simctl", "io", udid, "screenshot", "--display=" + screen.id, temporary.path])
+        try Task.checkCancellation()
+        return try Data(contentsOf: temporary, options: .mappedIfSafe)
+    }
+
     private func activePNG(
         udid: String, accessibility: IDBClient, screens: [SimulatorScreen]
     ) async throws -> (data: Data, points: CGSize) {
         let before = try await accessibility.applicationScreenSize(udid: udid)
         let screen = try SimulatorScreen.active(in: screens, applicationSize: before)
-        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
-        defer { try? FileManager.default.removeItem(at: temporary) }
-        try await ProcessRunner.run("xcrun", arguments: ["simctl", "io", udid, "screenshot", "--display=" + screen.id, temporary.path])
-        try Task.checkCancellation()
+        let data = try await framebufferPNG(udid: udid, screen: screen)
         let after = try await accessibility.applicationScreenSize(udid: udid)
         guard after == before else { throw SimulatorScreen.ScreenError.changed }
         // IDB can describe the landscape inner display with a portrait root.
@@ -107,7 +125,6 @@ struct SimctlClient: Sendable {
         let current = try await integratedScreens(udid: udid)
         let active = try SimulatorScreen.active(in: current, applicationSize: after)
         guard active.id == screen.id, let points = active.orientedPoints else { throw SimulatorScreen.ScreenError.changed }
-        let data = try Data(contentsOf: temporary, options: .mappedIfSafe)
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
@@ -119,6 +136,15 @@ struct SimctlClient: Sendable {
     }
 
     func screenshot(udid: String, path: String) async throws {
+        let axe = AXeSimulator()
+        if !axe.candidates.isEmpty,
+           let devices = try? await listDevices(),
+           devices.contains(where: { $0.udid.caseInsensitiveCompare(udid) == .orderedSame && $0.deviceTypeIdentifier == SimulatorPose.deviceType }),
+           let executable = await axe.supportedScreenshotExecutable() {
+            let png = try await axe.captureActiveDuoPNG(udid: udid, using: executable)
+            try png.write(to: URL(fileURLWithPath: path), options: .atomic)
+            return
+        }
         let screens = try await integratedScreens(udid: udid)
         if screens.count <= 1 {
             // Older Xcodes lack connected-screen descriptors. Keep their default

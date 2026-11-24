@@ -84,9 +84,12 @@ simulator UDID and the desired pose. Blitz prefers a local AXe installation that
 permission for Blitz Neo. When AXe hinge support is unavailable, Blitz can use Xcode
 Device Hub with Accessibility permission for Blitz Neo.
 
-After a fold, `get_screenshot` captures the active display. Set `display` to `outer` or
-`inner` to verify which panel is captured. If your Codex configuration has an
-`enabled_tools` list for `blitz_macos`, include `simulator_set_pose` to expose it to the chat.
+On iPhone Duo, the native screenshot export and the updated iPhone MCP
+(`0.1.18-blitz.3`) use a compatible AXe to identify the active panel even when
+the app occupies only part of it. In `get_screenshot`, use `display: "outer"`
+or `"inner"` to require that panel. The native PNG retains its full resolution.
+If your Codex configuration has an `enabled_tools` list for `blitz_macos`,
+include `simulator_set_pose` to expose it to the chat.
 
 To update, quit Blitz Neo and replace it using the latest DMG. The current in-app
 updater does not install DMG downloads; a regular GitHub release does not change

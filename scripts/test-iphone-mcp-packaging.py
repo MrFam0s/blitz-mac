@@ -44,6 +44,7 @@ class MCPPackagingTests(unittest.TestCase):
     def npm_archive(self, lock=None, extra=None, manifest=None, mtime=123, legacy=None):
         files = {'package.json': manifest or self.manifest, 'dist/cli.js': b'#!/usr/bin/env node\n',
                  'dist/index.js': b'// fixture', 'LICENSE': b'MIT', 'dist/idb/idb-client.js': b'// fixture',
+                 'dist/idb/axe-screens.js': b'// fixture',
                  'dist/idb/simulator-env.js': b'// fixture', 'dist/idb/type-text.py': b'# fixture'}
         if lock is not None:
             files['package-lock.json'] = lock

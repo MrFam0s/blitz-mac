@@ -4,7 +4,7 @@ import json
 from pathlib import Path, PurePosixPath
 import tarfile
 
-VERSION = '0.1.18-blitz.2'
+VERSION = '0.1.18-blitz.3'
 COMMIT = '3259f756279cd8cb6bc507b46369111fb5672fa2'
 
 
@@ -72,7 +72,7 @@ def verify(package, toolchain, overlay=None):
         if overlay is not None and provenance.get('overlaySHA256') != hashlib.sha256(Path(overlay).read_bytes()).hexdigest():
             raise ValueError('MCP overlay digest mismatch')
         for name in ('LICENSE', 'dist/cli.js', 'dist/index.js', 'dist/idb/idb-client.js',
-                     'dist/idb/simulator-env.js', 'dist/idb/type-text.py'):
+                     'dist/idb/axe-screens.js', 'dist/idb/simulator-env.js', 'dist/idb/type-text.py'):
             read_file(archive, inventory, name)
     return manifest
 

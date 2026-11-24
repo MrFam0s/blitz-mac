@@ -13,6 +13,18 @@ struct SimulatorView: View {
     @State private var savingScreenshot = false
     @State private var keyMonitor: Any?
 
+    private var interruptedPreview: (message: String, action: String)? {
+        let manager = appState.simulatorManager
+        guard manager.projectID == appState.activeProjectId, let udid = manager.selectedDeviceID else { return nil }
+        if stream.stoppedDeviceID?.caseInsensitiveCompare(udid) == .orderedSame {
+            return (L10n.tr("Der Simulator wurde beendet."), L10n.tr("Simulator starten"))
+        }
+        if stream.closedWindowDeviceID?.caseInsensitiveCompare(udid) == .orderedSame {
+            return (L10n.tr("Das Simulatorfenster wurde geschlossen."), L10n.tr("Vorschau öffnen"))
+        }
+        return nil
+    }
+
     private var deviceConfig: SimulatorDeviceConfig? {
         if stream.usesNativePreview || stream.usesDeviceHub {
             guard let points = stream.devicePointSize else { return nil }
@@ -132,7 +144,8 @@ struct SimulatorView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 8) {
-                        if stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission {
+                        if appState.simulatorManager.errorMessage == nil &&
+                            (stream.needsScreenRecordingPermission || stream.needsAccessibilityPermission) {
                             Button(L10n.tr("Systemeinstellungen öffnen")) {
                                 if stream.needsScreenRecordingPermission {
                                     AppRelaunchService.shared.prepareForScreenRecordingPermissionRestart()
@@ -183,15 +196,17 @@ struct SimulatorView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     } else {
-                        Text(appState.simulatorManager.selectedDeviceID == nil
-                             ? L10n.tr("Wähle einen Simulator für dieses Projekt") : L10n.tr("Simulator ist startbereit"))
+                        Text(interruptedPreview?.message ?? (appState.simulatorManager.selectedDeviceID == nil
+                             ? L10n.tr("Wähle einen Simulator für dieses Projekt") : L10n.tr("Simulator ist startbereit")))
                             .font(.system(size: 13))
                             .foregroundStyle(.secondary)
 
-                        Text(L10n.tr("Die Geräteauswahl wird pro Projekt gespeichert. Andere laufende Simulatoren bleiben geöffnet."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button(L10n.tr("Simulator starten")) {
+                        if interruptedPreview == nil {
+                            Text(L10n.tr("Die Geräteauswahl wird pro Projekt gespeichert. Andere laufende Simulatoren bleiben geöffnet."))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button(interruptedPreview?.action ?? L10n.tr("Simulator starten")) {
                             Task {
                                 await appState.startProjectSimulator()
                             }
@@ -207,6 +222,7 @@ struct SimulatorView: View {
 
         }
         .task(id: appState.activeProjectId) {
+            guard interruptedPreview == nil else { return }
             await appState.startProjectSimulator()
         }
         .onAppear {
@@ -233,7 +249,7 @@ struct SimulatorView: View {
                 }
                 .help(L10n.tr("Screenshot sichern …"))
                 .accessibilityLabel(L10n.tr("Screenshot sichern …"))
-                .disabled(appState.simulatorManager.bootedDeviceId == nil || savingScreenshot)
+                .disabled(appState.simulatorManager.bootedDeviceId == nil || stream.stoppedDeviceID != nil || savingScreenshot)
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -244,6 +260,7 @@ struct SimulatorView: View {
                         .padding(.horizontal, 4)
                 }
                 .help(L10n.tr("Home-Taste"))
+                .disabled(!stream.isCapturing || stream.interaction == nil)
             }
 
             ToolbarItem(placement: .primaryAction) {
@@ -280,7 +297,8 @@ struct SimulatorView: View {
         panel.nameFieldStringValue = "Screenshot.png"
         panel.title = L10n.tr("Screenshot sichern …")
         guard panel.runModal() == .OK, let destination = panel.url,
-              appState.activeProjectId == project, appState.simulatorManager.bootedDeviceId == udid else { return }
+              appState.activeProjectId == project,
+              appState.simulatorManager.bootedDeviceId?.caseInsensitiveCompare(udid) == .orderedSame else { return }
         savingScreenshot = true
         Task {
             defer { savingScreenshot = false }

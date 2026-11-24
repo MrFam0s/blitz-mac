@@ -3,7 +3,7 @@
 Official upstream: https://github.com/blitzdotdev/iPhone-mcp (MIT).
 Pinned source: **0.1.18**, commit `3259f756279cd8cb6bc507b46369111fb5672fa2`,
 held as `deps/iPhone-mcp`. The upstream license is included in every package.
-The local package identifies itself as **0.1.18-blitz.2**.
+The local package identifies itself as **0.1.18-blitz.3**.
 
 `maintenance.patch` contains the source changes and regression tests. Build with
 the Node/npm pair in `config/node-toolchain.json` using
@@ -44,16 +44,21 @@ stdin rather than process arguments. Subprocesses receive only OS/tool-path envi
 release owned helpers. Multiple booted simulators require an explicit UDID.
 
 `scan_ui` and display dimensions use the same companion rather than the obsolete
-native ax-scan linked to old IDB frameworks. The application frame identifies the
-active display. CoreSimulator's UI orientation sets the touch and scan bounds,
-including when IDB reports a portrait frame for a landscape app. `get_screenshot`
-checks the active integrated screen before and after capture on iPhone Duo. Optional
-`display: "outer"` / `"inner"` requires the matching Device Hub pose. Unresolved
-or inactive displays return an error. A successful call returns the native PNG
-path and a preview scaled to the captured screen's logical coordinates. Xcode 27 simulated entries in devicectl are excluded from physical
-phone discovery. Physical-device control remains on the existing WDA path and
+native ax-scan linked to old IDB frameworks.
+
+For iPhone Duo screenshots, a compatible local AXe identifies the active panel
+on the selected simulator. The native capture is bound to its display ID, UUID
+and boot session, including in book posture or with a letterboxed app window.
+An explicit `display: "outer"` or `"inner"` must match the active panel.
+A change of panel or boot during capture fails the request. The native PNG path
+and inline preview in touch coordinates remain available to existing clients.
+Without compatible AXe, the CoreSimulator capture path requires an unambiguous
+panel match on Duo.
+
+Xcode 27 simulated entries in devicectl are excluded from physical phone
+discovery. Physical-device control remains on the existing WDA path and
 must be verified separately on hardware.
 
 The configured executable and MCP server name stay unchanged. Existing running
 MCP processes retain their loaded code until their client reconnects; fresh
-sessions report `0.1.18-blitz.2` during initialize.
+sessions report `0.1.18-blitz.3` during initialize.

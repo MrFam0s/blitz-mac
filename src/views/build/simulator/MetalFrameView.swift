@@ -23,8 +23,14 @@ struct MetalFrameView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: MTKView, context: Context) {
+        context.coordinator.captureService = captureService
         context.coordinator.cursor = cursor
         context.coordinator.cropRect = cropRect
+    }
+
+    static func dismantleNSView(_ nsView: MTKView, coordinator: Coordinator) {
+        nsView.isPaused = true
+        nsView.delegate = nil
     }
 
     func makeCoordinator() -> Coordinator {
@@ -33,7 +39,7 @@ struct MetalFrameView: NSViewRepresentable {
 
     class Coordinator: NSObject, MTKViewDelegate {
         let renderer: MetalRenderer
-        let captureService: SimulatorCaptureService
+        var captureService: SimulatorCaptureService
         var cursor: CursorState?
         var cropRect: (x: Double, y: Double, w: Double, h: Double) = (0, 0, 1, 1)
 

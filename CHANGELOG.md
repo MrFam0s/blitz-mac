@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.83 (build 103)
+
+- Blitz and its iPhone MCP use a compatible AXe to identify the active iPhone
+  Duo display when saving a screenshot, including in book posture. The MCP
+  returns the captured panel’s role and identifiers alongside the original PNG
+  path and preview.
+- The Simulator tab offers to restart a stopped project simulator or reopen a
+  closed preview. Permission settings appear only for a permission error.
+
 ## 1.0.82 (build 102)
 
 - Blitz and its macOS MCP can fold the selected project’s iPhone Duo using an

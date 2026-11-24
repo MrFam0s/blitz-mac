@@ -6,7 +6,8 @@ struct SimulatorApplication: Equatable {
     let url: URL
     let kind: Kind
 
-    static func resolve(developerDirectory: String, exists: (String) -> Bool = FileManager.default.fileExists(atPath:)) throws -> Self {
+    static func resolve(developerDirectory: String, preferred: Kind = .deviceHub,
+                        exists: (String) -> Bool = FileManager.default.fileExists(atPath:)) throws -> Self {
         let path = developerDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         guard path.hasPrefix("/") else { throw LaunchError.viewerUnavailable }
         let selected = URL(fileURLWithPath: path)
@@ -17,7 +18,8 @@ struct SimulatorApplication: Equatable {
             .init(url: developer.appendingPathComponent("Applications/Simulator.app"), kind: .simulator),
             .init(url: developer.deletingLastPathComponent().appendingPathComponent("Applications/Simulator.app"), kind: .simulator)
         ]
-        guard let application = candidates.first(where: { exists($0.url.path) }) else {
+        let available = candidates.filter { exists($0.url.path) }
+        guard let application = available.first(where: { $0.kind == preferred }) ?? available.first else {
             throw LaunchError.viewerUnavailable
         }
         return application

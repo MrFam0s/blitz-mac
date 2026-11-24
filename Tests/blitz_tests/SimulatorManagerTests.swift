@@ -1,4 +1,5 @@
 import Foundation
+import ScreenCaptureKit
 import Testing
 @testable import Blitz
 
@@ -133,6 +134,16 @@ import Testing
     #expect(SimulatorCaptureService.matchingWindowIndex(titles: ["iPhone 17 (27.0)"], deviceName: "iPhone 17") == 0)
 }
 
+@Test func simulatorPreviewRejectsAWindowReusedForAnotherProject() {
+    let target = SimulatorCaptureService.WindowTarget(id: 12, processID: 34, deviceName: "My Project iPhone")
+    #expect(target.matches(id: 12, processID: 34, title: "My Project iPhone — iOS 27"))
+    #expect(!target.matches(id: 12, processID: 34, title: "Other Project iPhone — iOS 27"))
+    #expect(!target.matches(id: 12, processID: 34, title: nil))
+    #expect(!target.matches(id: 12, processID: nil, title: "My Project iPhone"))
+    #expect(!target.matches(id: 12, processID: 35, title: "My Project iPhone"))
+    #expect(!target.matches(id: 13, processID: 34, title: "My Project iPhone"))
+}
+
 @Test func simulatorViewerUsesSelectedXcodeForLegacyAndDeviceHub() throws {
     let developer = "/Applications/Xcode Preview.app/Contents/Developer"
     let legacy = developer + "/Applications/Simulator.app"
@@ -149,6 +160,12 @@ import Testing
     #expect(url.scheme == "devices")
     #expect(url.path == "/device/open")
     #expect(url.queryItems == [URLQueryItem(name: "id", value: id)])
+    let bothViewers = { (path: String) in path == legacy || path == hub }
+    #expect(try SimulatorApplication.resolve(developerDirectory: developer, exists: bothViewers).kind == .deviceHub)
+    #expect(try SimulatorApplication.resolve(developerDirectory: developer, preferred: .simulator,
+                                             exists: bothViewers).url.path == legacy)
+    #expect(try SimulatorApplication.resolve(developerDirectory: developer, preferred: .simulator,
+                                             exists: { $0 == hub }).kind == .deviceHub)
     #expect(throws: SimulatorApplication.LaunchError.self) {
         try newViewer.openArguments(udid: "not-a-device&other=value")
     }
@@ -164,6 +181,78 @@ import Testing
     #expect(SimulatorCaptureService.CaptureError.screenRecordingDenied("denied").requiresScreenRecordingPermission)
     #expect(!SimulatorCaptureService.CaptureError.accessibilityDenied.requiresScreenRecordingPermission)
     #expect(!SimulatorCaptureService.CaptureError.deviceScreenNotFound.requiresScreenRecordingPermission)
+}
+
+@MainActor
+@Test func simulatorPreviewChoosesAUsableCaptureBackendWithoutPrompting() {
+    func native(_ viewer: SimulatorApplication.Kind?, recording: Bool = true, accessibility: Bool = true,
+                screens: Int = 1, type: String = "com.apple.CoreSimulator.SimDeviceType.iPhone-17") -> Bool {
+        SimulatorStreamManager.prefersNativePreview(
+            deviceType: type, integratedScreenCount: screens, viewer: viewer,
+            screenRecordingAllowed: recording, accessibilityAllowed: accessibility
+        )
+    }
+    #expect(!native(.deviceHub))
+    #expect(native(.deviceHub, accessibility: false))
+    #expect(native(.deviceHub, recording: false))
+    #expect(!native(.simulator, accessibility: false))
+    #expect(native(.simulator, recording: false))
+    #expect(native(nil))
+    #expect(native(.deviceHub, screens: 2))
+    #expect(!native(.deviceHub, accessibility: false, screens: 0))
+    #expect(native(.deviceHub, screens: 0, type: SimulatorPose.deviceType))
+}
+
+@MainActor
+@Test func simulatorPreviewDetectsTestShutdownOnlyForItsOwnDevice() {
+    let selected = simDevice("mine", booted: true)
+    let parallel = SimctlClient.SimctlDevice(udid: "parallel", name: selected.name, state: "Booted",
+        isAvailable: true, deviceTypeIdentifier: selected.deviceTypeIdentifier, lastBootedAt: nil)
+    #expect(!SimulatorStreamManager.deviceHasStopped(udid: selected.udid, in: [parallel, selected]))
+    #expect(SimulatorStreamManager.deviceHasStopped(udid: selected.udid, in: [parallel, simDevice("mine")]))
+    #expect(SimulatorStreamManager.deviceHasStopped(udid: selected.udid, in: [parallel]))
+    #expect(SimulatorStreamManager.deviceHasStopped(udid: selected.udid, in: []))
+    #expect(!SimulatorStreamManager.deviceHasStopped(udid: selected.udid, in: nil))
+}
+
+@MainActor
+@Test func simulatorPreviewAfterShutdownExposesRestartWithoutRequestingPermissions() async {
+    let stopped = simDevice("mine")
+    let parallel = SimctlClient.SimctlDevice(udid: "parallel", name: stopped.name, state: "Booted",
+        isAvailable: true, deviceTypeIdentifier: stopped.deviceTypeIdentifier, lastBootedAt: nil)
+    let stream = SimulatorStreamManager(listDevices: { [parallel, stopped] in [parallel, stopped] })
+    await stream.startStreaming(bootedDeviceId: stopped.udid)
+    #expect(stream.stoppedDeviceID == stopped.udid)
+    #expect(stream.closedWindowDeviceID == nil)
+    #expect(!stream.isCapturing)
+    #expect(stream.interaction == nil)
+    #expect(stream.errorMessage == nil)
+    #expect(!stream.needsAccessibilityPermission)
+    #expect(!stream.needsScreenRecordingPermission)
+
+    await stream.stopStreaming()
+    #expect(stream.stoppedDeviceID == nil)
+}
+
+@Test func simulatorCaptureIdentifiesARealScreenRecordingDenialByDomainAndCode() {
+    let domain = SCStreamError.errorDomain
+    let denied = SCStreamError.Code.userDeclined.rawValue
+    let classification = SimulatorCaptureService.CaptureError.classify
+    let screenDenied = classification(NSError(domain: domain, code: denied))
+    #expect(screenDenied.requiresScreenRecordingPermission)
+    #expect(!screenDenied.requiresAccessibilityPermission)
+    let accessibilityDenied = classification(SimulatorCaptureService.CaptureError.accessibilityDenied)
+    #expect(accessibilityDenied.requiresAccessibilityPermission)
+    #expect(!accessibilityDenied.requiresScreenRecordingPermission)
+    let missingWindows = classification(NSError(domain: domain, code: SCStreamError.Code.noWindowList.rawValue))
+    #expect(!missingWindows.requiresScreenRecordingPermission)
+    #expect(!missingWindows.requiresAccessibilityPermission)
+    let stopped = classification(NSError(domain: domain, code: SCStreamError.Code.userStopped.rawValue))
+    guard case .simulatorWindowClosed = stopped else {
+        Issue.record("Stopping the stream should be reported as a closed preview")
+        return
+    }
+    #expect(!classification(NSError(domain: NSCocoaErrorDomain, code: denied)).requiresScreenRecordingPermission)
 }
 
 @Test func deviceHubScreenBoundsExcludeAsymmetricChromeAndMapTouches() throws {

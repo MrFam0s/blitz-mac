@@ -61,16 +61,20 @@ actor SimulatorService: SimulatorDeviceService {
         try await simctl.screenshot(udid: udid, path: path)
     }
 
-    /// Open the Simulator.app (-g flag opens in background)
-    func openSimulatorApp(udid: String, inBackground: Bool = true) async throws {
+    func viewer(preferred: SimulatorApplication.Kind) async throws -> SimulatorApplication {
         let developerDirectory: String
         if let override = ProcessInfo.processInfo.environment["DEVELOPER_DIR"], !override.isEmpty {
             developerDirectory = override
         } else {
             developerDirectory = try await ProcessRunner.run("/usr/bin/xcode-select", arguments: ["-p"])
         }
-        let application = try SimulatorApplication.resolve(developerDirectory: developerDirectory)
-        _ = try await ProcessRunner.run("/usr/bin/open", arguments: application.openArguments(udid: udid, inBackground: inBackground))
+        return try SimulatorApplication.resolve(developerDirectory: developerDirectory, preferred: preferred)
+    }
+
+    func openSimulatorApp(udid: String, inBackground: Bool = true, using application: SimulatorApplication? = nil) async throws {
+        let selected: SimulatorApplication
+        if let application { selected = application } else { selected = try await viewer(preferred: .deviceHub) }
+        _ = try await ProcessRunner.run("/usr/bin/open", arguments: selected.openArguments(udid: udid, inBackground: inBackground))
         try await Task.sleep(for: .milliseconds(500))
     }
 

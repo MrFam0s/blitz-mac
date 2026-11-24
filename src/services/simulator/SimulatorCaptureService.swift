@@ -11,13 +11,14 @@ private let logger = Logger(subsystem: AppIdentity.bundleIdentifier, category: "
 final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private var stream: SCStream?
     private var streamOutput: StreamOutputHandler?
-    private var currentWindow: SCWindow?
+    private var windowTarget: WindowTarget?
     private var resizeTimer: Timer?
     @MainActor private var resizeCheckRunning = false
 
     /// Protects _latestFrame against concurrent read (main thread) / write (capture queue)
     private let frameLock = NSLock()
     private var _latestFrame: CVPixelBuffer?
+    private var acceptingFrames = false
 
     /// Latest captured frame — read by MetalRenderer on the main thread
     var latestFrame: CVPixelBuffer? {
@@ -42,18 +43,27 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     private var skipFrameCount = 0
     private static let fps = 50
 
-    private let simulatorBundleIDs = [
-        "com.apple.iphonesimulator",
-        "com.apple.CoreSimulator.SimulatorTrampoline",
-        "com.apple.dt.Devices"
-    ]
+    struct WindowTarget {
+        let id: CGWindowID
+        let processID: pid_t
+        let deviceName: String
+
+        func matches(id: CGWindowID, processID: pid_t?, title: String?) -> Bool {
+            self.id == id && self.processID == processID &&
+                SimulatorCaptureService.matchingWindowIndex(titles: [title ?? ""], deviceName: deviceName) != nil
+        }
+
+        func window(in content: SCShareableContent) -> SCWindow? {
+            content.windows.first { matches(id: $0.windowID, processID: $0.owningApplication?.processID, title: $0.title) }
+        }
+    }
 
     /// Search an already-fetched SCShareableContent for the simulator window.
-    private func findSimulatorWindow(in content: SCShareableContent, deviceName: String) -> SCWindow? {
+    private func findSimulatorWindow(in content: SCShareableContent, deviceName: String, viewer: SimulatorApplication.Kind) -> SCWindow? {
+        let allowed = viewer == .deviceHub ? ["com.apple.dt.Devices"] : ["com.apple.iphonesimulator", "com.apple.CoreSimulator.SimulatorTrampoline"]
         let candidates = content.windows.filter { window in
             guard let app = window.owningApplication else { return false }
-            return simulatorBundleIDs.contains(app.bundleIdentifier)
-                && window.frame.width >= 200 && window.frame.height >= 300
+            return allowed.contains(app.bundleIdentifier) && window.frame.width >= 200 && window.frame.height >= 300
         }
         guard let index = Self.matchingWindowIndex(titles: candidates.map { $0.title ?? "" }, deviceName: deviceName) else {
             return nil
@@ -75,7 +85,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
     /// Start capturing the simulator window.
     /// Calls SCShareableContent exactly ONCE. If the window isn't visible yet,
     /// retries the query up to 10 times (1s apart).
-    func startCapture(deviceName: String, retryForWindow: Bool = true) async throws {
+    @MainActor func startCapture(deviceName: String, viewer: SimulatorApplication.Kind, retryForWindow: Bool = true) async throws {
         guard !isCapturing else {
             logger.warning("Already capturing")
             return
@@ -83,20 +93,19 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
         logger.info("Starting capture at \(Self.fps) FPS...")
 
-        // Step 1: Query SCShareableContent ONCE to get permission sorted out.
-        // If this throws, it's a permission error — bail immediately, no retry.
+        // A failing WindowServer connection or an empty capture source is distinct from TCC denial.
         let initialContent: SCShareableContent
         do {
             initialContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
             logger.error("SCShareableContent failed: \(error.localizedDescription)")
-            throw CaptureError.screenRecordingDenied(error.localizedDescription)
+            throw CaptureError.classify(error)
         }
 
         // Step 2: Look for the simulator window. If not found, retry (re-querying
         // SCShareableContent is safe AFTER the first successful call — TCC won't re-prompt
         // for the same process once granted).
-        var window = findSimulatorWindow(in: initialContent, deviceName: deviceName)
+        var window = findSimulatorWindow(in: initialContent, deviceName: deviceName, viewer: viewer)
 
         if window == nil && retryForWindow {
             let maxAttempts = 10
@@ -104,46 +113,50 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
                 logger.info("Simulator window not found, retrying... (\(attempt)/\(maxAttempts))")
                 try await Task.sleep(for: .seconds(1))
 
-                if let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) {
-                    window = findSimulatorWindow(in: content, deviceName: deviceName)
+                do {
+                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                    window = findSimulatorWindow(in: content, deviceName: deviceName, viewer: viewer)
                     if window != nil { break }
+                } catch {
+                    throw CaptureError.classify(error)
                 }
             }
         }
 
-        guard var window = window else {
+        guard var window, let owner = window.owningApplication else {
             throw CaptureError.simulatorWindowNotFound
         }
 
         try Task.checkCancellation()
-        if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
-           let app = window.owningApplication {
-            let selectedWindowID = window.windowID
+        let target = WindowTarget(id: window.windowID, processID: owner.processID, deviceName: deviceName)
+        if owner.bundleIdentifier == "com.apple.dt.Devices" {
             do {
                 let rect = try await DeviceHubScreenGeometry.waitForScreen {
-                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                    guard let refreshed = content.windows.first(where: { $0.windowID == selectedWindowID }) else {
-                        throw CaptureError.deviceScreenNotFound
+                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                    guard let refreshed = target.window(in: content) else {
+                        throw CaptureError.simulatorWindowClosed
                     }
                     window = refreshed
                     return try DeviceHubScreenGeometry.screenRect(
-                        processID: app.processID, windowTitle: refreshed.title ?? "", windowFrame: refreshed.frame)
+                        processID: owner.processID, windowTitle: refreshed.title ?? "", windowFrame: refreshed.frame)
                 }
                 await onGeometryChange?(.deviceHub(.init(crop: rect, windowSize: window.frame.size)))
             } catch CaptureError.deviceScreenNotFound {
                 // AX can become available after the stream starts. The periodic
                 // geometry check enables touches once it identifies one surface.
                 await onGeometryChange?(.deviceHub(nil))
+            } catch {
+                throw await windowFailure(error, target: target)
             }
         } else {
             await onGeometryChange?(.classic)
         }
-        currentWindow = window
+        windowTarget = target
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
 
-        let scale: CGFloat = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2.0 }
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         config.width = Int(window.frame.width * scale)
         config.height = Int(window.frame.height * scale)
         config.pixelFormat = kCVPixelFormatType_32BGRA
@@ -158,67 +171,79 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         self.streamOutput = handler
 
         let stream = SCStream(filter: filter, configuration: config, delegate: handler)
-        try stream.addStreamOutput(handler, type: .screen, sampleHandlerQueue: .global(qos: .userInteractive))
-
+        self.stream = stream
         do {
+            try stream.addStreamOutput(handler, type: .screen, sampleHandlerQueue: .global(qos: .userInteractive))
             try await stream.startCapture()
         } catch {
             logger.error("startCapture failed: \(error.localizedDescription)")
-            throw CaptureError.captureStartFailed(error.localizedDescription)
+            throw CaptureError.classify(error)
         }
 
-        self.stream = stream
+        guard self.stream === stream else { throw CancellationError() }
+        try Task.checkCancellation()
         self.isCapturing = true
-        await onTouchAvailabilityChange?(true)
-        self.skipFrameCount = 0
-        self.frameCount = 0
+        frameLock.withLock { acceptingFrames = true; skipFrameCount = 0; frameCount = 0 }
+        onTouchAvailabilityChange?(true)
         self.frameSize = CGSize(width: config.width, height: config.height)
 
         logger.info("Capture started successfully")
 
         // Poll for window resize every second
-        await MainActor.run {
-            self.resizeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-                Task { await self?.checkForResize() }
-            }
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { await self?.checkForResize() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        resizeTimer = timer
     }
 
     /// Stop capturing
-    func stopCapture() async {
-        logger.info("Stopping capture (total frames: \(self.frameCount))")
-        await onTouchAvailabilityChange?(false)
-
-        await MainActor.run {
-            resizeTimer?.invalidate()
-            resizeTimer = nil
-        }
-
-        if let stream {
-            try? await stream.stopCapture()
-        }
-
+    @MainActor private func detachStream() -> SCStream? {
+        let previous = stream
         stream = nil
         streamOutput = nil
-        currentWindow = nil
-        await onGeometryChange?(.classic)
+        windowTarget = nil
+        resizeTimer?.invalidate()
+        resizeTimer = nil
         isCapturing = false
-        clearLatestFrame()
+        frameSize = .zero
+        frameLock.withLock { acceptingFrames = false; _latestFrame = nil }
+        onTouchAvailabilityChange?(false)
+        return previous
     }
 
-    private func clearLatestFrame() {
-        frameLock.lock()
-        _latestFrame = nil
-        frameLock.unlock()
+    @MainActor func stopCapture() async {
+        let previous = detachStream()
+        try? await previous?.stopCapture()
+    }
+
+    @MainActor private func endCapture(_ expectedStream: SCStream, failure: CaptureError) async {
+        guard stream === expectedStream else { return }
+        _ = detachStream()
+        await onGeometryChange?(.failed(failure))
+        try? await expectedStream.stopCapture()
+    }
+
+    private func windowFailure(_ error: Error, target: WindowTarget) async -> CaptureError {
+        let failure = CaptureError.classify(error)
+        // A window can disappear between the WindowServer snapshot and its AX query.
+        // A fresh inventory distinguishes closure from a real AX denial.
+        guard failure.requiresAccessibilityPermission else { return failure }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            return target.window(in: content) == nil ? .simulatorWindowClosed : failure
+        } catch {
+            return .classify(error)
+        }
     }
 
     /// Read the same window again at the point of input. The user may have
     /// changed the hinge or rotated the device since the last resize poll.
     @MainActor func currentDeviceHubViewport() async -> DeviceHubScreenGeometry.Viewport? {
-        guard let expectedStream = stream, let windowID = currentWindow?.windowID,
-              let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+        guard let expectedStream = stream, let windowTarget,
+              let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false),
               stream === expectedStream,
-              let window = content.windows.first(where: { $0.windowID == windowID }),
+              let window = windowTarget.window(in: content),
               let app = window.owningApplication, app.bundleIdentifier == "com.apple.dt.Devices",
               let rect = try? DeviceHubScreenGeometry.screenRect(processID: app.processID,
                   windowTitle: window.title ?? "", windowFrame: window.frame) else { return nil }
@@ -227,15 +252,21 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
     /// Refresh only the selected window after capture permission has been granted.
     @MainActor private func checkForResize() async {
-        guard !resizeCheckRunning, isCapturing, let previous = currentWindow,
+        guard !resizeCheckRunning, isCapturing, let windowTarget,
               let expectedStream = stream else { return }
         resizeCheckRunning = true
         defer { resizeCheckRunning = false }
         // Permission has already been granted. Refresh this exact window's geometry.
-        let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        } catch {
+            await endCapture(expectedStream, failure: .classify(error))
+            return
+        }
         guard stream === expectedStream else { return }
-        guard let window = content?.windows.first(where: { $0.windowID == previous.windowID }) else {
-            onTouchAvailabilityChange?(false)
+        guard let window = windowTarget.window(in: content) else {
+            await endCapture(expectedStream, failure: .simulatorWindowClosed)
             return
         }
         if window.owningApplication?.bundleIdentifier == "com.apple.dt.Devices",
@@ -250,17 +281,15 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
                 onTouchAvailabilityChange?(false)
                 return
             } catch {
-                guard stream === expectedStream else { return }
-                await stopCapture()
-                await onGeometryChange?(.failed(error as? CaptureError ?? .deviceScreenNotFound))
+                let failure = await windowFailure(error, target: windowTarget)
+                await endCapture(expectedStream, failure: failure)
                 return
             }
         }
         guard stream === expectedStream else { return }
         onTouchAvailabilityChange?(true)
-        currentWindow = window
 
-        let scale: CGFloat = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2.0 }
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         let newWidth = Int(window.frame.width * scale)
         let newHeight = Int(window.frame.height * scale)
 
@@ -278,9 +307,10 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
         config.capturesAudio = false
 
         do {
-            try await stream?.updateConfiguration(config)
+            try await expectedStream.updateConfiguration(config)
+            guard stream === expectedStream else { return }
             frameSize = CGSize(width: newWidth, height: newHeight)
-            skipFrameCount = 0
+            frameLock.withLock { skipFrameCount = 0 }
         } catch {
             logger.warning("Failed to update stream config: \(error.localizedDescription)")
         }
@@ -288,14 +318,14 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
     /// Called by StreamOutputHandler when a frame arrives
     fileprivate func handleFrame(_ sampleBuffer: CMSampleBuffer) {
-        // Skip first 3 frames (initialization artifacts)
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        frameLock.lock()
+        guard acceptingFrames else { frameLock.unlock(); return }
         if skipFrameCount < 3 {
             skipFrameCount += 1
+            frameLock.unlock()
             return
         }
-
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-
         frameCount += 1
         if frameCount == 1 {
             let w = CVPixelBufferGetWidth(pixelBuffer)
@@ -303,24 +333,49 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
             logger.info("First frame received: \(w)x\(h)")
         }
 
-        frameLock.lock()
         _latestFrame = pixelBuffer
         frameLock.unlock()
         onFrame?(pixelBuffer)
     }
 
     /// Called when the stream encounters an error
-    fileprivate func handleStreamError(_ error: Error) {
+    @MainActor fileprivate func handleStreamError(_ error: Error, stream expectedStream: SCStream) async {
+        guard stream === expectedStream else { return }
         logger.error("Stream error: \(error.localizedDescription)")
+        var failure = CaptureError.classify(error)
+        if let target = windowTarget,
+           let inventory = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false),
+           target.window(in: inventory) == nil {
+            failure = .simulatorWindowClosed
+        }
+        await endCapture(expectedStream, failure: failure)
     }
 
     enum CaptureError: Error, LocalizedError {
-        case simulatorWindowNotFound
+        case simulatorWindowNotFound, simulatorWindowClosed
         case ambiguousSimulatorName
         case screenRecordingDenied(String)
         case captureStartFailed(String)
         case accessibilityDenied
         case deviceScreenNotFound
+
+        static func classify(_ error: Error) -> Self {
+            if let error = error as? Self { return error }
+            let nsError = error as NSError
+            if nsError.domain == SCStreamErrorDomain {
+                switch nsError.code {
+                case SCStreamError.Code.userDeclined.rawValue: return .screenRecordingDenied(error.localizedDescription)
+                case SCStreamError.Code.userStopped.rawValue: return .simulatorWindowClosed
+                default: break
+                }
+            }
+            return .captureStartFailed(error.localizedDescription)
+        }
+
+        var requiresAccessibilityPermission: Bool {
+            if case .accessibilityDenied = self { return true }
+            return false
+        }
 
         var requiresScreenRecordingPermission: Bool {
             if case .screenRecordingDenied = self { return true }
@@ -329,7 +384,7 @@ final class SimulatorCaptureService: NSObject, @unchecked Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .simulatorWindowNotFound:
+            case .simulatorWindowNotFound, .simulatorWindowClosed:
                 return L10n.tr("Das ausgewählte Simulatorfenster konnte nicht eindeutig gefunden werden. Öffne dieses Gerät in einem kompakten Device-Hub- oder Simulatorfenster und versuche es erneut.")
             case .ambiguousSimulatorName:
                 return L10n.tr("Mehrere laufende Simulatoren haben denselben Namen. Gib dem Projektsimulator in Xcode einen eindeutigen Namen und versuche es erneut.")
@@ -360,6 +415,6 @@ private final class StreamOutputHandler: NSObject, SCStreamOutput, SCStreamDeleg
     }
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        service?.handleStreamError(error)
+        Task { @MainActor [weak service] in await service?.handleStreamError(error, stream: stream) }
     }
 }

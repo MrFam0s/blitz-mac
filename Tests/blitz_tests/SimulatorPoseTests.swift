@@ -46,7 +46,7 @@ import Testing
         var calls: [[String]] = []
         let angle: Double = pose == .closed ? 0 : pose == .open ? 180 : 86.5
         let role = pose == .closed ? "outer" : "inner"
-        let axe = AXeSimulatorHinge(candidates: [old, current]) { path, args in
+        let axe = AXeSimulator(candidates: [old, current]) { path, args in
             calls.append([path] + args)
             if args.last == "--help" { return path == old ? genericHelp : supportedHelp }
             return result(id: udid.lowercased(), degrees: angle, posture: pose.rawValue, role: role, mechanical: pose == .partiallyOpen ? 90 : angle)
@@ -63,7 +63,7 @@ import Testing
     @MainActor @Test func olderOrAbsentAXeUsesOnlyTheExistingDeviceHubRoute() async throws {
         for paths in [[], [old]] {
             var requests: [String] = []
-            let axe = AXeSimulatorHinge(candidates: paths) { _, args in
+            let axe = AXeSimulator(candidates: paths) { _, args in
                 #expect(args.last == "--help")
                 return genericHelp
             }
@@ -82,7 +82,7 @@ import Testing
     @MainActor @Test func refusesInvalidOrChangedDeviceBeforeAnyWrite() async {
         for inventory in [[device("other")], [device(udid, state: "Shutdown")], [device(udid, type: "iPad")], [device(udid)]] {
             var bound = true
-            let axe = AXeSimulatorHinge(candidates: [current]) { _, args in
+            let axe = AXeSimulator(candidates: [current]) { _, args in
                 #expect(inventory.first?.deviceTypeIdentifier == SimulatorPose.deviceType && inventory.first?.isBooted == true && inventory.first?.udid == udid)
                 #expect(args.last == "--help")
                 bound = false
@@ -106,7 +106,7 @@ import Testing
         ]
         for reply in replies {
             var moves = 0
-            let axe = AXeSimulatorHinge(candidates: [current]) { _, args in
+            let axe = AXeSimulator(candidates: [current]) { _, args in
                 if args.last == "--help" { return supportedHelp }
                 moves += 1
                 guard let reply else { throw ProcessRunner.ProcessError(command: "hinge set", exitCode: 1, stderr: "bootChanged") }

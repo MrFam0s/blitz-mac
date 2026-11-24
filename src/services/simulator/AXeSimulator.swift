@@ -1,9 +1,8 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
 import Foundation
 
-/// AXe addresses CoreSimulator devices by UDID and reports the settled hinge
-/// and display. Probe the CLI without touching a device before attempting a move.
-struct AXeSimulatorHinge {
+/// Direct, device-bound simulator commands. Probe the installed CLI before choosing this backend.
+struct AXeSimulator {
     typealias Run = (String, [String]) async throws -> String
     let candidates: [String]
     let run: Run
@@ -21,7 +20,7 @@ struct AXeSimulatorHinge {
         self.run = run
     }
 
-    private struct Response<Payload: Decodable>: Decodable {
+    struct Response<Payload: Decodable>: Decodable {
         let command: String
         let didError: Bool
         let data: Payload
@@ -29,13 +28,16 @@ struct AXeSimulatorHinge {
 
     private struct Help: Decodable { let messages: [String] }
 
-    func supportedExecutable() async -> String? {
+    func supportedExecutable(for command: [String], requiring options: [String], helpFlag: String = "--help") async -> String? {
         for path in candidates {
-            guard let output = try? await run(path, ["--output", "json", "hinge", "set", "--help"]),
+            guard let output = try? await run(path, ["--output", "json"] + command + [helpFlag]),
                   let help = try? JSONDecoder().decode(Response<Help>.self, from: Data(output.utf8)), !help.didError else { continue }
             // Unsupported subcommands can return the general help with exit code zero.
             let lines = help.data.messages.flatMap { $0.split(whereSeparator: \.isNewline) }
-            if lines.contains(where: { $0.hasPrefix("USAGE: axe hinge set ") && $0.contains("--udid") }) { return path }
+            let usage = "USAGE: axe " + command.joined(separator: " ") + " "
+            if lines.contains(where: { line in
+                line.hasPrefix(usage) && options.allSatisfy { line.contains($0) }
+            }) { return path }
         }
         return nil
     }
@@ -55,9 +57,21 @@ struct AXeSimulatorHinge {
         let result: Result
     }
 
-    private struct Failure: Decodable {
-        struct Detail: Decodable { let code: String; let message: String }
-        let error: Detail
+    struct CommandError: Decodable, LocalizedError {
+        let code: String
+        let message: String
+        var errorDescription: String? { "AXe (\(code)): \(message)" }
+    }
+
+    private struct Failure: Decodable { let error: CommandError }
+
+    func runJSON(_ path: String, arguments: [String]) async throws -> String {
+        do {
+            return try await run(path, ["--output", "json"] + arguments)
+        } catch let error as ProcessRunner.ProcessError {
+            guard let failure = try? JSONDecoder().decode(Failure.self, from: Data(error.stderr.utf8)) else { throw error }
+            throw failure.error
+        }
     }
 
     func set(_ pose: SimulatorPose, on udid: String, using path: String) async throws -> SimulatorPose.Outcome {
@@ -68,13 +82,7 @@ struct AXeSimulatorHinge {
         case .partiallyOpen: expectedAngle = 90
         case .open: expectedAngle = 180
         }
-        let output: String
-        do {
-            output = try await run(path, ["--output", "json", "hinge", "set", argument, "--udid", udid])
-        } catch let error as ProcessRunner.ProcessError {
-            guard let detail = try? JSONDecoder().decode(Failure.self, from: Data(error.stderr.utf8)).error else { throw error }
-            throw SimulatorPose.PoseError.axeFailure(detail.code, detail.message)
-        }
+        let output = try await runJSON(path, arguments: ["hinge", "set", argument, "--udid", udid])
         guard let response = try? JSONDecoder().decode(Response<SetResponse>.self, from: Data(output.utf8)),
               !response.didError, response.command == "hinge set" else { throw SimulatorPose.PoseError.unconfirmed }
         let result = response.data.result

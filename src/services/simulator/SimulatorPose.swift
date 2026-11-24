@@ -26,12 +26,10 @@ enum SimulatorPose: String, CaseIterable {
 
     enum PoseError: LocalizedError {
         case changedTarget, unavailable, noControl, unconfirmed
-        case axeFailure(String, String)
         var errorDescription: String? {
             switch self {
             case .changedTarget: L10n.tr("Wähle den laufenden iPhone-Duo-Simulator dieses Projekts.")
             case .noControl: L10n.tr("Für die Faltposition benötigt Blitz Neo AXe mit Hinge-Unterstützung oder die macOS-Bedienungshilfen-Freigabe für den Device Hub.")
-            case .axeFailure(let code, let message): "AXe (\(code)): \(message)"
             case .unconfirmed: L10n.tr("AXe konnte die Faltposition für diesen Projektsimulator nicht bestätigen. Prüfe den aktuellen Winkel vor einem weiteren Versuch.")
             case .unavailable: L10n.tr("Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode.")
             }
@@ -80,7 +78,7 @@ enum SimulatorPose: String, CaseIterable {
         guard isBound() else { throw PoseError.changedTarget }
         let service = SimulatorService()
         let devices = try await service.listDevices()
-        return try await apply(udid: udid, devices: devices, isBound: isBound, axe: AXeSimulatorHinge()) { name in
+        return try await apply(udid: udid, devices: devices, isBound: isBound, axe: AXeSimulator()) { name in
             guard AXIsProcessTrusted() else { throw PoseError.noControl }
             try await service.openSimulatorApp(udid: udid)
             guard isBound() else { throw PoseError.changedTarget }
@@ -89,10 +87,10 @@ enum SimulatorPose: String, CaseIterable {
     }
 
     @MainActor func apply(udid: String, devices: [SimctlClient.SimctlDevice], isBound: () -> Bool,
-                          axe: AXeSimulatorHinge, requestInDeviceHub: (String) async throws -> Void) async throws -> Outcome {
+                          axe: AXeSimulator, requestInDeviceHub: (String) async throws -> Void) async throws -> Outcome {
         guard isBound(), let device = devices.first(where: { $0.udid == udid && $0.isBooted && $0.isAvailable }),
               device.deviceTypeIdentifier == Self.deviceType else { throw PoseError.changedTarget }
-        let executable = await axe.supportedExecutable()
+        let executable = await axe.supportedExecutable(for: ["hinge", "set"], requiring: ["--udid"])
         try Task.checkCancellation()
         guard isBound() else { throw PoseError.changedTarget }
         if let executable {

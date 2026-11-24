@@ -23,10 +23,10 @@ SCRIPT = SCRIPTS / 'pkg-scripts/install-iphone-mcp.sh'
 CLI = '''#!/usr/bin/env node
 process.stdin.on('data', data => {
  const request=JSON.parse(data.toString().trim());
- process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{serverInfo:{version:'0.1.18-blitz.2'}}})+'\\n');
+ process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{serverInfo:{version:'__MCP_VERSION__'}}})+'\\n');
 });
 process.stdin.on('end',()=>process.exit(0));
-'''
+'''.replace('__MCP_VERSION__', VERSION)
 
 
 class MCPInstallerTests(unittest.TestCase):
@@ -64,6 +64,7 @@ class MCPInstallerTests(unittest.TestCase):
                                          'dependencyLockSHA256': hashlib.sha256(lock_data).hexdigest()}}
         files = {'package.json': json.dumps(manifest).encode(), 'dist/index.js': b'// fixture',
                  'dist/cli.js': cli.encode(), 'LICENSE': b'MIT', 'dist/idb/idb-client.js': b'// fixture',
+                 'dist/idb/axe-screens.js': b'// fixture',
                  'dist/idb/simulator-env.js': b'// fixture', 'dist/idb/type-text.py': b'# fixture'}
         if lock:
             files['package-lock.json'] = lock_data

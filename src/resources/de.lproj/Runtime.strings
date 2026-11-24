@@ -232,6 +232,9 @@
 "Setting up signing…" = "Signierung wird eingerichtet …";
 "Shader compile failed: {0}" = "Shader-Kompilierung fehlgeschlagen: {0}";
 "Simulator wird geöffnet …" = "Simulator wird geöffnet …";
+"Simulator" = "Simulator";
+"Der Simulator wurde beendet." = "Der Simulator wurde beendet.";
+"Das Simulatorfenster wurde geschlossen." = "Das Simulatorfenster wurde geschlossen.";
 "Simulatoren konnten nicht geladen werden. Prüfe, ob Xcode installiert ist, und versuche es erneut." = "Simulatoren konnten nicht geladen werden. Prüfe, ob Xcode installiert ist, und versuche es erneut.";
 "Sitzung konnte nicht gespeichert werden: {0}" = "Sitzung konnte nicht gespeichert werden: {0}";
 "Sitzung konnte nicht im Schlüsselbund gespeichert werden (Status: {0})" = "Sitzung konnte nicht im Schlüsselbund gespeichert werden (Status: {0})";
