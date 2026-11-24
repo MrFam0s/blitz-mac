@@ -76,7 +76,8 @@ include local verification logs, private state, credentials or project data.
 
 ## Publish
 
-Confirm the tree is committed and pushed to this fork, create a release draft
+Pushing to `main` does not publish a release. Once publication is approved,
+verify the tested commit is on this fork’s `main`, create a release draft
 targeting that exact commit, and upload only the final DMG and `SHA256SUMS`.
 Review the draft, then publish an authorized regular release with **prerelease
 disabled** and mark it as the latest release. Use prerelease only when a preview

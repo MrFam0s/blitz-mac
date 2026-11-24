@@ -2,8 +2,8 @@
 
 Bug reports, documentation fixes and focused pull requests are welcome. This is
 the independently maintained AmoSystems fork of
-[Blitz](https://github.com/blitzdotdev/blitz-mac). Open pull requests against
-**`maintenance/auth-and-tooling`** in this repository, not the upstream project.
+[Blitz](https://github.com/blitzdotdev/blitz-mac). Create a working branch
+from **`main`** and open your pull request against **`main`** in this fork.
 
 ## Report a problem
 
@@ -61,6 +61,5 @@ does not prove a device interaction or an App Store submission succeeded.
 - Do not bump public versions, publish packages, enable paid CI or run a release
   as part of an ordinary contribution. Maintainers handle distribution separately.
 
-Local checks are the active validation route; this fork does not depend on paid
-GitHub Actions. Contributions are made under the repository's
+Contributions are made under the repository's
 [Apache 2.0 license](LICENSE), with existing [attribution](NOTICE) retained.

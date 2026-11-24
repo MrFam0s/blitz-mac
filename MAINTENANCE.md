@@ -1,6 +1,10 @@
 # Blitz Neo maintenance fork
 
-This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
+This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac).
+The fork keeps one permanent branch, `main`. To prepare an ASC update, branch
+from `main` as `chore/asc-<version>` and open a draft pull request against
+`main` for review. The working branch can be deleted after the merge.
+Published versions are identified by their release tags.
 
 ## 1.0.84 build 104 — manual simulator startup
 

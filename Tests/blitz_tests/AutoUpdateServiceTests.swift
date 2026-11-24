@@ -41,6 +41,23 @@ import Testing
     #expect(!manager.showsFullScreenOverlay)
 }
 
+@Test @MainActor func changelogMatchesExactVersionWithOrWithoutBuildNumber() {
+    let changelog = """
+    ## 1.0.84 (build 104)
+    - Manual simulator startup
+    ## 1.0.80 (build 100)
+    - Latest build notes
+    ## 1.0.80 (build 99)
+    - Previous build notes
+    ## 1.0.79
+    - Dashboard improvements
+    """
+    #expect(AutoUpdateManager.parseChangelog(changelog, version: "1.0.84") == "- Manual simulator startup")
+    #expect(AutoUpdateManager.parseChangelog(changelog, version: "1.0.80") == "- Latest build notes")
+    #expect(AutoUpdateManager.parseChangelog(changelog, version: "1.0.79") == "- Dashboard improvements")
+    #expect(AutoUpdateManager.parseChangelog(changelog, version: "1.0.8").isEmpty)
+}
+
 @Test @MainActor func testAppUpdateInstallScriptKeepsBundleGuardsAndFailsOnScriptErrors() {
     let zipPath = URL(fileURLWithPath: "/tmp/Blitz.app.zip")
     let script = AutoUpdateManager.appUpdateInstallScript(zipPath: zipPath)

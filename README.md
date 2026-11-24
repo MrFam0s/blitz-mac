@@ -125,7 +125,7 @@ executable; `BLITZ_NODE_BIN` can select the Node/npm `bin` directory. The resolv
 checks these versions and does not install missing tools.
 
 ```bash
-git clone --branch maintenance/auth-and-tooling https://github.com/MrFam0s/blitz-mac.git
+git clone https://github.com/MrFam0s/blitz-mac.git
 cd blitz-mac
 git submodule update --init --recursive
 
@@ -149,9 +149,8 @@ ordinary standalone ASC binary. The app and terminal share the same helper.
 The bundle script also builds and tests the maintained iPhone MCP from its pinned
 source; source builds download dependency packages as needed.
 
-GitHub Actions remain paused/manual for this fork. Local checks are the active
-validation route. Contributions do not require paid GitHub features or hosted
-macOS runners. See [CONTRIBUTING.md](CONTRIBUTING.md) for the review workflow.
+Run the checks locally on a Mac. Maintainers can also start the GitHub build
+checks manually. See [CONTRIBUTING.md](CONTRIBUTING.md) for the review workflow.
 
 ## Data and privacy
 

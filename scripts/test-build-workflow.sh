@@ -3,19 +3,16 @@
 #
 # This script is intentionally conservative:
 # - It always statically validates `.github/workflows/build.yml`.
-# - It only runs jobs that match the current host architecture unless explicitly forced.
-# - Release jobs are blocked by default because they can mutate GitHub releases.
+# - It only runs jobs that match the current host architecture on macOS.
 #
 # Usage:
 #   bash scripts/test-build-workflow.sh
 #   bash scripts/test-build-workflow.sh --validate-only
 #   bash scripts/test-build-workflow.sh --job build
 #   bash scripts/test-build-workflow.sh --job build_x86_64
-#   bash scripts/test-build-workflow.sh --job release --allow-release-job --tag v0.0.0-local
 #
 # Environment:
 #   ACT_ARGS               Additional arguments appended to `act`
-#   GITHUB_TOKEN           Required for release jobs
 #   ACTIONLINT_REQUIRED=1  Fail static validation if actionlint is not installed
 set -euo pipefail
 
@@ -24,9 +21,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKFLOW_PATH="$ROOT_DIR/.github/workflows/build.yml"
 
 JOB=""
-TAG=""
 VALIDATE_ONLY=false
-ALLOW_RELEASE_JOB=false
 ARTIFACT_DIR="$ROOT_DIR/.artifacts/act"
 
 usage() {
@@ -35,11 +30,9 @@ Usage: bash scripts/test-build-workflow.sh [options]
 
 Options:
   --job <name>            Job to run with act.
-                          Supported: build, build_x86_64, release, release_x86_64
-  --tag <tag>             Simulate a tag push ref (for release jobs). Default: v0.0.0-local
+                          Supported: build, build_x86_64
   --artifact-dir <dir>    Directory for act artifacts. Default: .artifacts/act
   --validate-only         Run only static validation, skip act execution
-  --allow-release-job     Allow running release/release_x86_64 locally
   --help                  Show this help
 
 Notes:
@@ -48,8 +41,6 @@ Notes:
       x86_64 -> build_x86_64
   - Local execution is only considered valid when host architecture matches the
     job's intended runner architecture.
-  - Release jobs require GITHUB_TOKEN and are blocked by default because they
-    can create or update GitHub releases.
 EOF
 }
 
@@ -69,11 +60,6 @@ while [ $# -gt 0 ]; do
             JOB="$2"
             shift 2
             ;;
-        --tag)
-            [ $# -ge 2 ] || die "--tag requires a value"
-            TAG="$2"
-            shift 2
-            ;;
         --artifact-dir)
             [ $# -ge 2 ] || die "--artifact-dir requires a value"
             ARTIFACT_DIR="$2"
@@ -81,10 +67,6 @@ while [ $# -gt 0 ]; do
             ;;
         --validate-only)
             VALIDATE_ONLY=true
-            shift
-            ;;
-        --allow-release-job)
-            ALLOW_RELEASE_JOB=true
             shift
             ;;
         --help|-h)
@@ -113,16 +95,16 @@ default_job_for_host() {
 
 required_host_for_job() {
     case "$1" in
-        build|release) echo "arm64" ;;
-        build_x86_64|release_x86_64) echo "x86_64" ;;
+        build) echo "arm64" ;;
+        build_x86_64) echo "x86_64" ;;
         *) die "unsupported job: $1" ;;
     esac
 }
 
 runner_label_for_job() {
     case "$1" in
-        build|release) echo "macos-15" ;;
-        build_x86_64|release_x86_64) echo "macos-15-intel" ;;
+        build) echo "macos-15" ;;
+        build_x86_64) echo "macos-15-intel" ;;
         *) die "unsupported job: $1" ;;
     esac
 }
@@ -172,12 +154,13 @@ write_event_file() {
 
     cat > "$event_file" <<EOF
 {
-  "ref": "$ref"
+  "ref": "$ref",
+  "repository": {"private": false}
 }
 EOF
 }
 
-run_act_job() {
+run_act_job() (
     local job="$1"
     local required_host="$2"
     local runner_label="$3"
@@ -193,16 +176,12 @@ run_act_job() {
     trap 'rm -f "$event_file"' EXIT
     write_event_file "$event_file" "$ref"
 
-    act_args+=("push")
+    act_args+=("workflow_dispatch")
     act_args+=("-W" "$WORKFLOW_PATH")
     act_args+=("-j" "$job")
     act_args+=("-P" "$runner_label=-self-hosted")
     act_args+=("-e" "$event_file")
     act_args+=("--artifact-server-path" "$ARTIFACT_DIR")
-
-    if [ -n "${GITHUB_TOKEN:-}" ]; then
-        act_args+=("-s" "GITHUB_TOKEN=$GITHUB_TOKEN")
-    fi
 
     if [ -n "${ACT_ARGS:-}" ]; then
         # shellcheck disable=SC2206
@@ -215,7 +194,7 @@ run_act_job() {
         cd "$ROOT_DIR"
         act "${act_args[@]}"
     )
-}
+)
 
 validate_yaml
 validate_with_actionlint
@@ -229,24 +208,6 @@ if [ -z "$JOB" ]; then
     JOB="$(default_job_for_host)"
 fi
 
-case "$JOB" in
-    build|build_x86_64|release|release_x86_64)
-        ;;
-    *)
-        die "unsupported job: $JOB"
-        ;;
-esac
-
-REF="refs/heads/main"
-if [[ "$JOB" == release* ]]; then
-    [ "$ALLOW_RELEASE_JOB" = true ] || die "release jobs are blocked by default; rerun with --allow-release-job"
-    [ -n "${GITHUB_TOKEN:-}" ] || die "release jobs require GITHUB_TOKEN"
-    TAG="${TAG:-v0.0.0-local}"
-    REF="refs/tags/$TAG"
-fi
-
-if [ -n "$TAG" ] && [[ "$JOB" != release* ]]; then
-    REF="refs/tags/$TAG"
-fi
-
-run_act_job "$JOB" "$(required_host_for_job "$JOB")" "$(runner_label_for_job "$JOB")" "$REF"
+required_host="$(required_host_for_job "$JOB")"
+runner_label="$(runner_label_for_job "$JOB")"
+run_act_job "$JOB" "$required_host" "$runner_label" "refs/heads/main"

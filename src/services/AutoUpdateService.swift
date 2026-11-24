@@ -253,10 +253,11 @@ final class AutoUpdateManager {
 
     /// Fetches CHANGELOG.md from the repo and extracts the notes for the given version.
     private static func fetchChangelogNotes(for version: String) async -> String {
-        let rawURL = "https://raw.githubusercontent.com/MrFam0s/blitz-mac/maintenance/auth-and-tooling/CHANGELOG.md"
+        let rawURL = "https://raw.githubusercontent.com/MrFam0s/blitz-mac/HEAD/CHANGELOG.md"
         do {
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: URL(string: rawURL)!))
-            guard let content = String(data: data, encoding: .utf8) else { return "" }
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: URL(string: rawURL)!))
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let content = String(data: data, encoding: .utf8) else { return "" }
             return parseChangelog(content, version: version)
         } catch {
             print("[AutoUpdate] Failed to fetch CHANGELOG.md: \(error)")
@@ -265,7 +266,7 @@ final class AutoUpdateManager {
     }
 
     /// Extracts bullet points under the `## <version>` heading from a changelog string.
-    private static func parseChangelog(_ content: String, version: String) -> String {
+    static func parseChangelog(_ content: String, version: String) -> String {
         let lines = content.components(separatedBy: "\n")
         var capturing = false
         var notes: [String] = []
@@ -273,10 +274,8 @@ final class AutoUpdateManager {
         for line in lines {
             if line.hasPrefix("## ") {
                 if capturing { break }
-                let heading = line.dropFirst(3).trimmingCharacters(in: .whitespaces)
-                if heading == version {
-                    capturing = true
-                }
+                let headingVersion = line.dropFirst(3).split(maxSplits: 1, whereSeparator: \.isWhitespace).first
+                capturing = headingVersion == Substring(version)
             } else if capturing {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 if !trimmed.isEmpty {
