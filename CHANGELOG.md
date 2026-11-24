@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.80
+
+- Sort dashboard apps by name, status or date in either direction and remember
+  the selection. Dates use changes observed by Blitz, falling back to the newest
+  version draft's creation date; unknown dates remain last.
+- Label each dashboard entry with its known platforms, distinguishing macOS,
+  iOS and shared Store listings without combining separate app records.
+- Keep dashboard rows in place while refreshing. Show names, platforms and status
+  in a compact grid with direct controls for sorting and reversing the order.
+- Add a color dot after each dashboard status and a size slider for app icons
+  and text. Icons start at 56 points and the dashboard remembers the chosen size.
+- Group dashboard apps by platform with a shared sort order inside each section.
+  Apps that support both iOS and macOS appear once in their own section.
+
 ## 1.0.79
 
 - Update the shared ASC app/CLI helper from 6.6.1 to 7.2.0, retaining the Blitz

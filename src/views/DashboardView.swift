@@ -8,6 +8,12 @@ struct DashboardView: View {
     @State private var showsHiddenApps = false
     @State private var lastHiddenApp: DashboardAppRow?
     @State private var visibilityError: String?
+    @AppStorage("dashboard.sortField") private var sortField = DashboardAppSortField.name
+    @AppStorage("dashboard.sortDirection") private var sortDirection = DashboardAppSortDirection.ascending
+    @AppStorage("dashboard.entryIconSize") private var storedIconSize = DashboardEntrySize.defaultIconSize
+    @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
+
+    private var entrySize: DashboardEntrySize { DashboardEntrySize(storedIconSize) }
 
     private var projects: [Project] { appState.projectManager.projects }
 
@@ -49,37 +55,56 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Top Navbar
+    // MARK: - Dashboard header
 
     private var topNavbar: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 dashboardTitle
-                searchField.frame(width: 220)
-                Spacer(minLength: 8)
+                Spacer(minLength: 12)
+                searchField.frame(width: 180)
+                sortControl
                 dashboardTools
             }
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    dashboardTitle
-                    Spacer(minLength: 8)
-                    dashboardTools
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        dashboardTitle
+                        Spacer(minLength: 0)
+                        searchField.frame(width: 128)
+                        dashboardTools
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            dashboardTitle
+                            Spacer(minLength: 0)
+                            dashboardTools
+                        }
+                        searchField
+                    }
                 }
-                searchField
+                sortControl
             }
         }
     }
 
     private var dashboardTitle: some View {
-        Label(L10n.tr("Meine Apps"), systemImage: "folder")
+        Text(showsHiddenApps ? L10n.tr("Ausgeblendete Apps") : L10n.tr("Meine Apps"))
             .font(BlitzLayout.pageTitle)
+            .foregroundStyle(.primary)
             .fixedSize()
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var sortControl: some View {
+        DashboardSortControl(field: $sortField, direction: $sortDirection)
     }
 
     private var searchField: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             TextField(L10n.tr("Apps suchen"), text: $searchText)
                 .textFieldStyle(.plain)
                 .accessibilityLabel(L10n.tr("Apps nach Name oder Bundle-ID suchen"))
@@ -93,46 +118,44 @@ struct DashboardView: View {
                 .help(L10n.tr("Suche leeren"))
             }
         }
-        .font(.system(size: 12))
+        .font(BlitzLayout.toolbarFont)
         .padding(.horizontal, 8)
-        .frame(height: 28)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
-        .overlay {
-            RoundedRectangle(cornerRadius: 7)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
+        .frame(height: 26)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var dashboardTools: some View {
-        HStack(spacing: 12) {
-            Button {
-                showsHiddenApps.toggle()
-            } label: {
-                Label(showsHiddenApps ? L10n.tr("Zurück zu meinen Apps") : L10n.tr("Ausgeblendete Apps (\(hiddenAppCount))"),
-                      systemImage: showsHiddenApps ? "square.grid.2x2" : "eye.slash")
+        HStack(spacing: 4) {
+            Button { showsHiddenApps.toggle() } label: {
+                Image(systemName: showsHiddenApps ? "arrow.uturn.backward" : "eye.slash")
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
-            .fixedSize()
-            .help(L10n.tr("Ausgeblendete Apps anzeigen und wieder einblenden"))
+            .accessibilityLabel(hiddenAppsTitle)
+            .help(hiddenAppsTitle)
 
-            Button {
-                forceRefreshApps()
-            } label: {
-                if isRefreshingApps {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .medium))
+            Button { forceRefreshApps() } label: {
+                ZStack {
+                    if isRefreshingApps {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
                 }
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
             .disabled(isRefreshingApps)
-            .help(refreshButtonHelpText)
-            .frame(width: 24, height: 28)
+            .accessibilityLabel(L10n.tr("Apps aktualisieren"))
+            .accessibilityValue(isRefreshingApps ? summaryLoadingStatusText : "")
+            .help(isRefreshingApps ? summaryLoadingStatusText : refreshButtonHelpText)
         }
+        .buttonStyle(.borderless)
         .fixedSize()
+    }
+
+    private var hiddenAppsTitle: String {
+        showsHiddenApps ? L10n.tr("Zurück zu meinen Apps") : L10n.tr("Ausgeblendete Apps (\(hiddenAppCount))")
     }
 
     private var appRows: [DashboardAppRow] { dashboardSummary.rows(linking: projects) }
@@ -145,9 +168,14 @@ struct DashboardView: View {
     }
     private var hiddenAppCount: Int { appRows.filter { visibility.isHidden($0) }.count }
     private var displayedRows: [DashboardAppRow] {
-        appRows.filter { visibility.isHidden($0) == showsHiddenApps && $0.matches(searchText: searchText) }
+        DashboardAppOrdering.sorted(
+            appRows.filter { visibility.isHidden($0) == showsHiddenApps && $0.matches(searchText: searchText) },
+            by: sortField,
+            direction: sortDirection,
+            unavailableStatusBundleIDs: dashboardSummary.unavailableStatusBundleIDs
+        )
     }
-    private var showsBlockingSummarySpinner: Bool {
+    private var isLoadingInitialSummary: Bool {
         dashboardSummary.isLoadingSummary && !dashboardSummary.hasLoadedSummary
     }
     private var summaryLoadingStatusText: String {
@@ -162,78 +190,62 @@ struct DashboardView: View {
     }
 
     private var myAppsContent: some View {
-        ScrollView {
+        let sections = DashboardAppOrdering.platformSections(for: displayedRows)
+        return ScrollView {
             VStack(alignment: .leading, spacing: BlitzLayout.sectionSpacing) {
-                if dashboardSummary.loadIssue != nil || dashboardSummary.isLoadingSummary {
-                    dashboardRefreshStatus
-                }
-                // Compact counts describe visible apps, independent of the search filter.
-                if !showsHiddenApps {
-                    BlitzFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
-                        statCard(
-                            title: L10n.tr("Im App Store"),
-                            value: statValue(visibleSummary.liveCount),
-                            color: .green,
-                            icon: "checkmark.seal.fill"
-                        )
-                        statCard(
-                            title: L10n.tr("In Prüfung"),
-                            value: statValue(visibleSummary.pendingCount),
-                            color: .orange,
-                            icon: "clock.fill"
-                        )
-                        statCard(
-                            title: L10n.tr("Abgelehnt"),
-                            value: statValue(visibleSummary.rejectedCount),
-                            color: .red,
-                            icon: "xmark.seal.fill"
-                        )
-                    }
-                }
-
                 if showsHiddenApps {
                     Text(L10n.tr("Ausgeblendete Apps bleiben in App Store Connect und auf dem Mac erhalten. Du kannst sie hier wieder einblenden."))
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                } else {
+                    Text(summaryLine)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
 
-                if !displayedRows.isEmpty {
-                    // App grid — ASC apps first, local-only projects beneath
+                if !sections.isEmpty {
                     LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 140, maximum: 180), spacing: 12, alignment: .center)],
-                        spacing: 16
+                        columns: [GridItem(.adaptive(minimum: entrySize.minimumColumnWidth), spacing: 20, alignment: .leading)],
+                        alignment: .leading, spacing: 6
                     ) {
-                        ForEach(displayedRows) { row in
-                            appCard(row: row)
+                        ForEach(sections) { section in
+                            Section {
+                                ForEach(section.rows) { row in appCard(row: row) }
+                            } header: {
+                                HStack(spacing: 10) {
+                                    Text(section.id.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityAddTraits(.isHeader)
+                                    VStack { Divider() }
+                                        .accessibilityHidden(true)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.top, section.id == sections.first?.id ? 0 : 8)
+                            }
                         }
                     }
-                } else if !showsBlockingSummarySpinner {
-                    emptyStateView
-                }
-
-                Spacer(minLength: 0)
-            }
-            .blitzPagePadding()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DottedCanvasBackground(dotColor: .primary.opacity(0.12)))
-        .overlay {
-            if showsBlockingSummarySpinner {
-                VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.large)
+                } else if isLoadingInitialSummary {
                     Text(summaryLoadingStatusText)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
+                } else if dashboardSummary.loadIssue == nil || dashboardSummary.hasLoadedSummary || !appRows.isEmpty {
+                    emptyStateView
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 24)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .blitzPagePadding()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
+                if let issue = dashboardSummary.loadIssue {
+                    dashboardRefreshStatus(issue)
+                }
                 if let lastHiddenApp {
                     HStack(alignment: .top, spacing: 8) {
                         Text(L10n.tr("\(lastHiddenApp.name) wurde im Dashboard ausgeblendet."))
@@ -248,44 +260,61 @@ struct DashboardView: View {
                         .help(L10n.tr("Schließen"))
                     }
                 }
-                HStack(spacing: 12) {
-                    Spacer(minLength: 0)
-                    Button {
-                        appState.showNewProjectSheet = true
-                    } label: {
-                        Label(L10n.tr("Neues Projekt"), systemImage: "plus")
-                            .font(.body.weight(.medium))
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        entrySizeControl
+                        Spacer(minLength: 0)
+                        projectActions
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-
-                    Button {
-                        appState.showImportProjectSheet = true
-                    } label: {
-                        Label(L10n.tr("Projekt importieren"), systemImage: "square.and.arrow.down")
-                            .font(.body.weight(.medium))
+                    VStack(alignment: .leading, spacing: 8) {
+                        entrySizeControl
+                        projectActions.frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
                 }
             }
             .blitzToolbar()
+            .background(Color(nsColor: .windowBackgroundColor))
         }
         .task(id: summaryHydrationKey) {
             await hydrateSummary()
         }
     }
 
-    private var dashboardRefreshStatus: some View {
+    private var entrySizeControl: some View {
+        HStack(spacing: 8) {
+            Text(L10n.tr("Größe"))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Slider(value: Binding(get: { entrySize.icon }, set: { storedIconSize = $0 }),
+                   in: DashboardEntrySize.iconRange, step: DashboardEntrySize.step) {
+                Text(L10n.tr("Größe der App-Einträge"))
+            }
+            .labelsHidden()
+            .frame(width: 88)
+            .accessibilityValue(L10n.tr("\(Int(entrySize.icon)) Punkte"))
+        }
+        .fixedSize()
+        .help(L10n.tr("App-Icons und Schrift gemeinsam skalieren"))
+    }
+
+    private var projectActions: some View {
+        HStack(spacing: 12) {
+            Button(L10n.tr("Neues Projekt")) { appState.showNewProjectSheet = true }
+                .buttonStyle(.borderedProminent)
+            Button(L10n.tr("Projekt importieren")) { appState.showImportProjectSheet = true }
+                .buttonStyle(.bordered)
+        }
+        .controlSize(.regular)
+        .fixedSize()
+    }
+
+    private func dashboardRefreshStatus(_ issue: DashboardLoadIssue) -> some View {
         DashboardRefreshStatusView(
-            issueTitle: dashboardSummary.loadIssue?.title,
-            issueMessage: dashboardSummary.loadIssue?.message,
-            needsSettings: dashboardSummary.loadIssue?.needsSettings == true,
+            issueTitle: issue.title,
+            issueMessage: issue.message,
+            needsSettings: issue.needsSettings,
             isShowingSavedData: dashboardSummary.isShowingSavedData,
-            hasLoadedSummary: dashboardSummary.hasLoadedSummary,
             isLoading: dashboardSummary.isLoadingSummary,
-            loadingText: summaryLoadingStatusText,
-            refreshedAt: dashboardSummary.refreshedAt,
             retry: { forceRefreshApps() },
             openSettings: { appState.activeTab = .settings }
         )
@@ -312,24 +341,9 @@ struct DashboardView: View {
         .padding(.vertical, 48)
     }
 
-    // MARK: - Stat Card
-
-    private func statCard(title: String, value: String, color: Color, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-            Text(title)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-        }
-        .font(.caption)
-        .fixedSize(horizontal: true, vertical: false)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .combine)
+    private var summaryLine: String {
+        let counts = visibleSummary
+        return L10n.tr("\(statValue(counts.liveCount)) im App Store · \(statValue(counts.pendingCount)) in Prüfung · \(statValue(counts.rejectedCount)) abgelehnt")
     }
 
     // MARK: - App Card
@@ -341,14 +355,30 @@ struct DashboardView: View {
         }) ?? (row.linkedProjectId != nil && row.linkedProjectId == appState.activeProjectId)
         let project = row.linkedProjectId.flatMap { id in projects.first(where: { $0.id == id }) }
 
+        let status = DashboardAppOrdering.status(for: row, unavailableStatusBundleIDs: dashboardSummary.unavailableStatusBundleIDs)
+        let statuses = row.dashboardStatuses(primary: status)
+        let caption = statuses.map(\.title).joined(separator: " · ")
+        let platform = DashboardPlatformPresentation.title(row.platformCodes)
+        let metadata = statuses.reduce(Text(verbatim: platform).foregroundColor(.secondary)) { text, status in
+            let separator = Text(verbatim: " · ").foregroundColor(.secondary)
+            return Text("\(text)\(separator)\(status.markedTitle)")
+        }
+        let platformHelp = row.dashboardPlatformHelp(includeStatuses: status != .unknown)
+        let details = [platformHelp, caption, sortField == .modified ? row.dashboardDateHelp : nil]
+            .compactMap { $0 }.joined(separator: "\n")
+
         Button { selectRow(row) } label: {
-            appCardContent(row: row, project: project, isSelected: isSelected)
-                .frame(maxWidth: .infinity)
-                .padding(8)
+            appCardContent(row: row, project: project, metadata: metadata)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 7)
+                .background(isSelected ? Color.accentColor.opacity(0.09) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 7))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr("\(row.name) öffnen"))
+        .accessibilityValue(details)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .contextMenu {
             if let links = row.projectLinks, links.count > 1 {
                 ForEach(links) { link in
@@ -360,62 +390,49 @@ struct DashboardView: View {
             }
             visibilityAction(for: row)
         }
-        .help([row.name, row.bundleId, statusCaption(for: row)].compactMap { $0 }.joined(separator: "\n"))
+        .help([row.name, row.bundleId, platformHelp, caption, row.dashboardDateHelp]
+            .compactMap { $0 }.joined(separator: "\n"))
     }
 
-    private func appCardContent(row: DashboardAppRow, project: Project?, isSelected: Bool) -> some View {
-        VStack(spacing: 6) {
+    private func appCardContent(row: DashboardAppRow, project: Project?, metadata: Text) -> some View {
+        HStack(alignment: .center, spacing: 11) {
             Group {
                 if let project {
-                    ProjectAppIconView(project: project, size: 56, cornerRadius: 12) {
+                    ProjectAppIconView(project: project, size: entrySize.icon, cornerRadius: entrySize.cornerRadius) {
                         ascIcon(for: row)
                     }
                 } else {
                     ascIcon(for: row)
                 }
             }
-            .padding(3)
-            .overlay(
-                RoundedRectangle(cornerRadius: 15)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-            )
-            .overlay(alignment: .bottomTrailing) {
-                if row.status != nil || (row.bundleId.map { dashboardSummary.unavailableStatusBundleIDs.contains($0) } ?? false) {
-                    statusIcon(for: row)
-                        .font(.system(size: 12))
-                        .padding(2)
-                        .background(.background, in: Circle())
-                        .offset(x: 2, y: 2)
+            .frame(width: entrySize.icon, height: entrySize.icon)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.name)
+                    .font(.system(size: entrySize.nameSize * textScale, weight: .medium))
+                    .lineLimit(2)
+
+                metadata
+                    .font(.system(size: entrySize.captionSize * textScale))
+
+                if sortField == .modified {
+                    DashboardDateCaption(row: row, font: .system(size: (entrySize.captionSize - 1) * textScale))
                 }
             }
-
-            Text(row.name)
-                .font(.callout.weight(.medium))
-                .lineLimit(2, reservesSpace: true)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Text(statusCaption(for: row) ?? " ")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(statusCaption(for: row) == nil)
-            if let platforms = row.status?.localizedPlatformSummaries, platforms.count > 1 {
-                ForEach(platforms.keys.sorted(), id: \.self) { platform in
-                    Text("\(platform == "MAC_OS" ? "macOS" : platform == "IOS" ? "iOS" : platform) · \(platforms[platform] ?? "")")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(minHeight: 112, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
     }
 
     @ViewBuilder
     private func ascIcon(for row: DashboardAppRow) -> some View {
         if let iconURL = row.iconURL {
-            DashboardRemoteIconView(url: iconURL, refreshRevision: dashboardSummary.iconRefreshRevision) {
+            DashboardRemoteIconView(url: iconURL, refreshRevision: dashboardSummary.iconRefreshRevision,
+                                    cornerRadius: entrySize.cornerRadius) {
                 fallbackIcon(name: row.name)
             }
-            .frame(width: 56, height: 56)
         } else {
             fallbackIcon(name: row.name)
         }
@@ -424,12 +441,11 @@ struct DashboardView: View {
     private func fallbackIcon(name: String) -> some View {
         let first = String(name.prefix(1)).uppercased()
         return ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.accentColor.opacity(0.15))
-                .frame(width: 56, height: 56)
+            RoundedRectangle(cornerRadius: entrySize.cornerRadius)
+                .fill(Color.secondary.opacity(0.10))
             Text(first.isEmpty ? "?" : first)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.7))
+                .font(.system(size: entrySize.icon * 0.45, weight: .medium))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -529,36 +545,4 @@ struct DashboardView: View {
         dashboardSummary.hasLoadedSummary ? "\(count)" : "—"
     }
 
-    private func statusCaption(for row: DashboardAppRow) -> String? {
-        if row.source == .localOnly { return L10n.tr("Nur lokal") }
-        if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) { return nil }
-        return row.status?.isUnavailableOnStore == true ? L10n.tr("Nicht im App Store") : nil
-    }
-
-    @ViewBuilder
-    private func statusIcon(for row: DashboardAppRow) -> some View {
-        if let bundle = row.bundleId, dashboardSummary.unavailableStatusBundleIDs.contains(bundle) {
-            Image(systemName: "questionmark.circle.fill")
-                .foregroundStyle(.orange)
-                .help(L10n.tr("Status konnte nicht aktualisiert werden"))
-        } else if let status = row.status {
-            if status.isRejected {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.red)
-            } else if status.isPendingReview {
-                Image(systemName: "clock.fill")
-                    .foregroundStyle(.orange)
-            } else if status.isLiveOnStore {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            } else if status.isUnavailableOnStore {
-                Image(systemName: "minus.circle.fill")
-                    .foregroundStyle(.secondary)
-                    .help(L10n.tr("In keinem App-Store-Gebiet verfügbar"))
-            } else {
-                Image(systemName: "pencil.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
 }

@@ -2,6 +2,16 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.80 build 99 — dashboard platform groups and sorting
+
+The Apple Silicon DMG packages the dashboard changes tested in builds 95–98.
+The release passed 714 Swift tests. The dashboard was also checked in German
+and English, at narrow and wide window sizes, in both light and dark mode.
+Apple accepted notarization submission `afd629ee-f0ba-4868-9624-989f0cc7b2be`.
+Gatekeeper accepted both the stapled DMG and its bundled application.
+The final DMG SHA-256 is
+`a315cca9a83a70077344276acc1e80ebfadcaafd2be9b73ab045cd5323cc2714`.
+
 ## 1.0.79 build 94 — regular release with ASC 7.2.0
 
 The reviewed ASC update in PR #3 was explicitly approved and merged. This release

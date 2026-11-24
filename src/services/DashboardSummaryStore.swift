@@ -27,13 +27,24 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
     let status: ASCDashboardProjectStatus?
     let iconURL: URL?
     var projectLinks: [DashboardProjectLink]? = nil
+    /// Store platforms come only from the complete version history. Local rows
+    /// use their explicit target; nil is an older cache or missing evidence.
+    var platformCodes: [String]? = nil
+    var latestVersionCreatedAt: Date? = nil
+    /// When Blitz observed a semantic change, not the time of a routine fetch.
+    var lastChangedAt: Date? = nil
+
+    var sortDate: Date? { lastChangedAt ?? latestVersionCreatedAt }
 
     static func asc(
         app: ASCApp,
         status: ASCDashboardProjectStatus?,
         linkedProjectId: String?,
         iconURL: URL?,
-        projectLinks: [DashboardProjectLink]? = nil
+        projectLinks: [DashboardProjectLink]? = nil,
+        platformCodes: [String]? = nil,
+        latestVersionCreatedAt: Date? = nil,
+        lastChangedAt: Date? = nil
     ) -> DashboardAppRow {
         DashboardAppRow(
             id: app.bundleId,
@@ -44,12 +55,19 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
             linkedProjectId: linkedProjectId,
             status: status,
             iconURL: iconURL,
-            projectLinks: projectLinks
+            projectLinks: projectLinks,
+            platformCodes: platformCodes,
+            latestVersionCreatedAt: latestVersionCreatedAt,
+            lastChangedAt: lastChangedAt
         )
     }
 
     static func localOnly(project: Project, target: ProjectReleaseTarget? = nil) -> DashboardAppRow {
         let target = target ?? project.selectedReleaseTarget
+        // Legacy metadata resolves to iOS for execution. That compatibility
+        // default is not evidence that the project actually targets iOS.
+        let explicitPlatform = project.metadata.releaseTargets?.first { $0.id == target?.id }?.platform
+            ?? project.metadata.platform
         return DashboardAppRow(
             id: "local:\(project.id)" + (project.releaseTargets.count > 1 ? ":\(target?.id ?? "")" : ""),
             bundleId: target?.bundleIdentifier ?? project.metadata.bundleIdentifier,
@@ -59,8 +77,74 @@ struct DashboardAppRow: Codable, Identifiable, Sendable, Equatable {
             linkedProjectId: project.id,
             status: nil,
             iconURL: nil,
-            projectLinks: target.map { [DashboardProjectLink(projectId: project.id, targetId: $0.id, platform: $0.platform)] }
+            projectLinks: target.map { [DashboardProjectLink(projectId: project.id, targetId: $0.id, platform: $0.platform)] },
+            platformCodes: explicitPlatform.map { [$0.ascPlatformValue] }
         )
+    }
+}
+
+/// Stable, language-independent fields used to compare successful responses.
+/// Icons and query timestamps deliberately do not participate.
+private struct DashboardVersionEvidence: Codable, Sendable, Equatable {
+    let id: String
+    let version: String
+    let state: String
+    let platform: String
+    let createdDate: String?
+
+    static func capture(_ versions: [ASCAppStoreVersion]) -> [DashboardVersionEvidence] {
+        versions.map { version in
+            let platform = ASCReleaseStatus.normalize(version.attributes.platform)
+            return DashboardVersionEvidence(id: version.id, version: version.attributes.versionString,
+                state: ASCReleaseStatus.normalize(version.attributes.effectiveState),
+                platform: platform.isEmpty ? "UNKNOWN" : platform,
+                createdDate: version.attributes.createdDate)
+        }.sorted {
+            // API page/order changes must not be counted as app changes.
+            [$0.id, $0.version, $0.state, $0.platform, $0.createdDate ?? ""]
+                .lexicographicallyPrecedes([$1.id, $1.version, $1.state, $1.platform, $1.createdDate ?? ""])
+        }
+    }
+
+    var parsedCreatedDate: Date? {
+        guard let value = createdDate?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let result = formatter.date(from: value) { return result }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
+    }
+}
+
+private struct DashboardAppObservation: Codable {
+    var name: String
+    var versions: [DashboardVersionEvidence]?
+    var status: ASCDashboardProjectStatus?
+    var lastChangedAt: Date?
+    var latestVersionCreatedAt: Date?
+
+    var platformCodes: [String]? {
+        versions.map { Array(Set($0.map(\.platform))).sorted() }
+    }
+
+    mutating func observe(name: String, versions: [DashboardVersionEvidence]?,
+                          status: ASCDashboardProjectStatus?, at date: Date) {
+        var changed = self.name != name
+        self.name = name
+        if let versions {
+            if let previous = self.versions, previous != versions { changed = true }
+            self.versions = versions
+            // Parse timestamps once per successful refresh, not whenever SwiftUI
+            // rebuilds or sorts the dashboard rows.
+            latestVersionCreatedAt = versions.compactMap(\.parsedCreatedDate).max()
+        }
+        if let status {
+            if let previous = self.status, previous != status { changed = true }
+            self.status = status
+        }
+        // A missing baseline or a failed read is not a change. Keep successful
+        // baselines through failures so recovery itself cannot create activity.
+        if changed { lastChangedAt = date }
     }
 }
 
@@ -81,6 +165,7 @@ final class DashboardSummaryStore {
         let appRows: [DashboardAppRow]
         let refreshedAt: Date?
         let unavailableStatusBundleIDs: Set<String>?
+        let observations: [String: DashboardAppObservation]?
     }
 
     var summary = ASCDashboardSummary.empty
@@ -99,15 +184,19 @@ final class DashboardSummaryStore {
     private(set) var unavailableStatusBundleIDs: Set<String> = []
     private var revision = 0
     private var loadedAccountKey: String?
+    private var observations: [String: DashboardAppObservation] = [:]
     private let cacheURL: URL
     private let accountKeyOverride: String?
+    private let now: () -> Date
 
     init(
         cacheURL: URL? = nil,
-        accountKeyOverride: String? = nil
+        accountKeyOverride: String? = nil,
+        now: @escaping () -> Date = Date.init
     ) {
         self.cacheURL = cacheURL ?? Self.persistentCacheURL()
         self.accountKeyOverride = accountKeyOverride
+        self.now = now
         restorePersistentCacheIfPossible()
     }
 
@@ -159,7 +248,7 @@ final class DashboardSummaryStore {
         self.appRows = appRows
         hasLoadedSummary = true
         cacheKey = key
-        refreshedAt = Date()
+        refreshedAt = now()
         loadedAccountKey = accountKey
         isLoadingSummary = false
         loadingSummaryStatusText = nil
@@ -175,9 +264,10 @@ final class DashboardSummaryStore {
         projectStatuses = [:]
         ascApps = []
         appRows = []
+        observations = [:]
         hasLoadedSummary = true
         cacheKey = key
-        refreshedAt = Date()
+        refreshedAt = now()
         loadedAccountKey = accountKey
         isLoadingSummary = false
         loadingSummaryStatusText = nil
@@ -258,7 +348,8 @@ final class DashboardSummaryStore {
 
         let concurrencyLimit = 6
         var perAppStatuses: [String: ASCDashboardProjectStatus] = [:]
-        await withTaskGroup(of: (String, ASCDashboardProjectStatus?, URL?).self) { group in
+        var perAppVersions: [String: [DashboardVersionEvidence]] = [:]
+        await withTaskGroup(of: (String, ASCDashboardProjectStatus?, URL?, [DashboardVersionEvidence]?).self) { group in
             var iterator = allAscApps.makeIterator()
 
             func enqueueNext() {
@@ -267,9 +358,11 @@ final class DashboardSummaryStore {
                 group.addTask {
                     var status: ASCDashboardProjectStatus?
                     var iconURL: URL?
+                    var versionEvidence: [DashboardVersionEvidence]?
 
                     do {
                         let versions = try await service.fetchAppStoreVersions(appId: next.id)
+                        versionEvidence = DashboardVersionEvidence.capture(versions)
                         let versionStatus = ASCDashboardProjectStatus(versions: versions)
                         let hasPublishedVersion = versions.contains {
                             ASCReleaseStatus.publishedStates.contains(ASCReleaseStatus.normalize($0.attributes.effectiveState))
@@ -291,7 +384,7 @@ final class DashboardSummaryStore {
                         iconURL = nil
                     }
 
-                    return (bundleId, status, iconURL)
+                    return (bundleId, status, iconURL, versionEvidence)
                 }
             }
 
@@ -307,6 +400,9 @@ final class DashboardSummaryStore {
                 if let iconURL = result.2 {
                     nextIconURLs[result.0] = iconURL
                 }
+                if let versions = result.3 {
+                    perAppVersions[result.0] = versions
+                }
                 completedCount += 1
                 loadingSummaryStatusText = L10n.tr("Apps werden geladen: \(completedCount)/\(allAscApps.count)…")
                 if Task.isCancelled { break }
@@ -321,12 +417,19 @@ final class DashboardSummaryStore {
         }
 
         let unavailable = Set(allAscApps.map(\.bundleId)).subtracting(perAppStatuses.keys)
+        let observedAt = now()
+        var nextObservations: [String: DashboardAppObservation] = [:]
         for app in allAscApps {
             if let status = perAppStatuses[app.bundleId] ?? projectStatuses[app.bundleId] {
                 nextSummary.include(status)
                 nextStatuses[app.bundleId] = status
             }
+            var observation = observations[app.id] ?? DashboardAppObservation(name: app.name)
+            observation.observe(name: app.name, versions: perAppVersions[app.bundleId],
+                                status: perAppStatuses[app.bundleId], at: observedAt)
+            nextObservations[app.id] = observation
         }
+        observations = nextObservations
 
         store(
             summary: nextSummary,
@@ -353,6 +456,7 @@ final class DashboardSummaryStore {
         projectStatuses = [:]
         ascApps = []
         appRows = []
+        observations = [:]
         hasLoadedSummary = false
         refreshedAt = nil
         loadIssue = nil
@@ -377,6 +481,7 @@ final class DashboardSummaryStore {
         summary = verifiedSchema ? snapshot.summary : .empty
         projectStatuses = verifiedSchema ? snapshot.projectStatuses : [:]
         ascApps = snapshot.ascApps ?? restoredASCApps(from: snapshot.appRows)
+        observations = verifiedSchema ? snapshot.observations ?? [:] : [:]
         // Preserve the warm app/icon list, but never revive pre-availability green badges.
         appRows = verifiedSchema ? snapshot.appRows : snapshot.appRows.map { row in
             DashboardAppRow(id: row.id, bundleId: row.bundleId, name: row.name,
@@ -402,7 +507,8 @@ final class DashboardSummaryStore {
             ascApps: ascApps,
             appRows: appRows,
             refreshedAt: refreshedAt,
-            unavailableStatusBundleIDs: unavailableStatusBundleIDs
+            unavailableStatusBundleIDs: unavailableStatusBundleIDs,
+            observations: observations
         )
 
         do {
@@ -446,12 +552,17 @@ final class DashboardSummaryStore {
                 }.map { DashboardProjectLink(projectId: project.id, targetId: $0.id, platform: $0.platform) }
             }
             linkedTargetIds.formUnion(links.map(\.id))
+            let observation = observations[app.id]
+            let cachedRow = appRows.first { $0.source == .asc && $0.ascAppId == app.id }
             return DashboardAppRow.asc(
                 app: app,
                 status: projectStatuses[app.bundleId],
                 linkedProjectId: links.first?.projectId,
                 iconURL: iconURLs[app.bundleId],
-                projectLinks: links
+                projectLinks: links,
+                platformCodes: observation?.versions != nil ? observation?.platformCodes : cachedRow?.platformCodes,
+                latestVersionCreatedAt: observation?.versions != nil ? observation?.latestVersionCreatedAt : cachedRow?.latestVersionCreatedAt,
+                lastChangedAt: observation?.lastChangedAt ?? cachedRow?.lastChangedAt
             )
         }
 

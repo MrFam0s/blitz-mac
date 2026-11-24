@@ -88,6 +88,7 @@ final class DashboardRemoteIconLoader {
 struct DashboardRemoteIconView<Placeholder: View>: View {
     let url: URL
     let refreshRevision: Int
+    let cornerRadius: CGFloat
     @ViewBuilder var placeholder: () -> Placeholder
     @State private var loader = DashboardRemoteIconLoader()
 
@@ -102,13 +103,7 @@ struct DashboardRemoteIconView<Placeholder: View>: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else if loader.isLoading {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.accentColor.opacity(0.08))
-                    ProgressView().controlSize(.small)
-                }
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             } else {
                 placeholder()
             }

@@ -42,3 +42,17 @@ import Testing
         #expect(restored.platformSummaries?["IOS"] == legacy)
     }
 }
+
+@Test func dashboardSortAndPlatformLabelsFollowInterfaceLanguage() {
+    L10n.$overrideLanguage.withValue("de") {
+        #expect(DashboardAppSortField.modified.title == "Änderungsdatum")
+        #expect(DashboardPlatformPresentation.title(nil) == "Plattform unbekannt")
+        #expect(DashboardPlatformPresentation.title(["IOS", "MAC_OS", "IOS"]) == "macOS + iOS")
+    }
+    L10n.$overrideLanguage.withValue("en") {
+        #expect(DashboardAppSortField.modified.title == "Date modified")
+        #expect(DashboardPlatformPresentation.title([]) == "Unknown platform")
+        #expect(DashboardPlatformPresentation.title(["IOS", "UNKNOWN"]) == "iOS + Unknown")
+        #expect(DashboardPlatformPresentation.title(["FUTURE_OS"]) == "FUTURE_OS")
+    }
+}
