@@ -2,6 +2,20 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.81 build 101 — project simulator instructions on import
+
+Blitz installs the project simulator skill in both Codex and Claude Code skill
+directories and links it from the project's instructions. Import from the UI
+or the macOS MCP completes the local setup before reporting success. Reimport
+preserves project-authored instructions. Startup also updates registered projects.
+
+All 726 Swift tests passed, including immediate availability after import and
+repeat imports. The ASC 7.2.0 helper passed its Go, protocol and direct CLI checks.
+The iPhone MCP passed 22 Node and seven Python tests. The package and installer
+checks passed with the pinned Node and npm versions. Apple accepted the notarization
+and Gatekeeper accepted the stapled Apple Silicon DMG and its app.
+The DMG SHA-256 is `e14dfa1addcd8fcf23ca59f0651f57d2e07b4c4501078f3ff82418b0f73e21e9`.
+
 ## 1.0.80 build 100 — simulator controls and iPhone Duo
 
 Projects can select an installed iPhone or iPad simulator. Duo previews, touch

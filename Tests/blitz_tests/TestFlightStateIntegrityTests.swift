@@ -72,12 +72,12 @@ import Testing
     | ipaPath | string | no | Path to IPA (uses latest app_store_build output if omitted) |
     Custom release notes remain here.
     """
-    let updated = ProjectAgentConfigService.updatedLegacyTestFlightExamples(in: original)
+    let updated = ProjectAgentConfigService.updatedLegacyGuide(in: original)
     #expect(updated.contains("--app APP_ID --email EMAIL --group GROUP_ID"))
     #expect(updated.contains("| ipaPath | string | yes |"))
     #expect(updated.contains("User workflow: always use our staging testers first."))
     #expect(updated.contains("Custom release notes remain here."))
-    #expect(ProjectAgentConfigService.updatedLegacyTestFlightExamples(in: updated) == updated)
+    #expect(ProjectAgentConfigService.updatedLegacyGuide(in: updated) == updated)
     let custom = "User note: `asc testflight add-tester --email ...` failed last year."
-    #expect(ProjectAgentConfigService.updatedLegacyTestFlightExamples(in: custom) == custom)
+    #expect(ProjectAgentConfigService.updatedLegacyGuide(in: custom) == custom)
 }

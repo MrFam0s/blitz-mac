@@ -72,11 +72,9 @@ If `asc` is not on PATH, add it: `export PATH="$HOME/.blitz/bin:$PATH"`
 
 ## Testing workflow
 
-After making code changes:
-1. Wait briefly for hot reload / rebuild
-2. `blitz-iphone` `describe_screen` — verify the UI updated as expected
-3. `blitz-iphone` `device_action` — interact (tap buttons, type text, swipe)
-4. `blitz-iphone` `describe_screen` — confirm the result
+For iOS and iPadOS tests, UI checks and screenshots, use the project's
+`blitz-project-simulator` skill. Pin the same project-owned simulator UDID
+in the test runner and each iPhone MCP call. Run native macOS targets on the Mac.
 
 ### TestFlight identity and distribution
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.81 (build 101)
+
+- Importing or creating an app installs the project simulator skill for Codex
+  and Claude Code. Existing registered projects receive it when Blitz starts.
+- App chats use the project's simulator for iOS and iPadOS tests, UI interaction
+  and full-resolution screenshots. Native macOS targets use the Mac.
+
 ## 1.0.80 (build 100)
 
 - Use a project’s selected iPhone or iPad simulator in Blitz. On iPhone Duo,

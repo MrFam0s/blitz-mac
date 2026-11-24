@@ -5,31 +5,39 @@ import Foundation
 /// A small, owned prefix leaves the project's authored instructions intact.
 /// File-descriptor-relative access also keeps registered project aliases safe.
 enum BlitzWorkflowInstructions {
-    static let beginMarker = "<!-- BEGIN BLITZ NEO WORKFLOW ROUTING -->"
-    static let endMarker = "<!-- END BLITZ NEO WORKFLOW ROUTING -->"
+    enum Route: String {
+        case release = "BLITZ NEO WORKFLOW ROUTING"
+        case simulator = "BLITZ NEO SIMULATOR ROUTING"
+
+        var beginMarker: String { "<!-- BEGIN \(rawValue) -->" }
+        var endMarker: String { "<!-- END \(rawValue) -->" }
+    }
     private static let installLock = NSLock()
 
-    static func bundledBody() throws -> String {
-        guard let url = Bundle.appResources.url(forResource: "blitz-release-instructions", withExtension: "md") else {
+    static func bundledBody(route: Route = .release) throws -> String {
+        let resource = route == .release ? "blitz-release-instructions" : "blitz-simulator-instructions"
+        guard let url = Bundle.appResources.url(forResource: resource, withExtension: "md") else {
             throw failure("The bundled workflow routing instructions are unavailable. Reinstall Blitz Neo before continuing.")
         }
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    static func updatedDocument(_ document: String, body: String) throws -> String {
+    static func updatedDocument(_ document: String, body: String, route: Route = .release) throws -> String {
         let content = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty, !content.contains("BLITZ NEO WORKFLOW ROUTING") else {
+        guard !content.isEmpty, !content.contains(Route.release.rawValue), !content.contains(Route.simulator.rawValue) else {
             throw failure("The bundled workflow routing instructions are empty or contain reserved markers.")
         }
-        let block = "\(beginMarker)\n\(content)\n\(endMarker)"
-        let beginCount = document.components(separatedBy: "<!-- BEGIN BLITZ NEO WORKFLOW ROUTING").count - 1
-        let endCount = document.components(separatedBy: "<!-- END BLITZ NEO WORKFLOW ROUTING").count - 1
+        let block = "\(route.beginMarker)\n\(content)\n\(route.endMarker)"
+        let beginCount = document.components(separatedBy: "<!-- BEGIN \(route.rawValue)").count - 1
+        let endCount = document.components(separatedBy: "<!-- END \(route.rawValue)").count - 1
         if beginCount == 0 && endCount == 0 {
             return block + "\n\n" + document
         }
         guard beginCount == 1, endCount == 1,
-              let begin = document.range(of: beginMarker), let end = document.range(of: endMarker),
+              let begin = document.range(of: route.beginMarker), let end = document.range(of: route.endMarker),
               begin.upperBound <= end.lowerBound,
+              !document[begin.upperBound..<end.lowerBound].contains("<!-- BEGIN BLITZ NEO "),
+              !document[begin.upperBound..<end.lowerBound].contains("<!-- END BLITZ NEO "),
               isWholeLine(begin, in: document), isWholeLine(end, in: document) else {
             throw failure("Malformed or duplicate Blitz Neo workflow markers. Repair the marked block manually; authored instructions were not changed.")
         }
@@ -38,17 +46,19 @@ enum BlitzWorkflowInstructions {
 
     /// Validate all targets first, including an existing Codex override document.
     /// Used before the older CLAUDE template migration so it cannot follow a link.
-    static func validateDocuments(projectDirectory: URL, body: String) throws {
+    static func validateDocuments(projectDirectory: URL, body: String, route: Route = .release) throws {
         try withProjectDirectory(projectDirectory) { directory in
-            _ = try plans(directory: directory, body: body)
+            _ = try plans(directory: directory, body: body, route: route)
         }
     }
 
-    static func install(projectDirectory: URL, body: String, beforeRename: ((String) throws -> Void)? = nil) throws {
+    static func install(projectDirectory: URL, body: String, route: Route = .release,
+                        updatingClaudeGuide: ((String?) -> String)? = nil,
+                        beforeRename: ((String) throws -> Void)? = nil) throws {
         installLock.lock()
         defer { installLock.unlock() }
         try withProjectDirectory(projectDirectory) { directory in
-            let updates = try plans(directory: directory, body: body)
+            let updates = try plans(directory: directory, body: body, route: route, updatingClaudeGuide: updatingClaudeGuide)
             // Refuse a changed document before starting the batch. Never truncate
             // a file in place: a concurrent reader always sees a whole document.
             for update in updates {
@@ -75,7 +85,8 @@ enum BlitzWorkflowInstructions {
         let data: Data
     }
 
-    private static func plans(directory: Int32, body: String) throws -> [Update] {
+    private static func plans(directory: Int32, body: String, route: Route,
+                              updatingClaudeGuide: ((String?) -> String)? = nil) throws -> [Update] {
         try ["AGENTS.md", "CLAUDE.md", "AGENTS.override.md"].compactMap { name in
             let original = try snapshot(name: name, directory: directory)
             if name == "AGENTS.override.md" && original == nil { return nil }
@@ -83,7 +94,11 @@ enum BlitzWorkflowInstructions {
                 throw failure("\(name) is not UTF-8. Authored instructions were not changed.")
             }
             do {
-                return Update(name: name, original: original, data: Data(try updatedDocument(existing, body: body).utf8))
+                var document = existing
+                if name == "CLAUDE.md", let updatingClaudeGuide {
+                    document = updatingClaudeGuide(original == nil ? nil : existing)
+                }
+                return Update(name: name, original: original, data: Data(try updatedDocument(document, body: body, route: route).utf8))
             } catch {
                 throw failure("\(name): \(error.localizedDescription)")
             }

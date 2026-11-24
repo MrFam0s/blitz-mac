@@ -11,10 +11,39 @@ import Testing
         return url.resolvingSymlinksInPath()
     }
 
+    @Test func simulatorRouteSurvivesReleaseOnlySyncAndRejectsOverlappingMarkers() throws {
+        let simulatorText = "Use the project's simulator."
+        let authored = "Keep this project-specific test command.\n"
+        let withSimulator = try BlitzWorkflowInstructions.updatedDocument(authored, body: simulatorText, route: .simulator)
+        let withBoth = try BlitzWorkflowInstructions.updatedDocument(withSimulator, body: body)
+        #expect(withBoth.hasSuffix(withSimulator))
+        #expect(try BlitzWorkflowInstructions.updatedDocument(withBoth, body: simulatorText, route: .simulator) == withBoth)
+
+        let nested = "\(BlitzWorkflowInstructions.Route.release.beginMarker)\n\(withSimulator)\n\(BlitzWorkflowInstructions.Route.release.endMarker)"
+        #expect(throws: Error.self) { try BlitzWorkflowInstructions.updatedDocument(nested, body: body) }
+    }
+
+    @Test func oldGeneratedTestingGuideUsesProjectRoutingAndPreservesCustomCommands() throws {
+        let obsolete = """
+        After making code changes:
+        1. Wait briefly for hot reload / rebuild
+        2. Use `blitz-iphone` `describe_screen` to verify the UI updated as expected
+        3. Use `blitz-iphone` `device_action` to interact (tap buttons, enter text, navigate)
+        4. Use `blitz-iphone` `describe_screen` again to verify the result
+        """
+        let original = "## blitz-macos\n### Testing Workflow\n\(obsolete)\nRun Scripts/test-local.sh.\n### app_store_upload"
+        let migrated = ProjectAgentConfigService.updatedLegacyGuide(in: original)
+        #expect(migrated.contains("blitz-project-simulator"))
+        #expect(migrated.contains("Run Scripts/test-local.sh."))
+        #expect(!migrated.contains(obsolete))
+        #expect(ProjectAgentConfigService.updatedLegacyGuide(in: migrated) == migrated)
+        #expect(ProjectAgentConfigService.updatedLegacyGuide(in: obsolete) == obsolete)
+    }
+
     @Test func preservesAuthoredBytesAndPrependsEvenForLargeDocuments() throws {
         let authored = "# Projektregeln\r\nUmlaute: Äß; e\u{301}.\r\n" + String(repeating: "Keep the existing product and safety rules.\r\n", count: 5000)
         let updated = try BlitzWorkflowInstructions.updatedDocument(authored, body: body)
-        #expect(updated.hasPrefix(BlitzWorkflowInstructions.beginMarker + "\n"))
+        #expect(updated.hasPrefix(BlitzWorkflowInstructions.Route.release.beginMarker + "\n"))
         #expect(Data(updated.utf8).suffix(Data(authored.utf8).count) == Data(authored.utf8))
         #expect(try BlitzWorkflowInstructions.updatedDocument(updated, body: body) == updated)
         let newBody = "## Updated routing\nKeep the exact saved app identity."
@@ -25,7 +54,7 @@ import Testing
     }
 
     @Test func replacementPreservesTextOutsideManagedBlockAndAcceptsCRLF() throws {
-        let original = "# Before\r\n" + BlitzWorkflowInstructions.beginMarker + "\r\nold\r\n" + BlitzWorkflowInstructions.endMarker + "\r\n# After\r\n"
+        let original = "# Before\r\n" + BlitzWorkflowInstructions.Route.release.beginMarker + "\r\nold\r\n" + BlitzWorkflowInstructions.Route.release.endMarker + "\r\n# After\r\n"
         let updated = try BlitzWorkflowInstructions.updatedDocument(original, body: body)
         #expect(updated.hasPrefix("# Before\r\n"))
         #expect(updated.hasSuffix("\r\n# After\r\n"))
@@ -34,8 +63,8 @@ import Testing
     }
 
     @Test func malformedAndDuplicateMarkersAreRejected() throws {
-        let begin = BlitzWorkflowInstructions.beginMarker
-        let end = BlitzWorkflowInstructions.endMarker
+        let begin = BlitzWorkflowInstructions.Route.release.beginMarker
+        let end = BlitzWorkflowInstructions.Route.release.endMarker
         let documents = [begin, end, "\(end)\n\(begin)", "\(begin)\n\(begin)\n\(end)",
                          "\(begin)\n\(end)\n\(end)", "inline \(begin)\n\(end)",
                          "\(begin)\n\(end) trailing", "<!-- BEGIN BLITZ NEO WORKFLOW ROUTING\n\(end)"]
@@ -56,7 +85,7 @@ import Testing
         try BlitzWorkflowInstructions.install(projectDirectory: project, body: body)
         for name in ["AGENTS.md", "CLAUDE.md", "AGENTS.override.md"] {
             let url = project.appendingPathComponent(name)
-            #expect(try String(contentsOf: url, encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.beginMarker))
+            #expect(try String(contentsOf: url, encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.Route.release.beginMarker))
         }
         #expect(try String(contentsOf: override, encoding: .utf8).hasSuffix(authored))
         let attributes = try FileManager.default.attributesOfItem(atPath: override.path)
@@ -104,10 +133,10 @@ import Testing
         let agents = project.appendingPathComponent("AGENTS.md")
         let claude = project.appendingPathComponent("CLAUDE.md")
         try "Original agents".write(to: agents, atomically: true, encoding: .utf8)
-        try BlitzWorkflowInstructions.beginMarker.write(to: claude, atomically: true, encoding: .utf8)
+        try BlitzWorkflowInstructions.Route.release.beginMarker.write(to: claude, atomically: true, encoding: .utf8)
         #expect(throws: Error.self) { try BlitzWorkflowInstructions.install(projectDirectory: project, body: body) }
         #expect(try String(contentsOf: agents, encoding: .utf8) == "Original agents")
-        #expect(try String(contentsOf: claude, encoding: .utf8) == BlitzWorkflowInstructions.beginMarker)
+        #expect(try String(contentsOf: claude, encoding: .utf8) == BlitzWorkflowInstructions.Route.release.beginMarker)
     }
 
     @Test(arguments: [true, false])
@@ -133,7 +162,7 @@ import Testing
         #expect(error.localizedDescription.contains("Reconcile"))
         #expect(try String(contentsOf: retained, encoding: .utf8) == authoredEdit)
         #expect(try String(contentsOf: claude, encoding: .utf8) == "Original Claude")
-        #expect(try String(contentsOf: agents, encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.beginMarker))
+        #expect(try String(contentsOf: agents, encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.Route.release.beginMarker))
     }
 
     @Test func rejectsNonUTF8OrDirectoryWithoutReplacingOtherInstructions() throws {

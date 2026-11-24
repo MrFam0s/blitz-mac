@@ -218,8 +218,8 @@ struct ProjectAgentConfigService {
                 includeProjectDocFallback: true
             )
         }
-        for issue in syncBundledReleaseSkillsForRegisteredProjects() {
-            print("[ProjectAgentConfigService] Release skill sync failed: \(issue)")
+        for issue in syncBundledWorkflowsForRegisteredProjects() {
+            print("[ProjectAgentConfigService] Project workflow sync failed: \(issue)")
         }
     }
 
@@ -228,7 +228,7 @@ struct ProjectAgentConfigService {
     /// not clone/update upstream skills. Only the owned instruction prefix changes;
     /// existing project-specific directives remain intact.
     @discardableResult
-    func syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil) -> [String] {
+    func syncBundledWorkflowsForRegisteredProjects(sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil) -> [String] {
         let fm = FileManager.default
         let entries: [URL]
         do {
@@ -243,6 +243,9 @@ struct ProjectAgentConfigService {
             do {
                 try prepareBundledCreationSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory)
                 try prepareBundledReleaseSkill(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory, instructionsBody: instructionsBody)
+            } catch { issues.append("\(entry.lastPathComponent): \(error.localizedDescription)") }
+            do {
+                try prepareSimulatorWorkflow(projectDir: entry, sourceSkillsDirectory: sourceSkillsDirectory)
             } catch { issues.append("\(entry.lastPathComponent): \(error.localizedDescription)") }
         }
         return issues
@@ -466,10 +469,8 @@ struct ProjectAgentConfigService {
     ) {
         let fm = FileManager.default
         let projectDir = baseDirectory.appendingPathComponent(projectId)
-        let workflowBody: String
         do {
-            workflowBody = try BlitzWorkflowInstructions.bundledBody()
-            try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: workflowBody)
+            try prepareProjectWorkflowInstructions(projectDir: projectDir, projectType: projectType)
         } catch {
             print("[ProjectAgentConfigService] Workflow instructions not installed: \(error.localizedDescription)")
             return
@@ -489,22 +490,6 @@ struct ProjectAgentConfigService {
             ],
             minimalBlitzAllow: ["mcp__blitz-macos__app_get_state"]
         )
-
-        let claudeMdFile = projectDir.appendingPathComponent("CLAUDE.md")
-        if !fm.fileExists(atPath: claudeMdFile.path) {
-            try? Self.claudeMdContent(projectType: projectType)
-                .write(to: claudeMdFile, atomically: true, encoding: .utf8)
-        } else if let existing = try? String(contentsOf: claudeMdFile, encoding: .utf8) {
-            // Migrate only exact obsolete examples from our own template, never replace the document.
-            let updated = Self.updatedLegacyTestFlightExamples(in: existing)
-            if updated != existing { try? updated.write(to: claudeMdFile, atomically: true, encoding: .utf8) }
-        }
-        do {
-            try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: workflowBody)
-        } catch {
-            print("[ProjectAgentConfigService] Workflow instructions not installed: \(error.localizedDescription)")
-            return
-        }
 
         let rulesDir = claudeDir.appendingPathComponent("rules")
         try? fm.createDirectory(at: rulesDir, withIntermediateDirectories: true)
@@ -641,14 +626,34 @@ struct ProjectAgentConfigService {
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
     }
 
-    func prepareBundledReleaseSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil) throws {
+    func prepareBundledReleaseSkill(projectDir: URL, sourceSkillsDirectory: URL? = nil, instructionsBody: String? = nil,
+                                   updatingClaudeGuide: ((String?) -> String)? = nil) throws {
         let body = try instructionsBody ?? BlitzWorkflowInstructions.bundledBody()
         try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: body)
         try prepareBundledSkill("blitz-release", requiredFiles: ["SKILL.md"],
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
         try prepareBundledSkill("asc-iap-attach", requiredFiles: ["SKILL.md"],
             projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
-        try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: body)
+        try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: body, updatingClaudeGuide: updatingClaudeGuide)
+    }
+
+    func prepareProjectWorkflowInstructions(projectDir: URL, projectType: ProjectType) throws {
+        let simulatorBody = try BlitzWorkflowInstructions.bundledBody(route: .simulator)
+        try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: simulatorBody, route: .simulator)
+        try prepareBundledCreationSkill(projectDir: projectDir)
+        try prepareBundledReleaseSkill(projectDir: projectDir, updatingClaudeGuide: { existing in
+            if let existing { return Self.updatedLegacyGuide(in: existing) }
+            return Self.claudeMdContent(projectType: projectType)
+        })
+        try prepareSimulatorWorkflow(projectDir: projectDir)
+    }
+
+    private func prepareSimulatorWorkflow(projectDir: URL, sourceSkillsDirectory: URL? = nil) throws {
+        let body = try BlitzWorkflowInstructions.bundledBody(route: .simulator)
+        try BlitzWorkflowInstructions.validateDocuments(projectDirectory: projectDir, body: body, route: .simulator)
+        try prepareBundledSkill("blitz-project-simulator", requiredFiles: ["SKILL.md"],
+            projectDir: projectDir, sourceSkillsDirectory: sourceSkillsDirectory)
+        try BlitzWorkflowInstructions.install(projectDirectory: projectDir, body: body, route: .simulator)
     }
 
     private func prepareBundledSkill(_ name: String, requiredFiles: [String], projectDir: URL, sourceSkillsDirectory: URL?) throws {
@@ -731,7 +736,8 @@ struct ProjectAgentConfigService {
             }
 
             let repoSkillsDir = repoDir.appendingPathComponent("skills")
-            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm, excluding: ["asc-app-create-ui", "blitz-release", "asc-iap-attach"])
+            Self.syncSkillDirectories(from: repoSkillsDir, into: skillDirectories, using: fm,
+                                      excluding: ["asc-app-create-ui", "blitz-release", "asc-iap-attach", "blitz-project-simulator"])
 
             if let bundledSkillsDir = Self.bundledProjectSkillsDirectory() {
                 Self.syncSkillDirectories(from: bundledSkillsDir, into: skillDirectories, using: fm)
@@ -837,13 +843,24 @@ struct ProjectAgentConfigService {
         allowList.append(permission)
     }
 
-    static func updatedLegacyTestFlightExamples(in content: String) -> String {
+    static func updatedLegacyGuide(in content: String) -> String {
         guard content.contains("## blitz-macos"), content.contains("### app_store_upload") else { return content }
         return content
             .replacingOccurrences(of: "`asc testflight add-tester --email ...`", with: "`asc testflight testers add --app APP_ID --email EMAIL --group GROUP_ID`")
             .replacingOccurrences(of: "`asc testflight add-tester --email user@example.com`", with: "`asc testflight testers add --app APP_ID --email user@example.com --group GROUP_ID`")
             .replacingOccurrences(of: "| ipaPath | string | no | Path to IPA (uses latest app_store_build output if omitted) |", with: "| ipaPath | string | yes | Exact IPA or macOS PKG path returned by the build |")
             .replacingOccurrences(of: "`asc builds upload --path ./app.ipa`", with: "`asc builds upload --app APP_ID --ipa ./app.ipa`")
+            .replacingOccurrences(of: """
+                After making code changes:
+                1. Wait briefly for hot reload / rebuild
+                2. Use `blitz-iphone` `describe_screen` to verify the UI updated as expected
+                3. Use `blitz-iphone` `device_action` to interact (tap buttons, enter text, navigate)
+                4. Use `blitz-iphone` `describe_screen` again to verify the result
+                """, with: """
+                For iOS and iPadOS tests, UI checks and screenshots, follow the project's
+                `blitz-project-simulator` skill and pass its resolved simulator UDID to every
+                device action. Run native macOS targets on the Mac.
+                """)
     }
 
     private static func claudeMdContent(projectType: ProjectType) -> String {

@@ -1,7 +1,7 @@
 # Public release preparation
 
 Public downloads come from this fork's GitHub releases. The current release is
-**1.0.80, build 100**, with ASC 7.2.0. Build 100 uses the tag `1.0.80`; the
+**1.0.81, build 101**, with ASC 7.2.0. Build 100 uses the tag `1.0.80`; the
 earlier dashboard distribution remains available as `v1.0.80` (build 99).
 Version 1.0.75 was the first regular
 release, following the 1.0.73 and 1.0.74 previews. Downloads
@@ -51,11 +51,11 @@ the repository. Submit through the shared ASC CLI and attach/verify the ticket
 with Apple's local tool:
 
 ```bash
-asc notarization submit --file build/public/1.0.80-build100/BlitzNeo-1.0.80-arm64.dmg --wait
-xcrun stapler staple build/public/1.0.80-build100/BlitzNeo-1.0.80-arm64.dmg
-xcrun stapler validate build/public/1.0.80-build100/BlitzNeo-1.0.80-arm64.dmg
+asc notarization submit --file build/public/1.0.81-build101/BlitzNeo-1.0.81-arm64.dmg --wait
+xcrun stapler staple build/public/1.0.81-build101/BlitzNeo-1.0.81-arm64.dmg
+xcrun stapler validate build/public/1.0.81-build101/BlitzNeo-1.0.81-arm64.dmg
 spctl --assess --type open --context context:primary-signature --verbose=2 \
-  build/public/1.0.80-build100/BlitzNeo-1.0.80-arm64.dmg
+  build/public/1.0.81-build101/BlitzNeo-1.0.81-arm64.dmg
 ```
 
 Require Apple's status to be **Accepted** before announcing a notarized release.

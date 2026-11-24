@@ -114,7 +114,41 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     }
 }
 
-@Test func startupReleaseSkillSyncIncludesRegisteredProjectsAndPreservesAuthoredFiles() throws {
+@Test func projectImportInstallsSimulatorWorkflowBeforeReturning() throws {
+    let root = try handoffRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let storage = ProjectStorage(baseDirectory: root.appendingPathComponent("projects"))
+    let project = root.appendingPathComponent("ImportedApp")
+    let metadata = BlitzProjectMetadata(name: "Imported App", type: .swift, bundleIdentifier: "org.example.Imported")
+    try storage.writeMetadataToDirectory(project, metadata: metadata)
+    let agents = project.appendingPathComponent("AGENTS.md")
+    let authored = "Keep the project's own test instructions.\n"
+    let malformed = BlitzWorkflowInstructions.Route.simulator.beginMarker + "\n" + authored
+    try malformed.write(to: agents, atomically: true, encoding: .utf8)
+
+    #expect(throws: Error.self) { try storage.openProject(at: project) }
+    #expect(try String(contentsOf: agents, encoding: .utf8) == malformed)
+    #expect(!FileManager.default.fileExists(atPath: storage.baseDirectory.appendingPathComponent("ImportedApp").path))
+
+    try authored.write(to: agents, atomically: true, encoding: .utf8)
+    #expect(try storage.openProject(at: project) == "ImportedApp")
+    let instructions = try String(contentsOf: agents, encoding: .utf8)
+    #expect(instructions.contains(BlitzWorkflowInstructions.Route.simulator.beginMarker))
+    #expect(instructions.hasSuffix(authored))
+    let guide = try String(contentsOf: project.appendingPathComponent("CLAUDE.md"), encoding: .utf8)
+    #expect(guide.contains("Swift Project — Blitz Neo AI Agent Guide"))
+    #expect(guide.contains(BlitzWorkflowInstructions.Route.simulator.beginMarker))
+    for agent in [".agents", ".claude"] {
+        let skill = project.appendingPathComponent("\(agent)/skills/blitz-project-simulator/SKILL.md")
+        #expect(try String(contentsOf: skill, encoding: .utf8).contains("name: blitz-project-simulator"))
+    }
+
+    #expect(try storage.openProject(at: project) == "ImportedApp")
+    #expect(try String(contentsOf: agents, encoding: .utf8) == instructions)
+    #expect(!FileManager.default.fileExists(atPath: project.appendingPathComponent(".claude/asc-skills").path))
+}
+
+@Test func startupWorkflowSyncIncludesRegisteredProjectsAndPreservesAuthoredFiles() throws {
     let root = try handoffRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let projects = root.appendingPathComponent("projects")
@@ -130,6 +164,9 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     try FileManager.default.createDirectory(at: creation.appendingPathComponent("scripts"), withIntermediateDirectories: true)
     try "Creation instructions".write(to: creation.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
     try "Creation script".write(to: creation.appendingPathComponent("scripts/create_app.py"), atomically: true, encoding: .utf8)
+    let simulator = source.deletingLastPathComponent().appendingPathComponent("blitz-project-simulator")
+    try FileManager.default.createDirectory(at: simulator, withIntermediateDirectories: true)
+    try "Project simulator".write(to: simulator.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
     let project = projects.appendingPathComponent("RegisteredApp")
     try FileManager.default.createDirectory(at: project.appendingPathComponent(".blitz"), withIntermediateDirectories: true)
     let metadata = BlitzProjectMetadata(name: "Registered App", type: .swift, bundleIdentifier: "org.example.App")
@@ -151,7 +188,7 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
 
     let service = ProjectAgentConfigService(baseDirectory: projects)
     let body = "Use the bundled release or app-creation skill for the corresponding request."
-    let issues = service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body)
+    let issues = service.syncBundledWorkflowsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body)
     #expect(issues.isEmpty)
     for agent in [".agents", ".claude"] {
         #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
@@ -159,9 +196,17 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
         #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/asc-app-create-ui/scripts/create_app.py"), encoding: .utf8) == "Creation script")
         #expect(try String(contentsOf: project.appendingPathComponent("\(agent)/skills/asc-iap-attach/SKILL.md"), encoding: .utf8) == "Joint version selection")
         #expect(try String(contentsOf: imported.appendingPathComponent("\(agent)/skills/asc-iap-attach/SKILL.md"), encoding: .utf8) == "Joint version selection")
+        for app in [project, imported] {
+            #expect(try String(contentsOf: app.appendingPathComponent("\(agent)/skills/blitz-project-simulator/SKILL.md"), encoding: .utf8) == "Project simulator")
+        }
     }
-    #expect(try String(contentsOf: authored, encoding: .utf8) == BlitzWorkflowInstructions.updatedDocument("Authored instructions stay unchanged.\n", body: body))
-    #expect(try String(contentsOf: imported.appendingPathComponent("AGENTS.md"), encoding: .utf8).hasPrefix(BlitzWorkflowInstructions.beginMarker))
+    let releaseInstructions = try BlitzWorkflowInstructions.updatedDocument("Authored instructions stay unchanged.\n", body: body)
+    let simulatorBody = try BlitzWorkflowInstructions.bundledBody(route: .simulator)
+    let expected = try BlitzWorkflowInstructions.updatedDocument(releaseInstructions, body: simulatorBody, route: .simulator)
+    #expect(try String(contentsOf: authored, encoding: .utf8) == expected)
+    let importedInstructions = try String(contentsOf: imported.appendingPathComponent("AGENTS.md"), encoding: .utf8)
+    #expect(importedInstructions.contains(BlitzWorkflowInstructions.Route.release.beginMarker))
+    #expect(importedInstructions.contains(simulatorBody.trimmingCharacters(in: .whitespacesAndNewlines)))
     #expect(try String(contentsOf: otherSkill.appendingPathComponent("SKILL.md"), encoding: .utf8) == "My own skill")
     #expect(try Data(contentsOf: project.appendingPathComponent(".blitz/project.json")) == metadataBytes)
     #expect(try FileManager.default.contentsOfDirectory(atPath: unregistered.path).isEmpty)
@@ -169,6 +214,6 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     #expect(!FileManager.default.fileExists(atPath: project.appendingPathComponent(".claude/asc-skills").path))
 
     try FileManager.default.removeItem(at: source.appendingPathComponent("SKILL.md"))
-    #expect(service.syncBundledReleaseSkillsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body).count == 2)
+    #expect(service.syncBundledWorkflowsForRegisteredProjects(sourceSkillsDirectory: source.deletingLastPathComponent(), instructionsBody: body).count == 2)
     #expect(try String(contentsOf: project.appendingPathComponent(".agents/skills/blitz-release/SKILL.md"), encoding: .utf8) == skill)
 }

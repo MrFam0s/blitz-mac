@@ -71,6 +71,11 @@ resources="/Applications/Blitz Neo.app/Contents/Resources"
 bash "$resources/pkg-scripts/install-iphone-mcp.sh" "$HOME/.blitz/node-runtime" "$resources"/iphone-mcp/*.tgz
 ```
 
+Importing an app installs the `blitz-project-simulator` skill and project
+instructions for Codex and Claude Code. A request such as “test the app and take a
+screenshot” uses the project's simulator for iOS and iPadOS, or the Mac for a
+native macOS target. Registered projects also receive the skill at startup.
+
 Select the project's simulator with `blitz_macos.simulator_select_device` and pass its UDID to
 `blitz-iphone` for taps, swipes and screenshots. On iPhone Duo, `blitz_macos.simulator_set_pose`
 changes the fold position using macOS Accessibility permission. `get_screenshot` captures the

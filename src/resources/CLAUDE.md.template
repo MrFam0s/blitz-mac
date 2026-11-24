@@ -39,13 +39,9 @@ Both tools share the same API key via Blitz Neo's auth bridge (`~/.blitz/asc-age
 
 ### Testing Workflow
 
-After making code changes:
-1. Wait briefly for hot reload / rebuild
-2. Use `blitz-iphone` `describe_screen` to verify the UI updated as expected
-3. Use `blitz-iphone` `device_action` to interact (tap buttons, enter text, navigate)
-4. Use `blitz-iphone` `describe_screen` again to verify the result
-
-For a selected iPhone Duo simulator, pass the project's explicit UDID to every action. Use `blitz_macos.simulator_set_pose` with the active `projectId`, `udid` and `pose` (`closed`, `partiallyOpen`, or `open`). Device Hub animates the change. Once the new layout appears, capture it with `blitz-iphone` `get_screenshot` using `display: outer` for the closed device or `display: inner` for the open device.
+For iOS and iPadOS tests, UI checks and screenshots, follow the project's
+`blitz-project-simulator` skill and pass its resolved simulator UDID to every
+device action. Run native macOS targets on the Mac.
 
 ## App Store Connect Tools
 

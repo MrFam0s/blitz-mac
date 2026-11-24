@@ -54,7 +54,13 @@ struct ProjectStorage {
     }
 
     func openProject(at url: URL) throws -> String {
-        try repository.openProject(at: url)
+        guard let metadata = try repository.readMetadataFromDirectory(url) else {
+            throw ProjectOpenError.notABlitzProject
+        }
+        // Both import entry points must have working local instructions before
+        // registering the project and reporting success to the caller.
+        try agentConfigService.prepareProjectWorkflowInstructions(projectDir: url, projectType: metadata.type)
+        return try repository.openProject(at: url)
     }
 
     func updateLastOpened(projectId: String) {
