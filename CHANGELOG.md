@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.86 (build 106)
+
+- Store updates can proceed when Apple retains empty review drafts without a
+  platform. Blitz checks that each draft belongs to a published, older version
+  of the same app and platform. After an interruption, Blitz can resume the
+  recorded draft for the update.
+
 ## 1.0.85 (build 105)
 
 - The update dialog reads release notes from the default branch and displays
