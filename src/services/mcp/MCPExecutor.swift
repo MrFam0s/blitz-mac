@@ -422,8 +422,12 @@ actor MCPExecutor {
                   let raw = arguments["pose"] as? String, let pose = SimulatorPose(rawValue: raw) else {
                 throw MCPServerService.MCPError.invalidToolArgs
             }
-            try await pose.request(in: appState, projectId: projectId, udid: udid)
-            return mcpJSON(["requestedPose": pose.rawValue, "udid": udid, "projectId": projectId])
+            let outcome = try await pose.request(in: appState, projectId: projectId, udid: udid)
+            var result = outcome.mcpFields
+            result["requestedPose"] = pose.rawValue
+            result["udid"] = udid
+            result["projectId"] = projectId
+            return mcpJSON(result)
 
         case "settings_get":
             return await executeSettingsGet()

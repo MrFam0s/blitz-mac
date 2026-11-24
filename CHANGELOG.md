@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.82 (build 102)
+
+- Blitz and its macOS MCP can fold the selected project’s iPhone Duo using an
+  installed copy of AXe with hinge support. AXe targets the simulator by UDID
+  and reports the measured angle and active display after the transition.
+- On Macs without compatible AXe, Blitz can still operate Xcode’s Device Hub
+  when authorized under Accessibility.
+
 ## 1.0.81 (build 101)
 
 - Importing or creating an app installs the project simulator skill for Codex

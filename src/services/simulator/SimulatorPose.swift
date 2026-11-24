@@ -25,10 +25,14 @@ enum SimulatorPose: String, CaseIterable {
     static let deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo"
 
     enum PoseError: LocalizedError {
-        case changedTarget, unavailable
+        case changedTarget, unavailable, noControl, unconfirmed
+        case axeFailure(String, String)
         var errorDescription: String? {
             switch self {
             case .changedTarget: L10n.tr("Wähle den laufenden iPhone-Duo-Simulator dieses Projekts.")
+            case .noControl: L10n.tr("Für die Faltposition benötigt Blitz Neo AXe mit Hinge-Unterstützung oder die macOS-Bedienungshilfen-Freigabe für den Device Hub.")
+            case .axeFailure(let code, let message): "AXe (\(code)): \(message)"
+            case .unconfirmed: L10n.tr("AXe konnte die Faltposition für diesen Projektsimulator nicht bestätigen. Prüfe den aktuellen Winkel vor einem weiteren Versuch.")
             case .unavailable: L10n.tr("Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode.")
             }
         }
@@ -53,24 +57,54 @@ enum SimulatorPose: String, CaseIterable {
         return indices.count == 1 ? indices[0] : nil
     }
 
-    @MainActor func request(in appState: AppState, projectId: String, udid: String) async throws {
+    enum Outcome: Equatable {
+        case confirmed(degrees: Double, activeDisplay: String)
+        case requestedInDeviceHub
+
+        var mcpFields: [String: Any] {
+            switch self {
+            case .confirmed(let degrees, let activeDisplay):
+                return ["backend": "axe", "confirmed": true, "degrees": degrees, "activeDisplay": activeDisplay]
+            case .requestedInDeviceHub:
+                return ["backend": "deviceHub", "confirmed": false]
+            }
+        }
+    }
+
+    @discardableResult
+    @MainActor func request(in appState: AppState, projectId: String, udid: String) async throws -> Outcome {
         func isBound() -> Bool {
             appState.activeProjectId == projectId && appState.simulatorManager.projectID == projectId
                 && appState.simulatorManager.bootedDeviceId == udid
         }
         guard isBound() else { throw PoseError.changedTarget }
-        guard AXIsProcessTrusted() else { throw SimulatorCaptureService.CaptureError.accessibilityDenied }
-
         let service = SimulatorService()
         let devices = try await service.listDevices()
-        guard isBound(), let device = devices.first(where: { $0.udid == udid && $0.isBooted }),
+        return try await apply(udid: udid, devices: devices, isBound: isBound, axe: AXeSimulatorHinge()) { name in
+            guard AXIsProcessTrusted() else { throw PoseError.noControl }
+            try await service.openSimulatorApp(udid: udid)
+            guard isBound() else { throw PoseError.changedTarget }
+            try pressButton(deviceName: name)
+        }
+    }
+
+    @MainActor func apply(udid: String, devices: [SimctlClient.SimctlDevice], isBound: () -> Bool,
+                          axe: AXeSimulatorHinge, requestInDeviceHub: (String) async throws -> Void) async throws -> Outcome {
+        guard isBound(), let device = devices.first(where: { $0.udid == udid && $0.isBooted && $0.isAvailable }),
               device.deviceTypeIdentifier == Self.deviceType else { throw PoseError.changedTarget }
+        let executable = await axe.supportedExecutable()
+        try Task.checkCancellation()
+        guard isBound() else { throw PoseError.changedTarget }
+        if let executable {
+            // A failed or interrupted write may already have moved the hinge.
+            // Propagate its outcome; never follow it with a second request.
+            return try await axe.set(self, on: udid, using: executable)
+        }
         guard devices.filter({ $0.isBooted && $0.name == device.name }).count == 1 else {
             throw SimulatorCaptureService.CaptureError.ambiguousSimulatorName
         }
-        try await service.openSimulatorApp(udid: udid)
-        guard isBound() else { throw PoseError.changedTarget }
-        try pressButton(deviceName: device.name)
+        try await requestInDeviceHub(device.name)
+        return .requestedInDeviceHub
     }
 
     @MainActor func pressButton(deviceName: String) throws {

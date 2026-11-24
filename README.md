@@ -77,10 +77,16 @@ screenshot” uses the project's simulator for iOS and iPadOS, or the Mac for a
 native macOS target. Registered projects also receive the skill at startup.
 
 Select the project's simulator with `blitz_macos.simulator_select_device` and pass its UDID to
-`blitz-iphone` for taps, swipes and screenshots. On iPhone Duo, `blitz_macos.simulator_set_pose`
-changes the fold position using macOS Accessibility permission. `get_screenshot` captures the
-active display. If your Codex configuration has an `enabled_tools` list for `blitz_macos`,
-include `simulator_set_pose` there to expose it to the chat.
+`blitz-iphone` for taps, swipes and screenshots. For iPhone Duo, use the fold controls in
+Blitz or call `blitz_macos.simulator_set_pose` with the active project ID, its selected
+simulator UDID and the desired pose. Blitz prefers a local AXe installation that supports
+`axe hinge`. This controls the simulator by UDID without requiring macOS Accessibility
+permission for Blitz Neo. When AXe hinge support is unavailable, Blitz can use Xcode
+Device Hub with Accessibility permission for Blitz Neo.
+
+After a fold, `get_screenshot` captures the active display. Set `display` to `outer` or
+`inner` to verify which panel is captured. If your Codex configuration has an
+`enabled_tools` list for `blitz_macos`, include `simulator_set_pose` to expose it to the chat.
 
 To update, quit Blitz Neo and replace it using the latest DMG. The current in-app
 updater does not install DMG downloads; a regular GitHub release does not change

@@ -172,7 +172,7 @@ enum MCPRegistry {
 
         tools.append(tool(
             name: "simulator_set_pose",
-            description: "Request a fold position in Xcode Device Hub for the active project's selected, booted iPhone Duo. The system transition is asynchronous.",
+            description: "Set the fold position of the active project's selected, booted iPhone Duo. AXe confirms the settled angle and active display. The Device Hub fallback requests the change asynchronously and requires macOS Accessibility access.",
             properties: [
                 "projectId": ["type": "string", "description": "Intended active Blitz project ID"],
                 "udid": ["type": "string", "description": "Selected iPhone Duo simulator UDID"],

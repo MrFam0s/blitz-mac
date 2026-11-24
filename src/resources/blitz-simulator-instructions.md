@@ -16,6 +16,8 @@ allein belegt keine Projektzuordnung.
 
 Übergib dieselbe UDID als Testdestination und bei jeder Aktion an
 `blitz-iphone`, auch bei `launch_app`, `describe_screen` und `get_screenshot`.
+Die Faltstellung eines iPhone Duo setzt du über `blitz_macos.simulator_set_pose`
+für das aktive Projekt und dessen ausgewählte UDID.
 Für die Aufnahme hat `blitz-project-simulator` Vorrang vor `asc-shots-pipeline`.
 Speichere das native PNG. Für Rahmung und Nachbearbeitung kann es an
 `asc-shots-pipeline` übergeben werden. Lass parallel laufende Projekte und

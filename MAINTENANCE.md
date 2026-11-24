@@ -2,6 +2,22 @@
 
 This is a personal maintenance fork of [Blitz](https://github.com/blitzdotdev/blitz-mac), not an official successor. Upstream `master` remains available for comparison. The maintained branch is `maintenance/auth-and-tooling`.
 
+## 1.0.82 build 102 — simulator hinge control via AXe
+
+The app and the macOS MCP can operate the selected project simulator by UDID
+with a compatible local AXe. The Device Hub path remains available with
+Accessibility permission. A failed direct move is reported to the caller
+without sending a second command.
+
+All 730 Swift tests and nine release metadata tests passed. On a temporary
+iPhone Duo running iOS 27.2, the shared Swift handler using AXe 2.1.1 returned
+confirmed results for all three positions. Separate AXe hinge and display
+queries agreed: closed 0° on the outer display, tabletop 90° mechanical
+(94.6° sensed) on the inner display, and open 180° on the inner display.
+The bundled ASC 7.2.0 helper passed its source, protocol and CLI checks.
+Apple notarized the disk image and Gatekeeper accepted both image and app.
+DMG SHA-256: `8d16a6721737ee578f062390e69e76fb2fde8248e2cae47a4861f242490d8b9c`.
+
 ## 1.0.81 build 101 — project simulator instructions on import
 
 Blitz installs the project simulator skill in both Codex and Claude Code skill
