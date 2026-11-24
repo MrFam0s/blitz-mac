@@ -112,7 +112,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             protected["review"] = Self.semantic(review)
             protected["reviewAttachments"] = try await all("/v1/appStoreReviewDetails/\(Self.id(review))/appStoreReviewAttachments").map(Self.semantic)
         }
-        let submission = try await submissionContext(target)
+        let submission = try await submissionContext(target, appVersions: versions)
         var reviewProductsReady = true
         if !target.reviewItems.isEmpty {
             let products = try await productSelection(target, submission: submission)
@@ -170,7 +170,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         let versions = try await all("/v1/apps/\(target.appID)/appStoreVersions")
         let firstPublication = try ReleaseReadinessPolicy.isFirstPublication(versions: versions, target: target)
         let localizations = try await all("/v1/appStoreVersions/\(target.versionID)/appStoreVersionLocalizations")
-        let products = target.reviewItems.isEmpty ? nil : try await productSelection(target, submission: try await submissionContext(target), allowRetained: resubmission != nil)
+        let products = target.reviewItems.isEmpty ? nil : try await productSelection(target, submission: try await submissionContext(target, appVersions: versions), allowRetained: resubmission != nil)
         return try ReleaseReadinessPolicy.normalize(report: object, exitCode: payload.exitCode, target: target,
             firstPublication: firstPublication, localizations: localizations, web: payload.web,
             webBindingStable: payload.web.matches(payload.web, target: target), products: products,
@@ -358,21 +358,35 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         var reviewItemIDs: [String: String] = [:]
     }
 
-    private func submissionContext(_ target: ReleaseWorkflowTarget) async throws -> SubmissionContext {
-        let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app"])
+    private func submissionContext(_ target: ReleaseWorkflowTarget, appVersions: [[String: Any]]? = nil) async throws -> SubmissionContext {
+        let submissions = try await all("/v1/reviewSubmissions", query: ["filter[app]": target.appID, "include": "app,appStoreVersionForReview"])
         var matches: [(id: String, state: String, date: String, draft: Bool, resubmission: Bool, resolution: Bool, contents: ReleaseSubmissionContents)] = []
         var activeCount = 0
+        var versions = appVersions
         for submission in submissions {
             guard let attributes = submission["attributes"] as? [String: Any],
-                  let platform = attributes["platform"] as? String,
                   let state = attributes["state"] as? String else { throw ReleaseWorkflowAPIError.invalidResponse }
             if let app = Self.relationshipID(submission, "app"), app != target.appID { throw ReleaseWorkflowError.identityChanged }
-            guard platform == target.platform else { continue }
+            let platform = attributes["platform"] as? String
+            if let platform, platform != target.platform { continue }
             let id = try Self.id(submission)
-            if state != "COMPLETE" { activeCount += 1 }
             let includes = target.reviewItems.isEmpty ? "appStoreVersion" :
                 "appStoreVersion,inAppPurchaseVersion,subscriptionVersion,subscriptionGroupVersion"
             let items = try await all("/v1/reviewSubmissions/\(id)/items", query: ["include": includes])
+            if platform == nil {
+                // Apple can retain undated, empty drafts for an already released version with a null platform.
+                guard attributes["platform"] is NSNull, attributes["submittedDate"] is NSNull,
+                      state == "READY_FOR_REVIEW", items.isEmpty,
+                      Self.relationshipID(submission, "app", type: "apps") == target.appID,
+                      let oldID = Self.relationshipID(submission, "appStoreVersionForReview", type: "appStoreVersions"),
+                      oldID != target.versionID else { throw ReleaseWorkflowAPIError.invalidResponse }
+                if versions == nil { versions = try await all("/v1/apps/\(target.appID)/appStoreVersions") }
+                guard let versions, Self.isPublishedPredecessor(oldID, of: target, in: versions) else {
+                    throw ReleaseWorkflowAPIError.invalidResponse
+                }
+                continue
+            }
+            if state != "COMPLETE" { activeCount += 1 }
             let contents = ReleaseSubmissionContents(items: items, target: target, submissionID: id)
             let forReview = Self.relationshipID(submission, "appStoreVersionForReview")
             let matchingVersion = forReview == target.versionID || contents.referencesAppVersion
@@ -443,9 +457,26 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
         return (try digest(normalized), legacy)
     }
 
-    private static func relationshipID(_ resource: [String: Any], _ name: String) -> String? {
+    private static func isPublishedPredecessor(_ id: String, of target: ReleaseWorkflowTarget, in versions: [[String: Any]]) -> Bool {
+        guard let previous = versions.first(where: { $0["id"] as? String == id }),
+              previous["type"] as? String == "appStoreVersions",
+              let previousAttributes = previous["attributes"] as? [String: Any],
+              previousAttributes["platform"] as? String == target.platform,
+              let previousNumber = previousAttributes["versionString"] as? String,
+              let current = versions.first(where: { $0["id"] as? String == target.versionID }),
+              let currentAttributes = current["attributes"] as? [String: Any],
+              currentAttributes["platform"] as? String == target.platform,
+              let currentNumber = currentAttributes["versionString"] as? String else { return false }
+        let state = previousAttributes["appVersionState"] as? String ?? previousAttributes["appStoreState"] as? String ?? ""
+        return ASCReleaseStatus.publishedStates.contains(state) &&
+            ReleaseAutomationService.compareVersions(previousNumber, currentNumber) == .orderedAscending
+    }
+
+    private static func relationshipID(_ resource: [String: Any], _ name: String, type: String? = nil) -> String? {
         let relationships = resource["relationships"] as? [String: [String: Any]]
-        return (relationships?[name]?["data"] as? [String: Any])?["id"] as? String
+        guard let data = relationships?[name]?["data"] as? [String: Any] else { return nil }
+        if let type, data["type"] as? String != type { return nil }
+        return data["id"] as? String
     }
 
     private static func id(_ resource: [String: Any]) throws -> String {
