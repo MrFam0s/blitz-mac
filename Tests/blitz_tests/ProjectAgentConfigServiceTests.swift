@@ -17,11 +17,10 @@ import Testing
     let codexConfigURL = tempDirectory.appendingPathComponent(".codex/config.toml")
     let codexConfig = try String(contentsOf: codexConfigURL, encoding: .utf8)
     #expect(codexConfig.contains("command = \"\(launcherPath)\""))
-    #expect(
-        codexConfig.contains("dist/cli.js")
-        || codexConfig.contains("node-runtime/bin/iphone-mcp")
-        || codexConfig.contains("\"-y\", \"@blitzdev/iphone-mcp\"")
-    )
+    let bundledArgs = [BlitzPaths.nodeDir.appendingPathComponent("node").path,
+                       BlitzPaths.nodeDir.appendingPathComponent("iphone-mcp").path]
+    let expectedToml = bundledArgs.map { "\"\($0)\"" }.joined(separator: ", ")
+    #expect(codexConfig.contains("args = [\(expectedToml)]"))
 
     let mcpConfigURL = tempDirectory.appendingPathComponent(".mcp.json")
     let mcpConfigData = try Data(contentsOf: mcpConfigURL)
@@ -29,6 +28,11 @@ import Testing
     let servers = try #require(root["mcpServers"] as? [String: Any])
     let blitzIphone = try #require(servers["blitz-iphone"] as? [String: Any])
     #expect(blitzIphone["command"] as? String == launcherPath)
+    #expect(blitzIphone["args"] as? [String] == bundledArgs)
+    let openCode = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: tempDirectory.appendingPathComponent("opencode.json"))) as? [String: Any])
+    let openCodeServers = try #require(openCode["mcp"] as? [String: Any])
+    let openCodeIphone = try #require(openCodeServers["blitz-iphone"] as? [String: Any])
+    #expect(openCodeIphone["command"] as? [String] == [launcherPath] + bundledArgs)
 }
 
 @Test func globalCodexMCPPreservesProjectSettings() throws {

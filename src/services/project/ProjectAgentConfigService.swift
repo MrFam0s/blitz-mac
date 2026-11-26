@@ -34,21 +34,8 @@ struct ProjectAgentConfigService {
 
     private func blitzIphoneCommand(nodeRuntimeBin: String) -> (command: String, args: [String], env: [String: String]) {
         let pathEnv = "\(nodeRuntimeBin):/usr/bin:/bin:/usr/sbin:/sbin"
-        let command: String
-        let args: [String]
-
-        if let localCLI = Self.localBlitzIphoneCLIPath() {
-            let localNode = Self.localNodePath() ?? "/opt/homebrew/bin/node"
-            command = localNode
-            args = [localCLI]
-        } else if FileManager.default.isExecutableFile(atPath: nodeRuntimeBin + "/node"),
-                  FileManager.default.isExecutableFile(atPath: nodeRuntimeBin + "/iphone-mcp") {
-            command = nodeRuntimeBin + "/node"
-            args = [nodeRuntimeBin + "/iphone-mcp"]
-        } else {
-            command = nodeRuntimeBin + "/npx"
-            args = ["-y", "@blitzdev/iphone-mcp"]
-        }
+        let command = nodeRuntimeBin + "/node"
+        let args = [nodeRuntimeBin + "/iphone-mcp"]
 
         let env = ["PATH": "\(pathEnv):/opt/homebrew/bin:/usr/local/bin"]
         if let launcher = ensureDetachedMCPLauncher() {
@@ -120,23 +107,6 @@ struct ProjectAgentConfigService {
             print("[ProjectAgentConfigService] Failed to write detached MCP launcher: \(error)")
             return nil
         }
-    }
-
-    private static func localBlitzIphoneCLIPath() -> String? {
-        let candidate = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("superapp/blitz-ios-mcp/dist/cli.js")
-        guard FileManager.default.isExecutableFile(atPath: candidate.path) else {
-            return nil
-        }
-        return candidate.path
-    }
-
-    private static func localNodePath() -> String? {
-        let candidates = [
-            "/opt/homebrew/bin/node",
-            "/usr/local/bin/node",
-        ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
     func ensureGlobalMCPConfigs(whitelistBlitzMCP: Bool = true, allowASCCLICalls: Bool = false) {
