@@ -33,6 +33,12 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
   und das bestätigte `submit` nutzen; `resolveRejectedItems: true` nur für belegbar
   korrigierte, zur Wiedervorlage autorisierte Bestandteile. Bei unklarem Ausgang
   ausschließlich den bestehenden Vorgang abgleichen.
+- Wurden fehlende Antworten zur Altersfreigabe nach dem Anlegen des Entwurfs
+  ergänzt, prüfe den ursprünglichen Vorgang mit `release status`. Bei
+  `refreshableSubmissionId` die ausgewiesenen Antworten mit den App-Funktionen
+  abgleichen, `prepare-draft-refresh` ausführen und den Vorgang erneut validieren.
+  Für eine beauftragte Einreichung denselben Entwurf mit dem neuen Bestätigungswert
+  fortsetzen. Die genauen Parameter stehen im Skill `blitz-release`.
 - **„App im App Store neu erstellen“** (auch „App im AppStore neu erstellen“):
   Lies `.agents/skills/asc-app-create-ui/SKILL.md`. Prüfe zuerst lesend, ob der
   passende App-Datensatz bereits existiert. Falls nicht, nutze das Blitz-

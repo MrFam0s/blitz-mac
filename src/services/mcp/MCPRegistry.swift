@@ -49,6 +49,14 @@ enum MCPRegistry {
                          "resolveRejectedItems": ["type": "boolean", "description": "Default false. Include only after verifying the rejected items' corrections and authorization to mark them resolved and resubmit. Preparation itself performs no Apple writes; inspect the returned exact resolution plan before confirming submit."]],
             required: ["operationId", "accountKey", "submissionId"]
         ))
+        tools.append(tool(
+            name: "release_prepare_draft_refresh",
+            description: "Renew the local confirmation of an existing unsent review draft after Apple saved previously unanswered age-rating questions. Use the exact refreshableSubmissionId from release_status and the previous confirmationDigest. Review the returned ageRatingCorrection, validate, then explicitly confirm the same draft with its new digest. This step performs no Apple writes.",
+            properties: ["operationId": ["type": "string"], "accountKey": ["type": "string"],
+                         "submissionId": ["type": "string"], "confirmationDigest": ["type": "string"],
+                         "releaseTargetId": ["type": "string"]],
+            required: ["operationId", "accountKey", "submissionId", "confirmationDigest"]
+        ))
         for (name, description) in [
             ("release_status", "Read and reconcile a durable operation with Apple. Historical state=submitted is not a current queue status: inspect current Apple/submission state and the reported next action. A reply or READY_FOR_REVIEW item is not a new submission. Never replays a write. Use after timeout/restart before any retry."),
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
@@ -515,7 +523,7 @@ enum MCPRegistry {
         // Navigation / read-only
         case "app_get_state", "nav_switch_tab", "nav_list_tabs":
             return .navigation
-        case "project_list", "project_get_active", "get_release_context", "get_release_targets", "release_prepare", "release_prepare_resubmission", "release_validate", "release_status":
+        case "project_list", "project_get_active", "get_release_context", "get_release_targets", "release_prepare", "release_prepare_resubmission", "release_prepare_draft_refresh", "release_validate", "release_status":
             return .query
         case "simulator_list_devices":
             return .query
@@ -584,7 +592,7 @@ enum MCPRegistry {
         if !required.isEmpty {
             schema["required"] = required
         }
-        if ["release_prepare", "release_prepare_resubmission", "release_validate", "release_status", "release_submit"].contains(name) {
+        if ["release_prepare", "release_prepare_resubmission", "release_prepare_draft_refresh", "release_validate", "release_status", "release_submit"].contains(name) {
             schema["additionalProperties"] = false
         }
         return [

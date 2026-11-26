@@ -444,7 +444,7 @@ actor MCPExecutor {
             return await executeGetReleaseContext(arguments)
         case "get_release_targets":
             return try await executeGetReleaseTargets(arguments)
-        case "release_prepare", "release_prepare_resubmission", "release_validate", "release_status", "release_submit":
+        case "release_prepare", "release_prepare_resubmission", "release_prepare_draft_refresh", "release_validate", "release_status", "release_submit":
             return try await executeReleaseWorkflow(name: name, arguments: arguments)
 
         case "asc_set_credentials":

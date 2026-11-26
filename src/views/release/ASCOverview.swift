@@ -218,7 +218,7 @@ struct ASCOverview: View {
         let keywords = trimmed(versionLoc?.attributes.keywords)
         let category = trimmed(asc.appInfo?.primaryCategoryId).map(BlitzDisplayText.category)
         let privacyPolicy = trimmed(infoLoc?.attributes.privacyPolicyUrl)
-        let ageRating = asc.ageRatingDeclaration != nil ? "Set" : nil
+        let ageRating = asc.ageRatingIsConfigured ? "Set" : nil
 
         return [
             ListingHealthRow(

@@ -327,3 +327,4 @@
 "Die Faltposition lässt sich in diesem Device-Hub-Fenster nicht einstellen. Öffne das Gerät in Xcode." = "The device pose is unavailable in this Device Hub window. Open the device in Xcode.";
 "Der Simulator wurde beendet." = "The simulator has shut down.";
 "Das Simulatorfenster wurde geschlossen." = "The simulator window was closed.";
+"Die Altersfreigabe wurde ergänzt. Öffne den Projektchat, prüfe die neuen Antworten und bestätige denselben Entwurf mit ‚prepare-draft-refresh‘ erneut." = "The age rating has been updated. Open the project chat, review the new answers and renew the confirmation for this draft with ‘prepare-draft-refresh’.";

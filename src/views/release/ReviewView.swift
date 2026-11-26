@@ -10,31 +10,7 @@ struct ReviewView: View {
     @State private var isSavingAgeRating = false
     @State private var isSavingContact = false
 
-    // Age Rating boolean fields
-    @State private var arGambling = false
-    @State private var arMessaging = false
-    @State private var arWebAccess = false
-    @State private var arUGC = false
-    @State private var arAdvertising = false
-    @State private var arLootBox = false
-    @State private var arHealth = false
-    @State private var arParental = false
-    @State private var arAgeAssurance = false
-
-    // Age Rating string fields (NONE / INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE)
-    @State private var arAlcohol = "NONE"
-    @State private var arContests = "NONE"
-    @State private var arGamblingSim = "NONE"
-    @State private var arGuns = "NONE"
-    @State private var arHorror = "NONE"
-    @State private var arMature = "NONE"
-    @State private var arMedical = "NONE"
-    @State private var arProfanity = "NONE"
-    @State private var arSexGraphic = "NONE"
-    @State private var arSex = "NONE"
-    @State private var arViolenceCartoon = "NONE"
-    @State private var arViolenceRealistic = "NONE"
-    @State private var arViolenceProlonged = "NONE"
+    @State private var ageRatingDraft = ASCAgeRatingDeclaration.Attributes()
 
     // Review contact fields
     @State private var contactFirstName = ""
@@ -157,7 +133,7 @@ struct ReviewView: View {
                             Text(L10n.tr("Altersfreigabe"))
                                 .font(BlitzLayout.sectionTitle)
                             Spacer()
-                            if asc.ageRatingDeclaration != nil {
+                            if asc.ageRatingIsConfigured {
                                 Text(L10n.tr("Eingerichtet"))
                                     .font(.caption)
                                     .padding(.horizontal, 8)
@@ -330,7 +306,7 @@ struct ReviewView: View {
             applyPendingValues()
             syncSelectedBuild()
         }
-        .onChange(of: asc.ageRatingDeclaration?.id) { _, _ in populateAgeRating() }
+        .onChange(of: asc.ageRatingDeclaration) { _, _ in populateAgeRating() }
         .onChange(of: asc.reviewDetail?.id) { _, _ in populateContact() }
         .onChange(of: asc.pendingFormVersion) { _, _ in applyPendingValues() }
         .onChange(of: asc.builds.map(\.id)) { _, _ in syncSelectedBuild() }
@@ -352,37 +328,42 @@ struct ReviewView: View {
             }
             Group {
                 Text(L10n.tr("Enthaltene Funktionen")).font(.callout.weight(.medium)).padding(.top, 8)
-                Toggle(L10n.tr("Glücksspiel"), isOn: $arGambling)
-                Toggle(L10n.tr("Nachrichten und Chat"), isOn: $arMessaging)
-                Toggle(L10n.tr("Uneingeschränkter Internetzugang"), isOn: $arWebAccess)
-                Toggle(L10n.tr("Nutzergenerierte Inhalte"), isOn: $arUGC)
-                Toggle(L10n.tr("Werbung"), isOn: $arAdvertising)
-                Toggle(L10n.tr("Lootboxen"), isOn: $arLootBox)
-                Toggle(L10n.tr("Gesundheits- und Wellnessthemen"), isOn: $arHealth)
-                Toggle(L10n.tr("Kindersicherung"), isOn: $arParental)
-                Toggle(L10n.tr("Altersüberprüfung"), isOn: $arAgeAssurance)
+                ageRatingAnswer(L10n.tr("Glücksspiel"), selection: $ageRatingDraft.gambling)
+                ageRatingAnswer(L10n.tr("Nachrichten und Chat"), selection: $ageRatingDraft.messagingAndChat)
+                ageRatingAnswer(L10n.tr("Uneingeschränkter Internetzugang"), selection: $ageRatingDraft.unrestrictedWebAccess)
+                ageRatingAnswer(L10n.tr("Nutzergenerierte Inhalte"), selection: $ageRatingDraft.userGeneratedContent)
+                ageRatingAnswer(L10n.tr("Werbung"), selection: $ageRatingDraft.advertising)
+                ageRatingAnswer(L10n.tr("Lootboxen"), selection: $ageRatingDraft.lootBox)
+                ageRatingAnswer(L10n.tr("Gesundheits- und Wellnessthemen"), selection: $ageRatingDraft.healthOrWellnessTopics)
+                ageRatingAnswer(L10n.tr("Kindersicherung"), selection: $ageRatingDraft.parentalControls)
+                ageRatingAnswer(L10n.tr("Altersüberprüfung"), selection: $ageRatingDraft.ageAssurance)
             }
+
+            ageRatingAnswer(L10n.tr("Soziale Medien"), selection: $ageRatingDraft.socialMedia)
+            ageRatingAnswer(L10n.tr("Altersbeschränkte soziale Medien"), selection: $ageRatingDraft.socialMediaAgeRestricted)
+            ageRatingAnswer(L10n.tr("Standortfreigabe"), selection: $ageRatingDraft.sharedLocation)
+            ageRatingAnswer(L10n.tr("Dating und Beziehungen"), selection: $ageRatingDraft.datingAndRelationships)
 
             Divider()
 
             Group {
                 Text(L10n.tr("Häufigkeit der Inhalte")).font(.callout.weight(.medium))
-                threeLevelPicker(L10n.tr("Alkohol-, Tabak- oder Drogenkonsum"), selection: $arAlcohol)
-                threeLevelPicker(L10n.tr("Wettbewerbe"), selection: $arContests)
-                threeLevelPicker(L10n.tr("Simuliertes Glücksspiel"), selection: $arGamblingSim)
-                threeLevelPicker(L10n.tr("Schusswaffen oder andere Waffen"), selection: $arGuns)
-                threeLevelPicker(L10n.tr("Horror- oder Angstthemen"), selection: $arHorror)
-                threeLevelPicker(L10n.tr("Erwachsenen- oder anzügliche Themen"), selection: $arMature)
-                threeLevelPicker(L10n.tr("Medizinische oder Behandlungsinformationen"), selection: $arMedical)
-                threeLevelPicker(L10n.tr("Vulgäre Sprache oder derber Humor"), selection: $arProfanity)
+                threeLevelPicker(L10n.tr("Alkohol-, Tabak- oder Drogenkonsum"), selection: $ageRatingDraft.alcoholTobaccoOrDrugUseOrReferences)
+                threeLevelPicker(L10n.tr("Wettbewerbe"), selection: $ageRatingDraft.contests)
+                threeLevelPicker(L10n.tr("Simuliertes Glücksspiel"), selection: $ageRatingDraft.gamblingSimulated)
+                threeLevelPicker(L10n.tr("Schusswaffen oder andere Waffen"), selection: $ageRatingDraft.gunsOrOtherWeapons)
+                threeLevelPicker(L10n.tr("Horror- oder Angstthemen"), selection: $ageRatingDraft.horrorOrFearThemes)
+                threeLevelPicker(L10n.tr("Erwachsenen- oder anzügliche Themen"), selection: $ageRatingDraft.matureOrSuggestiveThemes)
+                threeLevelPicker(L10n.tr("Medizinische oder Behandlungsinformationen"), selection: $ageRatingDraft.medicalOrTreatmentInformation)
+                threeLevelPicker(L10n.tr("Vulgäre Sprache oder derber Humor"), selection: $ageRatingDraft.profanityOrCrudeHumor)
             }
 
             Group {
-                threeLevelPicker(L10n.tr("Explizite sexuelle Inhalte und Nacktheit"), selection: $arSexGraphic)
-                threeLevelPicker(L10n.tr("Sexuelle Inhalte oder Nacktheit"), selection: $arSex)
-                threeLevelPicker(L10n.tr("Gewalt in Zeichentrick oder Fantasy"), selection: $arViolenceCartoon)
-                threeLevelPicker(L10n.tr("Realistische Gewalt"), selection: $arViolenceRealistic)
-                threeLevelPicker(L10n.tr("Anhaltende, explizite oder sadistische Gewalt"), selection: $arViolenceProlonged)
+                threeLevelPicker(L10n.tr("Explizite sexuelle Inhalte und Nacktheit"), selection: $ageRatingDraft.sexualContentGraphicAndNudity)
+                threeLevelPicker(L10n.tr("Sexuelle Inhalte oder Nacktheit"), selection: $ageRatingDraft.sexualContentOrNudity)
+                threeLevelPicker(L10n.tr("Gewalt in Zeichentrick oder Fantasy"), selection: $ageRatingDraft.violenceCartoonOrFantasy)
+                threeLevelPicker(L10n.tr("Realistische Gewalt"), selection: $ageRatingDraft.violenceRealistic)
+                threeLevelPicker(L10n.tr("Anhaltende, explizite oder sadistische Gewalt"), selection: $ageRatingDraft.violenceRealisticProlongedGraphicOrSadistic)
             }
 
             HStack {
@@ -391,7 +372,7 @@ struct ReviewView: View {
                     Task { await saveAgeRating() }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isSavingAgeRating)
+                .disabled(isSavingAgeRating || ageRatingChanges.isEmpty)
 
                 if isSavingAgeRating {
                     ProgressView().controlSize(.small)
@@ -403,7 +384,32 @@ struct ReviewView: View {
         .disabled(!asc.canEditField("ageRating"))
     }
 
-    private func threeLevelPicker(_ label: String, selection: Binding<String>) -> some View {
+    private func ageRatingAnswer(_ label: String, selection: Binding<Bool?>) -> some View {
+        let picker = Picker(label, selection: selection) {
+            if selection.wrappedValue == nil {
+                Text(L10n.tr("Nicht beantwortet")).tag(nil as Bool?)
+            }
+            Text(L10n.tr("Ja")).tag(true as Bool?)
+            Text(L10n.tr("Nein")).tag(false as Bool?)
+        }
+        .labelsHidden()
+        .accessibilityLabel(label)
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Text(label).fixedSize()
+                Spacer(minLength: 0)
+                picker.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label).fixedSize(horizontal: false, vertical: true)
+                picker.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .font(.callout)
+    }
+
+    private func threeLevelPicker(_ label: String, selection: Binding<String?>) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 12) {
                 Text(label).fixedSize()
@@ -421,11 +427,18 @@ struct ReviewView: View {
         .accessibilityLabel(label)
     }
 
-    private func frequencyPicker(selection: Binding<String>) -> some View {
+    private func frequencyPicker(selection: Binding<String?>) -> some View {
         Picker(L10n.tr("Häufigkeit"), selection: selection) {
-            Text(L10n.tr("Keine")).tag("NONE")
-            Text(L10n.tr("Selten oder schwach")).tag("INFREQUENT_OR_MILD")
-            Text(L10n.tr("Häufig oder intensiv")).tag("FREQUENT_OR_INTENSE")
+            if let current = selection.wrappedValue {
+                if !["NONE", "INFREQUENT_OR_MILD", "FREQUENT_OR_INTENSE"].contains(current) {
+                    Text(current).tag(current as String?)
+                }
+            } else {
+                Text(L10n.tr("Nicht beantwortet")).tag(nil as String?)
+            }
+            Text(L10n.tr("Keine")).tag("NONE" as String?)
+            Text(L10n.tr("Selten oder schwach")).tag("INFREQUENT_OR_MILD" as String?)
+            Text(L10n.tr("Häufig oder intensiv")).tag("FREQUENT_OR_INTENSE" as String?)
         }
         .labelsHidden()
     }
@@ -528,30 +541,7 @@ struct ReviewView: View {
     // MARK: - Data Population
 
     private func populateAgeRating() {
-        guard let ar = asc.ageRatingDeclaration?.attributes else { return }
-        arGambling = ar.gambling ?? false
-        arMessaging = ar.messagingAndChat ?? false
-        arWebAccess = ar.unrestrictedWebAccess ?? false
-        arUGC = ar.userGeneratedContent ?? false
-        arAdvertising = ar.advertising ?? false
-        arLootBox = ar.lootBox ?? false
-        arHealth = ar.healthOrWellnessTopics ?? false
-        arParental = ar.parentalControls ?? false
-        arAgeAssurance = ar.ageAssurance ?? false
-
-        arAlcohol = ar.alcoholTobaccoOrDrugUseOrReferences ?? "NONE"
-        arContests = ar.contests ?? "NONE"
-        arGamblingSim = ar.gamblingSimulated ?? "NONE"
-        arGuns = ar.gunsOrOtherWeapons ?? "NONE"
-        arHorror = ar.horrorOrFearThemes ?? "NONE"
-        arMature = ar.matureOrSuggestiveThemes ?? "NONE"
-        arMedical = ar.medicalOrTreatmentInformation ?? "NONE"
-        arProfanity = ar.profanityOrCrudeHumor ?? "NONE"
-        arSexGraphic = ar.sexualContentGraphicAndNudity ?? "NONE"
-        arSex = ar.sexualContentOrNudity ?? "NONE"
-        arViolenceCartoon = ar.violenceCartoonOrFantasy ?? "NONE"
-        arViolenceRealistic = ar.violenceRealistic ?? "NONE"
-        arViolenceProlonged = ar.violenceRealisticProlongedGraphicOrSadistic ?? "NONE"
+        ageRatingDraft = asc.ageRatingDeclaration?.attributes ?? .init()
     }
 
     private func populateContact() {
@@ -568,32 +558,11 @@ struct ReviewView: View {
 
     private func applyPendingValues() {
         if let pending = asc.pendingFormValues["review.ageRating"] {
-            for (field, value) in pending {
-                switch field {
-                case "gambling": arGambling = value == "true"
-                case "messagingAndChat": arMessaging = value == "true"
-                case "unrestrictedWebAccess": arWebAccess = value == "true"
-                case "userGeneratedContent": arUGC = value == "true"
-                case "advertising": arAdvertising = value == "true"
-                case "lootBox": arLootBox = value == "true"
-                case "healthOrWellnessTopics": arHealth = value == "true"
-                case "parentalControls": arParental = value == "true"
-                case "ageAssurance": arAgeAssurance = value == "true"
-                case "alcoholTobaccoOrDrugUseOrReferences": arAlcohol = value
-                case "contests": arContests = value
-                case "gamblingSimulated": arGamblingSim = value
-                case "gunsOrOtherWeapons": arGuns = value
-                case "horrorOrFearThemes": arHorror = value
-                case "matureOrSuggestiveThemes": arMature = value
-                case "medicalOrTreatmentInformation": arMedical = value
-                case "profanityOrCrudeHumor": arProfanity = value
-                case "sexualContentGraphicAndNudity": arSexGraphic = value
-                case "sexualContentOrNudity": arSex = value
-                case "violenceCartoonOrFantasy": arViolenceCartoon = value
-                case "violenceRealistic": arViolenceRealistic = value
-                case "violenceRealisticProlongedGraphicOrSadistic": arViolenceProlonged = value
-                default: break
-                }
+            for (field, path) in ASCAgeRatingDeclaration.Attributes.booleanFields {
+                if let value = pending[field], let answer = Bool(value) { ageRatingDraft[keyPath: path] = answer }
+            }
+            for (field, path) in ASCAgeRatingDeclaration.Attributes.frequencyFields {
+                if let value = pending[field] { ageRatingDraft[keyPath: path] = value }
             }
         }
         if let pending = asc.pendingFormValues["review.contact"] {
@@ -615,33 +584,16 @@ struct ReviewView: View {
 
     // MARK: - Save
 
+    private var ageRatingChanges: [String: Any] {
+        guard let saved = asc.ageRatingDeclaration?.attributes else { return [:] }
+        return ageRatingDraft.changedAnswers(from: saved)
+    }
+
     private func saveAgeRating() async {
+        let changes = ageRatingChanges
+        guard !changes.isEmpty else { return }
         isSavingAgeRating = true
-        let attrs: [String: Any] = [
-            "gambling": arGambling,
-            "messagingAndChat": arMessaging,
-            "unrestrictedWebAccess": arWebAccess,
-            "userGeneratedContent": arUGC,
-            "advertising": arAdvertising,
-            "lootBox": arLootBox,
-            "healthOrWellnessTopics": arHealth,
-            "parentalControls": arParental,
-            "ageAssurance": arAgeAssurance,
-            "alcoholTobaccoOrDrugUseOrReferences": arAlcohol,
-            "contests": arContests,
-            "gamblingSimulated": arGamblingSim,
-            "gunsOrOtherWeapons": arGuns,
-            "horrorOrFearThemes": arHorror,
-            "matureOrSuggestiveThemes": arMature,
-            "medicalOrTreatmentInformation": arMedical,
-            "profanityOrCrudeHumor": arProfanity,
-            "sexualContentGraphicAndNudity": arSexGraphic,
-            "sexualContentOrNudity": arSex,
-            "violenceCartoonOrFantasy": arViolenceCartoon,
-            "violenceRealistic": arViolenceRealistic,
-            "violenceRealisticProlongedGraphicOrSadistic": arViolenceProlonged,
-        ]
-        await asc.updateAgeRating(attrs)
+        await asc.updateAgeRating(changes)
         isSavingAgeRating = false
     }
 

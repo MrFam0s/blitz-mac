@@ -80,34 +80,6 @@ extension MCPExecutor {
 
     // MARK: - Tab State Tool
 
-    private static let ageRatingBooleanFieldReaders: [(String, (ASCAgeRatingDeclaration.Attributes) -> Bool?)] = [
-        ("gambling", { $0.gambling }),
-        ("messagingAndChat", { $0.messagingAndChat }),
-        ("unrestrictedWebAccess", { $0.unrestrictedWebAccess }),
-        ("userGeneratedContent", { $0.userGeneratedContent }),
-        ("advertising", { $0.advertising }),
-        ("lootBox", { $0.lootBox }),
-        ("healthOrWellnessTopics", { $0.healthOrWellnessTopics }),
-        ("parentalControls", { $0.parentalControls }),
-        ("ageAssurance", { $0.ageAssurance }),
-    ]
-
-    private static let ageRatingEnumFieldReaders: [(String, (ASCAgeRatingDeclaration.Attributes) -> String?)] = [
-        ("alcoholTobaccoOrDrugUseOrReferences", { $0.alcoholTobaccoOrDrugUseOrReferences }),
-        ("contests", { $0.contests }),
-        ("gamblingSimulated", { $0.gamblingSimulated }),
-        ("gunsOrOtherWeapons", { $0.gunsOrOtherWeapons }),
-        ("horrorOrFearThemes", { $0.horrorOrFearThemes }),
-        ("matureOrSuggestiveThemes", { $0.matureOrSuggestiveThemes }),
-        ("medicalOrTreatmentInformation", { $0.medicalOrTreatmentInformation }),
-        ("profanityOrCrudeHumor", { $0.profanityOrCrudeHumor }),
-        ("sexualContentGraphicAndNudity", { $0.sexualContentGraphicAndNudity }),
-        ("sexualContentOrNudity", { $0.sexualContentOrNudity }),
-        ("violenceCartoonOrFantasy", { $0.violenceCartoonOrFantasy }),
-        ("violenceRealistic", { $0.violenceRealistic }),
-        ("violenceRealisticProlongedGraphicOrSadistic", { $0.violenceRealisticProlongedGraphicOrSadistic }),
-    ]
-
     private static let reviewContactFieldOrder = [
         "contactFirstName",
         "contactLastName",
@@ -156,16 +128,16 @@ extension MCPExecutor {
         }
 
         var missingRequired: [String] = []
-        for (field, reader) in ageRatingBooleanFieldReaders {
-            if let attributes, let value = reader(attributes) {
+        for (field, path) in ASCAgeRatingDeclaration.Attributes.booleanFields {
+            if let attributes, let value = attributes[keyPath: path] {
                 payload[field] = value
             } else {
                 payload[field] = NSNull()
                 missingRequired.append(field)
             }
         }
-        for (field, reader) in ageRatingEnumFieldReaders {
-            if let attributes, let value = reader(attributes), !value.isEmpty {
+        for (field, path) in ASCAgeRatingDeclaration.Attributes.frequencyFields {
+            if let attributes, let value = attributes[keyPath: path], !value.isEmpty {
                 payload[field] = value
             } else {
                 payload[field] = NSNull()

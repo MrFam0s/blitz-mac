@@ -321,6 +321,8 @@ private actor WorkflowSnapshotFixture {
     var rejectAt: String?
     var failReadAfterSubmit = false
     var appInfoCount = 0
+    var ageRating: [String: Any]?
+    var attachedBuildID = "build1"
     var initialInfoState = "DEVELOPER_REJECTED"
     var timeoutAt: String?
     var unknownOtherRelationship = false
@@ -337,6 +339,15 @@ private actor WorkflowSnapshotFixture {
         self.timeoutAt = timeoutAt; self.unknownOtherRelationship = unknownOtherRelationship
     }
     func configureInfo(count: Int = 1, state: String = "DEVELOPER_REJECTED") { appInfoCount = count; initialInfoState = state }
+    func configureAgeRating(sharedLocation: Bool?, dating: Bool?) {
+        appInfoCount = 1
+        initialInfoState = "PREPARE_FOR_SUBMISSION"
+        ageRating = ["advertising": false,
+                     "sharedLocation": sharedLocation as Any? ?? NSNull(),
+                     "datingAndRelationships": dating as Any? ?? NSNull()]
+    }
+    func restoreEmptyDraft() { createdDraft = true }
+    func replaceAttachedBuild() { attachedBuildID = "other-build" }
     func response(_ method: String, _ path: String, _ headers: [String: String], _ body: Data?) throws -> ASCDaemonClient.HTTPResponse {
         #expect(headers["Accept"] == "application/json")
         let url = try #require(URLComponents(string: path))
@@ -374,7 +385,7 @@ private actor WorkflowSnapshotFixture {
                                                     "appStoreState": platformlessDraft.versionState == "READY_FOR_DISTRIBUTION" ? "READY_FOR_SALE" : platformlessDraft.versionState]])
                 }
                 object = ["data": versions]
-            case "/v1/appStoreVersions/version1/build": object = ["data": ["id": "build1"]]
+            case "/v1/appStoreVersions/version1/build": object = ["data": ["id": attachedBuildID]]
             case "/v1/appStoreVersions/version1/appStoreVersionLocalizations":
                 object = ["data": [["id": "loc1", "attributes": ["locale": "de-DE", "description": changedText ? "New" : "Original",
                     "whatsNew": "Die Trainingssteuerung ist jetzt beim Training erreichbar."]]]]
@@ -438,7 +449,13 @@ private actor WorkflowSnapshotFixture {
                 object = ["data": items]
             default:
                 if url.path.hasPrefix("/v1/appInfos/info"), url.path.hasSuffix("/appInfoLocalizations") { object = ["data": []] }
-                else if url.path.hasPrefix("/v1/appInfos/info"), url.path.hasSuffix("/ageRatingDeclaration") { object = ["data": NSNull()] }
+                else if url.path.hasPrefix("/v1/appInfos/info"), url.path.hasSuffix("/ageRatingDeclaration") {
+                    if let ageRating {
+                        object = ["data": ["id": "age1", "type": "ageRatingDeclarations", "attributes": ageRating] as [String: Any]]
+                    } else {
+                        object = ["data": NSNull()]
+                    }
+                }
                 else { throw ReleaseWorkflowAPIError.invalidResponse }
             }
         }
@@ -824,6 +841,148 @@ private func legacyPending(_ record: ReleaseWorkflowRecord, root: URL, legacyDig
     #expect(submitted.state == .submitted)
     #expect(await fixture.writes.map(\.method) == ["PATCH"])
     #expect(await fixture.writes.first?.path == "/v1/reviewSubmissions/existing-submission")
+}
+
+/// Persist the version-2 journal left by an older Blitz after Apple created a
+/// draft but rejected its version item. Only the full content digest was saved.
+private func ageRatingDraftJournal(_ root: URL, fixture: WorkflowSnapshotFixture,
+                                   phase: ReleaseSubmissionPhase = .addingVersion,
+                                   rejected: Bool = true) async throws -> ReleaseWorkflowRecord {
+    await fixture.configureAgeRating(sharedLocation: nil, dating: nil)
+    let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    var record = try await service.prepare(target: workflowTarget(root), mode: .manual)
+    #expect(record.contentFingerprintVersion == 2)
+    record.state = .submissionPending
+    record.submissionID = "submission1"
+    record.submissionProgress = .init(phase: phase, submissionID: "submission1")
+    record.lastErrorCode = "submission_outcome_unknown"
+    record.lastDiagnostic = rejected
+        ? .init(phase: phase, category: "apple_request_rejected",
+                apple: .init(httpStatus: 409, codes: ["STATE_ERROR.ENTITY_STATE_INVALID"], pointers: []))
+        : .init(phase: phase, category: "request_outcome_unknown")
+    try JSONEncoder().encode(record).write(to: root.appendingPathComponent("\(record.operationID).json"))
+    await fixture.restoreEmptyDraft()
+    await fixture.configureAgeRating(sharedLocation: false, dating: false)
+    return record
+}
+
+@Test func releaseWorkflowCorrectedAgeRatingRequiresNewConfirmationForOriginalDraft() async throws {
+    let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = WorkflowSnapshotFixture()
+    let old = try await ageRatingDraftJournal(root, fixture: fixture)
+    let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let id = old.operationID, account = old.target.accountKey
+    let status = try await service.status(operationID: id, accountKey: account)
+    #expect(status.refreshableSubmissionID == "submission1")
+    #expect(status.resumableSubmissionID == nil)
+    #expect(status.nextAction == "prepareDraftRefresh")
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.submit(operationID: id, accountKey: account,
+                                 confirmationDigest: old.confirmationDigest, resumeSubmissionID: "submission1")
+    }
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.prepareDraftRefresh(operationID: id, accountKey: account,
+                                             submissionID: "other", confirmationDigest: old.confirmationDigest)
+    }
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.prepareDraftRefresh(operationID: id, accountKey: account,
+                                             submissionID: "submission1", confirmationDigest: "stale")
+    }
+    let refreshed = try await service.prepareDraftRefresh(operationID: id, accountKey: account,
+                                                         submissionID: "submission1", confirmationDigest: old.confirmationDigest)
+    #expect(refreshed.operationID == id && refreshed.target == old.target && refreshed.mode == old.mode)
+    #expect(refreshed.submissionID == "submission1" && refreshed.resumableSubmissionID == "submission1")
+    #expect(refreshed.contentDigest != old.contentDigest && refreshed.confirmationDigest != old.confirmationDigest)
+    #expect(refreshed.ageRatingCorrection == .init(declarationID: "age1", sharedLocation: false, datingAndRelationships: false))
+    #expect(refreshed.validation == nil)
+
+    let restarted = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let recovered = try await restarted.status(operationID: id, accountKey: account)
+    #expect(recovered.resumableSubmissionID == "submission1" && recovered.refreshableSubmissionID == nil)
+    #expect(recovered.ageRatingCorrection == refreshed.ageRatingCorrection)
+    await fixture.configure(changedText: true)
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.validate(operationID: id, accountKey: account)
+    }
+    let interrupted = try await restarted.loadRecord(operationID: id)
+    #expect(interrupted.resumableSubmissionID == nil && interrupted.ageRatingCorrection == nil)
+    await fixture.configure()
+    let repeatedPreview = try await restarted.prepareDraftRefresh(operationID: id, accountKey: account,
+                                                                  submissionID: "submission1", confirmationDigest: old.confirmationDigest)
+    #expect(repeatedPreview.confirmationDigest == refreshed.confirmationDigest)
+    #expect(repeatedPreview.resumableSubmissionID == "submission1" && repeatedPreview.refreshableSubmissionID == nil)
+    #expect(repeatedPreview.ageRatingCorrection == refreshed.ageRatingCorrection)
+    #expect(repeatedPreview.nextAction == "validateDraftContinuation" && repeatedPreview.validation == nil)
+    let validated = try await restarted.validate(operationID: id, accountKey: account)
+    #expect(validated.validation?.ready == true)
+    let validatedPreview = try await restarted.prepareDraftRefresh(operationID: id, accountKey: account,
+                                                                  submissionID: "submission1", confirmationDigest: old.confirmationDigest)
+    #expect(validatedPreview.confirmationDigest == refreshed.confirmationDigest)
+    #expect(validatedPreview.nextAction == "confirmDraftContinuation" && validatedPreview.validation?.ready == true)
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.submit(operationID: id, accountKey: account,
+                                   confirmationDigest: old.confirmationDigest, resumeSubmissionID: "submission1")
+    }
+    #expect(await fixture.writes.isEmpty)
+    let done = try await restarted.submit(operationID: id, accountKey: account,
+                                          confirmationDigest: refreshed.confirmationDigest, resumeSubmissionID: "submission1")
+    #expect(done.state == .submitted && done.submissionID == "submission1" && done.submissionItemID == "item1")
+    _ = try await restarted.submit(operationID: id, accountKey: account,
+                                   confirmationDigest: refreshed.confirmationDigest, resumeSubmissionID: "submission1")
+    let writes = await fixture.writes
+    #expect(writes.map(\.method) == ["POST", "PATCH"])
+    #expect(writes.map(\.path) == ["/v1/reviewSubmissionItems", "/v1/reviewSubmissions/submission1"])
+    let firstBody = try #require(writes.first?.body)
+    let payload = try #require(JSONSerialization.jsonObject(with: firstBody) as? [String: Any])
+    let item = try #require(payload["data"] as? [String: Any])
+    let relationships = try #require(item["relationships"] as? [String: [String: [String: String]]])
+    #expect(relationships == ["reviewSubmission": ["data": ["type": "reviewSubmissions", "id": "submission1"]],
+                              "appStoreVersion": ["data": ["type": "appStoreVersions", "id": old.target.versionID]]])
+}
+
+private enum UnsafeAgeRatingRefresh: CaseIterable {
+    case halfAnswered, editedDescription, changedBuild, foreignDraft, additionalItem, lostVersionItemReply, finalPatch
+}
+
+@Test(arguments: UnsafeAgeRatingRefresh.allCases)
+private func releaseWorkflowRejectsUnsafeAgeRatingDraftRefresh(_ scenario: UnsafeAgeRatingRefresh) async throws {
+    let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = WorkflowSnapshotFixture()
+    let old = try await ageRatingDraftJournal(root, fixture: fixture,
+        phase: scenario == .finalPatch ? .submitting : .addingVersion, rejected: scenario != .lostVersionItemReply)
+    switch scenario {
+    case .halfAnswered: await fixture.configureAgeRating(sharedLocation: false, dating: nil)
+    case .editedDescription: await fixture.configure(changedText: true)
+    case .changedBuild: await fixture.replaceAttachedBuild()
+    case .foreignDraft: await fixture.configure(existing: true)
+    case .additionalItem: await fixture.configureSubmission(otherItem: true)
+    case .lostVersionItemReply, .finalPatch: break
+    }
+    let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let status = try await service.status(operationID: old.operationID, accountKey: old.target.accountKey)
+    #expect(status.refreshableSubmissionID == nil && status.resumableSubmissionID == nil)
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.prepareDraftRefresh(operationID: old.operationID, accountKey: old.target.accountKey,
+                                             submissionID: "submission1", confirmationDigest: old.confirmationDigest)
+    }
+    let saved = try await service.loadRecord(operationID: old.operationID)
+    #expect(saved.confirmationDigest == old.confirmationDigest && saved.submissionID == "submission1")
+    #expect(await fixture.writes.isEmpty)
+}
+
+@Test func releaseWorkflowAgeRatingDraftRefreshStillRejectsLaterEdits() async throws {
+    let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = WorkflowSnapshotFixture()
+    let old = try await ageRatingDraftJournal(root, fixture: fixture)
+    let service = ReleaseWorkflowService(directory: root, api: fixtureAdapter(fixture))
+    let refreshed = try await service.prepareDraftRefresh(operationID: old.operationID, accountKey: old.target.accountKey,
+                                                         submissionID: "submission1", confirmationDigest: old.confirmationDigest)
+    await fixture.configureAgeRating(sharedLocation: true, dating: false)
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.submit(operationID: refreshed.operationID, accountKey: refreshed.target.accountKey,
+                                 confirmationDigest: refreshed.confirmationDigest, resumeSubmissionID: "submission1")
+    }
+    #expect(await fixture.writes.isEmpty)
 }
 
 @Test func releaseWorkflowNeverResumesDraftContainingAdditionalContent() async throws {

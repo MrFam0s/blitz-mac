@@ -551,13 +551,20 @@ extension ASCManager {
             }
         })
         let workflow = ReleaseWorkflowService(directory: BlitzPaths.root.appendingPathComponent("release-operations"), api: api)
+        func reconcile(_ previous: ReleaseWorkflowRecord) async throws -> ReleaseWorkflowRecord {
+            let record = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
+            try target.check(self)
+            if record.refreshableSubmissionID != nil {
+                throw ASCError.notFound(L10n.tr("Die Altersfreigabe wurde ergänzt. Öffne den Projektchat, prüfe die neuen Antworten und bestätige denselben Entwurf mit ‚prepare-draft-refresh‘ erneut."))
+            }
+            return record
+        }
         do {
             let previous = try await workflow.activeOperation(target: request.target)
             try ASCManualReleaseRequest.requireAppOnlyScope(previous: previous)
             if expectedReviewSubmissionID == nil, let previous,
                previous.state == .submissionPending || previous.state == .releaseModePending || previous.state == .attachmentPending {
-                let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
-                try target.check(self)
+                let reconciled = try await reconcile(previous)
                 if reconciled.state == .submitted, reconciled.reviewOutcome == "submitted", reconciled.target == request.target {
                     await refreshTabData(.app)
                     return true
@@ -572,8 +579,7 @@ extension ASCManager {
                 guard !attachBuild, let previous, previous.target == request.target, previous.target.reviewItems.isEmpty else {
                     throw ASCError.notFound(L10n.tr("Die bestehende Einreichung passt nicht eindeutig zu diesem Release-Vorgang. Bitte den gespeicherten Vorgang über CLI oder MCP prüfen; es wurde kein neuer Entwurf angelegt."))
                 }
-                let reconciled = try await workflow.status(operationID: previous.operationID, accountKey: request.target.accountKey)
-                try target.check(self)
+                let reconciled = try await reconcile(previous)
                 guard reconciled.submissionID == expectedReviewSubmissionID else { throw ReleaseWorkflowError.identityChanged }
                 if reconciled.state == .submitted, reconciled.reviewOutcome == "submitted" {
                     await refreshTabData(.app)

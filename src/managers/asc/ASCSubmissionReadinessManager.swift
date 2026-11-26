@@ -4,14 +4,7 @@ extension ASCManager {
     /// ASC returns an age rating declaration object with nil fields by default.
     /// Submitting with nil fields later causes a 409.
     var ageRatingIsConfigured: Bool {
-        guard let attributes = ageRatingDeclaration?.attributes else { return false }
-        return attributes.alcoholTobaccoOrDrugUseOrReferences != nil
-            && attributes.violenceCartoonOrFantasy != nil
-            && attributes.violenceRealistic != nil
-            && attributes.sexualContentOrNudity != nil
-            && attributes.sexualContentGraphicAndNudity != nil
-            && attributes.profanityOrCrudeHumor != nil
-            && attributes.gamblingSimulated != nil
+        ageRatingDeclaration?.attributes.missingAnswers.isEmpty == true
     }
 
     private func whatsNewReadinessFields() -> [SubmissionReadiness.FieldStatus] {

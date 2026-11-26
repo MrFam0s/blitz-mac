@@ -13,6 +13,7 @@ public enum BlitzReleaseCLI {
       targets   List this explicitly named project's configured release targets.
       context   Read the explicitly requested project's current MCP target.
       prepare   Record an exact app/build and selected product versions; no Apple writes.
+      prepare-draft-refresh  Renew confirmation for corrected age-rating answers on an unsent draft.
       prepare-resubmission  Plan corrections and resubmission of the same rejected review.
       validate  Refresh readiness and the prepared content fingerprint.
       status    Reconcile a saved operation with Apple; no Apple writes.
@@ -36,6 +37,13 @@ public enum BlitzReleaseCLI {
     the previous run stopped before its final submit. The draft state alone
     cannot prove this. No new user approval is needed for unchanged already
     authorized scope, but an unknown old submit outcome must remain blocked.
+
+    If status provides refreshableSubmissionId, inspect ageRatingCorrection.
+    Use prepare-draft-refresh with operationId, accountKey, submissionId set to
+    that exact ID, and the old confirmationDigest. This updates only the local
+    confirmation. Verify the returned answers and run validate. To submit an
+    authorized release, pass its new confirmationDigest, resumeSubmissionId set
+    to the same draft ID, and confirm=true to submit.
 
     prepare-resubmission accepts the previous operationId, accountKey and exact
     submissionId. It reads Apple and creates a new operation/digest for the same
@@ -93,7 +101,7 @@ public enum BlitzReleaseCLI {
 
     public static func parse(_ arguments: [String]) throws -> Invocation {
         let commands = ["targets": "get_release_targets", "context": "get_release_context", "prepare": "release_prepare",
-                        "prepare-resubmission": "release_prepare_resubmission",
+                        "prepare-resubmission": "release_prepare_resubmission", "prepare-draft-refresh": "release_prepare_draft_refresh",
                         "validate": "release_validate", "status": "release_status", "submit": "release_submit"]
         guard arguments.count == 4, arguments[0] == "release",
               let tool = commands[arguments[1]], arguments[2] == "--request",

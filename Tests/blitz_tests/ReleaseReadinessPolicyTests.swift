@@ -119,3 +119,12 @@ private func normalize(_ report: [String: Any], first: Bool = true, web: Release
         }
     }
 }
+
+@Test func releaseReadinessIdentifiesMissingAgeRatingAnswers() throws {
+    let checks: [[String: Any]] = ["sharedLocation", "datingAndRelationships"].map {
+        ["id": "age_rating.missing_field", "severity": "error", "field": $0]
+    }
+    let result = try normalize(readinessReport(checks: checks))
+    #expect(!result.ready)
+    #expect(Set(try #require(result.diagnostics).compactMap(\.field)) == ["sharedLocation", "datingAndRelationships"])
+}

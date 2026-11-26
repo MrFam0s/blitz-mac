@@ -20,15 +20,8 @@ extension MCPExecutor {
         MCPAppInformationCompatibility.canonicalTab: appInformationLocalizationFields
             .union(appInformationDetailFieldWriteOrder),
         "monetization": ["isFree"],
-        "review.ageRating": ["gambling", "messagingAndChat", "unrestrictedWebAccess",
-                             "userGeneratedContent", "advertising", "lootBox",
-                             "healthOrWellnessTopics", "parentalControls", "ageAssurance",
-                             "alcoholTobaccoOrDrugUseOrReferences", "contests", "gamblingSimulated",
-                             "gunsOrOtherWeapons", "horrorOrFearThemes", "matureOrSuggestiveThemes",
-                             "medicalOrTreatmentInformation", "profanityOrCrudeHumor",
-                             "sexualContentGraphicAndNudity", "sexualContentOrNudity",
-                             "violenceCartoonOrFantasy", "violenceRealistic",
-                             "violenceRealisticProlongedGraphicOrSadistic"],
+        "review.ageRating": Set(ASCAgeRatingDeclaration.Attributes.booleanFields.map(\.0))
+            .union(ASCAgeRatingDeclaration.Attributes.frequencyFields.map(\.0)),
         "review.contact": ["contactFirstName", "contactLastName", "contactEmail", "contactPhone",
                            "notes", "demoAccountRequired", "demoAccountName", "demoAccountPassword"],
         "settings.bundleId": ["bundleId"],
@@ -362,6 +355,20 @@ extension MCPExecutor {
         return mcpText("Error: app was not found in App Store Connect after 10 checks.")
     }
 
+    static func ageRatingPatch(_ fields: [String: String]) throws -> [String: Any] {
+        let booleanFields = Set(ASCAgeRatingDeclaration.Attributes.booleanFields.map(\.0))
+        var attributes: [String: Any] = [:]
+        for (field, value) in fields {
+            if booleanFields.contains(field) {
+                guard let answer = Bool(value) else { throw MCPServerService.MCPError.invalidToolArgs }
+                attributes[field] = answer
+            } else {
+                attributes[field] = value
+            }
+        }
+        return attributes
+    }
+
     func executeASCFillForm(_ args: [String: Any]) async throws -> [String: Any] {
         guard let rawTab = args["tab"] as? String else {
             throw MCPServerService.MCPError.invalidToolArgs
@@ -462,13 +469,7 @@ extension MCPExecutor {
             if let err = await checkASCWriteError(tab: tab) { return err }
 
         case "review.ageRating":
-            var attrs: [String: Any] = [:]
-            let boolFields = Set(["gambling", "messagingAndChat", "unrestrictedWebAccess",
-                                  "userGeneratedContent", "advertising", "lootBox",
-                                  "healthOrWellnessTopics", "parentalControls", "ageAssurance"])
-            for (field, value) in fieldMap {
-                attrs[field] = boolFields.contains(field) ? (value == "true") : value
-            }
+            let attrs = try Self.ageRatingPatch(fieldMap)
             try await MCPMutationScope.checkBeforeWrite()
             await appState.ascManager.updateAgeRating(attrs)
             if let err = await checkASCWriteError(tab: tab) { return err }

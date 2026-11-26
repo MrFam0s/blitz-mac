@@ -193,6 +193,17 @@ proof of a newly queued review. After uncertainty read `status`. Only an explici
 `resumeSubmissionId`, its unchanged digest and `confirm: true`; it proves a safe
 pre-final-send boundary. An uncertain final submit permits status only, no replay.
 
+If Apple has saved previously missing age-rating answers, run `release status`
+on the original operation. When it returns `refreshableSubmissionId`, verify
+the reported `ageRatingCorrection` (including explicit `false` values) against
+the app's features and the authorized correction. Run
+`release prepare-draft-refresh --request <JSON-file>` with the original
+`operationId`, `accountKey`, old `confirmationDigest` and the returned draft
+ID as `submissionId`. Check the returned answers and validate the same operation
+again. For an authorized submission, continue with the new digest and the
+exact draft ID as `resumeSubmissionId`. If the evidence or authorization is
+missing, report what still needs verification. Never infer answers from an empty field.
+
 If `status` returns `resumableSubmissionId`, it has identified a unique existing
 unsubmitted draft for this same operation. Verify that ID against the saved release
 evidence. For this already authorized, unchanged release, use the same `submit`

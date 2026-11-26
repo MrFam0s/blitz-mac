@@ -1,0 +1,2 @@
+# Unified diff context prefixes a space to original source lines, including Go tabs.
+helpers/*.patch whitespace=-space-before-tab,-blank-at-eol

@@ -1,0 +1,135 @@
+--- a/internal/asc/age_rating.go
++++ b/internal/asc/age_rating.go
+@@ -10,4 +10,6 @@
+ 	// Boolean content descriptors
+ 	Advertising              *bool         `json:"advertising,omitempty"`
++	SharedLocation           *bool         `json:"sharedLocation,omitempty"`
++	DatingAndRelationships   *bool         `json:"datingAndRelationships,omitempty"`
+ 	Gambling                 *bool         `json:"gambling,omitempty"`
+ 	HealthOrWellnessTopics   *bool         `json:"healthOrWellnessTopics,omitempty"`
+--- a/internal/cli/agerating/age_rating.go
++++ b/internal/cli/agerating/age_rating.go
+@@ -166,4 +166,6 @@
+ 	socialMedia := fs.String("social-media", "", "Social media features (true/false)")
+ 	socialMediaAgeRestricted := fs.String("social-media-age-restricted", "", "Social media is age-restricted (true/false)")
++	sharedLocation := fs.String("shared-location", "", "Location sharing (true/false)")
++	datingAndRelationships := fs.String("dating-and-relationships", "", "Dating and relationships (true/false)")
+ 	unrestrictedWebAccess := fs.String("unrestricted-web-access", "", "Unrestricted web access (true/false)")
+ 	userGeneratedContent := fs.String("user-generated-content", "", "User-generated content (true/false)")
+@@ -248,4 +250,6 @@
+ 				"social-media":                *socialMedia,
+ 				"social-media-age-restricted": *socialMediaAgeRestricted,
++				"shared-location":             *sharedLocation,
++				"dating-and-relationships":    *datingAndRelationships,
+ 				"unrestricted-web-access":     *unrestrictedWebAccess,
+ 				"user-generated-content":      *userGeneratedContent,
+@@ -301,5 +305,5 @@
+ 
+ 			if !hasAgeRatingUpdates(attributes) {
+-				return d.UpdateFlagRequired(fs, allNone, advertising, gambling, healthOrWellnessTopics, lootBox, messagingAndChat, parentalControls, ageAssurance, socialMedia, socialMediaAgeRestricted, unrestrictedWebAccess, userGeneratedContent, alcoholTobaccoDrug, contests, gamblingSimulated, gunsOrOtherWeapons, medicalTreatment, profanityHumor, sexualContentNudity, sexualContentGraphicNudity, horrorFear, matureSuggestive, violenceCartoon, violenceRealistic, violenceRealisticGraphic, kidsAgeBand, ageRatingOverride, ageRatingOverrideV2, koreaAgeRatingOverride, gracNumber, clearGracNumber, developerAgeRatingInfoURL)
++				return d.UpdateFlagRequired(fs, allNone, advertising, gambling, healthOrWellnessTopics, lootBox, messagingAndChat, parentalControls, ageAssurance, socialMedia, socialMediaAgeRestricted, sharedLocation, datingAndRelationships, unrestrictedWebAccess, userGeneratedContent, alcoholTobaccoDrug, contests, gamblingSimulated, gunsOrOtherWeapons, medicalTreatment, profanityHumor, sexualContentNudity, sexualContentGraphicNudity, horrorFear, matureSuggestive, violenceCartoon, violenceRealistic, violenceRealisticGraphic, kidsAgeBand, ageRatingOverride, ageRatingOverrideV2, koreaAgeRatingOverride, gracNumber, clearGracNumber, developerAgeRatingInfoURL)
+ 			}
+ 
+@@ -430,4 +434,6 @@
+ 		{"parental-controls", &attrs.ParentalControls},
+ 		{"age-assurance", &attrs.AgeAssurance},
++		{"shared-location", &attrs.SharedLocation},
++		{"dating-and-relationships", &attrs.DatingAndRelationships},
+ 		{"unrestricted-web-access", &attrs.UnrestrictedWebAccess},
+ 		{"user-generated-content", &attrs.UserGeneratedContent},
+@@ -509,4 +515,6 @@
+ 		attrs.SocialMedia != nil ||
+ 		attrs.SocialMediaAgeRestricted != nil ||
++		attrs.SharedLocation != nil ||
++		attrs.DatingAndRelationships != nil ||
+ 		attrs.UnrestrictedWebAccess != nil ||
+ 		attrs.UserGeneratedContent != nil ||
+@@ -544,4 +552,6 @@
+ 	"social-media",
+ 	"social-media-age-restricted",
++	"shared-location",
++	"dating-and-relationships",
+ 	"unrestricted-web-access",
+ 	"user-generated-content",
+--- a/internal/cli/agerating/age_rating_test.go
++++ b/internal/cli/agerating/age_rating_test.go
+@@ -289,4 +289,6 @@
+ 		"social-media":                nullableBoolValue(attrs.SocialMedia),
+ 		"social-media-age-restricted": nullableBoolValue(attrs.SocialMediaAgeRestricted),
++		"shared-location":             attrs.SharedLocation,
++		"dating-and-relationships":    attrs.DatingAndRelationships,
+ 		"unrestricted-web-access":     attrs.UnrestrictedWebAccess,
+ 		"user-generated-content":      attrs.UserGeneratedContent,
+--- a/internal/cli/shared/sparse_fields.go
++++ b/internal/cli/shared/sparse_fields.go
+@@ -19,4 +19,5 @@
+ 	"medicalOrTreatmentInformation", "messagingAndChat", "parentalControls", "profanityOrCrudeHumor",
+ 	"ageAssurance", "sexualContentGraphicAndNudity", "sexualContentOrNudity", "socialMedia",
++	"sharedLocation", "datingAndRelationships",
+ 	"socialMediaAgeRestricted", "horrorOrFearThemes", "matureOrSuggestiveThemes", "unrestrictedWebAccess",
+ 	"userGeneratedContent", "violenceCartoonOrFantasy", "violenceRealisticProlongedGraphicOrSadistic",
+--- a/internal/cli/validate/validate.go
++++ b/internal/cli/validate/validate.go
+@@ -512,4 +512,6 @@
+ 	return &validation.AgeRatingDeclaration{
+ 		Advertising:                         attrs.Advertising,
++		SharedLocation:                      attrs.SharedLocation,
++		DatingAndRelationships:              attrs.DatingAndRelationships,
+ 		Gambling:                            attrs.Gambling,
+ 		HealthOrWellnessTopics:              attrs.HealthOrWellnessTopics,
+--- a/internal/validation/age_rating.go
++++ b/internal/validation/age_rating.go
+@@ -63,4 +63,6 @@
+ 	}{
+ 		{field: "advertising", value: declaration.Advertising},
++		{field: "sharedLocation", value: declaration.SharedLocation},
++		{field: "datingAndRelationships", value: declaration.DatingAndRelationships},
+ 		{field: "gambling", value: declaration.Gambling},
+ 		{field: "healthOrWellnessTopics", value: declaration.HealthOrWellnessTopics},
+--- a/internal/validation/age_rating_test.go
++++ b/internal/validation/age_rating_test.go
+@@ -16,4 +16,6 @@
+ 	decl := AgeRatingDeclaration{
+ 		Advertising:                         &falseValue,
++		SharedLocation:                      &falseValue,
++		DatingAndRelationships:              &trueValue,
+ 		Gambling:                            &falseValue,
+ 		HealthOrWellnessTopics:              &falseValue,
+--- a/internal/validation/types.go
++++ b/internal/validation/types.go
+@@ -326,4 +326,6 @@
+ type AgeRatingDeclaration struct {
+ 	Advertising              *bool
++	SharedLocation           *bool
++	DatingAndRelationships   *bool
+ 	Gambling                 *bool
+ 	HealthOrWellnessTopics   *bool
+--- a/internal/cli/metadata/settings_age_rating.go
++++ b/internal/cli/metadata/settings_age_rating.go
+@@ -17,4 +17,6 @@
+ 	{name: "advertising", kind: metadataSettingBool},
+ 	{name: "ageAssurance", kind: metadataSettingBool},
++	{name: "sharedLocation", kind: metadataSettingBool},
++	{name: "datingAndRelationships", kind: metadataSettingBool},
+ 	{name: "gambling", kind: metadataSettingBool},
+ 	{name: "healthOrWellnessTopics", kind: metadataSettingBool},
+--- a/internal/asc/output_age_rating.go
++++ b/internal/asc/output_age_rating.go
+@@ -41,4 +41,6 @@
+ 		{Name: "Parental Controls", Value: formatOptionalBool(attrs.ParentalControls)},
+ 		{Name: "Age Assurance", Value: formatOptionalBool(attrs.AgeAssurance)},
++		{Name: "Shared Location", Value: formatOptionalBool(attrs.SharedLocation)},
++		{Name: "Dating and Relationships", Value: formatOptionalBool(attrs.DatingAndRelationships)},
+ 		{Name: "Social Media", Value: formatOptionalBool(nullableBoolPointer(attrs.SocialMedia))},
+ 		{Name: "Social Media Age Restricted", Value: formatOptionalBool(nullableBoolPointer(attrs.SocialMediaAgeRestricted))},
+--- a/internal/validation/deep.go
++++ b/internal/validation/deep.go
+@@ -277,4 +277,8 @@
+ 	case "ageAssurance":
+ 		return "age-assurance", "TRUE_OR_FALSE"
++	case "sharedLocation":
++		return "shared-location", "TRUE_OR_FALSE"
++	case "datingAndRelationships":
++		return "dating-and-relationships", "TRUE_OR_FALSE"
+ 	case "socialMedia":
+ 		return "social-media", "TRUE_OR_FALSE"

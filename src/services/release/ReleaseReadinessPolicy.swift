@@ -12,6 +12,7 @@ struct ReleaseReadinessDiagnostic: Codable, Equatable, Sendable {
     let source: String
     let reason: String
     var locale: String? = nil
+    var field: String? = nil
     var guidance: String? = nil
 }
 
@@ -176,9 +177,12 @@ enum ReleaseReadinessPolicy {
         }
         for check in normalized {
             let id = check["id"] as! String, severity = check["severity"] as! String
+            let field = check["field"] as? String ?? ""
+            let ageRatingField = id == "age_rating.missing_field"
+                && ["sharedLocation", "datingAndRelationships"].contains(field) ? field : nil
             diagnostics.append(.init(id: id, status: severity == "info" ? "info" : "blocked", source: "asc",
                 reason: id == "metadata.required.whats_new" ? "published_platform_history_requires_changelog" : "asc_\(severity)",
-                locale: check["locale"] as? String))
+                locale: check["locale"] as? String, field: ageRatingField))
         }
         for check in effectiveDeep where !(check["id"] as! String).hasPrefix("agreements.") {
             diagnostics.append(.init(id: check["id"] as! String, status: check["status"] as! String,

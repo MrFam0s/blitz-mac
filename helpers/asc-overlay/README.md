@@ -6,6 +6,8 @@ https://github.com/rorkai/App-Store-Connect-CLI.
 
 The upstream source is an unmodified pinned submodule. `scripts/build-asc-helper.sh`
 exports it into `.build/asc-source`, adds this overlay and builds `cmd/ascd`.
+The build also applies `helpers/asc-7.2.0-age-rating.patch` to the staging tree.
+It backports the two boolean fields introduced in [Apple API 4.6.1](https://developer.apple.com/documentation/appstoreconnectapi/app-store-connect-api-4-6-1-release-notes) to the 7.2.0 CLI, its typed responses and release validator. Review this patch on every ASC update and remove it when the pin supports both fields upstream.
 Go must satisfy upstream's `go.mod` (currently Go 1.27.0 with the patched Go 1.27.4 toolchain).
 Use Go 1.27.4 or newer in that release line, rather than building with 1.27.3;
 the upstream toolchain directive includes a `net/http` security correction.

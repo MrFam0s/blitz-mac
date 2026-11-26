@@ -548,12 +548,16 @@ PATCH /v1/ageRatingDeclarations/<AGE_RATING_ID>
     "lootBox": false,
     "healthOrWellnessTopics": false,
     "parentalControls": false,
-    "ageAssurance": false
+    "ageAssurance": false,
+    "socialMedia": false,
+    "socialMediaAgeRestricted": false,
+    "sharedLocation": false,
+    "datingAndRelationships": false
   }
 }
 ```
 
-**Note:** `ageAssurance` is a boolean (not a string). The `ageRatingDeclaration` ID is the same as the `appInfo` ID.
+Supply the explicit boolean answers verified for the app. An absent or null value for `sharedLocation` or `datingAndRelationships` leaves that question unanswered. Use the declaration ID returned by `GET /v1/appInfos/{id}/ageRatingDeclaration`.
 
 ### Step 7.5: App Store Review Detail
 

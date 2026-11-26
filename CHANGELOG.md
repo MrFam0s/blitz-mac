@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.88 (build 108)
+
+- Age-rating checks cover Apple’s Shared Location and Dating and Relationships
+  questions. An explicit “No” counts as a completed answer.
+- When those missing answers are completed after preparation, the release CLI
+  and MCP can renew the confirmation for the existing review draft. Blitz
+  verifies the updated questionnaire and rechecks readiness before submission.
+
 ## 1.0.87 (build 107)
 
 - Blitz stays open if a chat disconnects while you are signing in to Apple.

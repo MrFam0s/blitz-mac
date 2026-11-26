@@ -127,6 +127,9 @@ struct ReleaseWorkflowSnapshot: Equatable, Sendable {
     var canResubmitSubmission: Bool = false
     var canResolveSubmission: Bool = false
     var submissionItemStates: [String: String] = [:]
+    /// Exact v2 fingerprints of the same Apple content with the new age questions unanswered.
+    /// Used only to prepare a replacement confirmation, never to authorize a submit.
+    var priorIncompleteAgeRatings: [String: ReleaseAgeRatingCorrection] = [:]
 
     static let submittedAppleStates: Set<String> = ["WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_DEVELOPER_RELEASE",
         "PENDING_APPLE_RELEASE", "PROCESSING_FOR_APP_STORE", "READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "ACCEPTED"]
@@ -220,14 +223,23 @@ enum ReleaseWorkflowState: String, Codable, Sendable {
     case prepared, validated, needsPreparation, attachmentPending, releaseModePending, submissionPending, submitted
 }
 
+struct ReleaseDraftRefreshBinding: Codable, Equatable, Sendable {
+    let previousConfirmationDigest: String
+    let submissionID: String
+    let correction: ReleaseAgeRatingCorrection
+    enum CodingKeys: String, CodingKey {
+        case previousConfirmationDigest, submissionID = "submissionId", correction
+    }
+}
+
 struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
     let operationID: String
     let target: ReleaseWorkflowTarget
     let mode: ReleaseWorkflowMode
     let versionString: String
     let buildNumber: String
-    let contentDigest: String
-    let confirmationDigest: String
+    var contentDigest: String
+    var confirmationDigest: String
     let preparedAt: Date
     var updatedAt: Date
     var state: ReleaseWorkflowState
@@ -253,6 +265,9 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
     var submissionItemStates: [String: String]? = nil
     var reviewOutcome: String? = nil
     var nextAction: String? = nil
+    var refreshableSubmissionID: String? = nil
+    var draftRefresh: ReleaseDraftRefreshBinding? = nil
+    var ageRatingCorrection: ReleaseAgeRatingCorrection? = nil
     enum CodingKeys: String, CodingKey {
         case operationID = "operationId", target, mode, versionString, buildNumber, contentDigest, confirmationDigest
         case preparedAt, updatedAt, state, validation, lastErrorCode, appleState, submissionID = "submissionId"
@@ -264,6 +279,7 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
         case resubmittableSubmissionID = "resubmittableSubmissionId"
         case resolvableSubmissionID = "resolvableSubmissionId", resumableResubmissionID = "resumableResubmissionId"
         case submissionItemStates, reviewOutcome, nextAction
+        case refreshableSubmissionID = "refreshableSubmissionId", draftRefresh, ageRatingCorrection
     }
 }
 
@@ -420,6 +436,47 @@ actor ReleaseWorkflowService {
         return record
     }
 
+    /// Reads Apple and replaces only this draft's stale local confirmation. The
+    /// recorded write boundary and its diagnostic remain the evidence for resuming.
+    func prepareDraftRefresh(operationID: String, accountKey: String, submissionID: String,
+                             confirmationDigest: String) async throws -> ReleaseWorkflowRecord {
+        var record = try load(operationID)
+        try checkAccount(accountKey, target: record.target)
+        let lock = try acquire(record.target); defer { release(lock) }
+        record = try requireActive(record)
+        guard ReleaseWorkflowTarget.validID(submissionID), record.submissionID == submissionID,
+              record.submissionProgress?.submissionID == submissionID, record.state == .submissionPending else {
+            throw ReleaseWorkflowError.unsafeState
+        }
+        let repeatedRefresh = record.draftRefresh?.previousConfirmationDigest == confirmationDigest
+        guard confirmationDigest == record.confirmationDigest || repeatedRefresh else {
+            throw ReleaseWorkflowError.confirmationRequired
+        }
+        let snapshot = try await api.snapshot(record.target)
+        if record.draftRefresh == nil || !canResume(snapshot, record: record) {
+            // The former token can retrieve the current confirmation but never
+            // authorize another revision.
+            guard !repeatedRefresh else { throw ReleaseWorkflowError.confirmationRequired }
+            guard let correction = draftCorrection(snapshot, record: record) else { throw ReleaseWorkflowError.unsafeState }
+            let binding = ReleaseDraftRefreshBinding(previousConfirmationDigest: record.confirmationDigest,
+                                                    submissionID: submissionID, correction: correction)
+            record.contentDigest = snapshot.contentDigest
+            record.draftRefresh = binding
+            record.confirmationDigest = try Self.digest(Confirmation(target: record.target, mode: record.mode,
+                operationID: record.operationID, versionString: record.versionString, buildNumber: record.buildNumber,
+                contentDigest: record.contentDigest, contentFingerprintVersion: record.contentFingerprintVersion,
+                draftRefresh: binding))
+            record.validation = nil
+        }
+        record.submissionItemID = snapshot.submissionItemID
+        record.reviewItemIDs = snapshot.reviewItemIDs
+        updateReviewStatus(&record, snapshot: snapshot)
+        describeResumableDraft(&record, snapshot: snapshot)
+        record.updatedAt = Date()
+        try save(record)
+        return record
+    }
+
     func status(operationID: String, accountKey: String) async throws -> ReleaseWorkflowRecord {
         var record = try load(operationID)
         try checkAccount(accountKey, target: record.target)
@@ -427,6 +484,10 @@ actor ReleaseWorkflowService {
         record = try load(operationID)
         let snapshot = try await api.snapshot(record.target)
         try snapshot.check(record.target, requirePreparedBuild: false)
+        if record.lastErrorCode == "age_rating_confirmation_changed" ||
+            (record.draftRefresh != nil && record.lastErrorCode == "submission_draft_requires_confirmation") {
+            record.lastErrorCode = nil
+        }
         updateReviewStatus(&record, snapshot: snapshot)
         if record.submissionProgress == nil || (record.submissionID == nil && record.submissionProgress?.phase == .creatingSubmission) {
           if snapshot.submissionItemsComplete && ((record.state == .submissionPending && snapshot.submissionState != "COMPLETE") || snapshot.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState))) {
@@ -435,6 +496,8 @@ actor ReleaseWorkflowService {
           }
         }
         record.resumableSubmissionID = nil
+        record.refreshableSubmissionID = nil
+        record.ageRatingCorrection = nil
         record.requiresLegacyRecoveryConfirmation = nil
         record.resumableResubmissionID = nil
         if snapshot.currentlySubmitted && Self.submittedStates.contains(ASCReleaseStatus.normalize(snapshot.appleState)) {
@@ -453,9 +516,15 @@ actor ReleaseWorkflowService {
         } else if record.state == .submissionPending, canResume(snapshot, record: record) {
             // This only advertises a verified draft. Resuming still needs the
             // exact draft ID plus explicit confirmation in a separate submit.
-            record.resumableSubmissionID = snapshot.submissionID
-            record.requiresLegacyRecoveryConfirmation = record.submissionProgress == nil ? true : nil
-            record.lastErrorCode = "submission_draft_requires_confirmation"
+            describeResumableDraft(&record, snapshot: snapshot)
+        } else if let correction = draftCorrection(snapshot, record: record) {
+            record.validation = nil
+            record.refreshableSubmissionID = snapshot.submissionID
+            record.ageRatingCorrection = correction
+            record.lastErrorCode = "age_rating_confirmation_changed"
+            record.nextAction = "prepareDraftRefresh"
+        } else if record.draftRefresh != nil && record.state == .submissionPending {
+            record.validation = nil
         } else if (record.state == .releaseModePending && snapshot.releaseType == record.mode.rawValue) ||
                     (record.state == .attachmentPending && snapshot.attachedBuildID == record.target.buildID) {
             // The mode effect is now known. Changed content needs a new plan, not
@@ -564,6 +633,8 @@ actor ReleaseWorkflowService {
         } ?? .init(phase: .checkingExisting)
         record.resumableSubmissionID = nil
         record.resumableResubmissionID = nil
+        record.refreshableSubmissionID = nil
+        record.ageRatingCorrection = nil
         record.requiresLegacyRecoveryConfirmation = nil
         record.lastDiagnostic = nil
         record.updatedAt = Date()
@@ -662,11 +733,19 @@ actor ReleaseWorkflowService {
             record.lastErrorCode = validation.ready ? nil : "readiness_blocked"
             updateReviewStatus(&record, snapshot: after)
             if record.resubmission != nil { record.nextAction = validation.ready ? "confirmResubmission" : "completeReadinessChecks" }
+            if record.draftRefresh != nil {
+                record.nextAction = validation.ready ? "confirmDraftContinuation" : "completeReadinessChecks"
+            }
             record.updatedAt = Date()
             try save(record)
             return record
         } catch {
-            if input.state == .submissionPending { record.state = .submissionPending; record.resumableSubmissionID = nil }
+            if input.state == .submissionPending {
+                record.state = .submissionPending
+                record.resumableSubmissionID = nil
+                record.refreshableSubmissionID = nil
+                record.ageRatingCorrection = nil
+            }
             else if case ReleaseWorkflowError.contentChanged = error { record.state = .needsPreparation }
             else { record.state = .prepared }
             record.validation = nil
@@ -692,6 +771,37 @@ actor ReleaseWorkflowService {
     }
 
     private func canResume(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
+        snapshot.matchesContentDigest(record.contentDigest, fingerprintVersion: record.contentFingerprintVersion)
+            && resumableDraftMatches(snapshot, record: record)
+    }
+
+    private func describeResumableDraft(_ record: inout ReleaseWorkflowRecord, snapshot: ReleaseWorkflowSnapshot) {
+        record.resumableSubmissionID = snapshot.submissionID
+        record.refreshableSubmissionID = nil
+        record.requiresLegacyRecoveryConfirmation = record.submissionProgress == nil ? true : nil
+        record.ageRatingCorrection = record.draftRefresh?.correction
+        record.lastErrorCode = "submission_draft_requires_confirmation"
+        if record.draftRefresh != nil {
+            if let validation = record.validation {
+                record.nextAction = validation.ready ? "confirmDraftContinuation" : "completeReadinessChecks"
+                if !validation.ready { record.lastErrorCode = "readiness_blocked" }
+            } else {
+                record.nextAction = "validateDraftContinuation"
+            }
+        }
+    }
+
+    private func draftCorrection(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> ReleaseAgeRatingCorrection? {
+        guard record.state == .submissionPending, record.contentFingerprintVersion == 2,
+              record.contentDigest != snapshot.contentDigest,
+              let correction = snapshot.priorIncompleteAgeRatings[record.contentDigest],
+              let id = record.submissionID, record.submissionProgress?.submissionID == id,
+              snapshot.submissionID == id, snapshot.submissionState == "READY_FOR_REVIEW",
+              resumableDraftMatches(snapshot, record: record) else { return nil }
+        return correction
+    }
+
+    private func resumableDraftMatches(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord) -> Bool {
         // Legacy journals have no phase; an explicit ID confirmation can recover
         // their unique unchanged draft. A known final PATCH intent is never replayed.
         guard record.resubmission == nil,
@@ -719,7 +829,7 @@ actor ReleaseWorkflowService {
             guard record.submissionID == nil || record.submissionID == id,
                   record.submissionItemID == nil || record.submissionItemID == snapshot.submissionItemID else { return false }
         }
-        do { try checkUnchanged(snapshot, record: record, allowingDraft: id); return true }
+        do { try checkBoundRelease(snapshot, record: record, allowingDraft: id); return true }
         catch { return false }
     }
 
@@ -754,6 +864,13 @@ actor ReleaseWorkflowService {
     }
 
     private func checkUnchanged(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord, allowingDraft: String? = nil) throws {
+        try checkBoundRelease(snapshot, record: record, allowingDraft: allowingDraft)
+        guard snapshot.matchesContentDigest(record.contentDigest, fingerprintVersion: record.contentFingerprintVersion) else {
+            throw ReleaseWorkflowError.contentChanged
+        }
+    }
+
+    private func checkBoundRelease(_ snapshot: ReleaseWorkflowSnapshot, record: ReleaseWorkflowRecord, allowingDraft: String?) throws {
         try snapshot.check(record.target)
         let ownResubmission = record.resubmission.map { binding in
             binding.matches(snapshot) && snapshot.releaseType == record.mode.rawValue
@@ -761,8 +878,9 @@ actor ReleaseWorkflowService {
         if record.resubmission != nil && !ownResubmission { throw ReleaseWorkflowError.uncertainOutcome }
         let ownDraft = ownResubmission || (allowingDraft != nil && snapshot.submissionID == allowingDraft && snapshot.canResumeSubmission &&
             snapshot.releaseType == record.mode.rawValue)
+        if let allowingDraft, !ownDraft || snapshot.submissionID != allowingDraft { throw ReleaseWorkflowError.uncertainOutcome }
         guard (ASCReleaseStatus.isEditable(snapshot.appleState) || (ownDraft && ["READY_FOR_REVIEW", "ACCEPTED"].contains(ASCReleaseStatus.normalize(snapshot.appleState)))), snapshot.versionString == record.versionString,
-              snapshot.buildNumber == record.buildNumber, snapshot.matchesContentDigest(record.contentDigest, fingerprintVersion: record.contentFingerprintVersion) else {
+              snapshot.buildNumber == record.buildNumber else {
             throw ReleaseWorkflowError.contentChanged
         }
         guard !snapshot.hasSubmissionConflict || ownDraft else { throw ReleaseWorkflowError.uncertainOutcome }
@@ -815,6 +933,7 @@ actor ReleaseWorkflowService {
         let contentDigest: String
         var contentFingerprintVersion: Int? = nil
         var resubmission: ReleaseResubmissionBinding? = nil
+        var draftRefresh: ReleaseDraftRefreshBinding? = nil
     }
 
     static func digest<T: Encodable>(_ value: T) throws -> String {
@@ -859,9 +978,15 @@ actor ReleaseWorkflowService {
                   binding.itemStates.map({ Set($0.keys) == Set([binding.submissionItemID] + Array(binding.reviewItemIDs.values)) }) ?? true else { throw ReleaseWorkflowError.unsafeState }
         }
         guard record.contentFingerprintVersion == nil || record.contentFingerprintVersion == 2 else { throw ReleaseWorkflowError.unsafeState }
+        if let refresh = record.draftRefresh {
+            guard record.resubmission == nil, record.contentFingerprintVersion == 2,
+                  ReleaseWorkflowTarget.validID(refresh.submissionID), refresh.submissionID == record.submissionID else {
+                throw ReleaseWorkflowError.unsafeState
+            }
+        }
         let expected = try Self.digest(Confirmation(target: record.target, mode: record.mode, operationID: record.operationID,
             versionString: record.versionString, buildNumber: record.buildNumber, contentDigest: record.contentDigest,
-            contentFingerprintVersion: record.contentFingerprintVersion, resubmission: record.resubmission))
+            contentFingerprintVersion: record.contentFingerprintVersion, resubmission: record.resubmission, draftRefresh: record.draftRefresh))
         guard expected == record.confirmationDigest else { throw ReleaseWorkflowError.unsafeState }
         return record
     }

@@ -56,6 +56,7 @@ There is no shell interpolation or generic remote-command execution.
 | `context` | `get_release_context` | Verify the explicitly requested current UI target |
 | `prepare` | `release_prepare` | Read Apple and record a fixed release snapshot |
 | `prepare-resubmission` | `release_prepare_resubmission` | Prepare the exact resolved review again with a fresh content snapshot |
+| `prepare-draft-refresh` | `release_prepare_draft_refresh` | Renew the local confirmation for a corrected age declaration on the recorded unsent draft |
 | `validate` | `release_validate` | Fresh readiness and unchanged-content checks |
 | `status` | `release_status` | Read-only reconciliation after delay/restart |
 | `submit` | `release_submit` | Guarded release-mode update and review submission |
@@ -225,6 +226,18 @@ such as the proven 1.0.69 READY_FOR_REVIEW guard failure. The draft's state alon
 does not establish that history. This evidence assertion does not expand the
 user's existing authorization. Ambiguous or unrelated drafts and uncertain
 final-submit responses remain blocked.
+
+When previously unanswered Shared Location or Dating and Relationships fields
+have been saved, `status` can return `refreshableSubmissionId` and
+`ageRatingCorrection`. Blitz reconstructs the previous fingerprint using only
+absent or null answers to those questions. Every other protected value must match.
+Check the reported answers against the app's actual features. Call
+`prepare-draft-refresh` with the saved `operationId`, `accountKey`, the old
+`confirmationDigest` and the returned ID as `submissionId`. This records a
+fresh confirmation locally for the same draft. Validate again and, when the
+corrections and submission are authorized, use the new digest and that exact
+`resumeSubmissionId` with `confirm: true`. Without the verified refresh or
+resume ID, inspect the reported blocker before taking further action.
 
 Programmatic status remains read-only regardless of resumability. A successful
 read is not permission to submit, and a historical completed submission cannot

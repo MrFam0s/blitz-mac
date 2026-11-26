@@ -39,6 +39,15 @@
 "Alle Versionen seit Beginn" = "Total versions · All time";
 "Altersfreigabe" = "Age rating";
 "Altersfreigabe speichern" = "Save Age Rating";
+"Soziale Medien" = "Social Media";
+"Altersbeschränkte soziale Medien" = "Age-Restricted Social Media";
+"Die Altersfreigabe ist noch nicht geladen." = "The age rating has not loaded yet.";
+"Apple hat die geänderten Antworten zur Altersfreigabe noch nicht bestätigt." = "Apple has not yet confirmed the age-rating changes.";
+"Standortfreigabe" = "Location Sharing";
+"Dating und Beziehungen" = "Dating and Relationships";
+"Nicht beantwortet" = "Unanswered";
+"Ja" = "Yes";
+"Nein" = "No";
 "Altersüberprüfung" = "Age Assurance";
 "Anbieternummer" = "Vendor Number";
 "Andere Bundle-ID eingeben" = "Enter another bundle ID";

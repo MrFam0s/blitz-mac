@@ -39,7 +39,7 @@ struct ReleaseWorkflowArgumentsTests {
     }
 
     @Test func savedOperationsCannotBeRetargetedThroughIgnoredArguments() throws {
-        for name in ["release_status", "release_validate", "release_submit"] {
+        for name in ["release_status", "release_validate", "release_submit", "release_prepare_draft_refresh"] {
             for key in ["reviewItems", "appId", "versionId", "buildId", "platform", "releaseMode"] {
                 #expect(throws: MCPServerService.MCPError.self) {
                     try ReleaseWorkflowArguments.validateKeys(name: name, arguments: [
@@ -127,4 +127,24 @@ struct ReleaseWorkflowArgumentsTests {
     let schema = try #require(tool["inputSchema"] as? [String: Any])
     let properties = try #require(schema["properties"] as? [String: Any])
     #expect((properties["resolveRejectedItems"] as? [String: Any])?["type"] as? String == "boolean")
+}
+
+
+@Test func draftRefreshRequiresExactOperationAndDoesNotAcceptMutations() throws {
+    let name = "release_prepare_draft_refresh"
+    let required = ["operationId", "accountKey", "submissionId", "confirmationDigest"]
+    let values = Dictionary(uniqueKeysWithValues: required.map { ($0, "saved") })
+    try ReleaseWorkflowArguments.validateKeys(name: name, arguments: values)
+    for key in ["confirm", "resolveRejectedItems", "resumeSubmissionId", "sharedLocation", "datingAndRelationships"] {
+        var invalid = values
+        invalid[key] = "value"
+        #expect(throws: MCPServerService.MCPError.self) {
+            try ReleaseWorkflowArguments.validateKeys(name: name, arguments: invalid)
+        }
+    }
+    let tool = try #require(MCPRegistry.allTools().first { $0["name"] as? String == name })
+    let schema = try #require(tool["inputSchema"] as? [String: Any])
+    #expect(schema["additionalProperties"] as? Bool == false)
+    #expect(Set(schema["required"] as? [String] ?? []) == Set(required))
+    #expect(MCPRegistry.category(for: name) == .query)
 }

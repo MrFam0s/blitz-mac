@@ -62,6 +62,9 @@ extension MCPExecutor {
             try await Self.verifyRegisteredReleaseTarget(saved.target)
             let service = service(for: saved.target)
             switch name {
+            case "release_prepare_draft_refresh":
+                record = try await service.prepareDraftRefresh(operationID: id, accountKey: accountKey,
+                    submissionID: string("submissionId"), confirmationDigest: string("confirmationDigest"))
             case "release_prepare_resubmission":
                 record = try await service.prepareResubmission(operationID: id, accountKey: accountKey,
                     submissionID: string("submissionId"),
@@ -129,6 +132,8 @@ enum ReleaseWorkflowArguments {
                        "accountKey", "versionId", "buildId", "releaseMode", "reviewItems"]
         case "release_prepare_resubmission":
             allowed = ["operationId", "accountKey", "releaseTargetId", "submissionId", "resolveRejectedItems"]
+        case "release_prepare_draft_refresh":
+            allowed = ["operationId", "accountKey", "releaseTargetId", "submissionId", "confirmationDigest"]
         case "release_validate", "release_status":
             allowed = ["operationId", "accountKey", "releaseTargetId"]
         case "release_submit":

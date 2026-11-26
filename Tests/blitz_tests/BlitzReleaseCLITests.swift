@@ -23,6 +23,17 @@ struct BlitzReleaseCLITests {
         #expect((decoded["target"] as? [String: Any])?["reviewItems"] as? [[String: String]] == selected)
     }
 
+    @Test func draftRefreshForwardsTheExistingConfirmationWithoutSubmitting() throws {
+        let invocation = try BlitzReleaseCLI.parse(["release", "prepare-draft-refresh", "--request", "-"])
+        #expect(invocation.tool == "release_prepare_draft_refresh")
+        let values = ["operationId": "operation", "accountKey": "account", "submissionId": "draft", "confirmationDigest": "previous"]
+        let request = try BlitzReleaseCLI.request(invocation, data: JSONEncoder().encode(values), id: "id")
+        let parsed = try #require(JSONSerialization.jsonObject(with: Data(request.utf8)) as? [String: Any])
+        let params = try #require(parsed["params"] as? [String: Any])
+        #expect(params["name"] as? String == invocation.tool)
+        #expect(params["arguments"] as? [String: String] == values)
+    }
+
     @Test func draftContinuationKeepsExactSavedOperationAndDoesNotClaimSubmission() throws {
         let invocation = try BlitzReleaseCLI.parse(["release", "submit", "--request", "-"])
         let request: [String: Any] = ["operationId": "saved-operation", "accountKey": "issuer:key",

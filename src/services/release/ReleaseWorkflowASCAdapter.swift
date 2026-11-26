@@ -119,7 +119,7 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             protected["jointReviewProducts"] = products.protectedContent
             reviewProductsReady = products.diagnostics.isEmpty
         }
-        let fingerprints = try Self.fingerprints(protected)
+        let fingerprints = try Self.fingerprints(protected, checkAgeRatingCorrection: submission.canResume)
         // Protected values (including demo credentials) are hashed in memory only.
         return ReleaseWorkflowSnapshot(appID: target.appID, bundleID: target.bundleID,
             versionID: target.versionID, platform: target.platform, versionString: versionString,
@@ -132,7 +132,8 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
             legacyContentDigests: fingerprints.legacy,
             submissionItemsComplete: submission.complete, reviewItemIDs: submission.reviewItemIDs,
             reviewProductsReady: reviewProductsReady, canResubmitSubmission: submission.canResubmit,
-            canResolveSubmission: submission.canResolve, submissionItemStates: submission.itemStates)
+            canResolveSubmission: submission.canResolve, submissionItemStates: submission.itemStates,
+            priorIncompleteAgeRatings: fingerprints.incompleteAgeRatings)
     }
 
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
@@ -430,7 +431,8 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
     /// immutable: bounded candidate hashes prove their complete old protected
     /// document, changing only this known READY_FOR_REVIEW transition. A metadata
     /// edit, locale/asset reorder or other field change still changes every hash.
-    private static func fingerprints(_ protected: [String: Any]) throws -> (current: String, legacy: Set<String>) {
+    static func fingerprints(_ protected: [String: Any], checkAgeRatingCorrection: Bool) throws
+        -> (current: String, legacy: Set<String>, incompleteAgeRatings: [String: ReleaseAgeRatingCorrection]) {
         func digest(_ object: [String: Any]) throws -> String {
             SHA256.hash(data: try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
                 .map { String(format: "%02x", $0) }.joined()
@@ -465,7 +467,8 @@ final class ReleaseWorkflowASCAdapter: ReleaseWorkflowAPI {
                 legacy.insert(try digest(value))
             }
         }
-        return (try digest(normalized), legacy)
+        let incomplete = checkAgeRatingCorrection ? try ReleaseAgeRatingCorrection.priorFingerprints(in: normalized, digest: digest) : [:]
+        return (try digest(normalized), legacy, incomplete)
     }
 
     private static func isPublishedPredecessor(_ id: String, of target: ReleaseWorkflowTarget, in versions: [[String: Any]]) -> Bool {

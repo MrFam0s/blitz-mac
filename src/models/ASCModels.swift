@@ -641,9 +641,9 @@ struct ASCAppInfoLocalization: Codable, Identifiable {
 
 // MARK: - AgeRatingDeclaration
 
-struct ASCAgeRatingDeclaration: Codable, Identifiable {
+struct ASCAgeRatingDeclaration: Codable, Identifiable, Equatable {
     let id: String
-    struct Attributes: Codable {
+    struct Attributes: Codable, Equatable {
         var alcoholTobaccoOrDrugUseOrReferences: String?
         var contests: String?
         var gambling: Bool?
@@ -666,6 +666,69 @@ struct ASCAgeRatingDeclaration: Codable, Identifiable {
         var healthOrWellnessTopics: Bool?
         var parentalControls: Bool?
         var ageAssurance: Bool?
+        var sharedLocation: Bool?
+        var datingAndRelationships: Bool?
+        var socialMedia: Bool?
+        var socialMediaAgeRestricted: Bool?
+
+        static let booleanFields: [(String, WritableKeyPath<Self, Bool?>)] = [
+            ("sharedLocation", \.sharedLocation),
+            ("datingAndRelationships", \.datingAndRelationships),
+            ("gambling", \.gambling),
+            ("messagingAndChat", \.messagingAndChat),
+            ("unrestrictedWebAccess", \.unrestrictedWebAccess),
+            ("userGeneratedContent", \.userGeneratedContent),
+            ("advertising", \.advertising),
+            ("lootBox", \.lootBox),
+            ("healthOrWellnessTopics", \.healthOrWellnessTopics),
+            ("parentalControls", \.parentalControls),
+            ("ageAssurance", \.ageAssurance),
+            ("socialMedia", \.socialMedia),
+            ("socialMediaAgeRestricted", \.socialMediaAgeRestricted),
+        ]
+
+        static let frequencyFields: [(String, WritableKeyPath<Self, String?>)] = [
+            ("alcoholTobaccoOrDrugUseOrReferences", \.alcoholTobaccoOrDrugUseOrReferences),
+            ("contests", \.contests),
+            ("gamblingSimulated", \.gamblingSimulated),
+            ("gunsOrOtherWeapons", \.gunsOrOtherWeapons),
+            ("horrorOrFearThemes", \.horrorOrFearThemes),
+            ("matureOrSuggestiveThemes", \.matureOrSuggestiveThemes),
+            ("medicalOrTreatmentInformation", \.medicalOrTreatmentInformation),
+            ("profanityOrCrudeHumor", \.profanityOrCrudeHumor),
+            ("sexualContentGraphicAndNudity", \.sexualContentGraphicAndNudity),
+            ("sexualContentOrNudity", \.sexualContentOrNudity),
+            ("violenceCartoonOrFantasy", \.violenceCartoonOrFantasy),
+            ("violenceRealistic", \.violenceRealistic),
+            ("violenceRealisticProlongedGraphicOrSadistic", \.violenceRealisticProlongedGraphicOrSadistic),
+        ]
+
+        var missingAnswers: [String] {
+            Self.booleanFields.compactMap { name, path in self[keyPath: path] == nil ? name : nil }
+                + Self.frequencyFields.compactMap { name, path in
+                    (self[keyPath: path] ?? "").isEmpty ? name : nil
+                }
+        }
+
+        func confirms(answers: [String: Any]) -> Bool {
+            let saved = changedAnswers(from: .init()).filter { answers[$0.key] != nil }
+            return NSDictionary(dictionary: saved).isEqual(to: answers)
+        }
+
+        func changedAnswers(from previous: Self) -> [String: Any] {
+            var changes: [String: Any] = [:]
+            for (name, path) in Self.booleanFields {
+                if let answer = self[keyPath: path], answer != previous[keyPath: path] {
+                    changes[name] = answer
+                }
+            }
+            for (name, path) in Self.frequencyFields {
+                if let answer = self[keyPath: path], !answer.isEmpty, answer != previous[keyPath: path] {
+                    changes[name] = answer
+                }
+            }
+            return changes
+        }
     }
     let attributes: Attributes
 }

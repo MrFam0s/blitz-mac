@@ -38,20 +38,6 @@ resolve_ascd_path() {
     printf '%s\n' "$candidate"
 }
 
-verify_ascd_helper() {
-    local helper_path="$1"
-    local response
-
-    response="$(printf '{"id":"bundle-check","method":"ping"}\n' | "$helper_path" 2>/dev/null | head -1 || true)"
-    case "$response" in
-        *'"id":"bundle-check"'*'"result"'*'"version":"7.2.0 (commit: 1bf81d53a6cd04e7364bee6e2f15a85ba52ac463,'*)
-            return 0
-            ;;
-    esac
-
-    return 1
-}
-
 if [ "$CONFIG" = "debug" ] && [ "$TIMESTAMP_MODE" = "auto" ]; then
     TIMESTAMP_MODE="none"
 fi
@@ -142,10 +128,10 @@ if [ -z "$ASC_HELPER_BINARY" ]; then
 fi
 
 if [ -n "$ASC_HELPER_BINARY" ]; then
-    if ! verify_ascd_helper "$ASC_HELPER_BINARY"; then
+    if ! python3 "$ROOT_DIR/scripts/verify-asc-helper.py" "$ASC_HELPER_BINARY"; then
         echo "ERROR: ascd helper is not compatible with Blitz:"
         echo "       $ASC_HELPER_BINARY"
-        echo "       Expected ASC 7.2.0 at the pinned commit with the Blitz JSON-line protocol adapter."
+        echo "       Expected the pinned helper with Blitz protocol and age-rating support."
         exit 1
     fi
     cp "$ASC_HELPER_BINARY" "$BUNDLE_DIR/Contents/Helpers/ascd"
