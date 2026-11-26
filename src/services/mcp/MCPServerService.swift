@@ -121,7 +121,7 @@ actor MCPServerService {
         do {
             guard let line = try readLine(from: clientFD) else { return }
             if let response = await processMCPLine(line) {
-                try writeLine(response, to: clientFD)
+                try Self.writeResponse(response, to: clientFD)
             }
         } catch {
             print("[MCP] Socket client failed: \(error.localizedDescription)")
@@ -158,7 +158,7 @@ actor MCPServerService {
         }
     }
 
-    private func writeLine(_ line: String, to fd: Int32) throws {
+    static func writeResponse(_ line: String, to fd: Int32) throws {
         let data = Data((line + "\n").utf8)
         try data.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return }
@@ -166,10 +166,14 @@ actor MCPServerService {
 
             while bytesWritten < rawBuffer.count {
                 let pointer = baseAddress.advanced(by: bytesWritten)
-                let result = Darwin.write(fd, pointer, rawBuffer.count - bytesWritten)
+                // The client can disconnect while its tool call is still running.
+                let result = Darwin.send(fd, pointer, rawBuffer.count - bytesWritten, MSG_NOSIGNAL)
                 if result < 0 {
-                    throw MCPError.writeFailed(code: errno)
+                    let code = errno
+                    if code == EINTR { continue }
+                    throw MCPError.writeFailed(code: code)
                 }
+                guard result > 0 else { throw MCPError.writeFailed(code: EIO) }
                 bytesWritten += result
             }
         }

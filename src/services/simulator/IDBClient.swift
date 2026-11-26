@@ -118,15 +118,15 @@ actor IDBClient {
         process.arguments = args
         process.environment = Self.helperEnvironment(ProcessInfo.processInfo.environment)
 
-        let stdin = Pipe()
-        process.standardInput = stdin
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
         self.shellProcess = process
-        self.stdinPipe = stdin
         self.udid = udid
         do {
+            let stdin = try makeSubprocessInputPipe()
+            process.standardInput = stdin
+            self.stdinPipe = stdin
             try process.run()
             try await Task.sleep(for: .milliseconds(500))
             guard !closed else { throw CancellationError() }
@@ -148,8 +148,12 @@ actor IDBClient {
             throw IDBError.shellNotAvailable
         }
 
-        let data = (command + "\n").data(using: .utf8)!
-        stdin.fileHandleForWriting.write(data)
+        do {
+            try stdin.fileHandleForWriting.write(contentsOf: Data((command + "\n").utf8))
+        } catch {
+            stopProcesses()
+            throw error
+        }
     }
 
     /// Run a direct idb command (not through shell) and return output

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.87 (build 107)
+
+- Blitz stays open if a chat disconnects while you are signing in to Apple.
+- If the App Store Connect or simulator helper disconnects, Blitz reports the
+  failed request. A new request can reconnect without repeating the earlier one.
+
 ## 1.0.86 (build 106)
 
 - Store updates can proceed when Apple retains empty review drafts without a

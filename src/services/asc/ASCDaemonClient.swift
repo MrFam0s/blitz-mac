@@ -52,12 +52,6 @@ actor ASCDaemonClient {
             value += 1
             return current
         }
-
-        func reset() {
-            lock.lock()
-            value = 0
-            lock.unlock()
-        }
     }
 
     private struct PendingRequest {
@@ -136,6 +130,7 @@ actor ASCDaemonClient {
     }
 
     private let credentials: ASCCredentials
+    private let executableURL: URL?
     private let fileManager = FileManager.default
     private let decoder = JSONDecoder()
     private let logger = ASCDaemonLogger.shared
@@ -143,7 +138,6 @@ actor ASCDaemonClient {
 
     private var process: Process?
     private var stdinHandle: FileHandle?
-    private var waitTask: Task<Void, Never>?
     private var stdoutReadHandle: FileHandle?
     private var stderrReadHandle: FileHandle?
     private var stdoutBuffer = SequencedPipeBuffer()
@@ -152,11 +146,10 @@ actor ASCDaemonClient {
     private var recentStderr: [String] = []
     private var requestCounter = 0
     private var sessionOpen = false
-    private let stdoutSequenceCounter = SequenceCounter()
-    private let stderrSequenceCounter = SequenceCounter()
 
-    init(credentials: ASCCredentials) {
+    init(credentials: ASCCredentials, executableURL: URL? = nil) {
         self.credentials = credentials
+        self.executableURL = executableURL
         Task {
             await logger.info("ASCDaemonClient initialized keyId=\(Self.redact(credentials.keyId)) issuerId=\(Self.redact(credentials.issuerId))")
         }
@@ -165,8 +158,7 @@ actor ASCDaemonClient {
     deinit {
         stdoutReadHandle?.readabilityHandler = nil
         stderrReadHandle?.readabilityHandler = nil
-        waitTask?.cancel()
-        process?.terminate()
+        if process?.isRunning == true { process?.terminate() }
     }
 
     func request(
@@ -177,7 +169,7 @@ actor ASCDaemonClient {
         timeoutMs: Int = 30_000,
         expectedStatusCodes: Set<Int> = []
     ) async throws -> HTTPResponse {
-        try await ensureSessionOpen()
+        let child = try await ensureSessionOpen()
 
         var params: [String: Any] = [
             "method": method,
@@ -193,7 +185,7 @@ actor ASCDaemonClient {
             params["body"] = try jsonObject(from: body)
         }
 
-        let result: SessionRequestResult = try await send(method: "session.request", params: params)
+        let result: SessionRequestResult = try await send(method: "session.request", params: params, on: child)
         let response = HTTPResponse(
             statusCode: result.statusCode,
             headers: result.headers ?? [:],
@@ -219,10 +211,10 @@ actor ASCDaemonClient {
             let stderr: String?
         }
 
-        try await ensureProcessRunning()
         let result: CLIExecResult = try await send(
             method: "cli.exec",
             params: ["args": args],
+            on: ensureProcessRunning(),
             responseTimeoutSeconds: responseTimeoutSeconds
         )
         return (result.exitCode, result.stdout ?? "", result.stderr ?? "")
@@ -238,28 +230,31 @@ actor ASCDaemonClient {
         }
         let result: Result = try await send(method: "release.readiness", params: [
             "appId": appID, "bundleId": bundleID, "versionId": versionID, "platform": platform
-        ], responseTimeoutSeconds: 240)
+        ], on: ensureProcessRunning(), responseTimeoutSeconds: 240)
         return ReleaseReadinessPayload(report: try JSONEncoder().encode(result.report), web: result.web, exitCode: result.exitCode)
     }
 
-    private func ensureSessionOpen() async throws {
-        try await ensureProcessRunning()
-        guard !sessionOpen else { return }
-        _ = try await send(method: "session.open", params: nil) as SessionOpenResult
+    private func ensureSessionOpen() async throws -> Process {
+        let child = try ensureProcessRunning()
+        guard !sessionOpen else { return child }
+        _ = try await send(method: "session.open", params: nil, on: child) as SessionOpenResult
+        guard process === child else { throw Error.helperLaunchFailed("ascd connection closed") }
         sessionOpen = true
         await logger.info("ascd session opened")
+        return child
     }
 
-    private func ensureProcessRunning() async throws {
-        if let process, process.isRunning, stdinHandle != nil {
-            return
+    private func ensureProcessRunning() throws -> Process {
+        if let process {
+            if process.isRunning { return process }
+            discardProcess(error: Error.processExited(process.terminationStatus, recentStderr.joined(separator: "\n")))
         }
-        try startProcess()
+        return try startProcess()
     }
 
-    private func startProcess() throws {
-        let executablePath = try resolveExecutablePath()
-        let stdinPipe = Pipe()
+    private func startProcess() throws -> Process {
+        let executablePath = try executableURL?.path ?? resolveExecutablePath()
+        let stdinPipe = try makeSubprocessInputPipe()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
 
@@ -270,6 +265,9 @@ actor ASCDaemonClient {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
         process.environment = helperEnvironment()
+        process.terminationHandler = { [weak self] exited in
+            Task { await self?.handleProcessExit(exited) }
+        }
 
         do {
             try process.run()
@@ -288,39 +286,31 @@ actor ASCDaemonClient {
         self.recentStderr = []
         self.stdoutBuffer.reset()
         self.stderrBuffer.reset()
-        self.stdoutSequenceCounter.reset()
-        self.stderrSequenceCounter.reset()
 
         Task {
             await logger.info("Started ascd pid=\(process.processIdentifier) path=\(executablePath)")
         }
 
-        let stdoutSequenceCounter = self.stdoutSequenceCounter
-        stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self, stdoutSequenceCounter] handle in
+        let stdoutSequenceCounter = SequenceCounter()
+        stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
+            guard let process else { return }
             let data = handle.availableData
             let sequence = stdoutSequenceCounter.next()
             Task {
-                await self?.handlePipeData(data, isStdout: true, sequence: sequence)
+                await self?.handlePipeData(data, isStdout: true, sequence: sequence, from: process)
             }
         }
 
-        let stderrSequenceCounter = self.stderrSequenceCounter
-        stderrPipe.fileHandleForReading.readabilityHandler = { [weak self, stderrSequenceCounter] handle in
+        let stderrSequenceCounter = SequenceCounter()
+        stderrPipe.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
+            guard let process else { return }
             let data = handle.availableData
             let sequence = stderrSequenceCounter.next()
             Task {
-                await self?.handlePipeData(data, isStdout: false, sequence: sequence)
+                await self?.handlePipeData(data, isStdout: false, sequence: sequence, from: process)
             }
         }
-
-        waitTask = Task {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                process.terminationHandler = { _ in
-                    continuation.resume()
-                }
-            }
-            await self.handleProcessExit(status: process.terminationStatus)
-        }
+        return process
     }
 
     private func resolveExecutablePath() throws -> String {
@@ -423,7 +413,8 @@ actor ASCDaemonClient {
         return environment
     }
 
-    private func handlePipeData(_ data: Data, isStdout: Bool, sequence: Int) async {
+    private func handlePipeData(_ data: Data, isStdout: Bool, sequence: Int, from child: Process) async {
+        guard process === child else { return }
         let lineData = if isStdout {
             stdoutBuffer.append(data, sequence: sequence)
         } else {
@@ -431,6 +422,7 @@ actor ASCDaemonClient {
         }
 
         for entry in lineData {
+            guard process === child else { return }
             if let line = String(data: entry, encoding: .utf8) {
                 if isStdout {
                     await handleStdoutLine(line)
@@ -475,38 +467,42 @@ actor ASCDaemonClient {
         await logger.error("ascd stderr: \(trimmed)")
     }
 
-    private func handleProcessExit(status: Int32) async {
+    private func handleProcessExit(_ exited: Process) async {
+        guard process === exited else { return }
         let message = recentStderr.joined(separator: "\n")
-        let error = Error.processExited(status, message)
+        let status = exited.terminationStatus
+        discardProcess(error: Error.processExited(status, message))
         await logger.error("ascd exited status=\(status) stderr=\(Self.truncate(message, limit: 1200))")
+    }
 
+    private func discardProcess(error: Swift.Error) {
         for (_, pending) in pendingResponses {
             pending.continuation.resume(throwing: error)
         }
         pendingResponses.removeAll()
 
+        if process?.isRunning == true { process?.terminate() }
         process = nil
         stdinHandle = nil
         sessionOpen = false
         stdoutReadHandle?.readabilityHandler = nil
         stderrReadHandle?.readabilityHandler = nil
-        waitTask?.cancel()
         stdoutReadHandle = nil
         stderrReadHandle = nil
         stdoutBuffer.reset()
         stderrBuffer.reset()
-        stdoutSequenceCounter.reset()
-        stderrSequenceCounter.reset()
-        waitTask = nil
     }
 
     private func send<Result: Decodable>(
         method: String,
         params: [String: Any]?,
+        on child: Process,
         responseTimeoutSeconds: TimeInterval? = nil,
         as type: Result.Type = Result.self
     ) async throws -> Result {
-        try await ensureProcessRunning()
+        guard process === child, let writer = stdinHandle else {
+            throw Error.helperLaunchFailed("ascd connection closed")
+        }
 
         requestCounter += 1
         let id = "ascd-\(requestCounter)"
@@ -531,20 +527,26 @@ actor ASCDaemonClient {
             } catch {}
         }
 
+        defer { timeoutTask.cancel() }
         let rawResponse = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Swift.Error>) in
+            guard writer === stdinHandle else {
+                continuation.resume(throwing: Error.helperLaunchFailed("ascd connection closed"))
+                return
+            }
             pendingResponses[id] = PendingRequest(
                 continuation: continuation,
                 summary: summary,
                 startedAt: Date()
             )
             do {
-                try writeRequestLine(requestData)
+                var line = requestData
+                line.append(0x0A)
+                try writer.write(contentsOf: line)
             } catch {
-                pendingResponses.removeValue(forKey: id)
-                continuation.resume(throwing: error)
+                // A partial write can have reached the helper. Fail its requests without replaying them.
+                discardProcess(error: error)
             }
         }
-        timeoutTask.cancel()
 
         let response: DaemonResponse<Result>
         do {
@@ -568,26 +570,9 @@ actor ASCDaemonClient {
 
     private func failPendingRequest(id: String, error: Swift.Error) async {
         guard let pending = pendingResponses.removeValue(forKey: id) else { return }
-        await logger.error("Timed out waiting for [\(id)] \(pending.summary)")
         pending.continuation.resume(throwing: error)
-        await restartProcessAfterTimeout(id: id, summary: pending.summary)
-    }
-
-    private func restartProcessAfterTimeout(id: String, summary: String) async {
-        guard let process else { return }
-        await logger.error("Terminating ascd after timeout for [\(id)] \(summary) pid=\(process.processIdentifier)")
-        sessionOpen = false
-        stdinHandle = nil
-        process.terminate()
-    }
-
-    private func writeRequestLine(_ requestData: Data) throws {
-        guard let stdinHandle else {
-            throw Error.helperLaunchFailed("ascd stdin is unavailable")
-        }
-        var line = requestData
-        line.append(0x0A)
-        try stdinHandle.write(contentsOf: line)
+        discardProcess(error: Error.helperLaunchFailed("ascd connection closed after another request timed out"))
+        await logger.error("Timed out waiting for [\(id)] \(pending.summary)")
     }
 
     nonisolated static func responseMetadata(from data: Data) -> (id: String?, summary: String) {
