@@ -211,7 +211,8 @@ make the version's Store metadata freely editable.
 The journal records each submission write intent, confirmed submission/item IDs,
 and a sanitized diagnostic. After interruption, status only reads Apple. For an
 unambiguous existing draft whose final submit has not been attempted, it can return
-`resumableSubmissionId`. To continue the same authorized release, call `submit`
+`resumableSubmissionId`. After a 409 when adding an item, first run `validate`
+on the stored operation and inspect the result. To continue the same authorized release, call `submit`
 with the unchanged `operationId`, `accountKey`, `confirmationDigest`, `confirm: true`
 and `resumeSubmissionId` equal to that result. Identity, content, media order, build,
 release mode and readiness are rechecked. Continuation fills only missing saved
@@ -368,3 +369,19 @@ Apple documents the item-update and final resubmission steps in
 [Manage a submission with unresolved issues](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/manage-a-submission-with-unresolved-issues).
 This differs from replying to an information-only request without updating the
 review items; use the action actually requested or already initiated by the user.
+
+### Mainland China declarations
+
+The release report checks mainland China availability for the selected app and
+returns separate diagnostics for the AI-generated content declaration
+(`compliance.CHN.ai_generated_content`) and the security assessment
+(`compliance.CHN.security_assessment`). A confirmed exclusion of the CHN
+storefront makes those checks inapplicable. An incomplete or ambiguous lookup
+is reported as unverified. A collected filing awaiting Apple's review with the
+next version is reported as answered, with verification pending.
+[Apple's submission property reference](https://developer.apple.com/help/app-store-connect/reference/app-information/required-localizable-and-editable-properties/).
+A generic HTTP 409 does not identify its cause.
+
+The provider decides on distribution and regulatory declarations. Once the
+relevant changes are recorded at Apple, run `release validate` on the existing
+operation. The same draft can continue after a successful fresh check.

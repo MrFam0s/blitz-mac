@@ -34,6 +34,9 @@ private actor JointWorkflowAPI: ReleaseWorkflowAPI {
     var loseCreateReply = false
     var failHTTP: Int?
     var missingAttempt = false
+    var readinessBlocked = false
+
+    func setReadinessBlocked(_ blocked: Bool) { readinessBlocked = blocked }
 
     func fail(at phase: ReleaseSubmissionPhase?, item: String? = nil, loseCreateReply: Bool = false,
               httpStatus: Int? = nil, missingAttempt: Bool = false) {
@@ -56,7 +59,7 @@ private actor JointWorkflowAPI: ReleaseWorkflowAPI {
                      submissionItemID: appItem, submissionItemsComplete: complete, reviewItemIDs: itemIDs)
     }
     func readiness(_ target: ReleaseWorkflowTarget) async throws -> ReleaseWorkflowValidation {
-        .init(ready: true, blocking: 0, warnings: 0, unverified: 0, checkIDs: ["joint.products"])
+        .init(ready: !readinessBlocked, blocking: readinessBlocked ? 1 : 0, warnings: 0, unverified: 0, checkIDs: ["joint.products"])
     }
     func setReleaseMode(_ mode: ReleaseWorkflowMode, target: ReleaseWorkflowTarget) async throws {
         throw ReleaseWorkflowError.unsafeState // All fixtures deliberately use MANUAL.
@@ -272,7 +275,27 @@ private actor JointWorkflowAPI: ReleaseWorkflowAPI {
             #expect(await api.submits == 0)
             await api.fail(at: nil)
             if httpStatus == 409 {
-                let done = try await service.submit(operationID: plan.operationID, accountKey: "issuer:key",
+                #expect(status.validation == nil && status.lastErrorCode == "submission_item_rejected")
+                #expect(status.nextAction == "validateDraftContinuation")
+                await #expect(throws: ReleaseWorkflowError.self) {
+                    try await service.submit(operationID: plan.operationID, accountKey: "issuer:key",
+                        confirmationDigest: plan.confirmationDigest, resumeSubmissionID: "submission")
+                }
+                await api.setReadinessBlocked(true)
+                let blocked = try await service.validate(operationID: plan.operationID, accountKey: "issuer:key")
+                #expect(blocked.validation?.ready == false && blocked.nextAction == "completeReadinessChecks")
+                let reconciled = try await service.status(operationID: plan.operationID, accountKey: "issuer:key")
+                #expect(reconciled.validation?.blocking == 1 && reconciled.lastErrorCode == "readiness_blocked")
+                await api.setReadinessBlocked(false)
+                await #expect(throws: ReleaseWorkflowError.self) {
+                    try await service.submit(operationID: plan.operationID, accountKey: "issuer:key",
+                        confirmationDigest: plan.confirmationDigest, resumeSubmissionID: "submission")
+                }
+                _ = try await service.validate(operationID: plan.operationID, accountKey: "issuer:key")
+                let restarted = ReleaseWorkflowService(directory: root, api: api)
+                let rechecked = try await restarted.status(operationID: plan.operationID, accountKey: "issuer:key")
+                #expect(rechecked.validation?.ready == true && rechecked.nextAction == "confirmDraftContinuation")
+                let done = try await restarted.submit(operationID: plan.operationID, accountKey: "issuer:key",
                     confirmationDigest: plan.confirmationDigest, resumeSubmissionID: "submission")
                 #expect(done.state == .submitted)
                 #expect(await api.adds.values.allSatisfy { $0 == 1 })

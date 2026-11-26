@@ -71,6 +71,7 @@ func (s *Service) Handle(ctx context.Context, request Request) Response {
 		return Response{
 			ID: request.ID,
 			Result: PingResult{
+				Capabilities:    []string{"release.chinaCompliance"},
 				ProtocolVersion: ProtocolVersion,
 				Version:         s.version,
 				SessionOpen:     s.hasSession(),

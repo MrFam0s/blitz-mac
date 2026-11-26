@@ -260,7 +260,9 @@ private func workflowDirectory() -> URL {
                 let web = ReleaseWebEvidence(appId: target.appID, bundleId: target.bundleID, bindingVerified: true,
                     bindingReason: "fixture", appleId: "fixture@example.invalid", providerId: "PROVIDER",
                     programLicense: .init(status: count == 0 ? "passed" : "unverified", reason: "fixture"),
-                    businessFree: .init(status: "passed", reason: "fixture"), businessPaid: .init(status: "passed", reason: "fixture"))
+                    businessFree: .init(status: "passed", reason: "fixture"), businessPaid: .init(status: "passed", reason: "fixture"),
+                    chinaGeneratedContent: .init(status: "passed", reason: "fixture"),
+                    chinaSecurityAssessment: .init(status: "passed", reason: "fixture"))
                 return ReleaseReadinessPayload(report: Data("""
                 {"appId":"app1","versionId":"version1","platform":"IOS","summary":{"blocking":0,"warnings":0},"deep":{"summary":{"blocked":0,"unverified":0},"checks":[]},"checks":[]}
                 """.utf8), web: web, exitCode: 0)
@@ -481,7 +483,8 @@ private func fixtureAdapter(_ fixture: WorkflowSnapshotFixture) -> ReleaseWorkfl
             return ReleaseReadinessPayload(report: try JSONSerialization.data(withJSONObject: report),
                 web: .init(appId: target.appID, bundleId: target.bundleID, bindingVerified: true, bindingReason: "fixture_verified",
                            appleId: "fixture@example.invalid", providerId: "provider", developerTeamId: "team",
-                           programLicense: passed, businessFree: passed, businessPaid: passed), exitCode: 0)
+                           programLicense: passed, businessFree: passed, businessPaid: passed,
+                           chinaGeneratedContent: passed, chinaSecurityAssessment: passed), exitCode: 0)
         })
 }
 
@@ -1024,6 +1027,48 @@ private func releaseWorkflowRejectsUnsafeAgeRatingDraftRefresh(_ scenario: Unsaf
     let contents = try String(contentsOf: root.appendingPathComponent("\(record.operationID).json"), encoding: .utf8)
     #expect(!contents.contains("secret-demo-password") && !contents.contains("private-user-value"))
     #expect(await fixture.writes.map(\.method) == ["POST", "POST"])
+}
+
+@Test func legacyGreenValidationBeforeItemConflictIsDiscardedWhenLoadingDraft() async throws {
+    let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+    let fixture = WorkflowSnapshotFixture(), adapter = fixtureAdapter(fixture)
+    let service = ReleaseWorkflowService(directory: root, api: adapter)
+    let plan = try await service.prepare(target: workflowTarget(root), mode: .manual)
+    let account = plan.target.accountKey, id = plan.operationID
+    let validated = try await service.validate(operationID: id, accountKey: account)
+    await fixture.configureSubmission(rejectAt: "/v1/reviewSubmissionItems")
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await service.submit(operationID: id, accountKey: account, confirmationDigest: plan.confirmationDigest)
+    }
+
+    // 1.0.88 retained the old green validation and advertised immediate continuation.
+    let journal = root.appendingPathComponent("\(id).json")
+    var legacy = try await service.loadRecord(operationID: id)
+    legacy.validation = validated.validation
+    legacy.resumableSubmissionID = legacy.submissionID
+    legacy.lastErrorCode = "submission_draft_requires_confirmation"
+    legacy.nextAction = "confirmDraftContinuation"
+    try JSONEncoder().encode(legacy).write(to: journal)
+    let restarted = ReleaseWorkflowService(directory: root, api: adapter)
+    let read = try await restarted.loadRecord(operationID: id)
+    #expect(read.validation == nil && read.nextAction == "validateDraftContinuation")
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.submit(operationID: id, accountKey: account, confirmationDigest: plan.confirmationDigest,
+                                   resumeSubmissionID: "submission1")
+    }
+    let status = try await restarted.status(operationID: id, accountKey: account)
+    #expect(status.lastDiagnostic?.apple?.httpStatus == 409 && status.lastErrorCode == "submission_item_rejected")
+    #expect(status.nextAction == "validateDraftContinuation" && status.resumableSubmissionID == "submission1")
+    #expect(await fixture.writes.map(\.method) == ["POST", "POST"])
+    _ = try await restarted.validate(operationID: id, accountKey: account)
+    // Even if a second preflight is green, a second Apple rejection invalidates it again.
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.submit(operationID: id, accountKey: account, confirmationDigest: plan.confirmationDigest,
+                                   resumeSubmissionID: "submission1")
+    }
+    let second = try await restarted.status(operationID: id, accountKey: account)
+    #expect(second.validation == nil && second.nextAction == "validateDraftContinuation")
+    #expect(await fixture.writes.map(\.path) == ["/v1/reviewSubmissions", "/v1/reviewSubmissionItems", "/v1/reviewSubmissionItems"])
 }
 
 @Test func releaseWorkflowFinalPatchIntentCannotBeResumedEvenWithSameDraftID() async throws {

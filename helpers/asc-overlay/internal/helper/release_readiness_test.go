@@ -69,9 +69,9 @@ func TestBlitzBusinessEvidenceRequiresCurrentConfigurationAndKnownRelevance(t *t
 }
 
 type fakeReleaseWeb struct {
-	wrongApp                      bool
-	wrongPortalTeam               bool
-	agreementReads, businessReads int
+	wrongApp                                       bool
+	wrongPortalTeam                                bool
+	agreementReads, businessReads, complianceReads int
 }
 
 func (f *fakeReleaseWeb) BindBlitzReleaseDeveloperTeam(context.Context) error {
@@ -94,6 +94,13 @@ func (f *fakeReleaseWeb) GetAgreementsStatus(context.Context) (*asc.WebAgreement
 	f.agreementReads++
 	return &asc.WebAgreementsStatusResult{}, errors.New("apple account has no Developer Portal team")
 }
+func (f *fakeReleaseWeb) ListBlitzReleaseComplianceRequirements(_ context.Context, accountID, appID string) ([]webcore.AppComplianceRequirement, error) {
+	if accountID != "PROVIDER" || appID != "app1" {
+		return nil, errors.New("wrong target")
+	}
+	f.complianceReads++
+	return nil, nil
+}
 func (f *fakeReleaseWeb) ListBusinessAgreements(context.Context) (*webcore.BusinessAgreementsResponse, error) {
 	f.businessReads++
 	return businessFixture(), nil
@@ -111,6 +118,12 @@ func TestBlitzReadinessBindsProviderBeforeReadingAgreementsAndKeepsUnknownPLA(t 
 		fake := &fakeReleaseWeb{wrongApp: wrong, wrongPortalTeam: scenario.wrongPortal}
 		params := ReleaseReadinessParams{AppID: "app1", BundleID: "org.example.App", VersionID: "version1", Platform: "IOS"}
 		result, err := collectReleaseReadiness(context.Background(), params, releaseReadinessDependencies{
+			chinaSelected: func(_ context.Context, appID string) (bool, error) {
+				if appID != "app1" || wrong {
+					t.Fatal("read availability before binding app")
+				}
+				return true, nil
+			},
 			buildReport: func(_ context.Context, options validate.ReadinessOptions) (validation.Report, error) {
 				if options.AppID != "app1" || options.VersionID != "version1" || options.Platform != "IOS" || !options.Strict || !options.Deep {
 					t.Fatal("wrong fixed target")
@@ -129,7 +142,7 @@ func TestBlitzReadinessBindsProviderBeforeReadingAgreementsAndKeepsUnknownPLA(t 
 			t.Fatal("wrong provider binding outcome")
 		}
 		if wrong {
-			if fake.agreementReads != 0 || fake.businessReads != 0 {
+			if fake.agreementReads != 0 || fake.businessReads != 0 || fake.complianceReads != 0 {
 				t.Fatal("read agreements before app binding")
 			}
 		} else {
@@ -137,7 +150,7 @@ func TestBlitzReadinessBindsProviderBeforeReadingAgreementsAndKeepsUnknownPLA(t 
 			if scenario.wrongPortal {
 				expectedReads = 0
 			}
-			if fake.agreementReads != expectedReads || fake.businessReads != 1 {
+			if fake.agreementReads != expectedReads || fake.businessReads != 1 || fake.complianceReads != 1 {
 				t.Fatal("deep validator must reuse exact same agreement result")
 			}
 			if result.Web.ProgramLicense.Reason != "developer_team_unresolved" || result.Web.BusinessPaid.Status != "passed" {

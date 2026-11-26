@@ -204,6 +204,16 @@ again. For an authorized submission, continue with the new digest and the
 exact draft ID as `resumeSubmissionId`. If the evidence or authorization is
 missing, report what still needs verification. Never infer answers from an empty field.
 
+If Apple rejects adding the app version or a product to the draft with HTTP 409,
+run `release status` and follow `validateDraftContinuation` on that operation.
+A resumable draft ID identifies the draft. Review the fresh validation before
+continuing. For `compliance.CHN.ai_generated_content` and
+`compliance.CHN.security_assessment`, check the storefront selection and the
+two individual results. An HTTP 409 without a field pointer does not identify
+its cause. Changing storefronts, answering regulatory declarations and uploading
+evidence require the provider's decision. Once the issue has been addressed,
+revalidate the same operation and draft.
+
 If `status` returns `resumableSubmissionId`, it has identified a unique existing
 unsubmitted draft for this same operation. Verify that ID against the saved release
 evidence. For this already authorized, unchanged release, use the same `submit`

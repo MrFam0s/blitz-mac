@@ -26,7 +26,9 @@ public enum BlitzReleaseCLI {
     use status with the saved operationId to reconcile the result first.
 
     A status result can expose resumableSubmissionId for a uniquely verified
-    existing, unsubmitted draft. To continue that same authorized release, pass
+    existing, unsubmitted draft. After Apple refuses to add an item with HTTP 409,
+    run validate on the same operation and inspect the current blockers before
+    continuing. A draft ID alone does not establish readiness. To continue that same authorized release, pass
     it as resumeSubmissionId to submit with the unchanged operationId, accountKey,
     confirmationDigest and confirm=true. This rechecks all release guards and
     submits only that existing draft. It never creates another draft. If the final

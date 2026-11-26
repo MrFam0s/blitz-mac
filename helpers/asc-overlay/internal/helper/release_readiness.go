@@ -25,16 +25,18 @@ type releaseEvidenceCheck struct {
 	Reason string `json:"reason"`
 }
 type releaseWebEvidence struct {
-	AppID           string               `json:"appId"`
-	BundleID        string               `json:"bundleId"`
-	BindingVerified bool                 `json:"bindingVerified"`
-	BindingReason   string               `json:"bindingReason"`
-	AppleID         string               `json:"appleId,omitempty"`
-	ProviderID      string               `json:"providerId,omitempty"`
-	DeveloperTeamID string               `json:"developerTeamId,omitempty"`
-	ProgramLicense  releaseEvidenceCheck `json:"programLicense"`
-	BusinessFree    releaseEvidenceCheck `json:"businessFree"`
-	BusinessPaid    releaseEvidenceCheck `json:"businessPaid"`
+	AppID                   string               `json:"appId"`
+	BundleID                string               `json:"bundleId"`
+	BindingVerified         bool                 `json:"bindingVerified"`
+	BindingReason           string               `json:"bindingReason"`
+	AppleID                 string               `json:"appleId,omitempty"`
+	ProviderID              string               `json:"providerId,omitempty"`
+	DeveloperTeamID         string               `json:"developerTeamId,omitempty"`
+	ProgramLicense          releaseEvidenceCheck `json:"programLicense"`
+	BusinessFree            releaseEvidenceCheck `json:"businessFree"`
+	BusinessPaid            releaseEvidenceCheck `json:"businessPaid"`
+	ChinaGeneratedContent   releaseEvidenceCheck `json:"chinaGeneratedContent"`
+	ChinaSecurityAssessment releaseEvidenceCheck `json:"chinaSecurityAssessment"`
 }
 type releaseReadinessResult struct {
 	Report   validation.Report  `json:"report"`
@@ -43,19 +45,28 @@ type releaseReadinessResult struct {
 }
 type releaseWebClient interface {
 	validate.BlitzDeepClient
+	ListBlitzReleaseComplianceRequirements(context.Context, string, string) ([]webcore.AppComplianceRequirement, error)
 	BindBlitzReleaseDeveloperTeam(context.Context) error
 	GetApp(context.Context, string) (*webcore.AppResponse, error)
 	ListBusinessAgreements(context.Context) (*webcore.BusinessAgreementsResponse, error)
 }
 type releaseReadinessDependencies struct {
-	buildReport  func(context.Context, validate.ReadinessOptions) (validation.Report, error)
-	resume       func(context.Context) (*webcore.AuthSession, bool, error)
-	newWebClient func(*webcore.AuthSession) releaseWebClient
+	chinaSelected func(context.Context, string) (bool, error)
+	buildReport   func(context.Context, validate.ReadinessOptions) (validation.Report, error)
+	resume        func(context.Context) (*webcore.AuthSession, bool, error)
+	newWebClient  func(*webcore.AuthSession) releaseWebClient
 }
 
 func releaseReadiness(ctx context.Context, p ReleaseReadinessParams) (releaseReadinessResult, error) {
 	deps := shared.DefaultDeps()
 	return collectReleaseReadiness(ctx, p, releaseReadinessDependencies{
+		chinaSelected: func(ctx context.Context, appID string) (bool, error) {
+			client, err := deps.Client()
+			if err != nil {
+				return false, err
+			}
+			return releaseChinaSelected(ctx, client, appID)
+		},
 		buildReport: func(ctx context.Context, opts validate.ReadinessOptions) (validation.Report, error) {
 			return validate.BuildReadinessReportWith(ctx, deps, opts)
 		},
@@ -89,7 +100,7 @@ func collectReleaseReadiness(ctx context.Context, p ReleaseReadinessParams, deps
 	}
 	unknown := releaseEvidenceCheck{"unverified", "web_session_unavailable"}
 	evidence := releaseWebEvidence{AppID: p.AppID, BundleID: p.BundleID, BindingReason: "web_session_unavailable",
-		ProgramLicense: unknown, BusinessFree: unknown, BusinessPaid: unknown}
+		ProgramLicense: unknown, BusinessFree: unknown, BusinessPaid: unknown, ChinaGeneratedContent: unknown, ChinaSecurityAssessment: unknown}
 	session, ok, sessionErr := deps.resume(ctx)
 	var bound validate.BlitzDeepClient
 	if sessionErr == nil && ok && session != nil && session.Client != nil && session.UserEmail != "" && session.PublicProviderID != "" {
@@ -99,6 +110,8 @@ func collectReleaseReadiness(ctx context.Context, p ReleaseReadinessParams, deps
 			evidence.BindingVerified = true
 			evidence.BindingReason = "exact_app_and_bundle_verified_in_selected_provider"
 			evidence.AppleID, evidence.ProviderID = session.UserEmail, session.PublicProviderID
+			selected, availabilityErr := deps.chinaSelected(ctx, p.AppID)
+			evidence.ChinaGeneratedContent, evidence.ChinaSecurityAssessment = releaseChinaEvidence(ctx, client, session.PublicProviderID, p.AppID, selected, availabilityErr)
 			var agreements *asc.WebAgreementsStatusResult
 			agreementErr := client.BindBlitzReleaseDeveloperTeam(ctx)
 			if agreementErr == nil {

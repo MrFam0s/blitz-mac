@@ -319,7 +319,8 @@ func jointProductFingerprintProtectsTokenWhenChecksumMissingOrBlank(path: String
         "summary": ["blocking": 3, "warnings": 1], "deep": ["checks": deepChecks, "summary": ["blocked": 2, "unverified": 0]]]
     let check = ReleaseWebEvidence.Check(status: "passed", reason: "fixture")
     let web = ReleaseWebEvidence(appId: "app1", bundleId: "org.example.App", bindingVerified: true, bindingReason: "fixture",
-        appleId: "test@example.invalid", providerId: "provider", programLicense: check, businessFree: check, businessPaid: check)
+        appleId: "test@example.invalid", providerId: "provider", programLicense: check, businessFree: check, businessPaid: check,
+                           chinaGeneratedContent: check, chinaSecurityAssessment: check)
     let result = try ReleaseReadinessPolicy.normalize(report: report, exitCode: 1, target: fixture.target(), firstPublication: true,
         localizations: [], web: web, webBindingStable: true, products: products)
     #expect(!result.ready && result.blocking == 1 && result.warnings == 1)
@@ -346,7 +347,8 @@ private func normalizedProductReadiness(_ checks: [[String: Any]], products: Rel
         "deep": ["checks": [[String: Any]](), "summary": ["blocked": 0, "unverified": 0]]]
     let check = ReleaseWebEvidence.Check(status: "passed", reason: "fixture")
     let web = ReleaseWebEvidence(appId: "app1", bundleId: "org.example.App", bindingVerified: true, bindingReason: "fixture",
-        appleId: "test@example.invalid", providerId: "provider", programLicense: check, businessFree: check, businessPaid: check)
+        appleId: "test@example.invalid", providerId: "provider", programLicense: check, businessFree: check, businessPaid: check,
+                           chinaGeneratedContent: check, chinaSecurityAssessment: check)
     return try ReleaseReadinessPolicy.normalize(report: report, exitCode: blocking == 0 ? 0 : 1,
         target: JointProductFixture().target(), firstPublication: true, localizations: [], web: web,
         webBindingStable: true, products: products)

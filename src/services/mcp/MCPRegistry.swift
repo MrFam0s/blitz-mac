@@ -58,7 +58,7 @@ enum MCPRegistry {
             required: ["operationId", "accountKey", "submissionId", "confirmationDigest"]
         ))
         for (name, description) in [
-            ("release_status", "Read and reconcile a durable operation with Apple. Historical state=submitted is not a current queue status: inspect current Apple/submission state and the reported next action. A reply or READY_FOR_REVIEW item is not a new submission. Never replays a write. Use after timeout/restart before any retry."),
+            ("release_status", "Read and reconcile a durable operation with Apple. Historical state=submitted is not a current queue status: inspect current Apple/submission state and the reported next action. A reply or READY_FOR_REVIEW item is not a new submission. After an HTTP 409 adding an item, validate the same draft again before attempting continuation. Never replays a write. Use after timeout/restart before any retry."),
             ("release_validate", "Freshly validate the exact prepared release and compare its content fingerprint. No Apple mutations. Reports blockers, authentication problems and changed content; does not authorize submission."),
             ("release_submit", "Submit the exact validated operation, including only its saved IAP/subscription/group versions, after explicit user authorization. Requires its unchanged confirmationDigest and confirm=true. Sets the prepared release mode, assembles the one exact review draft, submits once, and records unknown outcomes for read-only reconciliation. Never attaches an arbitrary build or changes prepared metadata.")
         ] {

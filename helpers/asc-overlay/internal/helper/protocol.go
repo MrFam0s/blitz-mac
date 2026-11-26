@@ -35,9 +35,10 @@ type ResponseError struct {
 }
 
 type PingResult struct {
-	ProtocolVersion string `json:"protocolVersion"`
-	Version         string `json:"version"`
-	SessionOpen     bool   `json:"sessionOpen"`
+	Capabilities    []string `json:"capabilities,omitempty"`
+	ProtocolVersion string   `json:"protocolVersion"`
+	Version         string   `json:"version"`
+	SessionOpen     bool     `json:"sessionOpen"`
 }
 
 type SessionOpenParams struct {

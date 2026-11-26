@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.89 (build 109)
+
+- Release validation checks the mainland China storefront and Apple’s AI-generated content declaration and security assessment for the selected app. It reports each outstanding requirement before adding the version to review.
+- When Apple refuses to add an item to a review draft with HTTP 409, Blitz clears the earlier readiness result and requires a fresh validation of the same draft before continuation.
+
 ## 1.0.88 (build 108)
 
 - Age-rating checks cover Apple’s Shared Location and Dating and Relationships

@@ -617,7 +617,9 @@ extension ASCManager {
             guard validated.state == .validated || (validated.state == .submissionPending
                     && resumeSubmissionID != nil && validated.resumableResubmissionID == resumeSubmissionID),
                   validated.validation?.ready == true else {
-                let checks = validated.validation?.checkIDs.prefix(8).joined(separator: ", ") ?? ""
+                let diagnostics = validated.validation?.diagnostics
+                let blockingIDs = diagnostics?.filter { ["blocked", "unverified"].contains($0.status) }.map(\.id)
+                let checks = (blockingIDs ?? validated.validation?.checkIDs ?? []).prefix(8).joined(separator: ", ")
                 throw ASCError.notFound(L10n.tr("Die vollständige Release-Prüfung blockiert die Einreichung.") + (checks.isEmpty ? "" : L10n.tr(" Prüfpunkte: \(checks)"))
                     + L10n.tr(" Vorgang: \(prepared.operationID)"))
             }

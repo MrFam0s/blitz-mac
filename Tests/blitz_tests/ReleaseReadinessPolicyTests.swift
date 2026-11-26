@@ -12,7 +12,9 @@ private func readinessEvidence(status: String = "passed", reason: String = "curr
           appleId: "fixture@example.invalid", providerId: "PROVIDER", developerTeamId: "TEAM",
           programLicense: .init(status: status, reason: reason),
           businessFree: .init(status: "passed", reason: "current_business_agreement_active"),
-          businessPaid: .init(status: "passed", reason: "current_business_agreement_active"))
+          businessPaid: .init(status: "passed", reason: "current_business_agreement_active"),
+          chinaGeneratedContent: .init(status: "notApplicable", reason: "china_storefront_excluded"),
+          chinaSecurityAssessment: .init(status: "notApplicable", reason: "china_storefront_excluded"))
 }
 private func readinessReport(checks: [[String: Any]] = [], deepChecks: [[String: Any]] = []) -> [String: Any] {
     ["appId": "app1", "versionId": "version1", "platform": "IOS", "checks": checks,
@@ -73,7 +75,7 @@ private func normalize(_ report: [String: Any], first: Bool = true, web: Release
     #expect(!blocked.ready && blocked.checkIDs.contains("agreements.alert") && blocked.blocking == 1)
     let wrongProvider = try normalize(readinessReport(deepChecks: [["id": "privacy.publish_state", "status": "passed", "source": "webSession"]]),
                                       web: readinessEvidence(bound: false))
-    #expect(!wrongProvider.ready && wrongProvider.unverified == 4)
+    #expect(!wrongProvider.ready && wrongProvider.unverified == 6)
     #expect(wrongProvider.diagnostics?.first { $0.id == "privacy.publish_state" }?.status == "unverified")
 }
 
@@ -127,4 +129,22 @@ private func normalize(_ report: [String: Any], first: Bool = true, web: Release
     let result = try normalize(readinessReport(checks: checks))
     #expect(!result.ready)
     #expect(Set(try #require(result.diagnostics).compactMap(\.field)) == ["sharedLocation", "datingAndRelationships"])
+}
+
+@Test func mainlandChinaRequirementsAreCountedSeparatelyAndOnlyOnce() throws {
+    var web = readinessEvidence()
+    web.chinaGeneratedContent = .init(status: "blocked", reason: "china_declaration_required")
+    web.chinaSecurityAssessment = .init(status: "blocked", reason: "china_declaration_required")
+    let report = readinessReport(deepChecks: [["id": "availability.configured", "status": "passed"]])
+    let blocked = try normalize(report, web: web)
+    #expect(!blocked.ready && blocked.blocking == 2 && blocked.unverified == 0)
+    let checks = try #require(blocked.diagnostics).filter { $0.id.hasPrefix("compliance.CHN.") }
+    #expect(checks.map(\.id).sorted() == ["compliance.CHN.ai_generated_content", "compliance.CHN.security_assessment"])
+    #expect(checks.allSatisfy { $0.status == "blocked" })
+
+    web.chinaGeneratedContent = nil
+    web.chinaSecurityAssessment = nil
+    let unknown = try normalize(report, web: web)
+    #expect(!unknown.ready && unknown.unverified == 2 && unknown.blocking == 0)
+    #expect(try normalize(report, web: readinessEvidence()).ready)
 }

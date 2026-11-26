@@ -163,6 +163,8 @@ struct ReleaseWorkflowValidation: Codable, Equatable, Sendable {
     /// Stable identifiers and generated diagnostics only; never persist raw CLI/review data.
     let checkIDs: [String]
     var diagnostics: [ReleaseReadinessDiagnostic]? = nil
+    /// Older journals could retain a successful check from before a rejected item write.
+    var checkedAfterItemConflict: Bool? = nil
 }
 
 protocol ReleaseWorkflowAPI {
@@ -268,6 +270,14 @@ struct ReleaseWorkflowRecord: Codable, Equatable, Sendable {
     var refreshableSubmissionID: String? = nil
     var draftRefresh: ReleaseDraftRefreshBinding? = nil
     var ageRatingCorrection: ReleaseAgeRatingCorrection? = nil
+
+    var hasItemConflict: Bool {
+        guard state == .submissionPending, let diagnostic = lastDiagnostic,
+              diagnostic.category == "apple_request_rejected", diagnostic.apple?.httpStatus == 409,
+              diagnostic.phase == submissionProgress?.phase else { return false }
+        return diagnostic.phase == .addingVersion || diagnostic.phase == .addingReviewItem
+    }
+
     enum CodingKeys: String, CodingKey {
         case operationID = "operationId", target, mode, versionString, buildNumber, contentDigest, confirmationDigest
         case preparedAt, updatedAt, state, validation, lastErrorCode, appleState, submissionID = "submissionId"
@@ -523,7 +533,7 @@ actor ReleaseWorkflowService {
             record.ageRatingCorrection = correction
             record.lastErrorCode = "age_rating_confirmation_changed"
             record.nextAction = "prepareDraftRefresh"
-        } else if record.draftRefresh != nil && record.state == .submissionPending {
+        } else if record.state == .submissionPending, record.draftRefresh != nil || record.hasItemConflict {
             record.validation = nil
         } else if (record.state == .releaseModePending && snapshot.releaseType == record.mode.rawValue) ||
                     (record.state == .attachmentPending && snapshot.attachedBuildID == record.target.buildID) {
@@ -586,6 +596,7 @@ actor ReleaseWorkflowService {
             // confirmation asserts independent evidence of a pre-PATCH abort;
             // a merely unknown historical outcome must not be retried.
             guard record.submissionProgress != nil || confirmLegacyDraftRecovery else { throw ReleaseWorkflowError.confirmationRequired }
+            if record.hasItemConflict, record.validation?.ready != true { throw ReleaseWorkflowError.notReady }
             let candidate = try await api.snapshot(record.target)
             guard (record.resubmission == nil ? canResume(candidate, record: record) : canResumeResubmission(candidate, record: record)),
                   candidate.submissionID == resumeSubmissionID else {
@@ -674,7 +685,13 @@ actor ReleaseWorkflowService {
             record = try load(operationID)
             let diagnostic = ReleaseSubmissionDiagnostic.make(error, phase: record.submissionProgress?.phase)
             record.lastDiagnostic = diagnostic
-            record.lastErrorCode = record.submissionProgress?.phase == .acknowledged ? "submission_accepted_status_unverified" : "submission_outcome_unknown"
+            if record.hasItemConflict {
+                record.validation = nil
+                record.lastErrorCode = "submission_item_rejected"
+                record.nextAction = "inspectReviewStatus"
+            } else {
+                record.lastErrorCode = record.submissionProgress?.phase == .acknowledged ? "submission_accepted_status_unverified" : "submission_outcome_unknown"
+            }
             record.updatedAt = Date()
             try save(record)
             throw ReleaseWorkflowError.submissionFailed(diagnostic)
@@ -725,7 +742,8 @@ actor ReleaseWorkflowService {
         do {
             let before = try await api.snapshot(record.target)
             try checkUnchanged(before, record: record, allowingDraft: allowingDraft)
-            let validation = try await api.readiness(record.target, resubmission: record.resubmission)
+            var validation = try await api.readiness(record.target, resubmission: record.resubmission)
+            if record.hasItemConflict { validation.checkedAfterItemConflict = true }
             let after = try await api.snapshot(record.target)
             try checkUnchanged(after, record: record, allowingDraft: allowingDraft)
             record.validation = validation
@@ -733,7 +751,7 @@ actor ReleaseWorkflowService {
             record.lastErrorCode = validation.ready ? nil : "readiness_blocked"
             updateReviewStatus(&record, snapshot: after)
             if record.resubmission != nil { record.nextAction = validation.ready ? "confirmResubmission" : "completeReadinessChecks" }
-            if record.draftRefresh != nil {
+            if record.draftRefresh != nil || record.hasItemConflict {
                 record.nextAction = validation.ready ? "confirmDraftContinuation" : "completeReadinessChecks"
             }
             record.updatedAt = Date()
@@ -781,12 +799,13 @@ actor ReleaseWorkflowService {
         record.requiresLegacyRecoveryConfirmation = record.submissionProgress == nil ? true : nil
         record.ageRatingCorrection = record.draftRefresh?.correction
         record.lastErrorCode = "submission_draft_requires_confirmation"
-        if record.draftRefresh != nil {
+        if record.draftRefresh != nil || record.hasItemConflict {
             if let validation = record.validation {
                 record.nextAction = validation.ready ? "confirmDraftContinuation" : "completeReadinessChecks"
                 if !validation.ready { record.lastErrorCode = "readiness_blocked" }
             } else {
                 record.nextAction = "validateDraftContinuation"
+                if record.hasItemConflict { record.lastErrorCode = "submission_item_rejected" }
             }
         }
     }
@@ -960,7 +979,7 @@ actor ReleaseWorkflowService {
         let url = directory.appendingPathComponent("\(id.lowercased()).json")
         try rejectSymlink(url)
         guard FileManager.default.fileExists(atPath: url.path) else { throw ReleaseWorkflowError.unknownOperation }
-        let record = try JSONDecoder().decode(ReleaseWorkflowRecord.self, from: Data(contentsOf: url))
+        var record = try JSONDecoder().decode(ReleaseWorkflowRecord.self, from: Data(contentsOf: url))
         guard record.operationID == id.lowercased() else { throw ReleaseWorkflowError.unsafeState }
         try record.target.validate()
         let itemIDs = record.reviewItemIDs ?? [:]
@@ -988,6 +1007,12 @@ actor ReleaseWorkflowService {
             versionString: record.versionString, buildNumber: record.buildNumber, contentDigest: record.contentDigest,
             contentFingerprintVersion: record.contentFingerprintVersion, resubmission: record.resubmission, draftRefresh: record.draftRefresh))
         guard expected == record.confirmationDigest else { throw ReleaseWorkflowError.unsafeState }
+        if record.hasItemConflict, let check = record.validation, check.checkedAfterItemConflict != true {
+            // A pre-upgrade green result cannot prove the rejected draft was rechecked.
+            record.validation = nil
+            record.lastErrorCode = "submission_item_rejected"
+            record.nextAction = record.resumableSubmissionID == nil ? "inspectReviewStatus" : "validateDraftContinuation"
+        }
         return record
     }
 

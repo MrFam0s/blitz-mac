@@ -29,6 +29,7 @@ with tempfile.TemporaryDirectory(prefix="blitz-asc-smoke-") as isolated:
     require(len(responses) == 2 and all("error" not in r for r in responses), "RPC contract failed")
     results = {r["id"]: r["result"] for r in responses}
     ping, cli = results["ping"], results["cli"]
+    require("release.chinaCompliance" in ping.get("capabilities", []), "ASC helper lacks regional release readiness")
     require(ping["protocolVersion"] == "1" and not ping["sessionOpen"], "Unexpected protocol/session")
     require(ping["version"].startswith(version + " ") and commit in ping["version"], "ASC pin mismatch")
     require(cli["exitCode"] == 0 and cli["stdout"].strip() == ping["version"], "RPC CLI mismatch")

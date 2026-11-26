@@ -1,0 +1,69 @@
+--- a/internal/web/app_compliance.go
++++ b/internal/web/app_compliance.go
+@@ -43,6 +43,16 @@
+ // ListAppComplianceRequirements lists the App Compliance requirements for an
+ // app, answered or not. An app with none gets an empty list.
+ func (c *Client) ListAppComplianceRequirements(ctx context.Context, accountID, appID string) ([]AppComplianceRequirement, error) {
++	return c.listAppComplianceRequirements(ctx, accountID, appID, false)
++}
++
++// ListBlitzReleaseComplianceRequirements reads the same App Store Connect forms,
++// rejecting incomplete responses before Blitz derives release readiness from them.
++func (c *Client) ListBlitzReleaseComplianceRequirements(ctx context.Context, accountID, appID string) ([]AppComplianceRequirement, error) {
++	return c.listAppComplianceRequirements(ctx, accountID, appID, true)
++}
++
++func (c *Client) listAppComplianceRequirements(ctx context.Context, accountID, appID string, strict bool) ([]AppComplianceRequirement, error) {
+ 	accountID = strings.TrimSpace(accountID)
+ 	appID = strings.TrimSpace(appID)
+ 	if accountID == "" {
+@@ -63,7 +73,9 @@
+ 			ID              string   `json:"id"`
+ 			FormName        string   `json:"formName"`
+ 			Status          string   `json:"status"`
+-			IsRequired      bool     `json:"isRequired"`
++			IsRequired      *bool    `json:"isRequired"`
++			EntityID        string   `json:"entityId"`
++			EntityType      string   `json:"entityType"`
+ 			Countries       []string `json:"countries"`
+ 			FormID          string   `json:"formId"`
+ 			DateSigned      string   `json:"dateSigned"`
+@@ -75,8 +87,29 @@
+ 		return nil, fmt.Errorf("failed to parse app compliance requirements response: %w", err)
+ 	}
+ 
++	if strict {
++		var envelope map[string]json.RawMessage
++		if err := json.Unmarshal(responseBody, &envelope); err != nil || envelope == nil {
++			return nil, errors.New("invalid app compliance response")
++		}
++		// The PPM service also uses {} for a successful, empty collection.
++		if len(envelope) > 0 && (payload.Data == nil || envelope["error"] != nil || envelope["errors"] != nil) {
++			return nil, errors.New("unverified app compliance collection")
++		}
++		var pagination struct {
++			Next string
++			Links struct { Next string }
++		}
++		if err := json.Unmarshal(responseBody, &pagination); err != nil || pagination.Next != "" || pagination.Links.Next != "" {
++			return nil, errors.New("incomplete app compliance collection")
++		}
++	}
+ 	requirements := make([]AppComplianceRequirement, 0, len(payload.Data))
+ 	for _, item := range payload.Data {
++		if strict && (item.ID == "" || item.FormName == "" || item.Status == "" || item.IsRequired == nil ||
++			(item.EntityID != "" && item.EntityID != appID) || (item.EntityType != "" && item.EntityType != "APP")) {
++			return nil, errors.New("unverified app compliance requirement")
++		}
+ 		name, ok := appComplianceRequirementNames[item.FormName]
+ 		if !ok {
+ 			name = item.FormName
+@@ -87,7 +120,7 @@
+ 			RequirementName:    name,
+ 			FormName:           item.FormName,
+ 			Status:             item.Status,
+-			Required:           item.IsRequired,
++			Required:           item.IsRequired != nil && *item.IsRequired,
+ 			CountriesOrRegions: item.Countries,
+ 			FormID:             item.FormID,
+ 			DateSigned:         item.DateSigned,

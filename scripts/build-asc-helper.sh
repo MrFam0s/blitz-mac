@@ -24,6 +24,7 @@ trap 'rm -f "$SOURCE_ARCHIVE"' EXIT
 git -C "$SOURCE_DIR" archive --format=tar --output="$SOURCE_ARCHIVE" "$ASC_COMMIT"
 tar -xf "$SOURCE_ARCHIVE" -C "$STAGE_DIR"
 patch -d "$STAGE_DIR" -p1 -F 0 --batch --forward --input "$ROOT_DIR/helpers/asc-7.2.0-age-rating.patch" >&2
+patch -d "$STAGE_DIR" -p1 -F 0 --batch --forward --input "$ROOT_DIR/helpers/asc-7.2.0-release-compliance.patch" >&2
 cp -R "$ROOT_DIR/helpers/asc-overlay/." "$STAGE_DIR/"
 BUILD_DATE="$(git -C "$SOURCE_DIR" show -s --format=%cI "$ASC_COMMIT")"
 echo "Building ASC $ASC_VERSION with the Blitz protocol adapter..." >&2

@@ -33,6 +33,8 @@ struct ReleaseWebEvidence: Codable, Equatable, Sendable {
     let programLicense: Check
     let businessFree: Check
     let businessPaid: Check
+    var chinaGeneratedContent: Check? = nil
+    var chinaSecurityAssessment: Check? = nil
 
     static func unavailable(_ target: ReleaseWorkflowTarget) -> Self {
         let unknown = Check(status: "unverified", reason: "web_session_unavailable")
@@ -158,9 +160,13 @@ enum ReleaseReadinessPolicy {
                 products?.attachmentEvidence[$0["id"] as? String ?? ""] == nil
         }
         var effectiveDeep = observedDeep
+        // Older helpers omit the regional checks. Missing evidence cannot establish readiness.
+        let missingRegionalCheck = ReleaseWebEvidence.Check(status: "unverified", reason: "china_compliance_evidence_missing")
         let evidenceChecks: [(String, ReleaseWebEvidence.Check)] = [
             ("agreements.program_license", web.programLicense), ("agreements.business.free", web.businessFree),
-            ("agreements.business.paid", web.businessPaid)]
+            ("agreements.business.paid", web.businessPaid),
+            ("compliance.CHN.ai_generated_content", web.chinaGeneratedContent ?? missingRegionalCheck),
+            ("compliance.CHN.security_assessment", web.chinaSecurityAssessment ?? missingRegionalCheck)]
         for (id, evidence) in evidenceChecks {
             let status = webBindingStable ? evidence.status : "unverified"
             guard ["passed", "blocked", "unverified", "notApplicable"].contains(status) else { throw ReleaseWorkflowAPIError.validationUnavailable }
@@ -184,7 +190,7 @@ enum ReleaseReadinessPolicy {
                 reason: id == "metadata.required.whats_new" ? "published_platform_history_requires_changelog" : "asc_\(severity)",
                 locale: check["locale"] as? String, field: ageRatingField))
         }
-        for check in effectiveDeep where !(check["id"] as! String).hasPrefix("agreements.") {
+        for check in effectiveDeep.prefix(observedDeep.count) where !(check["id"] as! String).hasPrefix("agreements.") {
             diagnostics.append(.init(id: check["id"] as! String, status: check["status"] as! String,
                 source: check["source"] as? String ?? "asc", reason: "deep_\(check["status"] as! String)"))
         }
@@ -213,6 +219,14 @@ enum ReleaseReadinessPolicy {
 
     private static func guidance(_ reason: String) -> String? {
         switch reason {
+        case "china_declaration_required":
+            return "Für Festlandchina verlangt Apple eine Angabe für diese App. Prüfe die ausgewiesene Erklärung in App Store Connect auf der Seite „App Compliance“. Für Änderungen am Vertrieb oder rechtliche Erklärungen ist eine Entscheidung des Anbieters erforderlich. Validiere danach denselben Entwurf erneut."
+        case "china_declaration_collected_verification_pending":
+            return "Apple hat die Erklärung erhalten und prüft sie im Zusammenhang mit der Versionseinreichung."
+        case "china_storefront_unverified":
+            return "Die Vertriebsauswahl für Festlandchina konnte nicht bestätigt werden. Prüfe die Verfügbarkeit dieser App in App Store Connect und aktualisiere die Prüfung."
+        case "china_compliance_evidence_missing", "china_requirements_unavailable", "china_requirement_ambiguous", "china_requirement_status_unknown":
+            return "Der Status der regionalen Erklärung ist ungeklärt. Prüfe die Angaben zu Festlandchina für diese App in App Store Connect und validiere den bestehenden Vorgang erneut."
         case "developer_team_unresolved":
             return "Business-Verträge und Programmlizenz sind getrennt. Das Developer-Portal-Team der bestätigten App konnte nicht aufgelöst werden. Im selben Apple-Konto unter developer.apple.com/account das richtige Team und die Mitgliedschaft prüfen; anschließend die Webanmeldung erneuern und erneut validieren."
         case "developer_portal_auth_required", "web_session_expired", "web_session_unavailable":

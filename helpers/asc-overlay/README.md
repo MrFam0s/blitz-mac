@@ -144,3 +144,11 @@ test_overlay="$(python3 scripts/prepare-asc-test-overlay.py \
   -overlay "$test_overlay" ./internal/asc)
 rm -rf "$test_overlay_dir"
 ```
+
+
+The `release.readiness` helper reads China mainland selection from the app's
+public territory availability records. For a selected storefront, the same
+app/provider-bound web session reads Apple's AI-generated content and security
+assessment requirements. The pinned compliance reader has a strict release
+entry point in `helpers/asc-7.2.0-release-compliance.patch`. It rejects
+incomplete or mismatched responses. Only check results leave the helper.

@@ -242,7 +242,8 @@ private func jointAdapter(_ fixture: JointAdapterFixture) -> ReleaseWorkflowASCA
             let passed = ReleaseWebEvidence.Check(status: "passed", reason: "synthetic_fixture")
             return .init(report: try JSONSerialization.data(withJSONObject: report), web: .init(appId: target.appID,
                 bundleId: target.bundleID, bindingVerified: true, bindingReason: "synthetic_fixture", appleId: "fixture@example.invalid",
-                providerId: "provider1", programLicense: passed, businessFree: passed, businessPaid: passed), exitCode: checks.isEmpty ? 0 : 1)
+                providerId: "provider1", programLicense: passed, businessFree: passed, businessPaid: passed,
+                           chinaGeneratedContent: passed, chinaSecurityAssessment: passed), exitCode: checks.isEmpty ? 0 : 1)
         })
 }
 
