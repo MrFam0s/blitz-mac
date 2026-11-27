@@ -54,9 +54,10 @@ displayed under Business → Agreements. [Apple's permit reference](https://deve
 
 ## Apply the answer and verify it
 
-During an authorized CHN release, fill each outstanding declaration the provider's
-mandate covers using the verified answer and matching files. Reuse an existing
-authorization for that scope. For preparation only, keep the result local.
+When the provider authorizes filing a declaration, either as part of the CHN
+release or as a standalone correction, save the verified answer and matching
+files within that scope. A request to correct and validate ends after readback
+and build validation. For a request to draft answers only, keep them local.
 Collect outstanding facts, missing official records or a missing authority to
 file in one targeted question. A gallery update alone grants no filing authority.
 
@@ -77,7 +78,8 @@ saved Yes/No. A pending filing is read-only. If its details cannot be reconciled
 with the shipped features, identify the discrepancy and Apple's correction path
 before attempting a replacement. Report pending
 verification separately from acceptance or rejection and read the territory's
-availability before reporting it live. Revalidate the same Blitz release operation.
+availability before reporting it live. Recheck the same build using the
+[prepared-build workflow](../SKILL.md#correct-required-declarations-on-a-prepared-build).
 
 Apple's transition deadline for existing mainland China listings is **January 31,
 2027**. Both declarations must have completed verification by that date to retain

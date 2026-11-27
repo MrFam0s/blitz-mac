@@ -21,9 +21,10 @@ public enum BlitzReleaseCLI {
 
     Request files contain the same arguments as get_release_context or
     release_<command> in the MCP tool schema. Use '-' to read JSON from stdin.
-    Blitz Neo must be running. Output is JSON. Authentication is shared with Blitz;
-    never put credentials in request files. A timeout does not authorize a retry:
-    use status with the saved operationId to reconcile the result first.
+    Open Blitz Neo once to install the CLI. Release commands then start Blitz Neo
+    in the background when needed. Output is JSON. Authentication is shared with
+    Blitz. Keep credentials out of request files. A timeout does not authorize
+    a retry: use status with the saved operationId to reconcile the result first.
 
     A status result can expose resumableSubmissionId for a uniquely verified
     existing, unsubmitted draft. After Apple refuses to add an item with HTTP 409,

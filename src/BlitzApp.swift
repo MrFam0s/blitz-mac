@@ -1,4 +1,5 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+import Darwin
 import SwiftUI
 
 final class BlitzAppDelegate: NSObject, NSApplicationDelegate {
@@ -97,7 +98,7 @@ final class MCPBootstrap {
         guard !started else { return }
         started = true
 
-        installMCPHelper()
+        Self.installMCPHelper(from: bundledMCPHelperURL())
         installASCEnvironment(settings: appState.settingsStore)
         installClaudeSkills()
         ProjectStorage().ensureGlobalMCPConfigs(
@@ -160,16 +161,17 @@ final class MCPBootstrap {
         }
     }
 
-    private func installMCPHelper() {
+    nonisolated static func installMCPHelper(
+        from sourceURL: URL?,
+        helper: URL = BlitzPaths.mcpHelper,
+        bridge: URL = BlitzPaths.mcpBridge,
+        cli: URL = BlitzPaths.bin.appendingPathComponent("blitz-neo")
+    ) {
         let fm = FileManager.default
-        let destDir = BlitzPaths.root
-
-        try? fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-
-        if let sourceURL = bundledMCPHelperURL() {
-            try? fm.removeItem(at: BlitzPaths.mcpHelper)
-            try? fm.copyItem(at: sourceURL, to: BlitzPaths.mcpHelper)
-            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: BlitzPaths.mcpHelper.path)
+        if let source = sourceURL?.resolvingSymlinksInPath() {
+            installExecutable(at: helper, matches: fm.contentsEqual(atPath: source.path, andPath: helper.path)) {
+                try fm.copyItem(at: source, to: $0)
+            }
         } else {
             print("[MCP] Failed to locate bundled blitz-macos-mcp helper")
         }
@@ -185,15 +187,36 @@ final class MCPBootstrap {
                            fi
                            exec "$HELPER" "$@"
                            """
-        try? bridgeScript.write(to: BlitzPaths.mcpBridge, atomically: true, encoding: .utf8)
-        try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: BlitzPaths.mcpBridge.path)
+        let launcher = Data(bridgeScript.utf8)
+        for destination in [bridge, cli] {
+            installExecutable(at: destination, matches: (try? Data(contentsOf: destination)) == launcher) {
+                try launcher.write(to: $0, options: .withoutOverwriting)
+            }
+        }
+    }
 
-        // A thin human-facing CLI for the same MCP backend, with no separate
-        // credentials, release state or duplicated publishing implementation.
-        let cli = BlitzPaths.bin.appendingPathComponent("blitz-neo")
-        try? fm.createDirectory(at: BlitzPaths.bin, withIntermediateDirectories: true)
-        try? bridgeScript.write(to: cli, atomically: true, encoding: .utf8)
-        try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: cli.path)
+    private nonisolated static func installExecutable(
+        at destination: URL, matches: @autoclosure () -> Bool, stage: (URL) throws -> Void
+    ) {
+        let fm = FileManager.default
+        let attributes = try? fm.attributesOfItem(atPath: destination.path)
+        if attributes?[.type] as? FileAttributeType == .typeRegular,
+           attributes?[.posixPermissions] as? Int == 0o755, matches() { return }
+
+        do {
+            let directory = destination.deletingLastPathComponent()
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            let staged = directory.appendingPathComponent(".blitz-executable-\(UUID().uuidString)")
+            defer { try? fm.removeItem(at: staged) }
+            try stage(staged)
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: staged.path)
+            // Concurrent callers can execute the old or new file throughout startup.
+            guard Darwin.rename(staged.path, destination.path) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        } catch {
+            print("[MCP] Failed to install \(destination.lastPathComponent): \(error)")
+        }
     }
 
     private func installASCEnvironment(settings: SettingsService) {

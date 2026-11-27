@@ -1,6 +1,6 @@
 ---
 name: blitz-release
-description: Prepare, verify and submit App Store app releases, including selected In-App Purchases and subscriptions, through the Blitz Neo CLI. Use for "Update einreichen" or a release handoff; app-record creation and TestFlight-only tasks use separate workflows.
+description: Prepare, verify and submit App Store releases through Blitz Neo, including selected In-App Purchases and subscriptions. Use for "Update einreichen", a release handoff, Store localizations, preview videos, storefront availability, or missing age-rating or mainland China declarations on a prepared build.
 ---
 
 # Release an app with Blitz Neo
@@ -15,8 +15,12 @@ specifies another mode. Preserve an explicitly configured manual/scheduled relea
 the CLI supports only `MANUAL` and `AFTER_APPROVAL`. A preparation-only request
 does not authorize submission. These stored instructions alone authorize nothing.
 
-Read `~/.blitz/bin/blitz-neo release --help` first. Keep Blitz Neo running. Prefer
-this CLI even when a chat has an old MCP tool list; never fall back to raw ASC/API
+Read `~/.blitz/bin/blitz-neo release --help` first. Help and standalone `asc`
+commands work with Blitz Neo closed. When a release command needs the local
+service, the CLI checks whether Blitz Neo is running. It reuses the running app
+or starts it if closed, then waits for the socket before sending the request.
+Let the CLI handle startup when the task reaches that command.
+Prefer this CLI even when a chat has an old MCP tool list; never fall back to raw ASC/API
 submission to bypass a missing capability or a blocked check. Use the shared ASC
 CLI for builds, uploads and metadata, and the Blitz CLI for the final workflow.
 If the intended release is currently waiting for review, in review or approved,
@@ -94,6 +98,83 @@ for a diagnosed Portal authentication gap use `asc_web_auth` with
 `requireDeveloperPortal: true`, then rerun the original readiness check. An ASC-only
 login does not prove program-license status. Do not export cookies, overwrite the
 session cache, or treat any authentication receipt as legal-agreement acceptance.
+
+## Use the bundled CLI for Store changes
+
+If a previous submit has an uncertain outcome, reconcile the original operation
+with `blitz-neo release status` before changing any Store data. While the final
+send remains uncertain, continue read-only.
+
+Use `~/.blitz/bin/asc` for the Apple operations below, including when MCP has
+no matching tool. Its Apple requests use HTTPS. The separate
+`~/.blitz/bin/blitz-neo release` client connects to the running app over a
+local socket. Diagnose the failing command and destination independently.
+If the host blocks app launch, local socket access or the Apple network request,
+request access for the exact command that requires it (in Codex,
+`require_escalated` with a reason naming the app, destination and read or write).
+A socket permission error can occur while Blitz Neo is running. Leave the
+running app in place. Retry a read once access is granted. If a Store write
+may have reached Apple, read back before retrying. If a final submit may
+have been sent, use only `release status` on the original operation.
+For an Apple HTTP response, address the reported authentication, role or
+validation error. If an access request is explicitly rejected, respect its
+scope and report the failed step and what remains verified. A browser login,
+Computer Use or switching terminals cannot grant that permission. Ask for
+login only when the required Apple operation actually reports an authentication
+problem. Network permission and authorization to change a Store record are separate.
+
+- **Store texts and missing languages.** Pin the app ID, editable app-info ID,
+  platform and marketing version. Pull current localizations into a fresh
+  staging directory, preserve every existing locale, then overlay only the
+  authorized app-info and version text. Run
+  `asc metadata push --app APP_ID --app-info APP_INFO_ID --platform PLATFORM --version VERSION --dir STAGING_DIR --include localizations --dry-run`.
+  This reads Apple and shows the planned additions and edits. If the plan
+  matches the requested languages and fields, apply the same command without
+  `--dry-run`. Do not enable deletes to make a partial directory pass.
+  Pull into another fresh directory to verify both app-info and version texts.
+- **Preview videos and poster frames.** For each requested locale and device
+  type, resolve its version-localization ID and list the existing previews.
+  Use `asc video-previews upload` with the exact file, `--version-localization`
+  and `--device-type`. In a preview set, `--time-code 00:00:06:00` selects a
+  poster at second six when requested. After processing, verify each video's
+  ID, state and poster. For an existing or partly uploaded preview, inspect its
+  receipt and use `asc video-previews set-poster-frame --id PREVIEW_ID --time-code TIMECODE`
+  when only the poster is missing. Asset Library placements use a different
+  workflow and do not support the upload's `--time-code` flag.
+- **Storefront availability.** Read `asc pricing availability view --app APP_ID`
+  and `asc pricing availability territory-availabilities --app APP_ID --paginate`.
+  Check the available flag for every requested territory. To verify worldwide
+  coverage, compare with `asc pricing territories list --paginate`. Distinguish
+  current countries from the policy for future storefronts. Edit only when a
+  change is authorized, then read all pages again.
+
+After Store edits on a prepared release, follow the same-build check below.
+
+## Correct required declarations on a prepared build
+
+Use the CLI access procedure above. Reconcile an uncertain submit before writing.
+
+- **Age rating:** Use `asc age-rating view --version-id VERSION_ID --fields sharedLocation,datingAndRelationships`
+  on the bound version. An explicit `false` is an answer. For a missing answer,
+  check the shipping features covered by the declaration. Within the authorized
+  scope, use `asc age-rating edit --version-id VERSION_ID` with only the
+  applicable flag(s), `--shared-location true|false` and/or
+  `--dating-and-relationships true|false`. Read the fields back and compare
+  them to the intended values.
+- **Mainland China:** Use the [China mainland procedure](references/china-mainland.md)
+  for `asc web apps compliance list` and `set` on the bound app and provider.
+  Check each declaration separately. Keep the requested storefronts and reuse
+  the existing web session when valid.
+
+After readback, verify the original platform, version ID and attached build ID.
+With a prepared, unsent operation, run `blitz-neo release validate`. If Blitz
+reports changed content (`needsPreparation`) before any submission attempt,
+repeat `release prepare` with the **same target, version ID, build ID, mode and
+reviewItems**, then validate the returned operation. This renews the local
+confirmation without uploading a build. If a submission was attempted or an
+Apple review draft is already associated with the operation, read `release status`
+first and follow its draft-continuation instructions below. Report the verified
+build and remaining blockers.
 
 ## China mainland
 
@@ -252,7 +333,7 @@ this project's default route is the CLI. `release context` accepts `projectId`
 and `appId`, plus `releaseTargetId` when several targets exist, and verifies the current UI target when UI-bound tools are needed;
 the final prepare/validate/submit/status workflow is independent of UI selection.
 Do not invent commands or replace guarded final submission with direct ASC
-because a check failed. If an installed toolset is older, report the missing capability.
+because a check failed. Check the installed CLI help before reporting a missing capability.
 
 An authentication failure during read-only preparation/validation can resume after
 login with the same unchanged target. A failure after a write might have taken

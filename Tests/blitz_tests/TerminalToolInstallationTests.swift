@@ -55,6 +55,48 @@ private struct TerminalToolFixture {
     #expect(fixture.inspect().first?.availability == .incomplete)
 }
 
+@Test func mcpHelperAndLaunchersPreserveWorkingExecutablesAcrossInstallations() throws {
+    let fixture = try TerminalToolFixture()
+    defer { fixture.cleanup() }
+    let source = fixture.home.appendingPathComponent("bundled-helper")
+    let helper = fixture.root.appendingPathComponent("blitz-macos-mcp")
+    let bridge = fixture.root.appendingPathComponent("blitz-mcp-bridge.sh")
+    let cli = fixture.root.appendingPathComponent("bin/blitz-neo")
+    let fm = FileManager.default
+    func install() { MCPBootstrap.installMCPHelper(from: source, helper: helper, bridge: bridge, cli: cli) }
+
+    let original = Data("old helper".utf8)
+    try original.write(to: source)
+    install()
+    let oldDate = Date(timeIntervalSince1970: 1_000_000)
+    for url in [helper, bridge, cli] {
+        #expect(fm.isExecutableFile(atPath: url.path))
+        try fm.setAttributes([.modificationDate: oldDate], ofItemAtPath: url.path)
+    }
+    install()
+    for url in [helper, bridge, cli] {
+        let attributes = try fm.attributesOfItem(atPath: url.path)
+        #expect(attributes[.modificationDate] as? Date == oldDate)
+    }
+
+    let reader = try FileHandle(forReadingFrom: helper)
+    defer { try? reader.close() }
+    let update = Data("new helper".utf8)
+    try update.write(to: source)
+    try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: cli.path)
+    install()
+    #expect(try reader.readToEnd() == original)
+    #expect(try Data(contentsOf: helper) == update)
+    #expect(fm.isExecutableFile(atPath: cli.path))
+    let expectedLauncher = try Data(contentsOf: bridge)
+    #expect(try Data(contentsOf: cli) == expectedLauncher)
+
+    try fm.removeItem(at: source)
+    install()
+    #expect(try Data(contentsOf: helper) == update)
+    #expect(fm.isExecutableFile(atPath: helper.path))
+}
+
 @Test func terminalToolCommandRemainsRunnableWithShellCharactersInHomePath() throws {
     let fixture = try TerminalToolFixture()
     defer { fixture.cleanup() }

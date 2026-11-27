@@ -20,7 +20,10 @@ the bundled skills and routing without requiring a prior handoff button click.
 Blitz Neo 1.0.67 uses one release backend for the manual submission preview,
 MCP tools and the thin `~/.blitz/bin/blitz-neo release` CLI. ASC remains the shared
 build/upload/metadata implementation. No extra server, credential store, paid CI,
-or separate ASC installation is needed. Blitz Neo must be running for its MCP/CLI.
+or separate ASC installation is needed. Open Blitz Neo once to install the CLI
+helpers. Subsequent release commands start Blitz Neo in the background when
+needed. Direct macOS MCP calls require a running app. The bundled `asc` CLI
+can run while Blitz Neo is closed.
 
 ## Handoff and evidence
 

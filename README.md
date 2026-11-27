@@ -48,8 +48,9 @@ required for Apple services and downloading any additional development tools.
    copy configuration for your coding assistant. Your assistant needs its own
    installation, account and permissions.
 
-Blitz Neo must be running for its release CLI and macOS MCP tools. The CLI is
-available at `~/.blitz/bin/blitz-neo`; see the
+After the first launch, release commands from `~/.blitz/bin/blitz-neo` open Blitz
+Neo in the background when needed. For direct macOS MCP calls, open the app first.
+The bundled `asc` CLI runs independently. See the
 [release workflow](docs/release-workflow.md) for requests and examples. A prepared
 release does not submit itself. Final submission requires explicit confirmation
 of the exact operation and passes the same checks through the UI, CLI and MCP.

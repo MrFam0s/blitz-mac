@@ -4,6 +4,11 @@ Diese Wege ersetzen ältere allgemeine Einreichungsanweisungen (MCP-Vorschau,
 direktes `asc submit` oder direkte API). Projektspezifische Identitäten,
 Versions-, Test- und Buildregeln gelten weiterhin.
 
+`blitz-neo release --help` und die eigenständigen `asc`-Befehle funktionieren
+bei geschlossener App. Erst wenn ein Release-Befehl die lokale Verbindung
+benötigt, prüft die CLI, ob Blitz Neo läuft. Sie nutzt die laufende App oder
+startet sie bei Bedarf und wartet vor dem Senden auf die Verbindung.
+
 Hat das Projekt mehrere Veröffentlichungsziele (z. B. iOS und macOS), lies zuerst
 mit `~/.blitz/bin/blitz-neo release targets --request <JSON-Datei>` die Ziele für
 die explizite `projectId`. Verwende die zum Auftrag gehörende `releaseTargetId`;
@@ -33,12 +38,28 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
   und das bestätigte `submit` nutzen; `resolveRejectedItems: true` nur für belegbar
   korrigierte, zur Wiedervorlage autorisierte Bestandteile. Bei unklarem Ausgang
   ausschließlich den bestehenden Vorgang abgleichen.
-- Wurden fehlende Antworten zur Altersfreigabe nach dem Anlegen des Entwurfs
-  ergänzt, prüfe den ursprünglichen Vorgang mit `release status`. Bei
-  `refreshableSubmissionId` die ausgewiesenen Antworten mit den App-Funktionen
-  abgleichen, `prepare-draft-refresh` ausführen und den Vorgang erneut validieren.
-  Für eine beauftragte Einreichung denselben Entwurf mit dem neuen Bestätigungswert
-  fortsetzen. Die genauen Parameter stehen im Skill `blitz-release`.
+- **Storetexte, neue Sprachen, Vorschauvideos, Poster und Vertriebsländer** bearbeitest
+  du über die mitgelieferte `~/.blitz/bin/asc`. Lies dafür „Use the bundled CLI
+  for Store changes“ im Skill `blitz-release`, auch wenn im MCP eine Aktion fehlt.
+  Ist der Ausgang einer früheren Einreichung unklar, lies zuerst den Status
+  des ursprünglichen Vorgangs und warte mit Store-Änderungen auf die Klärung.
+  Prüfe geplante Textänderungen per Dry Run und lies das Ergebnis für die
+  beauftragten Sprachen, Geräte oder Länder bei Apple zurück. Blockiert der Chat
+  den App-Start, die lokale Verbindung zu Blitz Neo oder den Netzwerkzugriff auf
+  Apple, fordere die passende Berechtigung für den konkreten Befehl an. Lass
+  eine bereits laufende App bei gesperrter Verbindung geöffnet. Wird der Zugriff abgelehnt,
+  benenne den offenen Schritt. Eine Browseranmeldung hilft bei einem von Apple
+  gemeldeten Anmeldeproblem. Prüfe nach den Änderungen am Entwurf dieselbe
+  Version und denselben Build erneut über Blitz.
+- **Fehlende Altersfreigabe oder China-Erklärungen:** Nutze den Abschnitt
+  „Correct required declarations on a prepared build“ im Skill `blitz-release`.
+  Verwende die mitgelieferte `~/.blitz/bin/asc`. Lies gespeicherte Antworten bei
+  Apple zurück und prüfe dieselbe Version mit derselben Build-ID über
+  `~/.blitz/bin/blitz-neo release validate`. Verlangt Blitz vor dem ersten
+  Einreichungsversuch wegen geänderter Angaben eine neue Vorbereitung, nutze
+  dieselbe Build-Zuordnung. Bei einem bereits begonnenen Einreichungsversuch
+  oder zugeordneten Apple-Prüfentwurf führt `release status` des ursprünglichen
+  Vorgangs zur passenden Fortsetzung.
 - **„App im App Store neu erstellen“** (auch „App im AppStore neu erstellen“):
   Lies `.agents/skills/asc-app-create-ui/SKILL.md`. Prüfe zuerst lesend, ob der
   passende App-Datensatz bereits existiert. Falls nicht, nutze das Blitz-
@@ -51,7 +72,7 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
 
 Diese Anweisungen allein starten keinen Vorgang. Maßgeblich ist der jeweilige
 ausdrückliche Nutzerauftrag; „nur vorbereiten“, TestFlight und abweichende
-Veröffentlichungswünsche bleiben eigenständige Aufträge. Blitz Neo muss laufen.
+Veröffentlichungswünsche bleiben eigenständige Aufträge.
 
 ### Freigabe für das Ersetzen von Store-Galerien
 

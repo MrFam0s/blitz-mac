@@ -1,4 +1,5 @@
 // Modified for the AmoSystems Blitz Neo maintenance fork (2026).
+import AppKit
 import BlitzMCPCommon
 import Darwin
 import Foundation
@@ -13,11 +14,13 @@ struct BlitzMCPHelper {
     }
 
     private enum HelperError: LocalizedError {
-        case emptyResponse, writeFailed
+        case emptyResponse, writeFailed, appNotInstalled, launchFailed
         var errorDescription: String? {
             switch self {
             case .emptyResponse: return "Blitz Neo returned an empty response. Reconcile before retrying."
             case .writeFailed: return "Could not write the MCP response. Reconcile before retrying."
+            case .appNotInstalled: return "Blitz Neo was not found in Applications. Open your installed copy to use the release CLI."
+            case .launchFailed: return "macOS could not open Blitz Neo. Allow this command to open the installed app or open Blitz Neo manually."
             }
         }
     }
@@ -42,7 +45,9 @@ struct BlitzMCPHelper {
                 }
                 let id = UUID().uuidString
                 let request = try BlitzReleaseCLI.request(invocation, data: data, id: id)
-                guard let response = try sendRequest(request, metadata: parseRequestMetadata(request)) else {
+                guard let response = try BlitzMCPTransport.send(request, socketPath: BlitzMCPTransportPaths.socket.path,
+                    startupTimeout: 30, responseTimeout: parseRequestMetadata(request).responseTimeout,
+                    onListenerUnavailable: launchReleaseAppIfNeeded) else {
                     throw HelperError.emptyResponse
                 }
                 let output = try BlitzReleaseCLI.output(response: response, id: id, tool: invocation.tool)
@@ -62,6 +67,25 @@ struct BlitzMCPHelper {
             log("MCP helper stopped: \(error.localizedDescription)")
             exit(1)
         }
+    }
+
+    private static func launchReleaseAppIfNeeded() throws {
+        let bundleID = "org.amosystems.BlitzNeo"
+        if !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty { return }
+
+        // Launch an installed copy only. Launch Services may also know about
+        // mounted DMGs, old builds and backups with the same bundle identifier.
+        let directories = FileManager.default.urls(for: .applicationDirectory, in: [.localDomainMask, .userDomainMask])
+        guard let app = directories.map({ $0.appendingPathComponent("Blitz Neo.app") })
+            .first(where: { Bundle(url: $0)?.bundleIdentifier == bundleID }) else {
+            throw HelperError.appNotInstalled
+        }
+        let launcher = Process()
+        launcher.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        launcher.arguments = ["-g", app.path]
+        do { try launcher.run() } catch { throw HelperError.launchFailed }
+        launcher.waitUntilExit()
+        guard launcher.terminationStatus == 0 else { throw HelperError.launchFailed }
     }
 
     private static func handleLine(_ line: String) throws {

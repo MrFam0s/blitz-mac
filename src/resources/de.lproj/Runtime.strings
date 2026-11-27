@@ -282,7 +282,7 @@
 "Unsupported or ambiguous Xcode JSON5 syntax. No settings were changed; edit the application target in Xcode." = "Nicht unterstützte oder mehrdeutige Xcode-JSON5-Syntax. Es wurden keine Einstellungen geändert; bearbeite das App-Ziel in Xcode.";
 "Unsupported scheme project reference. Choose a scheme with an explicit project container." = "Der Projektverweis des Schemas wird nicht unterstützt. Wähle ein Schema mit eindeutigem Projektcontainer.";
 "Update-Prüfung nicht möglich (HTTP {0}). Bitte später erneut versuchen." = "Update-Prüfung nicht möglich (HTTP {0}). Bitte später erneut versuchen.";
-"Updates aus anderen Chats prüfen und über den Blitz-Neo-Ablauf einreichen. Blitz Neo muss dafür geöffnet sein." = "Updates aus anderen Chats prüfen und über den Blitz-Neo-Ablauf einreichen. Blitz Neo muss dafür geöffnet sein.";
+"Updates aus anderen Chats prüfen und einreichen. Die CLI startet Blitz Neo bei Bedarf im Hintergrund." = "Updates aus anderen Chats prüfen und einreichen. Die CLI startet Blitz Neo bei Bedarf im Hintergrund.";
 "Upload fehlgeschlagen" = "Upload fehlgeschlagen";
 "Upload requires a captured App Store app and authenticated ASC service. Reopen the app before retrying." = "Für den Upload sind eine festgelegte App-Store-App und eine angemeldete ASC-Verbindung erforderlich. Öffne die App vor einem erneuten Versuch erneut.";
 "Uploading artifact…" = "Build-Datei wird hochgeladen …";

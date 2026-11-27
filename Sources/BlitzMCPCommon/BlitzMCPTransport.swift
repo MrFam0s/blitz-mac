@@ -5,10 +5,11 @@ import Foundation
 /// connected, any failure is ambiguous and must never replay the request.
 public enum BlitzMCPTransport {
     public enum Failure: LocalizedError {
-        case unavailable, invalidPath, outcomeUnknown
+        case unavailable, accessDenied, invalidPath, outcomeUnknown
         public var errorDescription: String? {
             switch self {
-            case .unavailable: return "Cannot connect to Blitz Neo. Is it running?"
+            case .unavailable: return "The local Blitz Neo service is unavailable. Check that the app is running and its local connection is ready."
+            case .accessDenied: return "Access to the local Blitz Neo socket was denied. Allow this command to reach Blitz Neo on this Mac."
             case .invalidPath: return "Blitz Neo MCP socket path is invalid."
             case .outcomeUnknown: return "Connection lost after sending began. Outcome unknown; reconcile the operation before retrying."
             }
@@ -16,8 +17,9 @@ public enum BlitzMCPTransport {
     }
 
     public static func send(_ request: String, socketPath: String, startupTimeout: TimeInterval,
-                            responseTimeout: TimeInterval, expectsResponse: Bool = true) throws -> String? {
-        let fd = try connect(socketPath, timeout: startupTimeout)
+                            responseTimeout: TimeInterval, expectsResponse: Bool = true,
+                            onListenerUnavailable: (() throws -> Void)? = nil) throws -> String? {
+        let fd = try connect(socketPath, timeout: startupTimeout, onListenerUnavailable: onListenerUnavailable)
         defer { Darwin.close(fd) }
         let deadline = Date().addingTimeInterval(responseTimeout)
         let data = Data((request + "\n").utf8)
@@ -60,7 +62,8 @@ public enum BlitzMCPTransport {
         throw Failure.outcomeUnknown
     }
 
-    private static func connect(_ path: String, timeout: TimeInterval) throws -> Int32 {
+    private static func connect(_ path: String, timeout: TimeInterval,
+                                onListenerUnavailable: (() throws -> Void)?) throws -> Int32 {
         var address = sockaddr_un()
         let length = path.utf8.count
         guard length > 0, length < MemoryLayout.size(ofValue: address.sun_path), !path.utf8.contains(0) else {
@@ -72,9 +75,10 @@ public enum BlitzMCPTransport {
             path.withCString { source in destination.copyBytes(from: UnsafeRawBufferPointer(start: source, count: length + 1)) }
         }
         let deadline = Date().addingTimeInterval(timeout)
+        var startListener = onListenerUnavailable
         repeat {
             let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-            guard fd >= 0 else { throw Failure.unavailable }
+            guard fd >= 0 else { throw errno == EACCES || errno == EPERM ? Failure.accessDenied : .unavailable }
             var noSignal: Int32 = 1
             guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
                 Darwin.close(fd); throw Failure.unavailable
@@ -107,6 +111,11 @@ public enum BlitzMCPTransport {
                 return fd
             }
             Darwin.close(fd)
+            if code == EACCES || code == EPERM { throw Failure.accessDenied }
+            if (code == ENOENT || code == ECONNREFUSED), let start = startListener {
+                startListener = nil
+                try start()
+            }
             guard [ENOENT, ECONNREFUSED, EAGAIN, ETIMEDOUT, ECONNRESET, EINTR].contains(code), Date() < deadline else {
                 throw Failure.unavailable
             }

@@ -123,51 +123,102 @@ struct BlitzMCPTransportTests {
         #expect(elapsed < .milliseconds(800))
     }
 
-    @Test(arguments: [true, false])
-    func actualSocketNeverReplaysAfterServerConsumesRequest(reply: Bool) async throws {
+    @Test(arguments: [true, false], [true, false])
+    func sendsOnceWithExistingOrStartedListener(alreadyListening: Bool, reply: Bool) async throws {
         let path = "/tmp/blitz-transport-\(UUID().uuidString).sock"
         let listener = socket(AF_UNIX, SOCK_STREAM, 0)
-        #expect(listener >= 0)
+        try #require(listener >= 0)
         defer { Darwin.close(listener); unlink(path) }
-        var address = sockaddr_un()
-        address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
-        address.sun_family = sa_family_t(AF_UNIX)
-        withUnsafeMutableBytes(of: &address.sun_path) { destination in
-            path.withCString { destination.copyBytes(from: UnsafeRawBufferPointer(start: $0, count: path.utf8.count + 1)) }
-        }
-        let bound = withUnsafePointer(to: &address) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(listener, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
-        }
-        #expect(bound == 0)
-        #expect(Darwin.listen(listener, 2) == 0)
-        let server = Task.detached { () -> Int in
-            var wait = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
-            guard poll(&wait, 1, 2000) == 1 else { return 0 }
-            let client = Darwin.accept(listener, nil, nil)
-            guard client >= 0 else { return 0 }
-            var buffer = [UInt8](repeating: 0, count: 4096)
-            _ = Darwin.read(client, &buffer, buffer.count)
-            if reply {
-                let response = Data("{\"received\":true}\n".utf8)
-                response.withUnsafeBytes { _ = Darwin.write(client, $0.baseAddress, $0.count) }
+        let request = "{\"method\":\"test\"}"
+        func startServer() throws -> Task<Int, Never> {
+            var address = sockaddr_un()
+            address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
+            address.sun_family = sa_family_t(AF_UNIX)
+            withUnsafeMutableBytes(of: &address.sun_path) { destination in
+                path.withCString { destination.copyBytes(from: UnsafeRawBufferPointer(start: $0, count: path.utf8.count + 1)) }
             }
-            Darwin.close(client) // Lost reply must not cause a second request.
-            wait.revents = 0
-            if poll(&wait, 1, 500) == 1 {
-                let duplicate = Darwin.accept(listener, nil, nil)
-                if duplicate >= 0 { Darwin.close(duplicate); return 2 }
+            let bound = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(listener, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
             }
-            return 1
+            try #require(bound == 0)
+            try #require(Darwin.listen(listener, 2) == 0)
+            return Task.detached { () -> Int in
+                var wait = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
+                guard poll(&wait, 1, 2000) == 1 else { return 0 }
+                let client = Darwin.accept(listener, nil, nil)
+                guard client >= 0 else { return 0 }
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                let count = Darwin.read(client, &buffer, buffer.count)
+                #expect(count > 0 && String(decoding: buffer.prefix(max(0, count)), as: UTF8.self) == request + "\n")
+                if reply {
+                    let response = Data("{\"received\":true}\n".utf8)
+                    response.withUnsafeBytes { _ = Darwin.write(client, $0.baseAddress, $0.count) }
+                }
+                Darwin.close(client) // Lost reply must not cause a second request.
+                wait.revents = 0
+                if poll(&wait, 1, 500) == 1 {
+                    let duplicate = Darwin.accept(listener, nil, nil)
+                    if duplicate >= 0 { Darwin.close(duplicate); return 2 }
+                }
+                return 1
+            }
+        }
+
+        var launches = 0
+        var server = alreadyListening ? try startServer() : nil
+        let onUnavailable = {
+            launches += 1
+            if server == nil {
+                server = try startServer()
+            }
         }
         if reply {
-            #expect(try BlitzMCPTransport.send("{\"method\":\"test\"}", socketPath: path,
-                startupTimeout: 2, responseTimeout: 1) == "{\"received\":true}")
+            #expect(try BlitzMCPTransport.send(request, socketPath: path,
+                startupTimeout: 2, responseTimeout: 1, onListenerUnavailable: onUnavailable) == "{\"received\":true}")
         } else {
-            #expect(throws: BlitzMCPTransport.Failure.self) {
-                try BlitzMCPTransport.send("{\"method\":\"test\"}", socketPath: path,
-                    startupTimeout: 2, responseTimeout: 1)
+            #expect(throws: BlitzMCPTransport.Failure.outcomeUnknown) {
+                try BlitzMCPTransport.send(request, socketPath: path,
+                    startupTimeout: 2, responseTimeout: 1, onListenerUnavailable: onUnavailable)
             }
         }
-        #expect(await server.value == 1)
+        #expect(launches == (alreadyListening ? 0 : 1))
+        let startedServer = try #require(server)
+        #expect(await startedServer.value == 1)
+    }
+
+    @Test func missingListenerTriggersSingleLaunchUntilDeadline() {
+        let path = "/tmp/blitz-missing-\(UUID().uuidString).sock"
+        var launches = 0
+        #expect(throws: BlitzMCPTransport.Failure.unavailable) {
+            try BlitzMCPTransport.send("{}", socketPath: path, startupTimeout: 0.25,
+                responseTimeout: 1, onListenerUnavailable: { launches += 1 })
+        }
+        #expect(launches == 1)
+    }
+
+    @Test(.enabled(if: geteuid() != 0)) func deniedSocketAccessDoesNotLaunchListener() throws {
+        let directory = "/tmp/blitz-denied-\(UUID().uuidString)"
+        try #require(mkdir(directory, 0) == 0)
+        defer { rmdir(directory) }
+        var launches = 0
+        #expect(throws: BlitzMCPTransport.Failure.accessDenied) {
+            try BlitzMCPTransport.send("{}", socketPath: directory + "/socket", startupTimeout: 1,
+                responseTimeout: 1, onListenerUnavailable: { launches += 1 })
+        }
+        #expect(launches == 0)
+    }
+
+    @Test func launchFailureIsReturnedToCaller() {
+        enum LaunchError: Error { case failed }
+        let path = "/tmp/blitz-launch-error-\(UUID().uuidString).sock"
+        var launches = 0
+        #expect(throws: LaunchError.self) {
+            try BlitzMCPTransport.send("{}", socketPath: path, startupTimeout: 1,
+                responseTimeout: 1, onListenerUnavailable: {
+                    launches += 1
+                    throw LaunchError.failed
+                })
+        }
+        #expect(launches == 1)
     }
 }
