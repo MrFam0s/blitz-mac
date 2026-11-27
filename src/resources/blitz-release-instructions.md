@@ -52,3 +52,25 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
 Diese Anweisungen allein starten keinen Vorgang. Maßgeblich ist der jeweilige
 ausdrückliche Nutzerauftrag; „nur vorbereiten“, TestFlight und abweichende
 Veröffentlichungswünsche bleiben eigenständige Aufträge. Blitz Neo muss laufen.
+
+### Freigabe für das Ersetzen von Store-Galerien
+
+Vergleiche die gewünschte Bilderfolge mit dem aktuellen Bestand im bearbeitbaren
+App-Store-Entwurf. Ermittle für jede betroffene Store-Sprache und Gerätegruppe die
+IDs der Entwurfsbilder, die entfallen. Bilder, die nur den Platz wechseln, bleiben erhalten.
+
+Fehlt die Freigabe zum Entfernen, stelle eine gemeinsame Frage für Upload,
+Löschung und Sortierung. Nenne App, Plattform, Entwurfsversion und je Sprache und
+Gerätegruppe die Anzahl zu entfernender Bilder, ihre Gesamtsumme und die gewünschte
+Reihenfolge. Setze dafür die tatsächlichen Werte aus dem Abgleich ein. Verwende
+denselben Umfang in der Begründung des Werkzeugaufrufs. Hat der Nutzer diese
+Ersetzung bereits ausdrücklich beauftragt, nutze die erteilte Freigabe direkt.
+
+> Soll ich im [Plattform]-Entwurf [Version] von [App] die freigegebenen Bilder
+> hochladen, die bisherigen Entwurfsbilder entfernen ([Store-Sprache und Gerät:
+> Anzahl je Gruppe], insgesamt [Summe]) und die Motive in der Reihenfolge
+> [Platz und Motiv je Galerie] anordnen?
+
+Entferne nur die im Abgleich identifizierten und freigegebenen Entwurfsbilder.
+Lies anschließend für jede betroffene Galerie die Bild-IDs, Plätze und
+Verarbeitungsstände bei Apple aus und vergleiche sie mit der gewünschten Bilderfolge.

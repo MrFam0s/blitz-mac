@@ -138,6 +138,9 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     let guide = try String(contentsOf: project.appendingPathComponent("CLAUDE.md"), encoding: .utf8)
     #expect(guide.contains("Swift Project — Blitz Neo AI Agent Guide"))
     #expect(guide.contains(BlitzWorkflowInstructions.Route.simulator.beginMarker))
+    for document in [instructions, guide] {
+        #expect(document.contains("### Freigabe für das Ersetzen von Store-Galerien"))
+    }
     for agent in [".agents", ".claude"] {
         let skill = project.appendingPathComponent("\(agent)/skills/blitz-project-simulator/SKILL.md")
         #expect(try String(contentsOf: skill, encoding: .utf8).contains("name: blitz-project-simulator"))
