@@ -67,3 +67,21 @@
  			CountriesOrRegions: item.Countries,
  			FormID:             item.FormID,
  			DateSigned:         item.DateSigned,
+@@ -293,7 +326,16 @@
+ 	if index < 0 {
+ 		return nil, fmt.Errorf("app compliance requirement %q was not found for app %q", declaration.Requirement, appID)
+ 	}
+-	requirement := requirements[index]
++	return c.SetBlitzSelectedComplianceDeclaration(ctx, accountID, appID, requirements[index], declaration)
++}
++
++// SetBlitzSelectedComplianceDeclaration uses the exact requirement from a
++// strict, provider-bound read. The helper checks its identity and editability.
++func (c *Client) SetBlitzSelectedComplianceDeclaration(ctx context.Context, accountID, appID string, requirement AppComplianceRequirement, declaration AppComplianceDeclaration) (*AppComplianceDeclarationResult, error) {
++	var err error
++	if requirement.AppID != appID || requirement.RequirementID == "" || requirement.RequirementName != declaration.Requirement {
++		return nil, errors.New("compliance requirement identity changed")
++	}
+ 	if requirement.Status == "COLLECTED_VERIFY_PENDING" {
+ 		return nil, fmt.Errorf("app compliance requirement %q is pending verification and cannot be changed", declaration.Requirement)
+ 	}

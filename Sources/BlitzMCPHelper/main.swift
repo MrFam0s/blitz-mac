@@ -115,11 +115,20 @@ struct BlitzMCPHelper {
         }
 
         let method = json["method"] as? String ?? ""
+        let params = json["params"] as? [String: Any]
+        let tool = method == "tools/call" ? params?["name"] as? String : nil
+        let responseTimeout: TimeInterval
+        switch tool {
+        case "store_preview_upload": responseTimeout = 6_120
+        case "store_availability_set": responseTimeout = 7_200 // Apple updates each existing storefront separately.
+        case "store_china_declaration_set": responseTimeout = 600
+        default: responseTimeout = method == "initialize" ? 30 : 300
+        }
         return RequestMetadata(
             expectsResponse: json["id"] != nil,
             id: json["id"] ?? NSNull(),
             startupTimeout: method == "initialize" ? 30 : 10,
-            responseTimeout: method == "initialize" ? 30 : 300
+            responseTimeout: responseTimeout
         )
     }
 

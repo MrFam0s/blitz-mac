@@ -103,7 +103,7 @@ extension MCPExecutor {
             "note": "Local configured targets only. Select exactly one intended target; this does not verify Apple readiness or authorize creation/submission."])
     }
 
-    private static func registeredReleaseProject(_ projectID: String) async throws -> Project {
+    static func registeredReleaseProject(_ projectID: String) async throws -> Project {
         let projects = await ProjectStorage().listProjects()
         guard let project = projects.first(where: { $0.id == projectID }) else {
             throw ReleaseWorkflowError.identityChanged
@@ -111,7 +111,7 @@ extension MCPExecutor {
         return project
     }
 
-    private static func verifyRegisteredReleaseTarget(_ target: ReleaseWorkflowTarget) async throws {
+    static func verifyRegisteredReleaseTarget(_ target: ReleaseWorkflowTarget) async throws {
         let project = try await registeredReleaseProject(target.projectID)
         try RegisteredReleaseTarget.verify(target, project: project)
         var isDirectory: ObjCBool = false

@@ -8,8 +8,8 @@
    China, prepare the answers even before selection. Change availability only if
    that change is part of the request.
 2. Read Apple's current requirements under General → App Compliance. For the two
-   feature questions use `~/.blitz/bin/asc web apps compliance list --app APP_ID
-   --public-provider-id PROVIDER_ID`, with the verified IDs. Account Holder or
+   feature questions use `store_china_declarations_get` on the registered app.
+   Inspect the returned provider, requirement IDs and current forms. Account Holder or
    Admin access is required to file them. Inspect any other required CHN row in
    Apple's current form. An incomplete, ambiguous or differently scoped response
    leaves its status unknown.
@@ -61,7 +61,17 @@ and build validation. For a request to draft answers only, keep them local.
 Collect outstanding facts, missing official records or a missing authority to
 file in one targeted question. A gallery update alone grants no filing authority.
 
-For the two feature declarations use `asc web apps compliance set` with the
+Use `store_china_declaration_set` with the providerId and requirementId from
+the read, the matching requirement, the verified boolean `declared` and
+`confirm: true`. Positive AI declarations require filingType, filingName,
+filingNumber and thirdPartyTechnology; for third-party technology supply
+thirdPartyAuthorizationPath. Positive security assessments require proofPath
+and reportPath. Use project-relative paths to the approved documents.
+For an expressly authorized correction to an editable collected form, include
+its exact replacingFormId. Read each form back with `store_china_declarations_get`.
+A listed form status alone cannot confirm the original boolean answer.
+
+When using the bundled CLI, use `asc web apps compliance set` with the
 same `--app` and `--public-provider-id`, the exact `--requirement` and
 `--declared true|false`. Supply these additional flags only for a “Yes”:
 

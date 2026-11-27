@@ -259,6 +259,25 @@ opens the Portal when that specific capability is needed. After login rerun the
 original scoped readiness check. Do not log out a healthy session or use manual
 session exports as routine recovery.
 
+## Editing a Store draft from another chat
+
+Use the `blitz_macos` tools with the existing `accountKey` and `operationId`.
+For work before release preparation, supply the registered project target instead.
+Use the exact version ID for localized previews.
+
+| Task | Read | Write |
+| --- | --- | --- |
+| Mainland China declarations | `store_china_declarations_get` | `store_china_declaration_set` for one verified requirement and provider |
+| Localized previews | `store_previews_list` for one locale and device type | `store_preview_upload` with optional poster, or `store_preview_set_poster` on the existing preview ID |
+| Storefront availability | `store_availability_get` across the current catalog | `store_availability_set` on named countries or all current countries |
+
+Storefronts and declarations apply to the Apple app record across platforms.
+Provide project-relative paths for videos and supporting documents. A write
+requires authorization for its scope and a true `confirm` value. Read the
+result from Apple before retrying after an interruption. Then run
+`release_validate` for the original release and follow its preparation or
+draft-continuation result before submission.
+
 ## Readiness diagnostics
 
 `validate` returns `validation.ready`, `blocking`, `warnings`, `unverified`,

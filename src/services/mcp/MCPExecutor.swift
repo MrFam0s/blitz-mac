@@ -103,6 +103,7 @@ actor MCPExecutor {
     private var targetLease: UUID?
     private static let gateableCategories: [ApprovalRequest.ToolCategory] = [
         .ascFormMutation, .ascScreenshotMutation, .ascSubmitMutation,
+        .ascComplianceMutation, .ascPreviewMutation, .ascAvailabilityMutation,
         .buildPipeline, .projectMutation, .settingsMutation, .simulatorControl,
     ]
 
@@ -173,6 +174,18 @@ actor MCPExecutor {
                     }
                 }
             } catch { return mcpText("Error: \(error.localizedDescription)") }
+        } else if MCPRegistry.isStoreTool(name) {
+            try MCPStoreArguments.validate(name, arguments)
+            let account = arguments["accountKey"] as? String
+            let initial = await MainActor.run { MCPReleaseRequestTarget.capture(appState) }
+            guard initial.accountKey == account else { throw ReleaseWorkflowError.accountChanged }
+            captured = nil
+            scope = MCPMutationScope { [appState] in
+                let current = MCPReleaseRequestTarget.capture(appState)
+                guard current.accountKey == account, current.credentialRevision == initial.credentialRevision else {
+                    throw ReleaseWorkflowError.accountChanged
+                }
+            }
         } else if name == "asc_fill_form", arguments["tab"] as? String == "settings.bundleId" {
             guard let projectId = arguments["projectId"] as? String, !projectId.isEmpty else {
                 return mcpText("Error: settings.bundleId requires the intended projectId. It cannot adopt the current UI selection.")
@@ -392,6 +405,8 @@ actor MCPExecutor {
 
     private func dispatchTool(name: String, arguments: [String: Any]) async throws -> [String: Any] {
         switch name {
+        case let tool where MCPRegistry.isStoreTool(tool):
+            return try await executeStoreTool(name: tool, arguments: arguments)
         case "app_get_state":
             return try await executeAppGetState()
 

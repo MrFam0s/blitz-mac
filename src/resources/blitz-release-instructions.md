@@ -38,28 +38,28 @@ Aufruf erstellt oder veröffentlicht niemals automatisch alle Plattformen.
   und das bestätigte `submit` nutzen; `resolveRejectedItems: true` nur für belegbar
   korrigierte, zur Wiedervorlage autorisierte Bestandteile. Bei unklarem Ausgang
   ausschließlich den bestehenden Vorgang abgleichen.
-- **Storetexte, neue Sprachen, Vorschauvideos, Poster und Vertriebsländer** bearbeitest
-  du über die mitgelieferte `~/.blitz/bin/asc`. Lies dafür „Use the bundled CLI
-  for Store changes“ im Skill `blitz-release`, auch wenn im MCP eine Aktion fehlt.
-  Ist der Ausgang einer früheren Einreichung unklar, lies zuerst den Status
-  des ursprünglichen Vorgangs und warte mit Store-Änderungen auf die Klärung.
-  Prüfe geplante Textänderungen per Dry Run und lies das Ergebnis für die
-  beauftragten Sprachen, Geräte oder Länder bei Apple zurück. Blockiert der Chat
-  den App-Start, die lokale Verbindung zu Blitz Neo oder den Netzwerkzugriff auf
-  Apple, fordere die passende Berechtigung für den konkreten Befehl an. Lass
-  eine bereits laufende App bei gesperrter Verbindung geöffnet. Wird der Zugriff abgelehnt,
-  benenne den offenen Schritt. Eine Browseranmeldung hilft bei einem von Apple
-  gemeldeten Anmeldeproblem. Prüfe nach den Änderungen am Entwurf dieselbe
-  Version und denselben Build erneut über Blitz.
-- **Fehlende Altersfreigabe oder China-Erklärungen:** Nutze den Abschnitt
-  „Correct required declarations on a prepared build“ im Skill `blitz-release`.
-  Verwende die mitgelieferte `~/.blitz/bin/asc`. Lies gespeicherte Antworten bei
-  Apple zurück und prüfe dieselbe Version mit derselben Build-ID über
-  `~/.blitz/bin/blitz-neo release validate`. Verlangt Blitz vor dem ersten
-  Einreichungsversuch wegen geänderter Angaben eine neue Vorbereitung, nutze
-  dieselbe Build-Zuordnung. Bei einem bereits begonnenen Einreichungsversuch
-  oder zugeordneten Apple-Prüfentwurf führt `release status` des ursprünglichen
-  Vorgangs zur passenden Fortsetzung.
+- **Vorschauvideos und Poster:** Nutze im Blitz-MCP `store_previews_list`,
+  `store_preview_upload` und `store_preview_set_poster` je Sprache und Gerät.
+  Lies Apples Verarbeitungsstand und Posterzeit zurück. Setze ein fehlendes
+  Poster am vorhandenen Video.
+- **Vertriebsländer:** Prüfe mit `store_availability_get` den vollständigen
+  Länderkatalog. Für beauftragte Änderungen nutze `store_availability_set`.
+  Die Auswahl heutiger Länder und die Einstellung für künftig hinzukommende
+  Länder sind getrennte Entscheidungen.
+- **China-Erklärungen:** Lies mit `store_china_declarations_get` Anbieter,
+  Anforderungs-IDs und Formulare. Speichere belegte, beauftragte Antworten mit
+  `store_china_declaration_set` und lies den Stand zurück. Der Abschnitt
+  „China mainland“ im Skill enthält die erforderlichen Produkt- und Dateinachweise.
+- **Storetexte, neue Sprachen und Altersfreigabe:** Nutze die mitgelieferte
+  `~/.blitz/bin/asc`. Prüfe Textänderungen per Dry Run und lies die gespeicherten
+  Angaben bei Apple zurück. Für den Zugriff gelten die Anweisungen unter
+  „Store changes through Blitz Neo“ im Skill `blitz-release`.
+- Bei einem vorhandenen Release übergib den spezialisierten MCP-Werkzeugen
+  die ursprüngliche `operationId` und den `accountKey`. Kläre einen ungewissen
+  Sendeausgang zuerst mit `release_status`. Prüfe nach den Änderungen dieselbe
+  Version und denselben Build mit `release_validate` oder der Release-CLI.
+  Benötigt ein CLI-Befehl Netzwerkzugriff, fordere ihn für genau diesen Befehl an.
+  Beachte eine verweigerte Berechtigung für die jeweilige Aktion.
 - **„App im App Store neu erstellen“** (auch „App im AppStore neu erstellen“):
   Lies `.agents/skills/asc-app-create-ui/SKILL.md`. Prüfe zuerst lesend, ob der
   passende App-Datensatz bereits existiert. Falls nicht, nutze das Blitz-

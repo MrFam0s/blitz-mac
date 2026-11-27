@@ -498,6 +498,7 @@ enum MCPRegistry {
             required: ["ipaPath"]
         ))
 
+        tools += storeTools
         return tools.map { definition in
             guard let name = definition["name"] as? String, MCPExpectedTarget.boundTools.contains(name),
                   var schema = definition["inputSchema"] as? [String: Any],
@@ -543,6 +544,10 @@ enum MCPRegistry {
         // ASC credential pre-fill — no approval needed, user must click Save
         case "asc_set_credentials":
             return .query
+        case "store_china_declarations_get", "store_previews_list", "store_availability_get": return .query
+        case "store_china_declaration_set": return .ascComplianceMutation
+        case "store_availability_set": return .ascAvailabilityMutation
+        case "store_preview_upload", "store_preview_set_poster": return .ascPreviewMutation
         case "asc_fill_form":
             return .ascFormMutation
         case "app_information_switch_localization", "store_listing_switch_localization":

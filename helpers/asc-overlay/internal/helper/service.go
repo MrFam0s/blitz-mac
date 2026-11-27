@@ -71,7 +71,7 @@ func (s *Service) Handle(ctx context.Context, request Request) Response {
 		return Response{
 			ID: request.ID,
 			Result: PingResult{
-				Capabilities:    []string{"release.chinaCompliance"},
+				Capabilities:    []string{"release.chinaCompliance", "store.chinaForms"},
 				ProtocolVersion: ProtocolVersion,
 				Version:         s.version,
 				SessionOpen:     s.hasSession(),
@@ -118,6 +118,17 @@ func (s *Service) Handle(ctx context.Context, request Request) Response {
 		result, err := releaseReadiness(ctx, params)
 		if err != nil {
 			return newErrorResponse(request.ID, CodeInternalError, "release readiness unavailable", nil)
+		}
+		return Response{ID: request.ID, Result: result}
+	case "store.chinaForms.get", "store.chinaForms.set":
+		var params chinaFormParams
+		if decodeParams(request.Params, &params) != nil {
+			return newErrorResponse(request.ID, CodeInvalidRequest, "invalid China declaration parameters", nil)
+		}
+		result, err := storeChinaForms(ctx, params, request.Method == "store.chinaForms.set")
+		if err != nil {
+			// The form handler returns fixed messages without document data or session details.
+			return newErrorResponse(request.ID, CodeInternalError, err.Error(), nil)
 		}
 		return Response{ID: request.ID, Result: result}
 	case "web.session.import":

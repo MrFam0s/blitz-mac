@@ -97,7 +97,7 @@ final class AppStoreConnectService {
         return path
     }
 
-    private func get<T: Decodable>(_ path: String, queryItems: [URLQueryItem] = [], as type: T.Type) async throws -> T {
+    func get<T: Decodable>(_ path: String, queryItems: [URLQueryItem] = [], as type: T.Type) async throws -> T {
         let response = try await performRequest(
             method: "GET",
             path: path,
@@ -113,7 +113,7 @@ final class AppStoreConnectService {
 
     /// Only follow pagination on the original official API endpoint. This also normalizes
     /// links before cycle detection, so absolute/relative spellings cannot hide a repeated page.
-    private func paginationPath(_ path: String, queryItems: [URLQueryItem], endpoint: String) throws -> String {
+    func paginationPath(_ path: String, queryItems: [URLQueryItem], endpoint: String) throws -> String {
         let raw = path.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved: String
         if raw.hasPrefix("?") {
@@ -168,7 +168,7 @@ final class AppStoreConnectService {
         return value
     }
 
-    private func patch(path: String, body: [String: Any]) async throws {
+    func patch(path: String, body: [String: Any]) async throws {
         let response = try await performRequest(
             method: "PATCH",
             path: path,
@@ -1269,7 +1269,8 @@ final class AppStoreConnectService {
 
     /// Create app availability for all given territories using the v2 compound-document endpoint.
     /// POST /v2/appAvailabilities
-    func createAppAvailability(appId: String, territoryIds: [String]) async throws {
+    func createAppAvailability(appId: String, territoryIds: [String], selectedTerritories: Set<String>? = nil,
+                               availableInNewTerritories: Bool = true) async throws {
         // Build inline-create entries for each territory
         var territoryRefs: [[String: Any]] = []
         var included: [[String: Any]] = []
@@ -1280,7 +1281,7 @@ final class AppStoreConnectService {
             included.append([
                 "type": "territoryAvailabilities",
                 "id": tempId,
-                "attributes": ["available": true],
+                "attributes": ["available": selectedTerritories?.contains(territoryId) ?? true],
                 "relationships": [
                     "territory": ["data": ["type": "territories", "id": territoryId]]
                 ]
@@ -1290,7 +1291,7 @@ final class AppStoreConnectService {
         let body: [String: Any] = [
             "data": [
                 "type": "appAvailabilities",
-                "attributes": ["availableInNewTerritories": true],
+                "attributes": ["availableInNewTerritories": availableInNewTerritories],
                 "relationships": [
                     "app": ["data": ["type": "apps", "id": appId]],
                     "territoryAvailabilities": ["data": territoryRefs]

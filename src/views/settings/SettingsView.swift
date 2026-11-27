@@ -34,6 +34,9 @@ struct SettingsView: View {
     private let gateableCategories: [(ApprovalRequest.ToolCategory, String)] = [
         (.ascFormMutation, L10n.tr("Store-Texte und Metadaten ändern")),
         (.ascScreenshotMutation, L10n.tr("Screenshots hochladen")),
+        (.ascComplianceMutation, L10n.tr("Erklärungen für Festlandchina abgeben")),
+        (.ascPreviewMutation, L10n.tr("Vorschauvideos und Poster ändern")),
+        (.ascAvailabilityMutation, L10n.tr("Vertriebsländer ändern")),
         (.ascSubmitMutation, L10n.tr("Zur App-Prüfung einreichen")),
         (.buildPipeline, L10n.tr("Builds ausführen")),
         (.projectMutation, L10n.tr("Projekte ändern")),

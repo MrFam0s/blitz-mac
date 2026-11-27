@@ -304,6 +304,7 @@ struct ProjectAgentConfigService {
         [mcp_servers.blitz_macos]
         command = "\(Self.escapeTOMLString(helperPath))"
         cwd = "\(Self.escapeTOMLString(directory.path))"
+        tool_timeout_sec = \(MCPIntegrationConfiguration.codexToolTimeoutSeconds)
         enabled_tools = [\(codexMacEnabledToolsToml)]
 
         [mcp_servers."blitz-iphone"]

@@ -22,6 +22,9 @@ struct MCPIntegrationConfiguration {
     let app: State
     let iphone: State
 
+    // Allow large media uploads and full storefront updates to finish inside the helper's own deadlines.
+    static let codexToolTimeoutSeconds = 7260
+
     static func load(agent: AIAgent, home: URL = FileManager.default.homeDirectoryForCurrentUser,
                      environment: [String: String] = ProcessInfo.processInfo.environment) -> Self {
         var file = configurationFile(agent: agent, home: home, environment: environment)
@@ -119,7 +122,7 @@ struct MCPIntegrationConfiguration {
     static func manualSnippet(agent: AIAgent, helperPath: String) -> String {
         switch agent {
         case .codex:
-            return "[mcp_servers.blitz_macos]\ncommand = \(jsonString(helperPath))"
+            return "[mcp_servers.blitz_macos]\ncommand = \(jsonString(helperPath))\ntool_timeout_sec = \(Self.codexToolTimeoutSeconds)"
         case .claudeCode:
             return json(["blitz-macos": ["command": helperPath]])
         case .opencode:

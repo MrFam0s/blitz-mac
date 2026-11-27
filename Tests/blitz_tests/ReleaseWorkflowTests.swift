@@ -234,6 +234,34 @@ private func workflowDirectory() -> URL {
     #expect(await api.submissions == 0)
 }
 
+@Test func appWideStoreEditsShareReleaseLocksAcrossPlatforms() async throws {
+    let root = workflowDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let api = WorkflowMockAPI()
+    let first = ReleaseWorkflowService(directory: root, api: api)
+    let second = ReleaseWorkflowService(directory: root, api: api)
+    let target = workflowTarget(root)
+    await api.pauseNextSnapshot()
+    let preparing = Task { try await first.prepare(target: target, mode: .manual) }
+    await api.waitUntilPaused()
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await second.withStoreEdit(account: target.accountKey, app: target.appID, platform: "MAC_OS",
+                                       appWide: true, operationID: nil) { Issue.record("Concurrent storefront edit") }
+    }
+    let unrelated = try await second.withStoreEdit(account: target.accountKey, app: "other", platform: "IOS",
+                                                   appWide: true, operationID: nil) { "ok" }
+    #expect(unrelated == "ok")
+    await api.resumeSnapshot()
+    let record = try await preparing.value
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await second.withStoreEdit(account: target.accountKey, app: target.appID, platform: target.platform,
+                                       appWide: false, operationID: UUID().uuidString) { Issue.record("Wrong operation") }
+    }
+    let permitted = try await second.withStoreEdit(account: target.accountKey, app: target.appID, platform: target.platform,
+                                                   appWide: false, operationID: record.operationID) { "ok" }
+    #expect(permitted == "ok")
+}
+
 @Test func releaseWorkflowJournalUsesPublicIDKeysAndRejectsSymlink() async throws {
     let root = workflowDirectory(); defer { try? FileManager.default.removeItem(at: root) }
     let api = WorkflowMockAPI(), service = ReleaseWorkflowService(directory: root, api: api)
@@ -589,6 +617,16 @@ private func fixtureAdapter(_ fixture: WorkflowSnapshotFixture) -> ReleaseWorkfl
     let status = try await restarted.status(operationID: record.operationID, accountKey: record.target.accountKey)
     #expect(status.submissionProgress?.phase == .submissionCreated)
     #expect(status.resumableSubmissionID == "submission1")
+    await #expect(throws: ReleaseWorkflowError.self) {
+        try await restarted.withStoreEdit(account: record.target.accountKey, app: record.target.appID,
+                                          platform: record.target.platform, appWide: false, operationID: record.operationID) {
+            Issue.record("Media changed after Apple draft creation")
+        }
+    }
+    let appWide = try await restarted.withStoreEdit(account: record.target.accountKey, app: record.target.appID,
+                                                    platform: record.target.platform, appWide: true,
+                                                    operationID: record.operationID) { "ok" }
+    #expect(appWide == "ok")
     await #expect(throws: ReleaseWorkflowError.self) {
         try await restarted.submit(operationID: record.operationID, accountKey: record.target.accountKey,
                                    confirmationDigest: record.confirmationDigest, resumeSubmissionID: "old-draft-a")

@@ -99,14 +99,23 @@ for a diagnosed Portal authentication gap use `asc_web_auth` with
 login does not prove program-license status. Do not export cookies, overwrite the
 session cache, or treat any authentication receipt as legal-agreement acceptance.
 
-## Use the bundled CLI for Store changes
+## Store changes through Blitz Neo
 
 If a previous submit has an uncertain outcome, reconcile the original operation
 with `blitz-neo release status` before changing any Store data. While the final
 send remains uncertain, continue read-only.
 
-Use `~/.blitz/bin/asc` for the Apple operations below, including when MCP has
-no matching tool. Its Apple requests use HTTPS. The separate
+For previews, storefronts and mainland China declarations, use the dedicated
+`blitz_macos` tools when exposed in this chat. Use the original `accountKey` and
+`operationId` for an existing release. Before preparing a release, use `accountKey`
+and an explicit registered `target` from `get_release_targets` with projectId,
+releaseTargetId, appId, bundleId and platform; previews also require versionId.
+Inspect the live tool schema. A write requires authorization for that operation
+and `confirm: true`. Apple requests run inside Neo. Each integration retains its
+own access controls; respect any denial covering the intended action.
+
+Use the bundled `~/.blitz/bin/asc` for other supported Store operations or when a
+dedicated tool is unavailable and the CLI has access. Its Apple requests use HTTPS. The separate
 `~/.blitz/bin/blitz-neo release` client connects to the running app over a
 local socket. Diagnose the failing command and destination independently.
 If the host blocks app launch, local socket access or the Apple network request,
@@ -132,27 +141,30 @@ problem. Network permission and authorization to change a Store record are separ
   matches the requested languages and fields, apply the same command without
   `--dry-run`. Do not enable deletes to make a partial directory pass.
   Pull into another fresh directory to verify both app-info and version texts.
-- **Preview videos and poster frames.** For each requested locale and device
-  type, resolve its version-localization ID and list the existing previews.
-  Use `asc video-previews upload` with the exact file, `--version-localization`
-  and `--device-type`. In a preview set, `--time-code 00:00:06:00` selects a
-  poster at second six when requested. After processing, verify each video's
-  ID, state and poster. For an existing or partly uploaded preview, inspect its
-  receipt and use `asc video-previews set-poster-frame --id PREVIEW_ID --time-code TIMECODE`
-  when only the poster is missing. Asset Library placements use a different
-  workflow and do not support the upload's `--time-code` flag.
-- **Storefront availability.** Read `asc pricing availability view --app APP_ID`
-  and `asc pricing availability territory-availabilities --app APP_ID --paginate`.
-  Check the available flag for every requested territory. To verify worldwide
-  coverage, compare with `asc pricing territories list --paginate`. Distinguish
-  current countries from the policy for future storefronts. Edit only when a
-  change is authorized, then read all pages again.
+- **Preview videos and poster frames.** Call `store_previews_list` for each exact
+  locale and Apple device type (`DESKTOP` for macOS). Send `store_preview_upload`
+  the project-relative file and optional `posterTimeCode` (`00:00:06:00` for
+  second six). Inspect the receipt and read the same set again. While Apple
+  processes a video, monitor its existing ID. For a missing or changed poster
+  use `store_preview_set_poster` on that ID. Report the confirmed poster and
+  processing state separately. The CLI equivalents are `asc video-previews list`,
+  `upload` and `set-poster-frame`.
+- **Storefront availability.** Use `store_availability_get` to compare the selected
+  countries with Apple's current catalog. To apply an authorized change, use
+  `store_availability_set` with explicit `territoryCodes` or
+  `allCurrentTerritories: true` and the intended `available` flag. First setup
+  also needs an explicit choice for `initialAvailableInNewTerritories`.
+  Preserve the existing future-country policy on later edits. Re-read the full
+  selection after a partial or uncertain result before considering another change.
+  The CLI provides `asc pricing availability territory-availabilities --app APP_ID --paginate`
+  and `asc pricing territories list --paginate` for comparison. Storefront selection
+  alone does not establish that a version is on sale.
 
 After Store edits on a prepared release, follow the same-build check below.
 
 ## Correct required declarations on a prepared build
 
-Use the CLI access procedure above. Reconcile an uncertain submit before writing.
+Use the Store access procedure above. Reconcile an uncertain submit before writing.
 
 - **Age rating:** Use `asc age-rating view --version-id VERSION_ID --fields sharedLocation,datingAndRelationships`
   on the bound version. An explicit `false` is an answer. For a missing answer,
@@ -162,12 +174,12 @@ Use the CLI access procedure above. Reconcile an uncertain submit before writing
   `--dating-and-relationships true|false`. Read the fields back and compare
   them to the intended values.
 - **Mainland China:** Use the [China mainland procedure](references/china-mainland.md)
-  for `asc web apps compliance list` and `set` on the bound app and provider.
+  for `store_china_declarations_get` and `store_china_declaration_set` on the bound app and provider.
   Check each declaration separately. Keep the requested storefronts and reuse
   the existing web session when valid.
 
 After readback, verify the original platform, version ID and attached build ID.
-With a prepared, unsent operation, run `blitz-neo release validate`. If Blitz
+With a prepared, unsent operation, use `blitz-neo release validate` or the equivalent `release_validate` tool with the original operation and account. If Blitz
 reports changed content (`needsPreparation`) before any submission attempt,
 repeat `release prepare` with the **same target, version ID, build ID, mode and
 reviewItems**, then validate the returned operation. This renews the local

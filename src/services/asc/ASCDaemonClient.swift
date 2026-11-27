@@ -220,6 +220,13 @@ actor ASCDaemonClient {
         return (result.exitCode, result.stdout ?? "", result.stderr ?? "")
     }
 
+    func chinaForms(writing: Bool, params: [String: Any]) async throws -> Data {
+        let result: [String: AnyCodable] = try await send(
+            method: writing ? "store.chinaForms.set" : "store.chinaForms.get", params: params,
+            on: ensureProcessRunning(), responseTimeoutSeconds: 255)
+        return try JSONEncoder().encode(result)
+    }
+
     /// Fixed read-only operation using the selected API key and one web client
     /// whose app/provider membership is verified before any deep checks.
     func releaseReadiness(appID: String, bundleID: String, versionID: String, platform: String) async throws -> ReleaseReadinessPayload {

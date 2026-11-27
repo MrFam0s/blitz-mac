@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.90 (build 110)
+
+- App chats can use Blitz Neo to read and file mainland China declarations, upload localized preview videos and set their posters, and check or change storefront availability.
+- The bundled release instructions use the registered project and Apple account for each operation. After a Store edit, the chat can verify the original version and build through Blitz.
+
 ## 1.0.89 (build 109)
 
 - Release validation checks the mainland China storefront and Apple’s AI-generated content declaration and security assessment for the selected app. It reports each outstanding requirement before adding the version to review.

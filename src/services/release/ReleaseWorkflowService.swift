@@ -961,13 +961,20 @@ actor ReleaseWorkflowService {
     }
 
     private func scope(_ target: ReleaseWorkflowTarget) -> String {
-        SHA256.hash(data: Data("\(target.accountKey)|\(target.appID)|\(target.platform)".utf8)).map { String(format: "%02x", $0) }.joined()
+        scope(account: target.accountKey, app: target.appID, platform: target.platform)
+    }
+
+    private func scope(account: String, app: String, platform: String) -> String {
+        SHA256.hash(data: Data("\(account)|\(app)|\(platform)".utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private func activeURL(_ target: ReleaseWorkflowTarget) -> URL { directory.appendingPathComponent("active-\(scope(target)).txt") }
 
     private func activeRecord(_ target: ReleaseWorkflowTarget) throws -> ReleaseWorkflowRecord? {
-        let url = activeURL(target)
+        try activeRecord(at: activeURL(target))
+    }
+
+    private func activeRecord(at url: URL) throws -> ReleaseWorkflowRecord? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         try rejectSymlink(url)
         let id = try String(contentsOf: url, encoding: .utf8)
@@ -1039,10 +1046,45 @@ actor ReleaseWorkflowService {
         guard url.standardizedFileURL.path == url.resolvingSymlinksInPath().path else { throw ReleaseWorkflowError.storage }
     }
 
+    /// App-level declarations and storefronts are shared by every platform on this Apple record.
+    /// Use the same filesystem locks as prepare/submit, including across MCP connections.
+    func withStoreEdit<T>(account: String, app: String, platform: String, appWide: Bool,
+                          operationID: String?, edit: () async throws -> T) async throws -> T {
+        let platforms = appWide ? ["IOS", "MAC_OS", "TV_OS", "VISION_OS"] : [platform]
+        var held: [Int32] = []
+        defer { for fd in held { release(fd) } }
+        for item in platforms {
+            let key = scope(account: account, app: app, platform: item)
+            held.append(try acquire(scope: key))
+            let active = try activeRecord(at: directory.appendingPathComponent("active-\(key).txt"))
+            if item == platform, let operationID, active?.operationID != operationID {
+                throw ReleaseWorkflowError.identityChanged
+            }
+            guard let active else { continue }
+            switch active.state {
+            case .attachmentPending, .releaseModePending: throw ReleaseWorkflowError.busy
+            case .submissionPending:
+                // Media is fingerprinted. Editing it here would invalidate the confirmed Apple draft.
+                guard appWide else { throw ReleaseWorkflowError.contentChanged }
+                guard active.operationID == operationID, active.submissionID != nil,
+                      active.resumableSubmissionID == active.submissionID,
+                      let phase = active.submissionProgress?.phase,
+                      phase != .submitting, phase != .acknowledged else { throw ReleaseWorkflowError.uncertainOutcome }
+            case .submitted where active.operationID == operationID: throw ReleaseWorkflowError.unsafeState
+            default: break
+            }
+        }
+        return try await edit()
+    }
+
     private func acquire(_ target: ReleaseWorkflowTarget) throws -> Int32 {
+        try acquire(scope: scope(target))
+    }
+
+    private func acquire(scope key: String) throws -> Int32 {
         try rejectSymlink(directory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let path = directory.appendingPathComponent("lock-\(scope(target))").path
+        let path = directory.appendingPathComponent("lock-\(key)").path
         let fd = Darwin.open(path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
         guard fd >= 0 else { throw ReleaseWorkflowError.storage }
         guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { Darwin.close(fd); throw ReleaseWorkflowError.busy }

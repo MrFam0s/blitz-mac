@@ -13,6 +13,7 @@ struct ApprovalRequest: Identifiable {
         case settingsMutation
         case simulatorControl
         case ascFormMutation
+        case ascComplianceMutation, ascPreviewMutation, ascAvailabilityMutation
         case ascScreenshotMutation
         case ascSubmitMutation
         case buildPipeline
