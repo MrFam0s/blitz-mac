@@ -74,3 +74,19 @@ Ersetzung bereits ausdrücklich beauftragt, nutze die erteilte Freigabe direkt.
 Entferne nur die im Abgleich identifizierten und freigegebenen Entwurfsbilder.
 Lies anschließend für jede betroffene Galerie die Bild-IDs, Plätze und
 Verarbeitungsstände bei Apple aus und vergleiche sie mit der gewünschten Bilderfolge.
+
+### Veröffentlichung in Festlandchina
+
+Prüfe beim Store-Release für den gebundenen App-Datensatz, ob Festlandchina
+(`CHN`) bei Apple ausgewählt oder im Auftrag ausdrücklich vorgesehen ist.
+Ist das Gebiet nachweislich ausgeschlossen und keine Aufnahme beauftragt,
+entfällt die China-Prüfung. Eine chinesische Übersetzung oder eine
+Galerieänderung allein löst keine Abgabe von Erklärungen aus.
+
+Bei Vertrieb in `CHN` folge dem Abschnitt „China mainland“ im Skill
+`blitz-release`. Ermittle beide Antworten zu KI-/synthetischen Diensten und
+zur Sicherheitsbewertung getrennt aus den dort angebotenen Funktionen.
+Prüfe außerdem die für diese App geltenden Registrierungen und Genehmigungen.
+Übernimm belegte Angaben im Umfang des China-Releaseauftrags selbstständig.
+Frage gesammelt nur nach offenen Tatsachen, amtlichen Belegen oder einer noch
+fehlenden Befugnis. Lies anschließend den Status jeder Erklärung bei Apple aus.

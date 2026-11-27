@@ -382,6 +382,7 @@ next version is reported as answered, with verification pending.
 [Apple's submission property reference](https://developer.apple.com/help/app-store-connect/reference/app-information/required-localizable-and-editable-properties/).
 A generic HTTP 409 does not identify its cause.
 
-The provider decides on distribution and regulatory declarations. Once the
-relevant changes are recorded at Apple, run `release validate` on the existing
-operation. The same draft can continue after a successful fresh check.
+For a CHN release the agent fills the [project facts](../src/resources/release-product-facts.md)
+from the shipped app and verified documents, then uses the [declaration procedure](../src/resources/skills/blitz-release/references/china-mainland.md)
+to apply authorized answers and check conditional permits. Once Apple has recorded
+the changes, run `release validate` on the existing operation.

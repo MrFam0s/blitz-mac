@@ -220,7 +220,7 @@ enum ReleaseReadinessPolicy {
     private static func guidance(_ reason: String) -> String? {
         switch reason {
         case "china_declaration_required":
-            return "Für Festlandchina verlangt Apple eine Angabe für diese App. Prüfe die ausgewiesene Erklärung in App Store Connect auf der Seite „App Compliance“. Für Änderungen am Vertrieb oder rechtliche Erklärungen ist eine Entscheidung des Anbieters erforderlich. Validiere danach denselben Entwurf erneut."
+            return "Für Festlandchina fehlt eine Erklärung in „App Compliance“. Ermittle die Antwort aus den Funktionen dieser App und den Projektbelegen. Übernimm sie im Umfang des erteilten Auftrags und kläre offene Angaben mit dem Anbieter. Validiere danach denselben Entwurf erneut."
         case "china_declaration_collected_verification_pending":
             return "Apple hat die Erklärung erhalten und prüft sie im Zusammenhang mit der Versionseinreichung."
         case "china_storefront_unverified":

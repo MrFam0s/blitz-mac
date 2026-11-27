@@ -31,6 +31,31 @@ Quellen für Screenshots/Videos und Hinweise für Apples Prüfung festhalten.
 Bestehende Store-Texte und Medien sind eigenständige Inhalte und werden nicht
 automatisch durch dieses Dokument ersetzt.
 
+## Veröffentlichung in Festlandchina
+
+| Geltungsbereich | Geprüfter Stand |
+| --- | --- |
+| App und Build | [Apple-App-ID, Plattform, Bundle-ID, Version, Build, Quellstand] |
+| Vertrieb in Festlandchina (`CHN`) | [ausgewählt / ausgeschlossen / ungeklärt, Datum und Quelle in App Store Connect] |
+| Umfang der Funktionsprüfung | [alle Plattformen und Targets desselben Apple-App-Datensatzes, ausgelieferte Dienste und serverseitig aktivierte Funktionen] |
+
+Für jede von Apple gestellte Frage die Antwort aus der ausgelieferten Funktion
+herleiten. Bei fehlendem oder widersprüchlichem Beleg „ungeklärt“ eintragen.
+
+| Erklärung | Geprüfte Funktion | Antwort und Beleg |
+| --- | --- | --- |
+| `AI_GENERATED_CONTENT` | Generative oder synthetische Dienste wie KI-Chat, Bild-/Videogenerierung oder Stimm-/Gesichtsveränderung | [Ja / Nein / ungeklärt, Funktionspfad und Quelle] |
+| `SECURITY_ASSESSMENT` | Von Apple abgefragte Funktionen, etwa Verbreitung KI-generierter oder synthetischer Inhalte und Ende-zu-Ende-verschlüsseltes Instant Messaging | [Ja / Nein / ungeklärt, Funktionspfad und Quelle] |
+
+| Bedingte Nachweise | Zu prüfen und auszufüllen |
+| --- | --- |
+| ICP und Inhaltsgenehmigungen | [Anwendungsgrund und Status je Nachweis, etwa ICP-App-Registrierung oder Genehmigungen für Spiele, Bücher/Zeitschriften, Nachrichten oder religiöse Inhalte] |
+| KI-Registrierung und Sicherheitsbewertung | [je nach Funktion genehmigte Modell-/Algorithmusregistrierung, Nutzungsvereinbarung für Dritttechnologie, Nachweis und Bericht zur abgeschlossenen Sicherheitsbewertung] |
+
+Je erforderlichem Nachweis nur eine Referenz auf die geschützte Ablage und den
+bei Apple zuletzt gelesenen Status mit Datum eintragen. Originaldokumente und
+vertrauliche Registrierungsangaben gehören in die private Projektablage.
+
 ## In-App-Käufe und Abos
 
 Falls vorhanden: verifizierte Produkt-IDs, Kaufart, Abo-Gruppen, enthaltene

@@ -19,6 +19,9 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     let root = try handoffRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let facts = try ReleaseHandoffService.prepareProductFacts(projectDirectory: root)
+    let template = try String(contentsOf: facts, encoding: .utf8)
+    #expect(template.contains("AI_GENERATED_CONTENT"))
+    #expect(template.contains("SECURITY_ASSESSMENT"))
     let authored = "# Our product\nOnly verified features.\n"
     try authored.write(to: facts, atomically: true, encoding: .utf8)
     let context = handoffContext(root)
@@ -140,10 +143,17 @@ private func handoffContext(_ root: URL) -> ReleaseAutomationContext {
     #expect(guide.contains(BlitzWorkflowInstructions.Route.simulator.beginMarker))
     for document in [instructions, guide] {
         #expect(document.contains("### Freigabe für das Ersetzen von Store-Galerien"))
+        #expect(document.contains("### Veröffentlichung in Festlandchina"))
     }
     for agent in [".agents", ".claude"] {
         let skill = project.appendingPathComponent("\(agent)/skills/blitz-project-simulator/SKILL.md")
         #expect(try String(contentsOf: skill, encoding: .utf8).contains("name: blitz-project-simulator"))
+        let releaseSkill = project.appendingPathComponent("\(agent)/skills/blitz-release/SKILL.md")
+        let releaseInstructions = try String(contentsOf: releaseSkill, encoding: .utf8)
+        #expect(releaseInstructions.contains("AI_GENERATED_CONTENT"))
+        #expect(releaseInstructions.contains("SECURITY_ASSESSMENT"))
+        let reference = releaseSkill.deletingLastPathComponent().appendingPathComponent("references/china-mainland.md")
+        #expect(FileManager.default.isReadableFile(atPath: reference.path))
     }
 
     #expect(try storage.openProject(at: project) == "ImportedApp")

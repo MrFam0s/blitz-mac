@@ -95,6 +95,17 @@ for a diagnosed Portal authentication gap use `asc_web_auth` with
 login does not prove program-license status. Do not export cookies, overwrite the
 session cache, or treat any authentication receipt as legal-agreement acceptance.
 
+## China mainland
+
+Check the app's selected storefronts and the release request before filing.
+For a selected or explicitly planned `CHN` release, follow the
+[China mainland declaration procedure](references/china-mainland.md) during preparation.
+Resolve `AI_GENERATED_CONTENT` and `SECURITY_ASSESSMENT` independently from
+the features actually offered there. Reuse evidenced answers and permits for the
+same provider and app, including evidence recorded in existing project documents.
+Skip the CHN procedure when the storefront is confirmed excluded and the request
+does not include it. Keep an unverified territory selection open until resolved.
+
 ## Prepare without submitting
 
 For a normal update, compare against the source/build proven to back the prior
@@ -210,9 +221,8 @@ A resumable draft ID identifies the draft. Review the fresh validation before
 continuing. For `compliance.CHN.ai_generated_content` and
 `compliance.CHN.security_assessment`, check the storefront selection and the
 two individual results. An HTTP 409 without a field pointer does not identify
-its cause. Changing storefronts, answering regulatory declarations and uploading
-evidence require the provider's decision. Once the issue has been addressed,
-revalidate the same operation and draft.
+its cause. Use the China mainland procedure above for an outstanding declaration.
+Revalidate the same operation and draft after recording the answer.
 
 If `status` returns `resumableSubmissionId`, it has identified a unique existing
 unsubmitted draft for this same operation. Verify that ID against the saved release
